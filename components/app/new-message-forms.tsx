@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { MAX_GROUP_TITLE } from "@/lib/rules"
 
 const INPUT =
-  "h-11 min-w-0 rounded-[4px] border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+  "h-11 min-w-0 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
 // Start a one-to-one message with a handle.
 export function NewChatForm() {
@@ -79,7 +79,7 @@ export function NewGroupForm() {
           rows={2}
           required
           placeholder="Handles, separated by spaces or commas"
-          className="rounded-[4px] border border-input bg-background px-3 py-2 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="rounded-xl border border-input bg-background px-3 py-2 text-[15px] outline-none focus-visible:border-foreground/50"
         />
       </label>
       {state.error ? (

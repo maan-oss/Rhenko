@@ -52,7 +52,7 @@ export function FolderManager({ folders }: { folders: { id: string; name: string
             required
             maxLength={MAX_FOLDER_NAME}
             placeholder="New folder name"
-            className="h-11 min-w-0 flex-1 rounded-[4px] border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
           />
           <Button type="submit" disabled={pending} className="h-11 rounded-lg px-4">
             Create

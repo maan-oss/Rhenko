@@ -16,10 +16,14 @@ async function SignupBody() {
   if (await getViewer()) redirect("/")
   return (
     <>
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[28px] font-semibold tracking-tight">Create your account</h1>
+        <p className="text-[15px] text-muted-foreground">It takes a minute. You can change your name later.</p>
+      </div>
       <AuthForm mode="signup" />
-      <p className="text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-dusk underline underline-offset-4">
+        <Link href="/login" className="font-semibold text-foreground underline underline-offset-4">
           Log in
         </Link>
       </p>

@@ -76,17 +76,19 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
     <>
       <PageHeader title={profile.name} backHref="/" />
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
-      <div className="relative h-36 overflow-hidden bg-dusk text-background md:h-44">
+      {/* The banner fades into the page below it, so the top of the profile reads as one surface. */}
+      <div className="relative h-40 overflow-hidden bg-muted md:h-48">
         {profile.bannerFile ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={`/media/${profile.bannerFile}`} alt="" className="size-full object-cover" />
         ) : (
-          <RhenkoSymbol className="absolute -right-8 -bottom-12 size-48 opacity-15" />
+          <RhenkoSymbol className="absolute -top-6 -right-10 size-56 text-foreground opacity-[0.07]" />
         )}
+        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_30%,var(--background)_100%)]" />
       </div>
 
       <div className="flex items-end justify-between gap-3 px-4">
-        <div className="relative z-10 -mt-12 bg-background p-1">
+        <div className="relative z-10 -mt-14 rounded-full bg-background p-1">
           <Avatar user={profile} size={96} />
         </div>
         <div className="flex items-center gap-2 pb-1">
@@ -121,6 +123,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             ) : null}
           </p>
         </div>
+        {profile.status ? <p className="w-fit max-w-full truncate rounded-full bg-muted px-3 py-1 text-sm">{profile.status}</p> : null}
         {rel.blockedByMe && !isSelf ? (
           <p className="rounded-xl bg-muted px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
         ) : null}
@@ -133,7 +136,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             </span>
           ) : null}
           {profile.website ? (
-            <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center gap-1.5 text-dusk hover:underline">
+            <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center gap-1.5 text-foreground underline-offset-4 hover:underline">
               <LinkIcon className="size-4" />
               {hostOf(profile.website)}
             </a>
@@ -166,7 +169,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       {pinned ? <PostCard post={pinned} viewer={viewer} showPinned /> : null}
 
       {locked ? (
-        <div className="flex flex-col items-start gap-2 px-4 py-14">
+        <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
           <Lock className="size-6" aria-hidden="true" />
           <p className="text-lg font-semibold">This account is protected</p>
           <p className="max-w-sm text-muted-foreground">

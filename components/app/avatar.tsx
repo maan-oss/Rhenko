@@ -2,9 +2,6 @@ import { cn } from "@/lib/utils"
 
 export type AvatarUser = { id: string; name: string; avatarFile: string | null }
 
-// The default avatar is the brand mark's cut: a square with one quarter disc removed.
-const CUT = "M0 0H50A50 50 0 0 0 100 50V100H0Z"
-
 function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return "?"
@@ -13,48 +10,24 @@ function initialsOf(name: string): string {
   return (first + second).toUpperCase()
 }
 
+// Every avatar is a circle. The shape comes from an overflow-hidden round box, so the
+// photo, the initials and the hover halo around it all share one edge.
 export function Avatar({ user, size = 40, className }: { user: AvatarUser; size?: number; className?: string }) {
-  const clipId = `av-${user.id}`
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
+    <span
       role="img"
       aria-label={user.name}
-      className={cn("shrink-0 select-none", className)}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
+      className={cn("relative inline-grid shrink-0 select-none place-items-center overflow-hidden rounded-full", className)}
     >
-      <defs>
-        <clipPath id={clipId}>
-          <path d={CUT} />
-        </clipPath>
-      </defs>
-      <g clipPath={`url(#${clipId})`}>
-        {user.avatarFile ? (
-          <image
-            href={`/media/${user.avatarFile}`}
-            x={0}
-            y={0}
-            width={100}
-            height={100}
-            preserveAspectRatio="xMidYMid slice"
-          />
-        ) : (
-          <>
-            <rect width={100} height={100} className="fill-foreground" />
-            <text
-              x={50}
-              y={53}
-              dominantBaseline="central"
-              textAnchor="middle"
-              className="fill-background"
-              style={{ fontFamily: "var(--font-sora), sans-serif", fontWeight: 600, fontSize: 38, letterSpacing: "-0.02em" }}
-            >
-              {initialsOf(user.name)}
-            </text>
-          </>
-        )}
-      </g>
-    </svg>
+      {user.avatarFile ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/media/${user.avatarFile}`} alt="" className="size-full object-cover" draggable={false} />
+      ) : (
+        <span className="grid size-full place-items-center bg-foreground font-semibold tracking-tight text-background" style={{ fontFamily: "var(--font-sora), sans-serif" }}>
+          {initialsOf(user.name)}
+        </span>
+      )}
+    </span>
   )
 }

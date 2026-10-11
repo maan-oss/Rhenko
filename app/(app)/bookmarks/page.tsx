@@ -7,7 +7,7 @@ import { firstParam } from "@/lib/params"
 import { FeedList } from "@/components/app/feed-list"
 import { FolderManager } from "@/components/app/folder-manager"
 import { PageHeader } from "@/components/app/page-header"
-import { ScrollTabs } from "@/components/app/scroll-tabs"
+import { TabLinks } from "@/components/app/tabs"
 
 type SearchParams = Promise<{ folder?: string | string[] }>
 
@@ -37,7 +37,7 @@ async function BookmarksBody({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       <PageHeader title="Bookmarks" actions={<FolderManager folders={folders} />} />
-      <ScrollTabs items={tabs} />
+      <TabLinks items={tabs} />
       <FeedList
         key={folder ?? "all"}
         items={page.items}

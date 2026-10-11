@@ -13,12 +13,13 @@ export function ThemeToggle() {
   // render after mount to avoid a hydration mismatch.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false)
 
-  const isDark = mounted && (resolvedTheme === "dark" || resolvedTheme === "dim" || resolvedTheme === "lights-out")
+  const isDark = mounted && resolvedTheme === "dark"
 
   return (
     <Button
       variant="ghost"
       size="icon"
+      className="rounded-full"
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >

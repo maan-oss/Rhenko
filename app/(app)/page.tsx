@@ -1,4 +1,6 @@
 import { Suspense } from "react"
+import Link from "next/link"
+import { Plus } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
@@ -27,14 +29,26 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const following = mode === "following"
   return (
     <>
-      <PageHeader title="Home">
-        <TabLinks
-          items={[
-            { href: "/", label: "For you", active: !following },
-            { href: "/?tab=following", label: "Following", active: following },
-          ]}
-        />
-      </PageHeader>
+      <PageHeader
+        title="Home"
+        tabs={
+          <TabLinks
+            items={[
+              { href: "/", label: "For you", active: !following },
+              { href: "/?tab=following", label: "Following", active: following },
+            ]}
+          />
+        }
+        actions={
+          <Link
+            href="/lists"
+            aria-label="Timelines and lists"
+            className="grid size-9 shrink-0 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-foreground/5"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+          </Link>
+        }
+      />
       <Composer viewer={viewer} placeholder="What's happening?" id="compose" />
       <FeedList
         key={mode}
@@ -58,7 +72,7 @@ function FeedSkeleton() {
     <div className="flex flex-col gap-5 px-4 py-6">
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className="flex gap-3">
-          <Skeleton className="size-10 shrink-0 rounded-none" />
+          <Skeleton className="size-10 shrink-0 rounded-full" />
           <div className="flex flex-1 flex-col gap-2">
             <Skeleton className="h-4 w-1/3" />
             <Skeleton className="h-4 w-full" />

@@ -28,6 +28,7 @@ export type UserRow = {
   totp_step: number
   deactivated_at: number | null
   birthday: string | null
+  status: string
 }
 
 export type Viewer = {
@@ -43,6 +44,7 @@ export type Viewer = {
   verified: boolean
   protected: boolean
   totpEnabled: boolean
+  status: string
 }
 
 export function toViewer(row: UserRow): Viewer {
@@ -59,6 +61,7 @@ export function toViewer(row: UserRow): Viewer {
     verified: row.verified === 1,
     protected: row.protected === 1,
     totpEnabled: row.totp_enabled === 1,
+    status: row.status,
   }
 }
 

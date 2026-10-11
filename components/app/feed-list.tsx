@@ -73,9 +73,9 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
 
   if (items.length === 0 && !next) {
     return (
-      <div className="flex flex-col gap-2 px-4 py-16">
+      <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
         <p className="text-lg font-semibold">{emptyTitle}</p>
-        <p className="max-w-sm text-muted-foreground">{emptyBody}</p>
+        <p className="max-w-sm text-[15px] text-muted-foreground">{emptyBody}</p>
       </div>
     )
   }

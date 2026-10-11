@@ -2,12 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react"
 import { motion } from "motion/react"
-import { CalendarClock, ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
+import { ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
-import { EmojiPicker } from "@/components/app/emoji-picker"
-import { Button } from "@/components/ui/button"
 import {
   MAX_ALT,
   MAX_IMAGE_BYTES,
@@ -18,22 +16,17 @@ import {
   POLL_DURATIONS,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
-  REPLY_SETTING_LABELS,
-  REPLY_SETTINGS,
-  SCHEDULE_MAX_AHEAD_MS,
-  SCHEDULE_MIN_LEAD_MS,
   UNDO_WINDOW_MS,
   countChars,
-  type ReplySetting,
 } from "@/lib/rules"
 import { cn } from "@/lib/utils"
+
+// The composer does one thing: a post with text, optional media or a poll, and Post.
 
 type ComposerProps = {
   viewer: AvatarUser
   replyToId?: string
   quoteOfId?: string
-  communityId?: string
-  communityName?: string
   placeholder: string
   id?: string
   compact?: boolean
@@ -78,7 +71,7 @@ function CountRing({ progress, over }: { progress: number; over: boolean }) {
         strokeWidth={2}
         strokeDasharray={circumference}
         transform="rotate(-90 11 11)"
-        className={over ? "stroke-destructive" : "stroke-dusk"}
+        className={over ? "stroke-destructive" : "stroke-foreground"}
         animate={{ strokeDashoffset: circumference * (1 - progress) }}
         initial={false}
         transition={{ duration: 0.25, ease: "easeOut" }}
@@ -94,37 +87,13 @@ function tokenBefore(text: string, caret: number): { token: string; start: numbe
   return { token: match[2], start: caret - match[2].length }
 }
 
-function toLocalInput(ms: number): string {
-  const date = new Date(ms)
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-export function Composer({
-  viewer,
-  replyToId,
-  quoteOfId,
-  communityId,
-  communityName,
-  placeholder,
-  id,
-  compact = false,
-  autoFocus = false,
-  onPosted,
-}: ComposerProps) {
+export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compact = false, autoFocus = false, onPosted }: ComposerProps) {
   const [text, setText] = useState("")
   const [caret, setCaret] = useState(0)
   const [media, setMedia] = useState<Draft[]>([])
   const [poll, setPoll] = useState(false)
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""])
   const [pollMinutes, setPollMinutes] = useState<number>(POLL_DEFAULT_MINUTES)
-  const [sensitive, setSensitive] = useState(false)
-  const [replySetting, setReplySetting] = useState<ReplySetting>("everyone")
-  const [scheduling, setScheduling] = useState(false)
-  // A thread in progress: each post goes out as a reply to the one before it.
-  const [threadTail, setThreadTail] = useState<string | null>(null)
-  const [threadCount, setThreadCount] = useState(0)
-  const [scheduleValue, setScheduleValue] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [active, setActive] = useState(0)
   const [pending, startTransition] = useTransition()
@@ -135,39 +104,12 @@ export function Composer({
   const count = countChars(text)
   const remaining = MAX_POST - count
   const over = remaining < 0
-  // The clock is read when the composer renders, which is when the schedule is checked.
-  // eslint-disable-next-line react-hooks/purity
-  const clock = Date.now()
-  const scheduleAt = scheduling && scheduleValue ? new Date(scheduleValue).getTime() : null
-  const scheduleError =
-    scheduleAt === null
-      ? null
-      : !Number.isFinite(scheduleAt)
-        ? "Pick a valid time."
-        : scheduleAt < clock + SCHEDULE_MIN_LEAD_MS
-          ? "Schedule at least 5 minutes ahead."
-          : scheduleAt > clock + SCHEDULE_MAX_AHEAD_MS
-            ? "Schedule up to 75 days ahead."
-            : null
   const pollReady = !poll || pollOptions.filter((o) => o.trim().length > 0).length >= POLL_MIN_OPTIONS
   const hasContent = count > 0 || media.length > 0 || (poll && pollReady)
-  const canPost = hasContent && !over && !pending && pollReady && !scheduleError && !(poll && media.length > 0)
+  const canPost = hasContent && !over && !pending && pollReady && !(poll && media.length > 0)
   const isReply = Boolean(replyToId)
-  const showDraft = !isReply && !quoteOfId && threadTail === null
-  // The post this one goes out as a reply to: the post being replied to, or the last post of a thread.
-  const replyTarget = replyToId ?? threadTail
-  // Threads are for plain posts: no replies, quotes, polls, schedules or community posts.
-  const canThread = !replyToId && !quoteOfId && !communityId && !poll && !scheduling
 
-  const label = pending
-    ? "Posting"
-    : isReply
-      ? "Reply"
-      : quoteOfId
-        ? "Quote"
-        : scheduleAt !== null && !scheduleError
-          ? "Schedule"
-          : "Post"
+  const label = pending ? "Posting" : isReply ? "Reply" : quoteOfId ? "Quote" : "Post"
 
   useEffect(() => {
     if (autoFocus || (id && window.location.hash === `#${id}`)) textareaRef.current?.focus()
@@ -269,20 +211,6 @@ export function Composer({
     setMedia((current) => current.map((m) => (m.key === key ? { ...m, ...patch } : m)))
   }
 
-  function insertAt(insert: string) {
-    const element = textareaRef.current
-    const start = element?.selectionStart ?? text.length
-    const end = element?.selectionEnd ?? text.length
-    const next = text.slice(0, start) + insert + text.slice(end)
-    setText(next)
-    const position = start + insert.length
-    setCaret(position)
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus()
-      textareaRef.current?.setSelectionRange(position, position)
-    })
-  }
-
   function applySuggestion(item: Suggestion) {
     if (!word) return
     const insert = item.kind === "user" ? `@${item.handle} ` : `#${item.tag} `
@@ -318,9 +246,9 @@ export function Composer({
     setCaret(event.target.selectionStart ?? event.target.value.length)
   }
 
-  function submit(event?: FormEvent<HTMLFormElement>, asDraft = false, asThread = false) {
+  function submit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
-    if (!canPost && !(asDraft && hasContent && !over)) return
+    if (!canPost) return
     const body = new FormData()
     body.set("body", text)
     media.forEach((m) => {
@@ -332,139 +260,101 @@ export function Composer({
       body.set("pollMinutes", String(pollMinutes))
       pollOptions.map((o) => o.trim()).filter(Boolean).forEach((o) => body.append("pollOption", o))
     }
-    if (sensitive && media.length > 0) body.set("sensitive", "on")
-    if (asDraft && showDraft) body.set("draft", "on")
-    if (!asDraft && !asThread && !replyTarget && scheduleAt !== null && !scheduleError) body.set("scheduleAt", String(scheduleAt))
-    if (replyTarget) body.set("replyTo", replyTarget)
+    if (replyToId) body.set("replyTo", replyToId)
     if (quoteOfId) body.set("quoteOf", quoteOfId)
-    if (communityId && !replyTarget) body.set("communityId", communityId)
-    if (!replyTarget) body.set("replySetting", replySetting)
 
     startTransition(async () => {
       const result = await createPost(body)
-      if (result.ok) {
-        // Clears the fields for the next post. Media goes too, so a thread post never repeats the last one's image.
-        const clearFields = () => {
-          setText("")
-          setCaret(0)
-          setMedia((current) => {
-            for (const m of current) {
-              URL.revokeObjectURL(m.url)
-              urlsRef.current.delete(m.url)
-            }
-            return []
-          })
-          setPoll(false)
-          setPollOptions(["", ""])
-          setSensitive(false)
-          setScheduling(false)
-          setScheduleValue("")
-        }
-        if (asThread) {
-          // The post stays in the composer as the next reply's target.
-          clearFields()
-          setThreadTail(result.id)
-          setThreadCount((n) => n + 1)
-          textareaRef.current?.focus()
-          toast.success(threadCount === 0 ? "Thread started. Keep writing, then post." : "Added to your thread.")
-          return
-        }
-        if (threadTail !== null) {
-          setThreadTail(null)
-          setThreadCount(0)
-        }
-        clearFields()
-        const message =
-          result.status === "draft"
-            ? "Saved to drafts."
-            : result.status === "scheduled"
-              ? "Scheduled."
-              : replyToId
-                ? "Reply posted."
-                : quoteOfId
-                  ? "Quote posted."
-                  : "Posted."
-        if (result.status === "published") {
-          // The post can be taken back for a few seconds, the same window the server enforces.
-          const postId = result.id
-          toast.success(message, {
-            duration: UNDO_WINDOW_MS,
-            action: {
-              label: "Undo",
-              onClick: () => {
-                undoPost(postId).then((undone) => {
-                  if (undone.ok) toast.success("Post deleted.")
-                  else toast.error(undone.error)
-                })
-              },
-            },
-          })
-        } else {
-          toast.success(message)
-        }
-        onPosted?.()
-      } else {
+      if (!result.ok) {
         toast.error(result.error)
+        return
       }
+      // Clear the composer, and revoke the preview images it was holding.
+      setText("")
+      setCaret(0)
+      setMedia((current) => {
+        for (const m of current) {
+          URL.revokeObjectURL(m.url)
+          urlsRef.current.delete(m.url)
+        }
+        return []
+      })
+      setPoll(false)
+      setPollOptions(["", ""])
+      const message = replyToId ? "Reply posted." : quoteOfId ? "Quote posted." : "Posted."
+      if (result.status === "published") {
+        // The post can be taken back for a few seconds, the same window the server enforces.
+        const postId = result.id
+        toast.success(message, {
+          duration: UNDO_WINDOW_MS,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              undoPost(postId).then((undone) => {
+                if (undone.ok) toast.success("Post deleted.")
+                else toast.error(undone.error)
+              })
+            },
+          },
+        })
+      } else {
+        toast.success(message)
+      }
+      onPosted?.()
     })
   }
 
   return (
-    <form id={id} onSubmit={(event) => submit(event)} className={cn("flex gap-3", compact ? "" : "border-b border-border px-4 py-3")}>
-      <Avatar user={viewer} size={40} className="mt-0.5" />
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {communityName ? (
-          <p className="text-[13px] text-dusk">Posting in {communityName}</p>
+    <form id={id} onSubmit={(event) => submit(event)} className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 py-4")}>
+      <Avatar user={viewer} size={44} className="mt-0.5" />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={onChangeText}
+          onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          aria-label="Post text"
+          aria-autocomplete="list"
+          rows={2}
+          className="field-sizing-content min-h-14 w-full resize-none bg-transparent pt-2 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground"
+        />
+        {open ? (
+          <ul role="listbox" aria-label="Suggestions" className="z-30 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-popover py-1 shadow-lg">
+            {suggestions.map((item, index) => (
+              <li key={item.kind === "user" ? item.id : item.tag} role="option" aria-selected={index === active}>
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    applySuggestion(item)
+                  }}
+                  onMouseEnter={() => setActive(index)}
+                  className={cn("flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150", index === active && "bg-foreground/5")}
+                >
+                  {item.kind === "user" ? (
+                    <>
+                      <Avatar user={{ id: item.id, name: item.name, avatarFile: item.avatarFile }} size={28} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{item.name}</span>
+                        <span className="block truncate text-[13px] text-muted-foreground">@{item.handle}</span>
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-sm font-semibold">#{item.tag}</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
         ) : null}
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={onChangeText}
-            onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
-            onKeyDown={onKeyDown}
-            placeholder={placeholder}
-            aria-label="Post text"
-            aria-autocomplete="list"
-            rows={2}
-            className="field-sizing-content min-h-12 w-full resize-none bg-transparent text-base leading-relaxed outline-none placeholder:text-muted-foreground"
-          />
-          {open ? (
-            <ul role="listbox" aria-label="Suggestions" className="absolute top-full left-0 z-30 mt-1 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-popover py-1 shadow-lg">
-              {suggestions.map((item, index) => (
-                <li key={item.kind === "user" ? item.id : item.tag} role="option" aria-selected={index === active}>
-                  <button
-                    type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault()
-                      applySuggestion(item)
-                    }}
-                    onMouseEnter={() => setActive(index)}
-                    className={cn("flex w-full items-center gap-3 px-3 py-2 text-left", index === active && "bg-muted")}
-                  >
-                    {item.kind === "user" ? (
-                      <>
-                        <Avatar user={{ id: item.id, name: item.name, avatarFile: item.avatarFile }} size={28} />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold">{item.name}</span>
-                          <span className="block truncate text-[13px] text-muted-foreground">@{item.handle}</span>
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-sm font-semibold text-dusk">#{item.tag}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
 
         {media.length > 0 ? (
           <div className={cn("grid gap-2", media.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
             {media.map((item) => (
               <div key={item.key} className="flex flex-col gap-1.5">
-                <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
+                <div className="relative overflow-hidden rounded-2xl border border-border bg-muted">
                   {item.kind === "video" ? (
                     <video src={item.url} muted playsInline controls className="max-h-72 w-full" aria-label="Selected video" />
                   ) : (
@@ -475,21 +365,23 @@ export function Composer({
                     type="button"
                     onClick={() => removeMedia(item.key)}
                     aria-label="Remove media"
-                    className="absolute top-2 right-2 grid size-7 place-items-center rounded-full bg-background/90 text-foreground ring-1 ring-border hover:bg-muted"
+                    className="absolute top-2 right-2 grid size-8 place-items-center rounded-full bg-background/90 text-foreground ring-1 ring-border transition-colors duration-200 hover:bg-muted"
                   >
                     <X className="size-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => patchMedia(item.key, { altOpen: !item.altOpen })}
-                    aria-expanded={item.altOpen}
-                    className={cn(
-                      "absolute bottom-2 left-2 rounded-md px-2 py-0.5 text-[12px] font-semibold",
-                      item.alt ? "bg-dusk text-background" : "bg-background/90 text-foreground ring-1 ring-border"
-                    )}
-                  >
-                    ALT
-                  </button>
+                  {item.kind === "image" ? (
+                    <button
+                      type="button"
+                      onClick={() => patchMedia(item.key, { altOpen: !item.altOpen })}
+                      aria-expanded={item.altOpen}
+                      className={cn(
+                        "absolute bottom-2 left-2 rounded-full px-2.5 py-0.5 text-[12px] font-semibold transition-colors duration-200",
+                        item.alt ? "bg-foreground text-background" : "bg-background/90 text-foreground ring-1 ring-border"
+                      )}
+                    >
+                      ALT
+                    </button>
+                  ) : null}
                 </div>
                 {item.altOpen ? (
                   <label className="flex flex-col gap-1 text-[13px]">
@@ -499,7 +391,7 @@ export function Composer({
                       maxLength={MAX_ALT}
                       rows={2}
                       onChange={(event) => patchMedia(item.key, { alt: event.target.value })}
-                      className="resize-none rounded-lg border border-border bg-background p-2 text-sm outline-none focus:border-dusk"
+                      className="resize-none rounded-xl border border-border bg-background p-2.5 text-sm outline-none transition-colors focus:border-foreground"
                     />
                   </label>
                 ) : null}
@@ -519,14 +411,14 @@ export function Composer({
                   onChange={(event) => setPollOptions((current) => current.map((o, i) => (i === index ? event.target.value : o)))}
                   placeholder={`Choice ${index + 1}`}
                   aria-label={`Choice ${index + 1}`}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-[15px] outline-none focus:border-dusk"
+                  className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-[15px] outline-none transition-colors focus:border-foreground"
                 />
                 {pollOptions.length > POLL_MIN_OPTIONS ? (
                   <button
                     type="button"
                     aria-label={`Remove choice ${index + 1}`}
                     onClick={() => setPollOptions((current) => current.filter((_, i) => i !== index))}
-                    className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground"
                   >
                     <Trash2 className="size-4" />
                   </button>
@@ -538,7 +430,7 @@ export function Composer({
                 <button
                   type="button"
                   onClick={() => setPollOptions((current) => [...current, ""])}
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-dusk hover:underline"
+                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold transition-colors duration-200 hover:bg-foreground/5"
                 >
                   <Plus className="size-4" /> Add choice
                 </button>
@@ -550,7 +442,7 @@ export function Composer({
                 <select
                   value={pollMinutes}
                   onChange={(event) => setPollMinutes(Number(event.target.value))}
-                  className="h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-dusk"
+                  className="h-9 rounded-full border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-foreground"
                 >
                   {POLL_DURATIONS.map((minutes) => (
                     <option key={minutes} value={minutes}>
@@ -563,46 +455,15 @@ export function Composer({
           </fieldset>
         ) : null}
 
-        {scheduling ? (
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Post on</span>
-            <input
-              type="datetime-local"
-              value={scheduleValue}
-              min={toLocalInput(clock + SCHEDULE_MIN_LEAD_MS)}
-              onChange={(event) => setScheduleValue(event.target.value)}
-              className="h-10 w-fit rounded-lg border border-border bg-background px-3 outline-none focus:border-dusk"
-            />
-            {scheduleError ? <span className="text-destructive">{scheduleError}</span> : null}
-          </label>
-        ) : null}
-
-        {!isReply && !compact && threadTail === null ? (
-          <label className="flex w-fit items-center gap-2 text-[13px] text-muted-foreground">
-            <span>Who can reply</span>
-            <select
-              value={replySetting}
-              onChange={(event) => setReplySetting(event.target.value as ReplySetting)}
-              className="h-8 rounded-lg border border-border bg-background px-2 text-[13px] text-foreground outline-none focus:border-dusk"
-            >
-              {REPLY_SETTINGS.map((option) => (
-                <option key={option} value={option}>
-                  {REPLY_SETTING_LABELS[option]}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-1 border-t border-border pt-2">
+        <div className="flex items-center gap-1 pt-1">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label="Add photos or video"
             disabled={poll}
-            className="grid size-9 place-items-center rounded-lg text-dusk transition-colors hover:bg-muted disabled:opacity-40"
+            className="grid size-9 place-items-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-40"
           >
-            <ImageIcon className="size-5" />
+            <ImageIcon className="size-[20px]" />
           </button>
           <input
             ref={fileRef}
@@ -621,75 +482,27 @@ export function Composer({
             aria-label={poll ? "Remove poll" : "Add a poll"}
             aria-pressed={poll}
             disabled={media.length > 0}
-            className={cn("grid size-9 place-items-center rounded-lg text-dusk transition-colors hover:bg-muted disabled:opacity-40", poll && "bg-dusk/10")}
+            className={cn(
+              "grid size-9 place-items-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-40",
+              poll && "bg-foreground/10 text-foreground"
+            )}
           >
-            <ListChecks className="size-5" />
+            <ListChecks className="size-[20px]" />
           </button>
-          {media.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setSensitive((value) => !value)}
-              aria-pressed={sensitive}
-              className={cn("h-9 rounded-lg px-2 text-[13px] font-semibold text-dusk transition-colors hover:bg-muted", sensitive && "bg-dusk/10")}
-            >
-              {sensitive ? "Marked sensitive" : "Mark sensitive"}
-            </button>
-          ) : null}
-          {!isReply && threadTail === null ? (
-            <button
-              type="button"
-              onClick={() => {
-                setScheduling((value) => !value)
-                if (!scheduling && !scheduleValue) setScheduleValue(toLocalInput(Date.now() + 60 * 60 * 1000))
-              }}
-              aria-label={scheduling ? "Remove schedule" : "Schedule post"}
-              aria-pressed={scheduling}
-              className={cn("grid size-9 place-items-center rounded-lg text-dusk transition-colors hover:bg-muted", scheduling && "bg-dusk/10")}
-            >
-              <CalendarClock className="size-5" />
-            </button>
-          ) : null}
-          <EmojiPicker onPick={insertAt} />
 
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-            {threadTail !== null ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setThreadTail(null)
-                  setThreadCount(0)
-                }}
-                className="rounded-full px-2 py-1 text-[13px] text-dusk hover:bg-dusk/10"
-              >
-                Finish thread ({threadCount})
-              </button>
-            ) : null}
+          <div className="ml-auto flex items-center gap-3">
             {count > 0 ? <CountRing progress={Math.min(count / MAX_POST, 1)} over={over} /> : null}
             {count > 0 && remaining <= 20 ? (
               <span className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>{remaining}</span>
             ) : null}
-            {poll ? (
-              <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span>
-            ) : null}
-            {canThread ? (
-              <Button type="button" variant="outline" disabled={!canPost} onClick={() => submit(undefined, false, true)} className="h-9 rounded-full px-4 font-semibold">
-                Add to thread
-              </Button>
-            ) : null}
-            {showDraft ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!hasContent || over || pending}
-                onClick={() => submit(undefined, true)}
-                className="h-9 rounded-full px-4 font-semibold"
-              >
-                Save draft
-              </Button>
-            ) : null}
-            <Button type="submit" disabled={!canPost} className="h-9 rounded-full px-5 font-semibold">
+            {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
+            <button
+              type="submit"
+              disabled={!canPost}
+              className="h-10 rounded-full bg-foreground px-5 text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-85 disabled:opacity-35"
+            >
               {label}
-            </Button>
+            </button>
           </div>
         </div>
       </div>

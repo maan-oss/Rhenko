@@ -76,7 +76,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
             aria-label="Message"
             onInput={onInput}
             onKeyDown={onKeyDown}
-            className="max-h-40 min-h-10 resize-none rounded-[20px] border border-input bg-background px-4 py-2 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="max-h-40 min-h-10 resize-none rounded-[20px] border border-input bg-background px-4 py-2 text-[15px] outline-none focus-visible:border-foreground/50"
           />
         </div>
         <SendButton />

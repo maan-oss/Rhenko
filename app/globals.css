@@ -2,7 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *, .dim *, .lights-out *));
+/* Two themes only: light (a warm cream, like Claude) and dark (a neutral charcoal, like ChatGPT). */
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -49,122 +50,84 @@
   --color-destructive-foreground: var(--destructive-foreground);
 }
 
+/* Light: Claude's cream. Ink is a warm near-black, never a hue. */
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
-  --card: #ffffff;
-  --card-foreground: #000000;
-  --popover: #ffffff;
-  --popover-foreground: #000000;
-  --primary: #000000;
-  --primary-foreground: #ffffff;
-  --secondary: #f4f3f6;
-  --secondary-foreground: #000000;
-  --muted: #f4f3f6;
-  --muted-foreground: #5c5a63;
-  --accent: #f4f3f6;
-  --accent-foreground: #000000;
-  --destructive: #b3261e;
-  --border: #d9d7de;
-  --input: #d9d7de;
-  --ring: #4b3f72;
-  --dusk: #4b3f72;
-  --chart-1: #4b3f72;
-  --chart-2: #5c5a63;
-  --chart-3: #8f8aa3;
-  --chart-4: #b9b5c7;
-  --chart-5: #e4e2ea;
-  --radius: 0.5rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #000000;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f4f3f6;
-  --sidebar-accent-foreground: #000000;
-  --sidebar-border: #d9d7de;
-  --sidebar-ring: #4b3f72;
-  --destructive-foreground: var(--color-red-500);
+  --background: #f5f1e8;
+  --foreground: #1f1d1a;
+  --card: #fbf8f2;
+  --card-foreground: #1f1d1a;
+  --popover: #fbf8f2;
+  --popover-foreground: #1f1d1a;
+  --primary: #1f1d1a;
+  --primary-foreground: #f5f1e8;
+  --secondary: #ece6d8;
+  --secondary-foreground: #1f1d1a;
+  --muted: #ebe5d6;
+  --muted-foreground: #6b655a;
+  --accent: #ebe5d6;
+  --accent-foreground: #1f1d1a;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --border: #ddd5c2;
+  --input: #d3caB5;
+  --ring: #8a8373;
+  --dusk: #1f1d1a;
+  --chart-1: #1f1d1a;
+  --chart-2: #6b655a;
+  --chart-3: #9a9384;
+  --chart-4: #c4bcaa;
+  --chart-5: #e4dccb;
+  --radius: 0.75rem;
+  --sidebar: #efe9dc;
+  --sidebar-foreground: #1f1d1a;
+  --sidebar-primary: #1f1d1a;
+  --sidebar-primary-foreground: #f5f1e8;
+  --sidebar-accent: #e4ddcc;
+  --sidebar-accent-foreground: #1f1d1a;
+  --sidebar-border: #ddd5c2;
+  --sidebar-ring: #8a8373;
 }
 
-/* Dim and Lights out are dark palettes. The dark tokens apply to all three, and each
-   palette below overrides the surfaces it changes. */
-.dark,
-.dim,
-.lights-out {
-  --background: #0a0a0a;
-  --foreground: #f5f5f5;
-  --card: #161519;
-  --card-foreground: #f5f5f5;
-  --popover: #161519;
-  --popover-foreground: #f5f5f5;
-  --primary: #f5f5f5;
-  --primary-foreground: #0a0a0a;
-  --secondary: #161519;
-  --secondary-foreground: #f5f5f5;
-  --muted: #161519;
-  --muted-foreground: #a3a1ab;
-  --accent: #161519;
-  --accent-foreground: #f5f5f5;
-  --destructive: #f28b82;
-  --border: #2e2c35;
-  --input: #2e2c35;
-  --ring: #b3a4e8;
-  --dusk: #b3a4e8;
-  --chart-1: #b3a4e8;
-  --chart-2: #a3a1ab;
-  --chart-3: #77747f;
-  --chart-4: #4d4a56;
-  --chart-5: #2e2c35;
-  --sidebar: #0a0a0a;
-  --sidebar-foreground: #f5f5f5;
-  --sidebar-primary: #f5f5f5;
-  --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-accent: #161519;
-  --sidebar-accent-foreground: #f5f5f5;
-  --sidebar-border: #2e2c35;
-  --sidebar-ring: #b3a4e8;
-  --destructive-foreground: var(--color-red-400);
-}
-
-.dim {
-  --background: #15141b;
-  --foreground: #f1f0f4;
-  --card: #1d1b25;
-  --card-foreground: #f1f0f4;
-  --popover: #1d1b25;
-  --popover-foreground: #f1f0f4;
-  --secondary: #1d1b25;
-  --muted: #1d1b25;
-  --muted-foreground: #a7a4b3;
-  --accent: #1d1b25;
-  --border: #34313f;
-  --input: #34313f;
-  --sidebar: #15141b;
-  --sidebar-accent: #1d1b25;
-  --sidebar-border: #34313f;
-}
-
-.lights-out {
-  --background: #000000;
-  --foreground: #f5f5f5;
-  --card: #000000;
-  --card-foreground: #f5f5f5;
-  --popover: #000000;
-  --popover-foreground: #f5f5f5;
-  --secondary: #16181c;
-  --muted: #16181c;
-  --muted-foreground: #8b98a5;
-  --accent: #16181c;
-  --border: #2f3336;
-  --input: #2f3336;
-  --sidebar: #000000;
-  --sidebar-accent: #16181c;
-  --sidebar-border: #2f3336;
+/* Dark: ChatGPT's charcoal. */
+.dark {
+  --background: #212121;
+  --foreground: #ececec;
+  --card: #2b2b2b;
+  --card-foreground: #ececec;
+  --popover: #2b2b2b;
+  --popover-foreground: #ececec;
+  --primary: #ececec;
+  --primary-foreground: #212121;
+  --secondary: #2b2b2b;
+  --secondary-foreground: #ececec;
+  --muted: #2f2f2f;
+  --muted-foreground: #a8a8a8;
+  --accent: #2f2f2f;
+  --accent-foreground: #ececec;
+  --destructive: #ff8a80;
+  --destructive-foreground: #212121;
+  --border: #3d3d3d;
+  --input: #4a4a4a;
+  --ring: #8e8e8e;
+  --dusk: #ececec;
+  --chart-1: #ececec;
+  --chart-2: #a8a8a8;
+  --chart-3: #7a7a7a;
+  --chart-4: #4d4d4d;
+  --chart-5: #353535;
+  --sidebar: #171717;
+  --sidebar-foreground: #ececec;
+  --sidebar-primary: #ececec;
+  --sidebar-primary-foreground: #212121;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #ececec;
+  --sidebar-border: #2c2c2c;
+  --sidebar-ring: #8e8e8e;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/40;
   }
   body {
     @apply bg-background text-foreground;
@@ -181,18 +144,26 @@
   }
 }
 
-::selection {
-  background: color-mix(in oklab, var(--dusk) 28%, transparent);
+/* Fields show no browser outline, and browser autofill keeps the page's own colours. Focus is the border. */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
 }
-html[data-reduce-motion="true"] *,
-html[data-reduce-motion="true"] *::before,
-html[data-reduce-motion="true"] *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
-  scroll-behavior: auto !important;
+input:-webkit-autofill,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--background) inset;
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  transition: background-color 9999s;
 }
 
+::selection {
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+
+/* The operating system's reduced-motion setting is always respected. There is no in-app switch. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -202,4 +173,18 @@ html[data-reduce-motion="true"] *::after {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* A faint brand mark for the empty side areas of wide screens. */
+.brand-gutter {
+  background-image: url("/gutter-mark.svg");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(120vh, 90vw);
+  opacity: 0.05;
+  filter: grayscale(1);
+}
+.dark .brand-gutter {
+  opacity: 0.07;
+  filter: invert(1) grayscale(1);
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
 import { conversationFor, conversationMessages } from "@/lib/data"
 import { AcceptBar } from "@/components/app/accept-bar"
+import { CallButton } from "@/components/app/call-button"
 import { ChatComposer } from "@/components/app/chat-composer"
 import { ChatThread } from "@/components/app/chat-thread"
 import { GroupPanel } from "@/components/app/group-panel"
@@ -53,10 +54,11 @@ async function ConversationBody({ params }: { params: Params }) {
               }))}
             />
           ) : others[0] ? (
-            <Link href={`/${others[0].handle}`} className="text-sm font-semibold text-dusk hover:underline">
+            <Link href={`/${others[0].handle}`} className="text-sm font-semibold text-foreground hover:underline">
               @{others[0].handle}
             </Link>
           ) : null}
+          <CallButton name={title} />
           <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
           </div>
         }

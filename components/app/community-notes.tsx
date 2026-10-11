@@ -162,7 +162,7 @@ function AddNote({ postId }: { postId: string }) {
         onChange={(event) => setValue(event.target.value)}
         rows={3}
         placeholder="Add context that helps readers understand this post"
-        className="rounded-xl border border-border bg-background p-3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="rounded-xl border border-border bg-background p-3 text-[15px] outline-none focus-visible:border-foreground/50"
       />
       <div className="flex items-center justify-between gap-3">
         <span className={cn("text-xs tabular-nums", length > MAX_NOTE ? "text-destructive" : "text-muted-foreground")}>

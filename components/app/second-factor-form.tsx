@@ -27,7 +27,7 @@ export function SecondFactorForm() {
           autoComplete="one-time-code"
           inputMode="text"
           placeholder="123456 or a recovery code"
-          className="h-11 rounded-[4px] border border-input bg-background px-3 text-[15px] tracking-wider outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-11 rounded-xl border border-input bg-background px-3 text-[15px] tracking-wider outline-none focus-visible:border-foreground/50"
         />
         <span className="text-xs text-muted-foreground">Codes from your authenticator app change every 30 seconds.</span>
       </label>

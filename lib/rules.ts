@@ -2,6 +2,7 @@
 
 export const MAX_POST = 280
 export const MAX_BIO = 160
+export const MAX_STATUS = 40
 export const MAX_NAME = 50
 export const MAX_LOCATION = 30
 export const MAX_WEBSITE = 100
@@ -30,12 +31,30 @@ export const RESERVED_HANDLES = new Set([
 ])
 
 export const HANDLE_PATTERN = /^[A-Za-z0-9_]{3,15}$/
+export const HANDLE_MIN = 3
+export const HANDLE_MAX = 15
+export const HANDLE_MAX_UNDERSCORES = 5
+export const HANDLE_MIN_LETTERS = 3
 
 export function countChars(text: string): number {
   return [...text].length
 }
 
+// The first problem with a handle as typed (without the @), or null when it is valid.
+// The signup form shows this live in red, and the server runs the same check.
+export function handleProblem(handle: string): string | null {
+  if (handle.length === 0) return null
+  if (!/^[A-Za-z0-9_]*$/.test(handle)) return "Use only letters, numbers and underscores."
+  if (handle.length < HANDLE_MIN) return `At least ${HANDLE_MIN} characters.`
+  if (handle.length > HANDLE_MAX) return `No more than ${HANDLE_MAX} characters.`
+  if ((handle.match(/_/g) ?? []).length > HANDLE_MAX_UNDERSCORES) return `Up to ${HANDLE_MAX_UNDERSCORES} underscores.`
+  if ((handle.match(/[A-Za-z]/g) ?? []).length < HANDLE_MIN_LETTERS) return `At least ${HANDLE_MIN_LETTERS} letters.`
+  return null
+}
+
 export function validateHandle(handle: string): string | null {
+  const problem = handleProblem(handle)
+  if (problem) return problem
   if (!HANDLE_PATTERN.test(handle)) {
     return "Handles use 3 to 15 letters, numbers or underscores."
   }
@@ -122,8 +141,6 @@ export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as c
 
 export const MAX_LIST_NAME = 25
 export const MAX_LIST_DESCRIPTION = 100
-export const MAX_COMMUNITY_NAME = 50
-export const MAX_COMMUNITY_DESCRIPTION = 160
 export const MAX_MUTED_WORD = 50
 export const MAX_GROUP_TITLE = 50
 export const MAX_GROUP_MEMBERS = 50

@@ -17,7 +17,7 @@ export function PeopleList({
   emptyText: string
 }) {
   if (users.length === 0) {
-    return <p className="px-4 py-14 text-center text-muted-foreground">{emptyText}</p>
+    return <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">{emptyText}</p>
   }
   return (
     <ul>

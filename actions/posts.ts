@@ -57,7 +57,6 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const scheduleAt = scheduleRaw && !draft ? Number(scheduleRaw) : null
   const replyTo = text(formData.get("replyTo"))
   const quoteOf = text(formData.get("quoteOf"))
-  const communityId = replyTo ? null : text(formData.get("communityId"))
   const replySetting = replyTo ? "everyone" : parseReplySetting(text(formData.get("replySetting")))
 
   const videos = files.filter((f) => f.type.startsWith("video/")).length
@@ -87,10 +86,6 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
     const quoted = get<{ is_draft: number; publish_at: number | null }>("SELECT is_draft, publish_at FROM posts WHERE id = ?", quoteOf)
     if (!quoted || quoted.is_draft === 1 || quoted.publish_at !== null) return { ok: false, error: "That post was deleted." }
   }
-  if (communityId) {
-    const member = get("SELECT 1 AS found FROM community_members WHERE community_id = ? AND user_id = ?", communityId, viewer.id)
-    if (!member) return { ok: false, error: "Join this community to post in it." }
-  }
 
   const saved: { file: string; kind: MediaKind; alt: string }[] = []
   for (let i = 0; i < files.length; i++) {
@@ -109,8 +104,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const publishAt = status === "scheduled" ? scheduleAt : null
   transaction(() => {
     run(
-      `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, community_id)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
       id,
       viewer.id,
       body,
@@ -120,8 +115,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
       replySetting,
       sensitive ? 1 : 0,
       publishAt,
-      draft ? 1 : 0,
-      communityId
+      draft ? 1 : 0
     )
     saved.forEach((media, position) => {
       run(

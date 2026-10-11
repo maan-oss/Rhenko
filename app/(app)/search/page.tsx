@@ -8,7 +8,7 @@ import { FeedList } from "@/components/app/feed-list"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
 import { RecentSearches, RememberSearch } from "@/components/app/recent-searches"
-import { ScrollTabs } from "@/components/app/scroll-tabs"
+import { TabLinks } from "@/components/app/tabs"
 import { SearchField } from "@/components/app/search-field"
 
 type SearchParams = Promise<{ q?: string | string[]; f?: string | string[] }>
@@ -40,7 +40,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader title={q ? q : "Search"} backHref="/explore" />
       <SearchField defaultQuery={q} type={type} />
       {q ? (
-        <ScrollTabs
+        <TabLinks
           items={TYPES.map((t) => ({
             href: `/search?q=${encodeURIComponent(q)}&f=${t.key}`,
             label: t.label,

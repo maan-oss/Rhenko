@@ -6,7 +6,7 @@ import { redirect } from "next/navigation"
 import { currentSessionHash, destroySession, getViewer, hashPassword, newId, verifyPassword } from "@/lib/auth"
 import { get, run, transaction } from "@/lib/db"
 import { mediaFilesFor, removeFiles, treeOfAuthor } from "@/lib/post-writes"
-import { MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
+import { MAX_PASSWORD, MAX_STATUS, MIN_PASSWORD } from "@/lib/rules"
 import { generateRecoveryCodes, generateSecret, matchTotp, otpauthUri } from "@/lib/totp"
 import { removeUpload } from "@/lib/uploads"
 
@@ -25,6 +25,17 @@ async function checkPassword(userId: string, password: string): Promise<boolean>
   const row = get<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = ?", userId)
   if (!row) return false
   return verifyPassword(password, row.password_hash)
+}
+
+// A short line shown next to your name, like a Discord status. Blank clears it.
+export async function setStatus(_prev: AccountState, formData: FormData): Promise<AccountState> {
+  const viewer = await getViewer()
+  if (!viewer) return { error: "Sign in first." }
+  const status = String(formData.get("status") ?? "").trim().replace(/\s+/g, " ")
+  if (Array.from(status).length > MAX_STATUS) return { error: `Statuses can have up to ${MAX_STATUS} characters.` }
+  run("UPDATE users SET status = ? WHERE id = ?", status, viewer.id)
+  refresh()
+  return { ok: true }
 }
 
 export async function changePassword(_prev: AccountState, formData: FormData): Promise<AccountState> {

@@ -25,8 +25,6 @@ export type PollView = {
   options: PollOption[]
 }
 
-export type CommunityRef = { id: string; name: string }
-
 export type PostCore = {
   id: string
   body: string
@@ -42,7 +40,6 @@ export type PostCore = {
   replySetting: ReplySetting
   canReply: boolean
   poll: PollView | null
-  community: CommunityRef | null
   author: MiniUser
   replies: number
   reposts: number
@@ -85,8 +82,6 @@ type PostRow = {
   reply_to_id: string | null
   quote_of_id: string | null
   reply_setting: string
-  community_id: string | null
-  community_name: string | null
   reply_to_handle: string | null
   author_id: string
   author_handle: string
@@ -217,7 +212,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   const marks = ids.map(() => "?").join(",")
   const rows = all<PostRow>(
     `SELECT p.id, p.body, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
-       p.reply_setting, p.community_id, c.name AS community_name,
+       p.reply_setting,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
        (SELECT COUNT(*) FROM posts r WHERE r.reply_to_id = p.id AND r.is_draft = 0 AND r.publish_at IS NULL) AS replies,
@@ -243,7 +238,6 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
        ) AS has_note
      FROM posts p
      JOIN users u ON u.id = p.author_id
-     LEFT JOIN communities c ON c.id = p.community_id
      WHERE p.id IN (${marks})`,
     viewerId, // liked
     viewerId, // reposted
@@ -281,7 +275,6 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       replySetting: (r.reply_setting as ReplySetting) ?? "everyone",
       canReply,
       poll: polls.get(r.id) ?? null,
-      community: r.community_id && r.community_name ? { id: r.community_id, name: r.community_name } : null,
       author: {
         id: r.author_id,
         handle: r.author_handle,
@@ -406,7 +399,7 @@ export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor
   const source = `
     SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
     FROM posts p
-    WHERE p.reply_to_id IS NULL AND p.community_id IS NULL
+    WHERE p.reply_to_id IS NULL
       AND (? = 'all' OR p.author_id = ? OR p.author_id IN (${FOLLOWING}))
     UNION ALL
     SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
@@ -472,13 +465,6 @@ export function listFeed(listId: string, viewerId: string, cursor?: string, limi
     SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
     FROM reposts r WHERE r.user_id IN (${members})`
   return feedPage(source, [listId, listId], cursor, limit, viewerId)
-}
-
-export function communityFeed(communityId: string, viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
-  const source = `
-    SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-    FROM posts p WHERE p.reply_to_id IS NULL AND p.community_id = ?`
-  return feedPage(source, [communityId], cursor, limit, viewerId)
 }
 
 export function topicFeed(tag: string, viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
@@ -716,6 +702,7 @@ export type ProfileView = {
   website: string
   avatarFile: string | null
   bannerFile: string | null
+  status: string
   createdAt: number
   followers: number
   following: number
@@ -740,6 +727,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     website: string
     avatar_file: string | null
     banner_file: string | null
+    status: string
     created_at: number
     verified: number
     protected: number
@@ -750,7 +738,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     following: number
     posts: number
   }>(
-    `SELECT u.id, u.handle, u.name, u.bio, u.location, u.website, u.avatar_file, u.banner_file, u.created_at,
+    `SELECT u.id, u.handle, u.name, u.bio, u.location, u.website, u.avatar_file, u.banner_file, u.status, u.created_at,
        u.verified, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
        (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) AS followers,
        (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
@@ -770,6 +758,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     website: row.website,
     avatarFile: row.avatar_file,
     bannerFile: row.banner_file,
+    status: row.status,
     createdAt: row.created_at,
     followers: row.followers,
     following: row.following,
@@ -1227,29 +1216,6 @@ export function listDetail(id: string, viewerId: string): { list: ListSummary; m
     id
   ).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 }))
   return { list, members }
-}
-
-export type CommunitySummary = {
-  id: string
-  name: string
-  description: string
-  memberCount: number
-  role: string | null
-}
-
-export function communitiesFor(viewerId: string, limit = 60): CommunitySummary[] {
-  return all<{ id: string; name: string; description: string; member_count: number; role: string | null }>(
-    `SELECT c.id, c.name, c.description,
-       (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id) AS member_count,
-       (SELECT role FROM community_members m WHERE m.community_id = c.id AND m.user_id = ?) AS role
-     FROM communities c ORDER BY member_count DESC, c.created_at DESC LIMIT ?`,
-    viewerId,
-    limit
-  ).map((r) => ({ id: r.id, name: r.name, description: r.description, memberCount: r.member_count, role: r.role }))
-}
-
-export function communityDetail(id: string, viewerId: string): CommunitySummary | null {
-  return communitiesFor(viewerId, 200).find((c) => c.id === id) ?? null
 }
 
 export function bookmarkFolders(viewerId: string): { id: string; name: string; count: number }[] {

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME } from "@/lib/rules"
 
 const INPUT =
-  "h-11 rounded-[4px] border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+  "h-11 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
 function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
   const { pending } = useFormStatus()

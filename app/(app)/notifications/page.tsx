@@ -62,7 +62,7 @@ async function NotificationsBody({ searchParams }: { searchParams: SearchParams 
         </section>
       ) : null}
       {notes.length === 0 ? (
-        <div className="flex flex-col gap-2 px-4 py-16">
+        <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
           <p className="text-lg font-semibold">{tab === "mentions" ? "No mentions yet" : "Nothing here yet"}</p>
           <p className="max-w-sm text-muted-foreground">Likes, replies, reposts and follows from other people show up here.</p>
         </div>

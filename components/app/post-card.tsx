@@ -100,11 +100,6 @@ export function PostCard({
                 <RelativeTime at={post.createdAt} />
               </Link>
             </time>
-            {post.community ? (
-              <Link href={`/communities/${post.community.id}`} className="relative z-10 text-[13px] text-dusk hover:underline">
-                {post.community.name}
-              </Link>
-            ) : null}
             {post.editedAt ? <EditHistory postId={post.id} /> : null}
           </header>
           {post.replyToHandle && !detail ? (

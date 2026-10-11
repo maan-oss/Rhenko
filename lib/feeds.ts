@@ -1,7 +1,6 @@
 import { get } from "@/lib/db"
 import {
   bookmarkFeed,
-  communityFeed,
   hasSearchContent,
   homeFeed,
   listFeed,
@@ -23,7 +22,7 @@ export type FeedSpec =
   | { kind: "profile"; tab: ProfileTab; handle: string }
   | { kind: "bookmarks"; folder?: string }
   | { kind: "list"; listId: string }
-  | { kind: "community"; communityId: string }
+  | { kind: "explore"; sort: "top" | "latest"; media: boolean }
   | { kind: "topic"; tag: string }
   | { kind: "search"; q: string; sort: "top" | "latest" }
 
@@ -45,8 +44,8 @@ export function parseSpec(input: unknown): FeedSpec | null {
       return isString(spec.folder) ? { kind: "bookmarks", folder: spec.folder } : null
     case "list":
       return isString(spec.listId) ? { kind: "list", listId: spec.listId } : null
-    case "community":
-      return isString(spec.communityId) ? { kind: "community", communityId: spec.communityId } : null
+    case "explore":
+      return { kind: "explore", sort: spec.sort === "latest" ? "latest" : "top", media: spec.media === true }
     case "topic":
       return isString(spec.tag) ? { kind: "topic", tag: normalizeTag(spec.tag) } : null
     case "search":
@@ -83,8 +82,8 @@ export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): Feed
       return bookmarkFeed(viewerId, spec.folder, cursor)
     case "list":
       return listFeed(spec.listId, viewerId, cursor)
-    case "community":
-      return communityFeed(spec.communityId, viewerId, cursor)
+    case "explore":
+      return searchPostFeed(parseSearch(spec.media ? "filter:media" : ""), spec.sort, viewerId, cursor)
     case "topic":
       return topicFeed(spec.tag, viewerId, cursor)
     case "search": {

@@ -30,7 +30,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-const INPUT = "h-11 rounded-[4px] border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+const INPUT = "h-11 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
 export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
   const [open, setOpen] = useState(false)
@@ -59,7 +59,7 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
               rows={3}
               maxLength={MAX_BIO}
               defaultValue={defaults.bio}
-              className="rounded-[4px] border border-input bg-background px-3 py-2 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="rounded-xl border border-input bg-background px-3 py-2 text-[15px] outline-none focus-visible:border-foreground/50"
             />
           </Field>
           <Field label="Location">

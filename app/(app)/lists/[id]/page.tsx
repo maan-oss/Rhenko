@@ -84,7 +84,7 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
       ) : (
         <div>
           {members.length === 0 ? (
-            <p className="px-4 py-14 text-center text-muted-foreground">No one is on this list yet.</p>
+            <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">No one is on this list yet.</p>
           ) : (
             <ul className="list-none">
               {members.map((member) => (

@@ -267,7 +267,7 @@ export function PostActions(props: Props) {
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={`Repost, ${repostState.count} reposts`}
-          className={cn(BUTTON, "relative z-10", repostState.active && "text-emerald-500 hover:text-emerald-500")}
+          className={cn(BUTTON, "relative z-10", repostState.active && "text-foreground font-semibold")}
         >
           <Repeat2 className="size-[18px]" />
           <Count value={repostState.count} />

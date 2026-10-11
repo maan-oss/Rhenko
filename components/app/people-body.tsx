@@ -25,7 +25,7 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: "foll
         ]}
       />
       {hidden ? (
-        <p className="px-4 py-14 text-center text-muted-foreground">This account is protected. Follow it to see who it follows.</p>
+        <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">This account is protected. Follow it to see who it follows.</p>
       ) : (
         <PeopleList
           users={users}

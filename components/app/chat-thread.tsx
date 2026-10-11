@@ -38,7 +38,7 @@ export function ChatThread({ conversationId, messages, showNames }: { conversati
   }, [conversationId])
 
   if (messages.length === 0) {
-    return <p className="px-4 py-16 text-center text-muted-foreground">No messages yet. Say hello.</p>
+    return <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">No messages yet. Say hello.</p>
   }
 
   const lastOwn = [...messages].reverse().find((m) => m.mine)

@@ -400,6 +400,11 @@ CREATE INDEX IF NOT EXISTS profile_visits_profile ON profile_visits(profile_id, 
 ALTER TABLE users ADD COLUMN mentions_verified_only INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE conversation_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;
 `,
+
+  // 6. A short status shown beside the account, like a status line in chat apps.
+  `
+ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT '';
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

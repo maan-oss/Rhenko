@@ -13,7 +13,7 @@ import { MAX_GROUP_TITLE } from "@/lib/rules"
 type Member = { id: string; name: string; handle: string; status: "accepted" | "requested" }
 
 const INPUT =
-  "h-10 min-w-0 flex-1 rounded-[4px] border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+  "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
 // Rename, add people, or leave a group.
 export function GroupPanel({ conversationId, title, members }: { conversationId: string; title: string; members: Member[] }) {

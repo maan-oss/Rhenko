@@ -1,9 +1,9 @@
 import { Search } from "lucide-react"
 
 // A plain GET form, so searches work without JavaScript and can be bookmarked.
-export function SearchField({ defaultQuery, type }: { defaultQuery: string; type?: string }) {
+export function SearchField({ defaultQuery, type, className = "px-4 pt-3 pb-3" }: { defaultQuery: string; type?: string; className?: string }) {
   return (
-    <form action="/search" role="search" className="px-4 pt-3 pb-3">
+    <form action="/search" role="search" className={className}>
       {type ? <input type="hidden" name="f" value={type} /> : null}
       <label htmlFor="search-q" className="sr-only">
         Search Rhenko

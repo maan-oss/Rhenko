@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
 export const FIELD_INPUT =
-  "h-11 rounded-[4px] border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+  "h-11 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
