@@ -77,7 +77,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 
 **Explore and search**
 - Explore is a search field, one icon button that switches between ranked posts (the default) and the latest, and a Media switch that shows only posts with photos or videos. Both controls live in the URL, so a view can be shared.
-- The sidebar search is a field. Clicking or focusing it drops a card of recent searches, which arrive one after another. Escape closes it.
+- The sidebar search is a field. Clicking or focusing it opens a card that fades in with the recent searches, one row after another, the way the America.gov menu opens. Typing adds a "Search for" row, arrow down moves into the card, and Escape closes it.
 - Search posts and people with `from:handle`, `to:handle`, `since:YYYY-MM-DD`, `until:YYYY-MM-DD`, `filter:images|videos|media|links|replies`, `min_likes:N`, `min_reposts:N`, and `-word` to leave a word out.
 - The right rail shows trending hashtags, topics (`/topics/[tag]`) and suggested people.
 

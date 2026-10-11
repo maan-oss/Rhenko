@@ -167,7 +167,7 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
                 {label}
                 <span
                   aria-hidden="true"
-                  className={cn("absolute inset-x-0 -bottom-px h-px origin-left scale-x-0 bg-foreground transition-transform duration-300 group-hover:scale-x-100", EASE)}
+                  className={cn("absolute inset-x-0 bottom-0 h-[1.5px] origin-left scale-x-0 rounded-full bg-foreground transition-transform duration-300 group-hover:scale-x-100", EASE)}
                 />
               </span>
               {badge > 0 ? <CountPill count={badge} /> : null}
