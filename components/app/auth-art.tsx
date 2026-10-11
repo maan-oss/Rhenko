@@ -3,12 +3,11 @@
 import { useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 
-// The sign-in art is liquid metal. A polished medallion of metal sits at the centre, with the Rhenko mark
-// cut out of it, so the mark stays crisp and shows the panel's own colour. Droplets orbit the medallion,
-// drift into it and merge. The medallion is alive: its edge swells toward the pointer, a click sends a
-// ripple through it and throws droplets off that fall back in, and the light in the metal follows the
-// pointer. The metal colours come from the theme tokens, so it reads in light and dark. Under reduced
-// motion it holds still.
+// The sign-in art is liquid chrome, shown on desktop only. A polished medallion sits at the centre with the
+// Rhenko mark cut out of it, so the mark stays crisp and shows the panel's colour. Droplets orbit it and merge in.
+// The chrome reflects a horizon that drifts slowly, and the whole piece bobs on a steady rhythm. The medallion
+// swells toward the pointer, a click sends a ripple through it and throws droplets off that fall back in, and the
+// light follows the pointer. The colours come from the theme tokens. Under reduced motion it holds still.
 
 const VIEW_W = 600
 const VIEW_H = 800
@@ -78,6 +77,8 @@ export function AuthArt({ className }: { className?: string }) {
   const headRef = useRef<SVGCircleElement>(null)
   const trailRef = useRef<SVGCircleElement>(null)
   const lightRef = useRef<SVGFEPointLightElement>(null)
+  const chromeRef = useRef<SVGLinearGradientElement>(null)
+  const bobRef = useRef<SVGGElement>(null)
 
   useEffect(() => {
     const wrapEl = wrapRef.current
@@ -85,13 +86,17 @@ export function AuthArt({ className }: { className?: string }) {
     const headEl = headRef.current
     const trailEl = trailRef.current
     const lightEl = lightRef.current
-    if (!wrapEl || !coinEl || !headEl || !trailEl || !lightEl) return
+    const chromeEl = chromeRef.current
+    const bobEl = bobRef.current
+    if (!wrapEl || !coinEl || !headEl || !trailEl || !lightEl || !chromeEl || !bobEl) return
     // Typed, non-null copies, so the helpers below don't have to re-check them.
     const wrap: HTMLDivElement = wrapEl
     const coin: SVGPathElement = coinEl
     const head: SVGCircleElement = headEl
     const trail: SVGCircleElement = trailEl
     const light: SVGFEPointLightElement = lightEl
+    const chrome: SVGLinearGradientElement = chromeEl
+    const bob: SVGGElement = bobEl
     const dropEls = dropRefs.current.filter((el): el is SVGEllipseElement => Boolean(el))
     const splashEls = splashRefs.current.filter((el): el is SVGEllipseElement => Boolean(el))
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -227,7 +232,7 @@ export function AuthArt({ className }: { className?: string }) {
       // The light follows the pointer, and drifts across the top of the panel when the pointer is away.
       const lightGoal = pointer.inside
         ? { x: pointer.x - 40, y: pointer.y - 70 }
-        : { x: CENTER.x + 240 * Math.cos(t * 0.19), y: 150 + 90 * Math.sin(t * 0.23) }
+        : { x: CENTER.x + 240 * Math.cos(t * 0.25), y: 170 + 90 * Math.sin(t * 0.25) }
       const lightK = 1 - Math.exp(-dt * 2.5)
       lightPos.x += (lightGoal.x - lightPos.x) * lightK
       lightPos.y += (lightGoal.y - lightPos.y) * lightK
@@ -257,6 +262,12 @@ export function AuthArt({ className }: { className?: string }) {
     }
 
     function render() {
+      // The horizon drifts up and down the medallion, so the chrome seems to turn in the light.
+      const horizon = CENTER.y + 46 * Math.sin(t * 0.45) + (pull * 30) * Math.cos(t * 0.8)
+      chrome.setAttribute("y1", (horizon - 240).toFixed(1))
+      chrome.setAttribute("y2", (horizon + 240).toFixed(1))
+      // The whole piece rises and falls on one steady rhythm, with a slight sway.
+      bob.setAttribute("transform", `translate(${(5 * Math.sin(t * 0.27)).toFixed(2)} ${(12 * Math.sin(t * 0.6)).toFixed(2)})`)
       coin.setAttribute("d", coinPath())
 
       head.setAttribute("cx", headPos.x.toFixed(1))
@@ -295,7 +306,8 @@ export function AuthArt({ className }: { className?: string }) {
     function loop(now: number) {
       const dt = last ? Math.min(0.05, (now - last) / 1000) : 0
       last = now
-      frameTick(dt)
+      // Hidden on phones: keep the clock running but skip the work until the art is on screen again.
+      if (wrap.offsetParent !== null) frameTick(dt)
       frame = requestAnimationFrame(loop)
     }
 
@@ -337,11 +349,13 @@ export function AuthArt({ className }: { className?: string }) {
     <div ref={wrapRef} aria-hidden="true" className={cn("absolute inset-0 overflow-hidden", className)}>
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid slice" className="absolute inset-0 size-full">
         <defs>
-          {/* The metal runs from the theme's top highlight to its base, so it reads as polished in both themes. */}
-          <linearGradient id="auth-art-metal" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={VIEW_W} y2={VIEW_H}>
-            <stop offset="0" style={{ stopColor: "var(--metal-top)" }} />
-            <stop offset="0.55" style={{ stopColor: "var(--metal-mid)" }} />
-            <stop offset="1" style={{ stopColor: "var(--metal-bottom)" }} />
+          {/* Chrome: a sky, a bright horizon line, then a dark ground. The horizon moves; see render(). */}
+          <linearGradient ref={chromeRef} id="auth-art-chrome" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={CENTER.y - 240} y2={CENTER.y + 240}>
+            <stop offset="0" style={{ stopColor: "var(--art-top)" }} />
+            <stop offset="0.44" style={{ stopColor: "var(--art-mid)" }} />
+            <stop offset="0.5" style={{ stopColor: "var(--art-line)" }} />
+            <stop offset="0.56" style={{ stopColor: "var(--art-low)" }} />
+            <stop offset="1" style={{ stopColor: "var(--art-base)" }} />
           </linearGradient>
 
           {/* Blur, then sharpen the edge into a bead of liquid, then light the bead so it glints. */}
@@ -370,8 +384,8 @@ export function AuthArt({ className }: { className?: string }) {
           </mask>
         </defs>
 
-        <g mask="url(#auth-art-cut)">
-          <g filter="url(#auth-art-liquid)" fill="url(#auth-art-metal)">
+        <g ref={bobRef} mask="url(#auth-art-cut)">
+          <g filter="url(#auth-art-liquid)" fill="url(#auth-art-chrome)">
             <path ref={coinRef} d={`M${CENTER.x - COIN_R} ${CENTER.y}A${COIN_R} ${COIN_R} 0 1 0 ${CENTER.x + COIN_R} ${CENTER.y}A${COIN_R} ${COIN_R} 0 1 0 ${CENTER.x - COIN_R} ${CENTER.y}Z`} />
             {DROPS.map((drop, index) => (
               <ellipse

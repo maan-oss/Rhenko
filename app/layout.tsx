@@ -27,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
-          <Toaster />
+          <Toaster position="top-center" />
         </ThemeProvider>
       </body>
     </html>

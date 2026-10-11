@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
 import { conversationFor, conversationMessages } from "@/lib/data"
 import { AcceptBar } from "@/components/app/accept-bar"
+import { Avatar } from "@/components/app/avatar"
 import { CallButton } from "@/components/app/call-button"
 import { ChatComposer } from "@/components/app/chat-composer"
 import { ChatThread } from "@/components/app/chat-thread"
@@ -39,27 +40,31 @@ async function ConversationBody({ params }: { params: Params }) {
     <>
       <PageHeader
         title={title}
+        subtitle={!isGroup && others[0] ? `@${others[0].handle}` : isGroup ? `${conversation.members.length} people` : undefined}
         backHref="/messages"
+        lead={
+          !isGroup && others[0] ? (
+            <Link href={`/${others[0].handle}`} aria-label={`Open ${others[0].name}'s profile`} className="shrink-0 rounded-full transition-opacity hover:opacity-80">
+              <Avatar user={others[0]} size={36} />
+            </Link>
+          ) : null
+        }
         actions={
           <div className="flex items-center gap-2">
-          {isGroup ? (
-            <GroupPanel
-              conversationId={conversation.id}
-              title={conversation.title}
-              members={[...orderedMembers, ...conversation.members.filter((m) => !orderedMembers.includes(m))].map((m) => ({
-                id: m.id,
-                name: m.name,
-                handle: m.handle,
-                status: m.status,
-              }))}
-            />
-          ) : others[0] ? (
-            <Link href={`/${others[0].handle}`} className="text-sm font-semibold text-foreground hover:underline">
-              @{others[0].handle}
-            </Link>
-          ) : null}
-          <CallButton name={title} />
-          <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
+            {isGroup ? (
+              <GroupPanel
+                conversationId={conversation.id}
+                title={conversation.title}
+                members={[...orderedMembers, ...conversation.members.filter((m) => !orderedMembers.includes(m))].map((m) => ({
+                  id: m.id,
+                  name: m.name,
+                  handle: m.handle,
+                  status: m.status,
+                }))}
+              />
+            ) : null}
+            <CallButton name={title} />
+            <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
           </div>
         }
       />
@@ -67,7 +72,7 @@ async function ConversationBody({ params }: { params: Params }) {
       {requested ? <AcceptBar conversationId={conversation.id} /> : null}
       <ChatThread conversationId={conversation.id} messages={messages} showNames={isGroup} />
       {requested ? (
-        <p className="sticky bottom-14 border-t border-border bg-background/95 px-4 py-4 text-sm text-muted-foreground backdrop-blur xl:bottom-0">
+        <p className="sticky bottom-0 border-t border-border bg-background/95 px-4 py-4 text-sm text-muted-foreground backdrop-blur">
           Accept the request to reply.
         </p>
       ) : (

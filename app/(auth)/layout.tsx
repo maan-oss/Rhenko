@@ -2,12 +2,13 @@ import type { ReactNode } from "react"
 import { AuthArt } from "@/components/app/auth-art"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 
-// The sign-in screens. The mark's art sits beside the form on wide screens and above it on phones.
+// The sign-in screens. The art sits beside the form on wide screens; phones show the form alone.
 // The form is one card, the same on every sign-in screen.
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <main className="app-canvas relative flex min-h-dvh flex-col overflow-hidden lg:flex-row">
-      <section className="relative h-60 w-full shrink-0 overflow-hidden bg-sidebar sm:h-72 lg:h-auto lg:w-[46%] lg:shrink">
+      {/* The art is for computers only. Phones get the form alone. */}
+      <section className="relative hidden overflow-hidden bg-sidebar lg:block lg:w-[46%] lg:shrink-0">
         <AuthArt />
       </section>
       <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-12 sm:px-8 lg:px-12">

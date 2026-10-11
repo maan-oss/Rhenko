@@ -371,8 +371,7 @@ export function PostActions(props: Props) {
           <Composer viewer={viewer} quoteOfId={postId} placeholder="Add a comment" compact autoFocus onPosted={() => setQuoteOpen(false)} />
           <div className="rounded-2xl border border-border p-3 text-sm">
             <p>
-              <span className="font-semibold">{quoteAuthor.name}</span>{" "}
-              <span className="text-muted-foreground">@{quoteAuthor.handle}</span>
+              <span className="font-semibold">{quoteAuthor.name}</span>
             </p>
             {quoteAuthor.body ? <PostBody text={quoteAuthor.body} className="mt-1 line-clamp-4 text-[15px]" /> : null}
           </div>

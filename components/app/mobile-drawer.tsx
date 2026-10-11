@@ -6,7 +6,6 @@ import { AnimatePresence, motion } from "motion/react"
 import { X } from "lucide-react"
 import { buildItems } from "@/components/app/nav"
 import { SidebarFooter, type FooterViewer } from "@/components/app/sidebar-footer"
-import { ThemeSettings } from "@/components/app/theme-settings"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import type { AccountSummary } from "@/lib/auth"
 import { cn } from "@/lib/utils"
@@ -121,7 +120,6 @@ export function MobileDrawer({ open, onClose, viewer, accounts, path, notificati
                 <RhenkoSymbol className="size-7" />
               </span>
               <div className="flex items-center gap-1">
-                <ThemeSettings />
                 <button
                   type="button"
                   onClick={onClose}

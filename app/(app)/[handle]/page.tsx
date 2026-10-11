@@ -153,7 +153,6 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             ) : null}
           </p>
         </div>
-        {profile.status ? <p className="glass w-fit max-w-full truncate rounded-full px-3 py-1 text-sm">{profile.status}</p> : null}
         {rel.blockedByMe && !isSelf ? (
           <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
         ) : null}

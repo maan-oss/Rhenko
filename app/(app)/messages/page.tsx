@@ -31,17 +31,20 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
     <>
       <PageHeader
         title="Messages"
+        tabs={
+          <TabLinks
+            label="Messages sections"
+            items={[
+              { href: "/messages", label: "Messages", icon: <MessageCircle />, active: tab === "messages" },
+              { href: "/messages?tab=requests", label: "Requests", icon: <UserRoundPlus />, active: tab === "requests", badge: requests },
+            ]}
+          />
+        }
         actions={
           <Button variant="outline" size="icon" render={<Link href="/messages/new" aria-label="New message" />} className="rounded-full">
             <Plus className="size-4" />
           </Button>
         }
-      />
-      <TabLinks
-        items={[
-          { href: "/messages", label: "Messages", icon: <MessageCircle />, active: tab === "messages" },
-          { href: "/messages?tab=requests", label: "Requests", icon: <UserRoundPlus />, active: tab === "requests", badge: requests },
-        ]}
       />
       {conversations.length === 0 ? (
         <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">

@@ -1,6 +1,8 @@
 "use client"
 
-import { useRef, useSyncExternalStore, type KeyboardEvent } from "react"
+import { useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
+import { createPortal } from "react-dom"
+import { motion, useReducedMotion } from "motion/react"
 import { useTheme } from "next-themes"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -18,6 +20,9 @@ const OPTIONS: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ]
+
+// The colour the sweep paints in: each theme's page background.
+const BACKDROP: Record<Theme, string> = { light: "#f5f1e8", dark: "#212121" }
 
 const noopSubscribe = () => () => {}
 
@@ -55,51 +60,90 @@ function WindowPreview({ theme }: { theme: Theme }) {
 export function ThemeChoice() {
   const { theme, setTheme } = useTheme()
   const ready = useSyncExternalStore(noopSubscribe, () => true, () => false)
+  const reduce = useReducedMotion()
+  const [sweep, setSweep] = useState<{ to: Theme; phase: "in" | "out" } | null>(null)
   const group = useRef<HTMLDivElement>(null)
+  const current: Theme = ready && theme === "dark" ? "dark" : "light"
+
+  // A panel sweeps down the screen in the new colour, the theme changes underneath it, and the panel leaves.
+  // Reduced motion gets the change with no sweep.
+  function choose(next: Theme) {
+    if (!ready || next === current) return
+    if (reduce) setTheme(next)
+    else setSweep({ to: next, phase: "in" })
+  }
+
+  function onSweepDone() {
+    if (!sweep) return
+    if (sweep.phase === "in") {
+      setTheme(sweep.to)
+      setSweep({ to: sweep.to, phase: "out" })
+    } else {
+      setSweep(null)
+    }
+  }
 
   // Radio groups move the selection with the arrow keys, and only the selected card sits in the tab order.
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return
     event.preventDefault()
-    const next: Theme = ready && theme === "dark" ? "light" : "dark"
-    setTheme(next)
+    const next: Theme = current === "dark" ? "light" : "dark"
+    choose(next)
     group.current?.querySelector<HTMLButtonElement>(`[data-theme-value="${next}"]`)?.focus()
   }
 
   return (
-    <div ref={group} role="radiogroup" aria-label="Theme" onKeyDown={onKeyDown} className="grid grid-cols-2 gap-3">
-      {OPTIONS.map(({ value, label }) => {
-        const active = ready && theme === value
-        return (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            data-theme-value={value}
-            tabIndex={!ready || active ? 0 : -1}
-            onClick={() => setTheme(value)}
-            className={cn(
-              "flex flex-col gap-2.5 rounded-2xl border p-2 text-left transition-colors duration-200",
-              active ? "border-foreground" : "border-border hover:border-foreground/40"
-            )}
-          >
-            <WindowPreview theme={value} />
-            <span className="flex items-center justify-between px-1 pb-0.5 text-sm font-semibold">
-              {label}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "grid size-4 place-items-center rounded-full border transition-colors duration-200",
-                  active ? "border-foreground bg-foreground text-background" : "border-border"
-                )}
-              >
-                {active ? <Check className="size-2.5" strokeWidth={3} /> : null}
+    <>
+      <div ref={group} role="radiogroup" aria-label="Theme" onKeyDown={onKeyDown} className="grid grid-cols-2 gap-3">
+        {OPTIONS.map(({ value, label }) => {
+          const active = ready && theme === value
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              data-theme-value={value}
+              tabIndex={!ready || active ? 0 : -1}
+              onClick={() => choose(value)}
+              className={cn(
+                "flex flex-col gap-2.5 rounded-2xl border p-2 text-left transition-colors duration-200",
+                active ? "border-foreground" : "border-border hover:border-foreground/40"
+              )}
+            >
+              <WindowPreview theme={value} />
+              <span className="flex items-center justify-between px-1 pb-0.5 text-sm font-semibold">
+                {label}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "grid size-4 place-items-center rounded-full border transition-colors duration-200",
+                    active ? "border-foreground bg-foreground text-background" : "border-border"
+                  )}
+                >
+                  {active ? <Check className="size-2.5" strokeWidth={3} /> : null}
+                </span>
               </span>
-            </span>
-          </button>
-        )
-      })}
-    </div>
+            </button>
+          )
+        })}
+      </div>
+      {ready && sweep
+        ? createPortal(
+            <motion.div
+              aria-hidden="true"
+              className="pointer-events-none fixed inset-0 z-[150]"
+              style={{ backgroundColor: BACKDROP[sweep.to] }}
+              initial={{ y: "-100%" }}
+              animate={{ y: sweep.phase === "in" ? "0%" : "100%" }}
+              transition={{ duration: 0.6, ease: [0.76, 0, 0.24, 1] }}
+              onAnimationComplete={onSweepDone}
+            >
+              <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-b from-transparent to-black/12 dark:to-white/10" />
+            </motion.div>,
+            document.body
+          )
+        : null}
+    </>
   )
 }

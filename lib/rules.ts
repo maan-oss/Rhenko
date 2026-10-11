@@ -2,7 +2,6 @@
 
 export const MAX_POST = 280
 export const MAX_BIO = 160
-export const MAX_STATUS = 40
 export const MAX_NAME = 50
 export const MAX_LOCATION = 30
 export const MAX_WEBSITE = 100

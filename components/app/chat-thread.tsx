@@ -18,8 +18,10 @@ export function ChatThread({ conversationId, messages, showNames }: { conversati
   const [typing, setTyping] = useState<string | null>(null)
   const timer = useRef<number | undefined>(undefined)
 
+  // Start at the newest message. The scroll waits for the first frame so the thread has its height before it moves.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" })
+    const frame = requestAnimationFrame(() => endRef.current?.scrollIntoView({ block: "end" }))
+    return () => cancelAnimationFrame(frame)
   }, [messages.length])
 
   useEffect(() => {
@@ -44,23 +46,51 @@ export function ChatThread({ conversationId, messages, showNames }: { conversati
   const lastOwn = [...messages].reverse().find((m) => m.mine)
 
   return (
-    <div className="flex flex-col gap-3 py-4">
-      {messages.map((message, index) => (
-        <MessageRow
-          key={message.id}
-          message={message}
-          showSeen={message.id === lastOwn?.id && message.seen}
-          // In a group, name the sender once at the start of each run of their messages.
-          showName={showNames && !message.mine && messages[index - 1]?.senderId !== message.senderId}
-        />
-      ))}
+    <div className="flex flex-col pt-4 pb-12">
+      {messages.map((message, index) => {
+        const previous = messages[index - 1]
+        const next = messages[index + 1]
+        return (
+          <MessageRow
+            key={message.id}
+            message={message}
+            showSeen={message.id === lastOwn?.id && message.seen}
+            // Messages from the same sender in quick succession stack into one run.
+            joinsPrev={sameRun(previous, message)}
+            joinsNext={sameRun(message, next)}
+            // In a group, name the sender once at the start of each run of their messages.
+            showName={showNames && !message.mine && !sameRun(previous, message)}
+          />
+        )
+      })}
       {typing ? <p className="px-4 text-sm text-muted-foreground">{typing} is typing…</p> : null}
-      <div ref={endRef} />
+      {/* The margin is the sticky composer, so the newest message clears it when the thread scrolls to the end. */}
+      <div ref={endRef} className="scroll-mb-[88px] lg:scroll-mb-[80px]" />
     </div>
   )
 }
 
-function MessageRow({ message, showSeen, showName }: { message: MessageView; showSeen: boolean; showName: boolean }) {
+// Two messages from one sender, a few minutes apart, read as one run.
+const RUN_MS = 5 * 60 * 1000
+
+function sameRun(a: MessageView | undefined, b: MessageView | undefined): boolean {
+  if (!a || !b) return false
+  return a.senderId === b.senderId && !a.deleted && !b.deleted && Math.abs(b.createdAt - a.createdAt) < RUN_MS
+}
+
+function MessageRow({
+  message,
+  showSeen,
+  showName,
+  joinsPrev,
+  joinsNext,
+}: {
+  message: MessageView
+  showSeen: boolean
+  showName: boolean
+  joinsPrev: boolean
+  joinsNext: boolean
+}) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
@@ -73,13 +103,14 @@ function MessageRow({ message, showSeen, showName }: { message: MessageView; sho
   }
 
   return (
-    <div className={cn("group flex flex-col gap-1 px-4", message.mine ? "items-end" : "items-start")}>
+    <div className={cn("group flex flex-col gap-1 px-4", joinsPrev ? "pt-[3px]" : "pt-3", message.mine ? "items-end" : "items-start")}>
       {showName ? <span className="text-xs text-muted-foreground">{message.senderName}</span> : null}
       <div className={cn("flex items-end gap-2", message.mine && "flex-row-reverse")}>
         <div
           className={cn(
-            "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed",
-            message.mine ? "rounded-br-md bg-dusk text-background [&_a]:text-background [&_a]:underline" : "rounded-bl-md bg-muted",
+            "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
+            // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
+            message.mine ? "bg-dusk text-background [&_a]:text-background [&_a]:underline" : "bg-muted",
             message.deleted && "italic opacity-70"
           )}
         >
@@ -98,7 +129,6 @@ function MessageRow({ message, showSeen, showName }: { message: MessageView; sho
                   className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
                 >
                   <span className="text-sm font-semibold">{message.post.author.name}</span>
-                  <span className="text-sm text-muted-foreground"> @{message.post.author.handle}</span>
                   {message.post.body ? <span className="mt-1 line-clamp-3 block text-sm">{message.post.body}</span> : null}
                 </Link>
               ) : null}
@@ -166,10 +196,13 @@ function MessageRow({ message, showSeen, showName }: { message: MessageView; sho
         </div>
       ) : null}
 
-      <p className="text-xs text-muted-foreground">
-        {showSeen ? "Seen · " : null}
-        <LocalTime at={message.createdAt} variant="clock" />
-      </p>
+      {/* The time sits under the last message of a run; the run shares it. */}
+      {!joinsNext || showSeen ? (
+        <p className="text-xs text-muted-foreground">
+          {showSeen ? "Seen · " : null}
+          <LocalTime at={message.createdAt} variant="clock" />
+        </p>
+      ) : null}
     </div>
   )
 }

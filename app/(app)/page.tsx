@@ -1,10 +1,11 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { FileText, Plus, Sparkles, Users } from "lucide-react"
+import { Sparkles, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { trendingTags } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
+import { MenuButton } from "@/components/app/menu-button"
 import { PageHeader } from "@/components/app/page-header"
 import { TabLinks } from "@/components/app/tabs"
 import { Composer } from "@/components/app/composer"
@@ -33,6 +34,8 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
     <>
       <PageHeader
         title="Home"
+        hideTitleOnPhone
+        lead={<MenuButton />}
         tabs={
           <TabLinks
             items={[
@@ -40,24 +43,6 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
               { href: "/?tab=following", label: "Following", icon: <Users />, active: following },
             ]}
           />
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/drafts"
-              aria-label="Drafts and scheduled posts"
-              className="glass grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5"
-            >
-              <FileText className="size-4" aria-hidden="true" />
-            </Link>
-            <Link
-              href="/lists"
-              aria-label="Timelines and lists"
-              className="glass grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-            </Link>
-          </div>
         }
       />
       {tags.length > 0 ? (

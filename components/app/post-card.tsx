@@ -25,7 +25,7 @@ function QuotedPost({ post }: { post: PostCore }) {
         <span className="font-semibold">{post.author.name}</span>
         {post.author.verified ? <VerifiedBadge className="ml-1 inline-block align-[-2px]" /> : null}{" "}
         <span className="text-muted-foreground">
-          @{post.author.handle} · <RelativeTime at={post.createdAt} />
+          · <RelativeTime at={post.createdAt} />
         </span>
       </p>
       {post.body ? <PostBody text={post.body} className="mt-1 line-clamp-6 text-[15px]" /> : null}

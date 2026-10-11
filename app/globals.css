@@ -97,6 +97,12 @@
   --metal-bottom: #12110f;
   --metal-text: #f5f1e8;
   --chrome-fill: #fbf8f2;
+  /* Chrome for the sign-in art: a sky, a bright horizon line, a dark ground. Light theme is dark chrome. */
+  --art-top: #9c978e;
+  --art-mid: #f7f4ee;
+  --art-line: #ffffff;
+  --art-low: #1b1916;
+  --art-base: #4d4941;
 }
 
 /* Dark: ChatGPT's charcoal. */
@@ -145,6 +151,12 @@
   --metal-bottom: #bdbdbd;
   --metal-text: #212121;
   --chrome-fill: #2b2b2b;
+  /* Dark theme is bright chrome: a white sky over a dark horizon and a light ground. */
+  --art-top: #f7f7f7;
+  --art-mid: #1c1c1c;
+  --art-line: #ffffff;
+  --art-low: #a3a3a3;
+  --art-base: #e6e6e6;
 }
 
 @layer base {

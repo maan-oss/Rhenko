@@ -7,7 +7,6 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
 import { SidebarFooter } from "@/components/app/sidebar-footer"
 import { SidebarSearch } from "@/components/app/sidebar-search"
-import { ThemeSettings } from "@/components/app/theme-settings"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import type { AccountSummary } from "@/lib/auth"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
@@ -30,8 +29,8 @@ type Props = {
   initialCollapsed: boolean
 }
 
-// One full-height surface, fully opaque. The logo leads at the top; settings, the theme switch and the
-// collapse control sit on the right. The footer holds Post, then your profile with its account menu and log out.
+// One full-height surface, fully opaque. The logo leads at the top, with the collapse control on the right.
+// The footer holds Post, then your profile with its account menu and log out.
 export function SidebarPanel({ viewer, accounts, recent, notifications, messages, initialCollapsed }: Props) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const path = usePathname()
@@ -67,8 +66,8 @@ export function SidebarPanel({ viewer, accounts, recent, notifications, messages
   )
 }
 
-// Expanded: the logo on the left; settings, the theme switch and the collapse control on the right.
-// Collapsed: the logo is the open button. On hover it turns into the open icon, which points right.
+// One panel icon for both states, the way most apps draw a sidebar toggle. Expanded: the logo sits on the left and
+// the panel-close icon on the right. Collapsed: the panel-open icon stands alone, so the control is always visible.
 function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   if (!collapsed) {
     return (
@@ -76,21 +75,15 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
         <span className="grid size-11 place-items-center">
           <RhenkoSymbol className="size-7" />
         </span>
-        <div className="flex items-center gap-1">
-          <ThemeSettings />
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label="Close sidebar"
-            title="Close sidebar"
-            className={cn(
-              "grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              EASE
-            )}
-          >
-            <PanelLeftClose className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Close sidebar"
+          title="Close sidebar"
+          className="grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <PanelLeftClose className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
+        </button>
       </div>
     )
   }
@@ -102,22 +95,9 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
         aria-label="Open sidebar"
         aria-expanded={false}
         title="Open sidebar"
-        className="group/brand relative grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="grid size-11 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <RhenkoSymbol
-          className={cn(
-            "size-7 transition-[opacity,scale] duration-300 group-hover/brand:scale-75 group-hover/brand:opacity-0 group-focus-visible/brand:scale-75 group-focus-visible/brand:opacity-0",
-            EASE
-          )}
-        />
-        <PanelLeftOpen
-          className={cn(
-            "absolute size-[22px] scale-75 text-foreground opacity-0 transition-[opacity,scale] duration-300 group-hover/brand:scale-100 group-hover/brand:opacity-100 group-focus-visible/brand:scale-100 group-focus-visible/brand:opacity-100",
-            EASE
-          )}
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
+        <PanelLeftOpen className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
       </button>
     </div>
   )

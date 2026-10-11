@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { CalendarClock, ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
+import { CalendarClock, ImageIcon, ListChecks, Plus, Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
@@ -121,7 +121,7 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled ? hint : label}
       className={cn(
-        "grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent",
+        "grid size-8 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent",
         pressed && "bg-foreground/5"
       )}
     >
@@ -452,27 +452,39 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
         event.preventDefault()
         send(false)
       }}
-      className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 py-4")}
+      className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 pt-3 pb-3")}
     >
-      <Avatar user={viewer} size={44} className="mt-0.5" />
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        {!isReply ? (
-          <div className="flex justify-end">
-            <ReplyPicker value={replySetting} onChange={setReplySetting} />
+      <Avatar user={viewer} size={44} />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={onChangeText}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            aria-label="Post text"
+            aria-autocomplete="list"
+            rows={1}
+            className={cn(
+              "field-sizing-content min-h-[30px] w-full resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground",
+              // Room in the corner for the reply chip and the count, so long lines never run under them.
+              count > 0 ? "pr-14" : "pr-10"
+            )}
+          />
+          <div className="absolute top-0 right-0 flex items-center gap-2">
+            {count > 0 ? (
+              <span className="flex items-center gap-1.5">
+                {remaining <= 20 ? (
+                  <span className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>{remaining}</span>
+                ) : null}
+                <CountRing progress={Math.min(count / MAX_POST, 1)} over={over} />
+              </span>
+            ) : null}
+            {!isReply ? <ReplyPicker value={replySetting} onChange={setReplySetting} /> : null}
           </div>
-        ) : null}
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={onChangeText}
-          onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          aria-label="Post text"
-          aria-autocomplete="list"
-          rows={2}
-          className="field-sizing-content min-h-14 w-full resize-none bg-transparent pt-2 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground"
-        />
+        </div>
         {open ? (
           <ul role="listbox" aria-label="Suggestions" className="glass z-30 w-full max-w-sm overflow-hidden rounded-[22px] py-1">
             {suggestions.map((item, index) => (
@@ -661,7 +673,7 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-1 pt-1">
+        <div className="flex items-center gap-0.5 pt-1">
           <ToolButton
             label="Add photos or video"
             hint="Remove the poll to add photos or video"
@@ -698,25 +710,24 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           />
 
           <div className="ml-auto flex items-center gap-2">
-            {count > 0 ? <CountRing progress={Math.min(count / MAX_POST, 1)} over={over} /> : null}
-            {count > 0 && remaining <= 20 ? (
-              <span className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>{remaining}</span>
-            ) : null}
             {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
             {!isReply ? (
               <button
                 type="button"
                 onClick={() => send(true)}
                 disabled={!canDraft}
-                className="chrome-ring h-10 rounded-full px-4 text-[15px] font-semibold text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35"
+                aria-label="Save draft"
+                title="Save draft"
+                className="chrome-ring grid size-9 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
               >
-                {pending && intent === "draft" ? "Saving" : "Save draft"}
+                <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
+                <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
               </button>
             ) : null}
             <button
               type="submit"
               disabled={!canPost}
-              className="metal h-10 rounded-full px-5 text-[15px] font-semibold transition-opacity duration-200 hover:opacity-85 disabled:opacity-35"
+              className="metal h-9 rounded-full px-4 text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5"
             >
               {label}
             </button>
