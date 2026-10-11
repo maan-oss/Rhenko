@@ -65,7 +65,7 @@ function HandleField({ isLogin }: { isLogin: boolean }) {
       }
     >
       <div className={cn(FIELD, "flex items-center gap-1 px-4 focus-within:border-foreground", problem && "border-destructive hover:border-destructive")}>
-        <span aria-hidden="true" className="text-muted-foreground select-none">
+        <span aria-hidden="true" className="select-none text-foreground">
           @
         </span>
         <input

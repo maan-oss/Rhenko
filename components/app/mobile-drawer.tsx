@@ -1,27 +1,33 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ChartNoAxesColumn, FileText, Settings, X } from "lucide-react"
-import { Avatar, type AvatarUser } from "@/components/app/avatar"
+import { X } from "lucide-react"
 import { buildItems } from "@/components/app/nav"
+import { SidebarFooter, type FooterViewer } from "@/components/app/sidebar-footer"
+import { ThemeSettings } from "@/components/app/theme-settings"
+import { RhenkoSymbol } from "@/components/brand/symbol"
+import type { AccountSummary } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
 // The left panel on phones. It slides over the page from the left, and its rounded edge
-// overlaps the content. It closes on the scrim, the close button, Escape, or a swipe left.
+// overlaps the content. It is opaque. It closes on the scrim, the close button, Escape, or a swipe left.
 const EASE = [0.22, 1, 0.36, 1] as const
 
 type Props = {
   open: boolean
   onClose: () => void
-  viewer: AvatarUser & { handle: string; status?: string | null }
+  viewer: FooterViewer
+  accounts: AccountSummary[]
   path: string
   notifications: number
   messages: number
 }
 
-export function MobileDrawer({ open, onClose, viewer, path, notifications, messages }: Props) {
+export function MobileDrawer({ open, onClose, viewer, accounts, path, notifications, messages }: Props) {
+  const panelRef = useRef<HTMLElement>(null)
+
   useEffect(() => {
     if (!open) return
     const previous = document.body.style.overflow
@@ -36,12 +42,51 @@ export function MobileDrawer({ open, onClose, viewer, path, notifications, messa
     }
   }, [open, onClose])
 
-  const items = buildItems(notifications, messages)
-  const extras = [
-    { href: "/drafts", label: "Drafts and scheduled", Icon: FileText, badge: 0 },
-    { href: "/analytics", label: "Analytics", Icon: ChartNoAxesColumn, badge: 0 },
-    { href: "/settings", label: "Settings", Icon: Settings, badge: 0 },
-  ]
+  // A swipe left across the panel closes it. Touch events, not a drag: the browser cancels a pointer
+  // once a sideways pan starts, but the touch moves keep arriving, so the swipe reads all the way across.
+  useEffect(() => {
+    if (!open) return
+    let startX = 0
+    let startY = 0
+    let tracking = false
+    function down(event: TouchEvent) {
+      const touch = event.touches[0]
+      const panel = panelRef.current
+      if (!touch || event.touches.length > 1 || !panel || !panel.contains(event.target as Node)) return
+      startX = touch.clientX
+      startY = touch.clientY
+      tracking = true
+    }
+    function move(event: TouchEvent) {
+      const touch = event.touches[0]
+      if (!tracking || !touch) return
+      const dx = touch.clientX - startX
+      const dy = touch.clientY - startY
+      if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) {
+        tracking = false
+        return
+      }
+      if (dx < -64) {
+        tracking = false
+        onClose()
+      }
+    }
+    function up() {
+      tracking = false
+    }
+    window.addEventListener("touchstart", down, { passive: true })
+    window.addEventListener("touchmove", move, { passive: true })
+    window.addEventListener("touchend", up, { passive: true })
+    window.addEventListener("touchcancel", up, { passive: true })
+    return () => {
+      window.removeEventListener("touchstart", down)
+      window.removeEventListener("touchmove", move)
+      window.removeEventListener("touchend", up)
+      window.removeEventListener("touchcancel", up)
+    }
+  }, [open, onClose])
+
+  const rows = buildItems(notifications, messages)
 
   return (
     <AnimatePresence>
@@ -50,7 +95,8 @@ export function MobileDrawer({ open, onClose, viewer, path, notifications, messa
           <motion.button
             key="scrim"
             type="button"
-            aria-label="Close menu"
+            aria-label="Dismiss menu"
+            tabIndex={-1}
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -60,6 +106,7 @@ export function MobileDrawer({ open, onClose, viewer, path, notifications, messa
           />
           <motion.aside
             key="panel"
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
@@ -67,38 +114,31 @@ export function MobileDrawer({ open, onClose, viewer, path, notifications, messa
             animate={{ x: 0 }}
             exit={{ x: "-110%" }}
             transition={{ duration: 0.42, ease: EASE }}
-            drag="x"
-            dragConstraints={{ left: -400, right: 0 }}
-            dragElastic={0.04}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -80 || info.velocity.x < -500) onClose()
-            }}
-            className="glass fixed top-2 bottom-2 left-2 z-50 flex w-[min(84vw,330px)] flex-col gap-4 overflow-y-auto rounded-[32px] p-4 lg:hidden"
+            className="fixed top-2 bottom-2 left-2 z-50 flex w-[min(84vw,330px)] flex-col overflow-hidden rounded-[32px] border border-sidebar-border bg-sidebar p-4 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.55)] lg:hidden"
           >
-            <div className="flex items-center gap-3">
-              <Link href={`/${viewer.handle}`} onClick={onClose} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 transition-colors hover:bg-foreground/5">
-                <Avatar user={viewer} size={44} />
-                <span className="min-w-0">
-                  <span className="block truncate text-[15px] font-semibold">{viewer.name}</span>
-                  <span className="block truncate text-sm text-muted-foreground">@{viewer.handle}</span>
-                  {viewer.status ? <span className="block truncate text-[13px] text-foreground/75">{viewer.status}</span> : null}
-                </span>
-              </Link>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close menu"
-                className="grid size-10 shrink-0 place-items-center rounded-full transition-colors hover:bg-foreground/5"
-              >
-                <X className="size-5" strokeWidth={1.8} aria-hidden="true" />
-              </button>
+            <div className="flex h-11 items-center justify-between">
+              <span className="grid size-11 place-items-center">
+                <RhenkoSymbol className="size-7" />
+              </span>
+              <div className="flex items-center gap-1">
+                <ThemeSettings />
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close menu"
+                  title="Close menu"
+                  className="grid size-9 place-items-center rounded-full text-foreground transition-colors hover:bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="size-5" strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
-            <nav aria-label="Menu">
+            <nav aria-label="Menu" className="mt-5 min-h-0 flex-1 overflow-y-auto">
               <ul className="flex flex-col gap-1">
-                {[...items, ...extras.map((e) => ({ ...e, filled: false, active: (p: string) => p.startsWith(e.href), mobile: false }))].map((item) => {
+                {rows.map((item) => {
                   const active = item.active(path)
-                  const count = ("badge" in item ? item.badge : 0) ?? 0
+                  const count = item.badge ?? 0
                   return (
                     <li key={item.href}>
                       <Link
@@ -124,13 +164,9 @@ export function MobileDrawer({ open, onClose, viewer, path, notifications, messa
               </ul>
             </nav>
 
-            <Link
-              href="/#compose"
-              onClick={onClose}
-              className="metal mt-auto flex h-12 w-full items-center justify-center rounded-full text-[16px] font-semibold transition-opacity duration-200 hover:opacity-85"
-            >
-              Post
-            </Link>
+            <div className="mt-4 border-t border-border pt-4">
+              <SidebarFooter viewer={viewer} accounts={accounts} onNavigate={onClose} />
+            </div>
           </motion.aside>
         </>
       ) : null}

@@ -4,10 +4,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { motion } from "motion/react"
-import { Bell, Bookmark, House, List, MessageCircle, Search } from "lucide-react"
+import { Bell, Bookmark, ChartNoAxesColumn, FileText, House, List, MessageCircle, Search } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
+import type { AccountSummary } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
 export type NavItemConfig = {
@@ -21,7 +22,7 @@ export type NavItemConfig = {
   mobile: boolean
 }
 
-// The sidebar keeps every section. The glass dock on phones keeps the ones used most.
+// The sidebar and the phone panel keep every section. The glass dock on phones keeps the ones used most.
 export function buildItems(notifications: number, messages: number): NavItemConfig[] {
   return [
     { href: "/", label: "Home", Icon: House, filled: true, active: (p) => p === "/", mobile: true },
@@ -30,16 +31,20 @@ export function buildItems(notifications: number, messages: number): NavItemConf
     { href: "/messages", label: "Messages", Icon: MessageCircle, badge: messages, filled: true, active: (p) => p.startsWith("/messages"), mobile: true },
     { href: "/bookmarks", label: "Bookmarks", Icon: Bookmark, filled: true, active: (p) => p.startsWith("/bookmarks"), mobile: true },
     { href: "/lists", label: "Lists", Icon: List, filled: false, active: (p) => p.startsWith("/lists"), mobile: false },
+    { href: "/drafts", label: "Drafts", Icon: FileText, filled: false, active: (p) => p.startsWith("/drafts"), mobile: false },
+    { href: "/analytics", label: "Analytics", Icon: ChartNoAxesColumn, filled: false, active: (p) => p.startsWith("/analytics"), mobile: false },
   ]
 }
 
 // The glass dock along the bottom of phones. The avatar opens the left panel, which also opens on a swipe from the left edge.
 export function MobileTabBar({
   viewer,
+  accounts,
   notifications,
   messages,
 }: {
   viewer: AvatarUser & { handle: string; status?: string | null }
+  accounts: AccountSummary[]
   notifications: number
   messages: number
 }) {
@@ -136,6 +141,7 @@ export function MobileTabBar({
         open={open}
         onClose={() => setOpen(false)}
         viewer={viewer}
+        accounts={accounts}
         path={path}
         notifications={notifications}
         messages={messages}

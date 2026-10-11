@@ -44,6 +44,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Passwords are hashed with scrypt. Sessions are stored by SHA-256 token hash in an httpOnly cookie. New accounts land on home.
 - Two-factor sign-in with an authenticator app (TOTP, RFC 6238). Ten one-time recovery codes are issued when it is turned on. Codes can be regenerated.
 - Signed-in devices can be reviewed and revoked, individually or all but the current one.
+- Several accounts can be signed in on one device, up to five. The `…` button beside your name in the sidebar and the left panel lists them, switches between them, adds an existing account, and logs out the account you are using. When you log out, the next remembered account takes over.
 - Change password, change handle, edit the birthday, deactivate the account (signing in again reactivates it), or delete it.
 - Export everything the account holds as JSON from Settings → Account.
 
@@ -54,7 +55,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. A row of trending topics sits above the composer and links to `/topics/[tag]`.
 - Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
 - The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
-- Under the text are icon buttons for photos, poll, emoji and schedule. Below them, a "Who can reply" menu (everyone, accounts you follow, or accounts you mention) and a "Mark media as sensitive" toggle appear when they apply. Replies inherit the post's settings.
+- Under the text are icon buttons for photos, poll, emoji and schedule. A "Who can reply" pill sits at the top right of the composer. It shows the current choice (everyone, accounts you follow, or accounts you mention), and opens an animated card with the three choices and a Done button. A "Mark media as sensitive" toggle appears when it applies. Replies inherit the post's settings.
 - Schedule picks a date and a quarter-hour time. The server checks the time is far enough ahead and reports a problem as a toast.
 - Save draft keeps a new post on `/drafts` without publishing it. Cmd or Ctrl with Enter posts.
 - Posts with two or more photos or videos show as a carousel. Hover the post for the arrows, use the arrow keys once it has focus, swipe on a phone, or pick a dot.
@@ -111,14 +112,17 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 **Settings**
 - One page holds the status, the appearance (Light and Dark, each a card with a small window preview), the account pages (Account, Security, Privacy and safety, Notifications), the keyboard shortcuts, and a full-width Log out button that turns red on hover.
 - Native controls such as checkboxes and sliders use the neutral gray, not the browser's blue.
-- The bottom-left account in the sidebar opens this page.
+- The gear at the top right of the sidebar (and of the left panel) opens this page. It sits in a pair with the sun/moon switch: click the pair to separate it, then the switch changes the theme and the gear opens Settings.
 - The app follows the operating system's reduced-motion setting. There is no in-app switch.
 
 **Display and PWA**
-- The sidebar is one full-height surface. Expanded, a close button sits at the top right. Collapsed, the logo becomes the open button on hover, and each icon's label appears beside it. The state is kept in a cookie, so the page never flashes the wrong width.
+- The sidebar is one full-height, opaque surface. The logo leads at the top left. At the top right, the settings gear and the sun/moon switch sit as a pair, and a collapse button closes the sidebar (its arrow points left). Expanded, the labels show. Collapsed, the logo becomes the open button on hover (its arrow points right), and each icon's label appears beside it. The state is kept in a cookie, so the page never flashes the wrong width.
+- The sidebar footer holds the Post button, then your profile, with the `…` account switcher and a log out button beside it. Post is always there, even when the sidebar is collapsed.
+- The switch between light and dark sweeps a panel down the screen in the new colour, then the page converts underneath it. The pair squashes under the pointer and wobbles apart on a press.
 - On phones the bottom navigation is a glass dock: Home, Explore, Notifications, Messages and Bookmarks. The active item is a metal pill that slides between them. The avatar at the end opens the left panel.
-- The left panel slides in from the left with rounded edges that overlap the page. It holds your profile, every section, Drafts, Analytics, Settings and the Post button. Swipe right from the left edge to open it; swipe left, press Escape, or tap the dimmed page to close it.
-- The sign-in screens show a faint, drifting ink mass around the Rhenko mark. It follows the pointer with a little lag and stays still under reduced motion.
+- The left panel slides in from the left with rounded edges that overlap the page, and it is fully opaque. The logo leads at the top, the same settings and theme pair and a close button sit at the top right, then every section, with Post above your profile at the foot. Swipe right from the left edge to open it; swipe left, press Escape, or tap the dimmed page to close it.
+- The sign-in art is liquid metal: a polished medallion carries the Rhenko mark, cut out of it, and droplets drift in and merge with it. The medallion swells toward the pointer, the light in the metal follows the pointer, and a click sends a ripple through it and throws droplets off that fall back in. The metal uses the theme's colours, and it holds still under reduced motion.
+- The sign-in handle always shows its `@` in the normal text colour, and the Rhenko wordmark is the same size as the logo.
 - Installable as a PWA with an offline fallback page. The service worker only registers in production.
 
 **Realtime**

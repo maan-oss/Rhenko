@@ -4,10 +4,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
-import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
+import { SidebarFooter } from "@/components/app/sidebar-footer"
 import { SidebarSearch } from "@/components/app/sidebar-search"
+import { ThemeSettings } from "@/components/app/theme-settings"
 import { RhenkoSymbol } from "@/components/brand/symbol"
+import type { AccountSummary } from "@/lib/auth"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
 import { cn } from "@/lib/utils"
 
@@ -17,18 +19,20 @@ const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
 // Labels collapse to zero width in their own grid track, so the rail never reflows text.
 const LABEL_TRACK = `grid min-w-0 flex-1 transition-[grid-template-columns] duration-[380ms] ${EASE}`
 
-export type SidebarViewer = AvatarUser & { handle: string; status: string | null }
+export type SidebarViewer = { id: string; name: string; handle: string; avatarFile: string | null; status: string | null }
 
 type Props = {
   viewer: SidebarViewer
+  accounts: AccountSummary[]
   recent: string[]
   notifications: number
   messages: number
   initialCollapsed: boolean
 }
 
-// One full-height surface. No card, no gaps, no curve. The main column sits beside its edge.
-export function SidebarPanel({ viewer, recent, notifications, messages, initialCollapsed }: Props) {
+// One full-height surface, fully opaque. The logo leads at the top; settings, the theme switch and the
+// collapse control sit on the right. The footer holds Post, then your profile with its account menu and log out.
+export function SidebarPanel({ viewer, accounts, recent, notifications, messages, initialCollapsed }: Props) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const path = usePathname()
 
@@ -57,33 +61,14 @@ export function SidebarPanel({ viewer, recent, notifications, messages, initialC
           <SidebarSearch recent={recent} collapsed={collapsed} onExpand={() => save(false)} />
           <SidebarNav path={path} notifications={notifications} messages={messages} collapsed={collapsed} />
         </div>
-        <div className="flex flex-col gap-3">
-          <ComposeLink collapsed={collapsed} />
-          <AccountLink viewer={viewer} collapsed={collapsed} />
-        </div>
+        <SidebarFooter viewer={viewer} accounts={accounts} collapsed={collapsed} />
       </div>
     </aside>
   )
 }
 
-// The Post button is text only. In the collapsed rail it stays a small pill, so it never disappears.
-function ComposeLink({ collapsed }: { collapsed: boolean }) {
-  return (
-    <Link
-      href="/#compose"
-      className={cn(
-        "flex h-11 items-center justify-center overflow-hidden rounded-full bg-foreground font-semibold text-background transition-[width,opacity,scale] duration-300 hover:opacity-85 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        EASE,
-        collapsed ? "w-11 text-[14px]" : "w-full text-[16px]"
-      )}
-    >
-      Post
-    </Link>
-  )
-}
-
-// Expanded: the logo sits left, and a close button is always visible on the right.
-// Collapsed: the logo is the open button. On hover it turns into the open icon.
+// Expanded: the logo on the left; settings, the theme switch and the collapse control on the right.
+// Collapsed: the logo is the open button. On hover it turns into the open icon, which points right.
 function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   if (!collapsed) {
     return (
@@ -91,18 +76,21 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
         <span className="grid size-11 place-items-center">
           <RhenkoSymbol className="size-7" />
         </span>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label="Close sidebar"
-          title="Close sidebar"
-          className={cn(
-            "grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            EASE
-          )}
-        >
-          <PanelLeftClose className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1">
+          <ThemeSettings />
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Close sidebar"
+            title="Close sidebar"
+            className={cn(
+              "grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              EASE
+            )}
+          >
+            <PanelLeftClose className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     )
   }
@@ -221,37 +209,5 @@ function CountPill({ count }: { count: number }) {
     <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold tabular-nums text-background">
       {count > 99 ? "99+" : count}
     </span>
-  )
-}
-
-function AccountLink({ viewer, collapsed }: { viewer: SidebarViewer; collapsed: boolean }) {
-  return (
-    <Link
-      href="/settings"
-      aria-label="Account and settings"
-      className="group flex min-h-14 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <span
-        className={cn(
-          "grid size-11 shrink-0 place-items-center rounded-full ring-2 ring-transparent transition-[box-shadow] duration-300 group-hover:ring-foreground/30",
-          EASE
-        )}
-      >
-        <Avatar user={viewer} size={36} />
-      </span>
-      <span className={cn(LABEL_TRACK, collapsed ? "grid-cols-[0fr]" : "grid-cols-[1fr]")}>
-        <span
-          className={cn(
-            "min-w-0 overflow-hidden pr-3 transition-[opacity,translate] duration-300",
-            EASE,
-            collapsed ? "-translate-x-4 opacity-0" : "translate-x-0 opacity-100"
-          )}
-        >
-          <span className="block truncate text-[15px] font-semibold">{viewer.name}</span>
-          <span className="block truncate text-sm text-muted-foreground">@{viewer.handle}</span>
-          {viewer.status ? <span className="mt-0.5 block truncate text-[13px] text-foreground/75">{viewer.status}</span> : null}
-        </span>
-      </span>
-    </Link>
   )
 }

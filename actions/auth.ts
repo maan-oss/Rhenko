@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation"
 import {
+  activateAccount,
+  adoptRemainingAccount,
   challengedUserId,
   clearChallenge,
   createChallenge,
@@ -108,7 +110,13 @@ export async function verifySecondFactor(_prev: AuthState, formData: FormData): 
   redirect("/")
 }
 
+// Logs out the active account. Another remembered account takes over if there is one.
 export async function logout(): Promise<void> {
   await destroySession()
+  if (await adoptRemainingAccount()) redirect("/")
   redirect("/login")
+}
+
+export async function switchAccount(userId: string): Promise<void> {
+  if (await activateAccount(userId)) redirect("/")
 }

@@ -12,9 +12,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       </section>
       <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-12 sm:px-8 lg:px-12">
         <div className="flex w-full max-w-[400px] flex-col gap-7 rounded-[28px] border border-border bg-card/90 p-7 shadow-sm backdrop-blur sm:p-9">
-          <div className="flex items-center gap-2.5">
-            <RhenkoSymbol className="size-7" />
-            <span className="text-[15px] font-semibold tracking-tight">Rhenko</span>
+          <div className="flex items-center gap-3">
+            <RhenkoSymbol className="size-9" />
+            <span className="text-[36px] leading-none font-semibold tracking-[-0.03em]">Rhenko</span>
           </div>
           {children}
         </div>

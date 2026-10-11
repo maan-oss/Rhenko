@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { CalendarClock, ChevronDown, ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
+import { CalendarClock, ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ReplyPicker } from "@/components/app/reply-picker"
 import { fullTimestamp } from "@/lib/format"
 import {
   MAX_ALT,
@@ -20,7 +20,6 @@ import {
   POLL_DURATIONS,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
-  REPLY_SETTINGS,
   UNDO_WINDOW_MS,
   countChars,
   type ReplySetting,
@@ -62,11 +61,6 @@ const DURATION_LABELS: Record<number, string> = {
   10080: "7 days",
 }
 
-const REPLY_OPTIONS: Record<ReplySetting, string> = {
-  everyone: "Everyone can reply",
-  following: "Accounts you follow can reply",
-  mentioned: "Only accounts you mention can reply",
-}
 
 // Quarter-hour steps, written the way the app writes times everywhere else.
 const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
@@ -462,6 +456,11 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
     >
       <Avatar user={viewer} size={44} className="mt-0.5" />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
+        {!isReply ? (
+          <div className="flex justify-end">
+            <ReplyPicker value={replySetting} onChange={setReplySetting} />
+          </div>
+        ) : null}
         <textarea
           ref={textareaRef}
           value={text}
@@ -609,26 +608,9 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           </fieldset>
         ) : null}
 
-        {/* Who can reply, and whether the media needs a warning. Replies to a post inherit its settings. */}
-        {!isReply || media.length > 0 ? (
+        {/* Whether the media needs a warning. Who can reply sits at the top right; replies inherit the post's settings. */}
+        {media.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
-            {!isReply ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger aria-label="Who can reply" className={cn(PILL, "glass text-foreground hover:bg-foreground/5")}>
-                  {REPLY_OPTIONS[replySetting]}
-                  <ChevronDown className="size-3.5" aria-hidden="true" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-64">
-                  <DropdownMenuRadioGroup value={replySetting} onValueChange={(value) => setReplySetting(value as ReplySetting)}>
-                    {REPLY_SETTINGS.map((option) => (
-                      <DropdownMenuRadioItem key={option} value={option} closeOnClick>
-                        {REPLY_OPTIONS[option]}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
             {media.length > 0 ? (
               <button
                 type="button"
