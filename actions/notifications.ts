@@ -1,0 +1,13 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { getViewer } from "@/lib/auth"
+import { run } from "@/lib/db"
+
+export async function markNotificationsRead(): Promise<{ ok: boolean }> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false }
+  run("UPDATE notifications SET read = 1 WHERE recipient_id = ? AND read = 0", viewer.id)
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
