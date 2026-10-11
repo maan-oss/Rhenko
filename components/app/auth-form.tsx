@@ -14,6 +14,7 @@ import {
 } from "@/actions/auth"
 import { DateField } from "@/components/app/date-field"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
+import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
@@ -178,7 +179,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         />
       )}
       {isLogin ? null : (
-        <Field label="Date of birth" name="birthday" id="field-birthday" hint="You must be at least 13. Only you can see this.">
+        <Field label="Date of birth" name="birthday" id="field-birthday" hint={`Rhenko is for people ${MINIMUM_AGE} or older. Only you can see this.`}>
           <DateField id="field-birthday" name="birthday" placeholder="Pick your birthday" />
         </Field>
       )}
@@ -198,6 +199,27 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           ) : undefined
         }
       />
+      {isLogin ? null : (
+        <label className="flex items-start gap-3 text-[14px] leading-relaxed">
+          <input
+            type="checkbox"
+            name="agree"
+            required
+            className="mt-[3px] size-4 shrink-0 cursor-pointer accent-foreground"
+          />
+          <span>
+            I am {MINIMUM_AGE} or older, and I agree to the{" "}
+            <Link href="/terms" target="_blank" className="font-semibold underline underline-offset-4">
+              Terms of Service
+            </Link>{" "}
+            and the{" "}
+            <Link href="/privacy" target="_blank" className="font-semibold underline underline-offset-4">
+              Privacy Policy
+            </Link>
+            .
+          </span>
+        </label>
+      )}
       <ErrorText message={state.error} />
       <SubmitButton label={isLogin ? "Log in" : "Create account"} pendingLabel={isLogin ? "Logging in" : "Creating account"} />
     </form>

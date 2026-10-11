@@ -1,7 +1,7 @@
-// Direct access to the server's SQLite file, used for exactly one purpose: the scheduled post check.
-// The product refuses a schedule less than five minutes ahead, so the check schedules through the page at the
-// shortest time the page allows, then moves that one post's time to 30 seconds from now and waits for the server's
-// own background loop to publish it. Nothing else in the suite reads or writes the database.
+// Direct access to the server's SQLite file, for two checks the browser cannot make. The scheduled post check moves one
+// post's time to 30 seconds from now, because the product refuses a schedule less than five minutes ahead. The legal
+// checks read notices, appeals and posts, and set up one account whose agreement is out of date. Every other check
+// goes through the pages.
 import fs from "node:fs"
 import path from "node:path"
 import { DATA_DIR } from "./env.mjs"
@@ -45,6 +45,26 @@ export async function postState(id) {
   try {
     const row = db.prepare("SELECT is_draft, publish_at, created_at FROM posts WHERE id = ?").get(id)
     return row ? { draft: row.is_draft === 1, publishAt: row.publish_at, createdAt: row.created_at } : null
+  } finally {
+    db.close()
+  }
+}
+
+// Reads rows for a check. Nothing is changed.
+export async function query(sql, ...params) {
+  const db = await open(true)
+  try {
+    return db.prepare(sql).all(...params)
+  } finally {
+    db.close()
+  }
+}
+
+// Changes rows for a check, and says how many changed.
+export async function execute(sql, ...params) {
+  const db = await open(false)
+  try {
+    return Number(db.prepare(sql).run(...params).changes)
   } finally {
     db.close()
   }

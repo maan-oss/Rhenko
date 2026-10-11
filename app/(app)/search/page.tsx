@@ -1,8 +1,10 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Clock, Flame, Image as ImageIcon, Users } from "lucide-react"
+import { Clock, Flame, Image as ImageIcon, List as ListIcon, Lock, Users } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
-import { parseSearch, recentSearches, searchUsers } from "@/lib/data"
+import { parseSearch, recentSearches, savedSearches, searchLists, searchUsers, type ListSummary } from "@/lib/data"
+import { formatCount } from "@/lib/format"
+import { listOwnersVisibleTo } from "@/lib/people-state"
 import { recordSearch } from "@/lib/search-history"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
@@ -11,6 +13,7 @@ import { FeedList } from "@/components/app/feed-list"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
 import { RecentSearches } from "@/components/app/recent-searches"
+import { SaveSearchButton, SavedSearches } from "@/components/app/saved-searches"
 import { TabLinks } from "@/components/app/tabs"
 import { SearchField } from "@/components/app/search-field"
 
@@ -21,6 +24,7 @@ const TYPES = [
   { key: "latest", label: "Latest", icon: <Clock /> },
   { key: "people", label: "People", icon: <Users /> },
   { key: "media", label: "Media", icon: <ImageIcon /> },
+  { key: "lists", label: "Lists", icon: <ListIcon /> },
 ] as const
 
 export default function SearchPage({ searchParams }: { searchParams: SearchParams }) {
@@ -38,6 +42,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
   const requested = firstParam(params.f)
   const type = TYPES.find((t) => t.key === requested)?.key ?? "top"
   if (q) recordSearch(viewer.id, q)
+  const saved = savedSearches(viewer.id)
 
   return (
     <>
@@ -53,6 +58,9 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
               active: t.key === type,
             }))}
           />
+          <div className="flex justify-end pt-2">
+            <SaveSearchButton query={q} saved={saved.includes(q)} />
+          </div>
         </div>
       ) : null}
       {q ? (
@@ -60,7 +68,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
           <Results q={q} type={type} viewer={viewer} />
         </>
       ) : (
-        <SearchHelp recent={recentSearches(viewer.id)} />
+        <SearchHelp recent={recentSearches(viewer.id)} saved={saved} />
       )}
     </>
   )
@@ -88,6 +96,15 @@ function NoPeople({ q, hasTerms }: { q: string; hasTerms: boolean }) {
 }
 
 async function Results({ q, type, viewer }: { q: string; type: (typeof TYPES)[number]["key"]; viewer: Viewer }) {
+  if (type === "lists") {
+    const terms = parseSearch(q).terms.join(" ")
+    const found = terms ? searchLists(terms, viewer.id) : []
+    // A list whose owner has blocked the viewer, or whose account is gone, stays out of the results.
+    const visible = listOwnersVisibleTo(viewer.id, found.map((list) => list.owner.id))
+    const lists = found.filter((list) => list.owner.id === viewer.id || visible.has(list.owner.id))
+    if (lists.length === 0) return <NoLists q={q} hasTerms={terms !== ""} />
+    return <ListResults lists={lists} />
+  }
   if (type === "people") {
     const terms = parseSearch(q).terms.join(" ")
     const users = terms ? searchUsers(terms, viewer.id, 40) : []
@@ -129,6 +146,40 @@ async function Results({ q, type, viewer }: { q: string; type: (typeof TYPES)[nu
   )
 }
 
+function NoLists({ q, hasTerms }: { q: string; hasTerms: boolean }) {
+  return (
+    <EmptyState
+      title={hasTerms ? `No lists match “${q}”` : "Search lists by name"}
+      body={hasTerms ? "Lists are groups of accounts. Try a shorter name, or search posts for the same words." : "Type a name to find a list."}
+    >
+      <Link href={searchHref(q, "top")} className={emptyActionClass("primary")}>
+        Search posts
+      </Link>
+    </EmptyState>
+  )
+}
+
+function ListResults({ lists }: { lists: ListSummary[] }) {
+  return (
+    <ul className="list-none">
+      {lists.map((list) => (
+        <li key={list.id} className="border-b border-border">
+          <Link href={`/lists/${list.id}`} className="flex flex-col gap-1 px-4 py-4 transition-colors hover:bg-muted/50">
+            <span className="flex items-center gap-2 text-[17px] font-semibold">
+              {list.name}
+              {list.private ? <Lock className="size-3.5 text-muted-foreground" aria-label="Private" /> : null}
+            </span>
+            {list.description ? <span className="text-[15px] text-muted-foreground">{list.description}</span> : null}
+            <span className="text-sm text-muted-foreground">
+              {formatCount(list.memberCount)} {list.memberCount === 1 ? "member" : "members"} · by @{list.owner.handle}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 const OPERATORS: { syntax: string; meaning: string }[] = [
   { syntax: "from:handle", meaning: "Posts by one person" },
   { syntax: "to:handle", meaning: "Replies to one person" },
@@ -139,9 +190,10 @@ const OPERATORS: { syntax: string; meaning: string }[] = [
   { syntax: "-word", meaning: "Leave out posts that contain a word" },
 ]
 
-function SearchHelp({ recent }: { recent: string[] }) {
+function SearchHelp({ recent, saved }: { recent: string[]; saved: string[] }) {
   return (
     <div className="flex flex-col gap-6 px-4 py-6">
+      <SavedSearches queries={saved} />
       <RecentSearches queries={recent} />
       <div className="flex flex-col gap-3">
         <p className="text-lg font-semibold">Search Rhenko</p>

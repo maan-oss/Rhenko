@@ -27,17 +27,6 @@ async function SignupBody({ searchParams }: { searchParams: SearchParams }) {
       </div>
       {deleted ? <AuthNotice>Your account is deleted, along with its posts, messages and media.</AuthNotice> : null}
       <AuthForm mode="signup" />
-      <p className="text-center text-[13px] leading-relaxed text-muted-foreground">
-        By creating an account, you agree to the{" "}
-        <Link href="/terms" className="font-semibold text-foreground underline underline-offset-4">
-          Terms of Service
-        </Link>{" "}
-        and the{" "}
-        <Link href="/privacy" className="font-semibold text-foreground underline underline-offset-4">
-          Privacy Policy
-        </Link>
-        .
-      </p>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link href="/login" className="font-semibold text-foreground underline underline-offset-4">

@@ -45,20 +45,29 @@ Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls nee
 - Photos lose their location, camera and time details when they are uploaded. That covers EXIF, XMP, IPTC, text chunks and comments in JPEG, PNG, WebP and GIF. The picture itself is unchanged. Videos keep their metadata.
 - `npm run backup` writes a folder into `backups/` with a consistent copy of the database, the server key and the uploads. It keeps the newest 14. Copy the backup folder off the machine as well. The script's header has the restore steps.
 - A background tick runs every 15 seconds. It publishes scheduled posts on time, announces poll results, ends calls that have stopped answering, and removes expired sessions and codes.
+- Retention is enforced by the background tick: views and profile visits after 90 days, read notifications after 180 days, and notices and moderation records after three years. Hidden posts are deleted when their appeal window closes or an appeal fails.
 - Delete the data directory to reset the app to empty.
 
 ## Operations
 
 ```bash
 npm run backup                          # back up now
-npm run moderation -- list              # open reports, oldest first
-npm run moderation -- resolve <id>      # close a report, leave the post
-npm run moderation -- remove <postId>   # delete a post for good (asks first)
+npm run moderation -- list                              # open reports, oldest first
+npm run moderation -- resolve <id>                      # close a report, leave the post
+npm run moderation -- hide <postId> --category <id> --explain "<reason>"   # hide, tell the author, allow an appeal
+npm run moderation -- restore <postId>                  # put a hidden post back
+npm run moderation -- appeals                           # appeals waiting for a decision
+npm run moderation -- decide <appealId> reverse|uphold --note "<reason>"
+npm run moderation -- remove <postId>                   # delete a post for good at once (asks first)
+npm run legal -- list                                   # notices about content, urgent first
+npm run legal -- show <noticeId>
+npm run legal -- decide <noticeId> actioned|rejected --note "<reason>"   # decides, and emails the sender
+npm run legal -- record-request --summary "<text>"      # log an order from a court or authority
 node scripts/grant-verified.mjs <handle>            # grant the verified badge
 node scripts/grant-verified.mjs <handle> --revoke   # remove it
 ```
 
-The scripts read the same database as the app, and the server can keep running while they do.
+The scripts read the same database as the app, and the server can keep running while they do. The legal runbook in `docs/legal-operations.md` says when to use each command.
 
 ## Testing
 
@@ -67,7 +76,7 @@ The scripts read the same database as the app, and the server can keep running w
 ## What's in it
 
 **Accounts and security**
-- Sign up with a display name, handle, date of birth and password. The handle is `@` followed by 3 to 15 letters, numbers or underscores, with at least 3 letters and at most 5 underscores. Anything that breaks a rule turns red as you type. Accounts under 13 are refused.
+- Sign up with a display name, handle, date of birth and password. The handle is `@` followed by 3 to 15 letters, numbers or underscores, with at least 3 letters and at most 5 underscores. Anything that breaks a rule turns red as you type. Accounts under 18 are refused. Sign-up ends with a box to agree to the Terms and Privacy Policy, and an account must agree again whenever they change.
 - The date of birth is picked from a round calendar that opens under the field.
 - Email is optional at sign-up. Add an address in Settings → Account and confirm it with the six-digit code that is mailed. Forgot your password? A code goes to the confirmed address. Setting a new password signs out every device, this one included.
 - Passwords are hashed with scrypt. Sessions are stored by SHA-256 token hash in an httpOnly cookie. New accounts land on home.
@@ -166,10 +175,11 @@ The scripts read the same database as the app, and the server can keep running w
 - SQLite and local uploads need one machine with a persistent disk. They are not built for serverless hosting.
 - A page that doesn't exist, or that the viewer may not see, answers HTTP 200 with the "This page is not here" view and a `noindex` tag. Cache Components sends the page shell before the page's checks run, so the status can't change. The app is behind sign-in, so search engines see only the sign-in, terms and privacy pages. A path with no matching route at all, such as `/nope/a/b`, gets a real 404. A single unknown name is read as a handle, so it gets the same "not here" view as any missing profile.
 - Messages are stored as readable text on the server. They are not end-to-end encrypted.
+- The agreement to the Terms is enforced on every page. A request sent straight to a server action by an account that has not agreed is not refused yet: the actions check that someone is signed in, not that they agreed. Adding that check to each action is the next step.
 - Videos keep their metadata. Only photos are cleaned on upload.
 - Voice calls use Google's public STUN server unless `RHENKO_ICE_SERVERS` or the TURN settings are set. Some networks only connect through TURN. Calls are voice only, and a group call holds up to six people.
 - Email codes need SMTP. Without it, in production, the email features say they are not set up.
 - Scheduled posts are published by the 15-second tick, so a post can be up to 15 seconds late.
 - The likes tab shows only to the account's owner, matching X's default.
 - Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs. Drafts and scheduled posts are reached from the Drafts icon.
-- Not included: ads and ad billing, premium tiers and payments, tip jar, the AI assistant, Spaces, jobs, articles, live video, shopping, saved searches, and a lists tab in search.
+- Not included: ads and ad billing, premium tiers and payments, tip jar, the AI assistant, Spaces, jobs, articles, live video and shopping. Each needs its own product, payment or safety work before it can be offered safely here.

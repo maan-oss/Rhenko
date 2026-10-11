@@ -7,6 +7,7 @@ import { get, run, transaction } from "@/lib/db"
 import { getProfileByHandle, peopleOfPage } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { withRequested } from "@/lib/people-state"
+import { MINIMUM_AGE } from "@/lib/legal"
 import { ageFrom, MAX_BIO, MAX_LOCATION, validateHandle, validateName, validateWebsite } from "@/lib/rules"
 import { checkTopic, MAX_FOLLOWED_TOPICS, PEOPLE_PAGE, type PersonEntry } from "@/lib/social-rules"
 import { removeUpload, saveUpload } from "@/lib/uploads"
@@ -304,7 +305,7 @@ export async function updateBirthday(_prev: ProfileState, formData: FormData): P
   const birthday = String(formData.get("birthday") ?? "").trim()
   const age = ageFrom(birthday)
   if (age === null) return { error: "Enter a valid date." }
-  if (age < 13) return { error: "You must be at least 13 to use Rhenko." }
+  if (age < MINIMUM_AGE) return { error: `You must be ${MINIMUM_AGE} or older to use Rhenko.` }
   run("UPDATE users SET birthday = ? WHERE id = ?", birthday, viewer.id)
   refresh()
   return { ok: true }

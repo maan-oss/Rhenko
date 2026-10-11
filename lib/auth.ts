@@ -48,6 +48,7 @@ export type UserRow = {
   status: string
   email: string | null
   email_verified_at: number | null
+  terms_version: string | null
 }
 
 export type Viewer = {
@@ -64,6 +65,8 @@ export type Viewer = {
   protected: boolean
   totpEnabled: boolean
   status: string
+  // The Terms version this account accepted last. The app asks again when the current version differs.
+  termsVersion: string | null
 }
 
 export function toViewer(row: UserRow): Viewer {
@@ -81,6 +84,7 @@ export function toViewer(row: UserRow): Viewer {
     protected: row.protected === 1,
     totpEnabled: row.totp_enabled === 1,
     status: row.status,
+    termsVersion: row.terms_version,
   }
 }
 

@@ -7,6 +7,7 @@ import {
   NOTIFICATION_PAGE_SIZE,
   normalizeTag,
   RECENT_SEARCH_LIMIT,
+  SAVED_SEARCH_LIMIT,
   replyAllowed,
   type ReplySetting,
 } from "@/lib/rules"
@@ -146,11 +147,13 @@ function likePattern(term: string): string {
   return `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
 }
 
-const LIVE = "p.is_draft = 0 AND p.publish_at IS NULL"
+// A post hidden by moderation (removed_at) is gone for everyone, its author included, until it is restored.
+const LIVE = "p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL"
 
 // Direct-access visibility for one viewer, applied to posts (alias p) and their authors (alias au). canSeePost and
 // visiblePostIds share it, so a post, its quote and its media follow one rule. It takes the viewer's id seven times.
 const CAN_SEE = `((p.is_draft = 0 AND p.publish_at IS NULL) OR p.author_id = ?)
+  AND p.removed_at IS NULL
   AND au.deactivated_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = au.id) OR (b.blocker_id = au.id AND b.blocked_id = ?))
   AND (p.hidden_by_parent = 0 OR p.author_id = ? OR EXISTS (SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?))
@@ -873,7 +876,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
        u.verified, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
        (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) AS followers,
        (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
-       (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id AND p.reply_to_id IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL) AS posts
+       (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id AND p.reply_to_id IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL) AS posts
      FROM users u WHERE u.handle = ? COLLATE NOCASE`,
     handle
   )
@@ -1736,6 +1739,19 @@ export function recentSearches(viewerId: string): string[] {
   ).map((row) => row.query)
 }
 
+// Searches the account chose to keep, newest first.
+export function savedSearches(viewerId: string): string[] {
+  return all<{ query: string }>("SELECT query FROM saved_searches WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", viewerId, SAVED_SEARCH_LIMIT).map(
+    (row) => row.query
+  )
+}
+
+// Lists whose name matches the words. A private list shows only to its owner, as it does everywhere else.
+export function searchLists(query: string, viewerId: string, limit = 30): ListSummary[] {
+  const pattern = `%${query.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+  return listRowsWhere("(l.private = 0 OR l.owner_id = ?) AND l.name LIKE ? ESCAPE '\\'", [viewerId, pattern], viewerId).slice(0, limit)
+}
+
 // Analytics for an account's own posts and profile. Visits and views are counted per day in UTC.
 export type AnalyticsDay = { label: string; visits: number; views: number }
 
@@ -1789,7 +1805,7 @@ export function analyticsFor(userId: string, handle: string, now = Date.now()): 
          (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id AND v.created_at >= ?) AS views,
          (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes
        FROM posts p
-       WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL
+       WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL
      ) WHERE views > 0
      ORDER BY views DESC, created_at DESC
      LIMIT 5`,

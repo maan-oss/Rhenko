@@ -32,6 +32,7 @@ import { get, run } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { HANDLE_MAX, MAX_PASSWORD, ageFrom, validateHandle, validateName } from "@/lib/rules"
+import { MINIMUM_AGE, TERMS_VERSION } from "@/lib/legal"
 import { emailReady } from "@/lib/settings-data"
 
 export type AuthState = { error?: string }
@@ -49,6 +50,8 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const password = String(formData.get("password") ?? "")
   const birthday = String(formData.get("birthday") ?? "").trim()
   const email = cleanEmail(String(formData.get("email") ?? ""))
+  // The box is ticked by the person, never by the form. Its value is what the account records as its acceptance.
+  const agreed = formData.get("agree") === "on"
 
   const handleError = validateHandle(handle)
   if (handleError) return { error: handleError }
@@ -56,7 +59,8 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   if (nameError) return { error: nameError }
   const age = ageFrom(birthday)
   if (age === null) return { error: "Enter your date of birth." }
-  if (age < 13) return { error: "You must be at least 13 to join Rhenko." }
+  if (age < MINIMUM_AGE) return { error: `You must be ${MINIMUM_AGE} or older to join Rhenko.` }
+  if (!agreed) return { error: "Tick the box to agree to the Terms of Service and the Privacy Policy." }
   if (email) {
     const problem = emailProblem(email)
     if (problem) return { error: problem }
@@ -79,15 +83,17 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const hash = await hashPassword(password)
   try {
     run(
-      `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at)
-       VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL)`,
+      `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at, terms_version, terms_accepted_at)
+       VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
       id,
       handle,
       name,
       hash,
       Date.now(),
       birthday,
-      email || null
+      email || null,
+      TERMS_VERSION,
+      Date.now()
     )
   } catch (error) {
     if (isUniqueViolation(error, "users.email")) return { error: emailTaken }

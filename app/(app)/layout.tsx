@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
+import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
+import { TERMS_VERSION } from "@/lib/legal"
 import { MobileNav, Sidebar } from "@/components/app/sidebar"
 import { RightRail } from "@/components/app/right-rail"
 import { BannerHost } from "@/components/app/banner-host"
@@ -12,7 +14,11 @@ import { ServiceWorkerRegister } from "@/components/app/sw-register"
 // notFound() runs before anything streams and the response gets a real 404 status.
 export const instant = false
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+// An account must agree to the current Terms and Privacy Policy before anything in the app. Until it does, every page
+// here sends it to the agreement screen.
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  const viewer = await getViewer()
+  if (viewer && viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
   return (
     <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
       <Sidebar />

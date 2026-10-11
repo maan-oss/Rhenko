@@ -16,6 +16,8 @@
 //                    not started in production mode.
 //   MAIL_LOG         the log of a local mail sink, when the server sends through SMTP (RHENKO_SMTP_URL). The sink writes
 //                    the same "[mail] to ..." lines. Defaults to SERVER_LOG. Without either, the email checks fail and say so.
+//                    The legal area's decision emails are sent by the command line, which reads RHENKO_SMTP_URL from
+//                    the environment it is started in, so give the suite the same RHENKO_SMTP_URL as the server.
 //   RHENKO_DATA_DIR  folder the server keeps rhenko.sqlite in (same value the server got; default ./data). Used for exactly
 //                    one step: moving a scheduled post to 30 seconds from now (see e2e/posts.mjs).
 //   ONLY             run only some areas, for example ONLY=auth,posts
@@ -37,6 +39,7 @@ import * as calls from "./calls.mjs"
 import * as settings from "./settings.mjs"
 import * as visibility from "./visibility.mjs"
 import * as account from "./account.mjs"
+import * as legal from "./legal.mjs"
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Console and page messages the suite does not count as failures. Everything else that the browser reports as a console
@@ -82,6 +85,7 @@ const AREAS = [
   ["settings", settings],
   ["visibility", visibility],
   ["account", account],
+  ["legal", legal],
 ]
 
 // Errors nobody caught. They are printed when they happen and counted as one failed check at the end.

@@ -39,7 +39,7 @@ async function signUpRules() {
     }
     const text = await bodyText(page)
     assert.match(text, /3 to 15 characters/i, "the handle rule is not on the page")
-    assert.match(text, /at least 13/i, "the age rule is not on the page")
+    assert.match(text, /18 or older/i, "the age rule is not on the page")
     assert.match(text, /8 characters/i, "the password rule is written only as a placeholder or not at all; it must be visible text")
   })
 
@@ -97,10 +97,10 @@ async function signUpRules() {
     })
   }
 
-  await check("server refuses someone under 13 (turns 13 in two days)", async () => {
-    const result = await trySignUp(page, validFields({ birthday: dateBefore(13, -2) }))
-    assert.equal(result.ok, false, "an account for a 12 year old was created")
-    assert.match(result.error, /at least 13/i)
+  await check("server refuses someone under 18 (turns 18 in two days)", async () => {
+    const result = await trySignUp(page, validFields({ birthday: dateBefore(18, -2) }))
+    assert.equal(result.ok, false, "an account for a 17 year old was created")
+    assert.match(result.error, /18 or older/i)
     await stillOn(page, "/signup")
   })
 
@@ -123,10 +123,10 @@ async function signUpRules() {
     assert.match(result.error, /200/)
   })
 
-  const teen = validFields({ handle: randomHandle("teen"), birthday: dateBefore(13, 2) })
-  await check("someone who turned 13 two days ago can sign up, with an 8 character password", async () => {
-    const result = await trySignUp(page, { ...teen, password: "abcd1234" })
-    assert.equal(result.ok, true, `sign-up of a 13 year old failed: ${result.error}`)
+  const adult = validFields({ handle: randomHandle("adult"), birthday: dateBefore(18, 2) })
+  await check("someone who turned 18 two days ago can sign up, with an 8 character password", async () => {
+    const result = await trySignUp(page, { ...adult, password: "abcd1234" })
+    assert.equal(result.ok, true, `sign-up of an 18 year old failed: ${result.error}`)
     await page.locator(COMPOSER).first().waitFor()
   })
 
@@ -147,7 +147,7 @@ async function signUpRules() {
   await check("a handle that is taken is refused, in any letter case", async () => {
     const fresh = await newVisitor({ label: "taken" })
     try {
-      const result = await trySignUp(fresh.page, { ...validFields(), handle: teen.handle.toUpperCase() })
+      const result = await trySignUp(fresh.page, { ...validFields(), handle: adult.handle.toUpperCase() })
       assert.equal(result.ok, false, "a second account was created with the same handle in capitals")
       assert.match(result.error, /taken/i)
     } finally {

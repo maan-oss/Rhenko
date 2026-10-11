@@ -1,21 +1,36 @@
 import type { Metadata } from "next"
-import { OperatorContact, OperatorWho } from "@/app/_legal/operator"
-import { B, LegalPage, List, P, TextLink, type LegalSection } from "@/app/_legal/shell"
-import { HANDLE_MAX, HANDLE_MIN, MIN_PASSWORD, REPORT_REASONS } from "@/lib/rules"
+import { OperatorContact, OperatorLines, OperatorValue, OperatorWho } from "@/app/_legal/operator"
+import { B, LegalPage, List, Note, P, TextLink, type LegalSection } from "@/app/_legal/shell"
+import { LEGAL_UPDATED, MINIMUM_AGE, APPEAL_DAYS } from "@/lib/legal"
+import { HANDLE_MAX, HANDLE_MIN, MIN_PASSWORD } from "@/lib/rules"
 
 export const metadata: Metadata = {
   title: { absolute: "Terms of Service · Rhenko" },
-  description: "The rules for using Rhenko on this server.",
+  description: "The agreement for using Rhenko, and what happens when a rule is broken.",
 }
 
-// These terms describe what Rhenko does and what the operator of a server may do. They are not legal advice: whoever
-// runs a server should have them reviewed for the place where they run it. Change UPDATED whenever the text changes.
-const UPDATED = "11 October 2026"
+// These terms describe what the software does and what the operator of a server may do. They are not legal advice.
+// Whoever runs a server needs a lawyer in each place the server serves people to check them before launch.
+// LEGAL_UPDATED and TERMS_VERSION in lib/legal.ts change whenever the text changes, and every account must agree again.
 
-function andList(items: readonly string[]): string {
-  if (items.length < 2) return items.join("")
-  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`
-}
+const SUMMARY = (
+  <Note title="The short version">
+    <List>
+      <li>
+        You must be {MINIMUM_AGE} or older. Rhenko is not for anyone younger, and sign-up refuses them.
+      </li>
+      <li>You own what you post. You give the operator permission to host and show it, and nothing more.</li>
+      <li>
+        Do not post what the <TextLink href="/rules">Community Rules</TextLink> forbid, or what the law where you are or where
+        the server runs forbids.
+      </li>
+      <li>
+        If a post is hidden, we tell you why. You can appeal within {APPEAL_DAYS} days, from Notices.
+      </li>
+      <li>You can delete your account whenever you like.</li>
+    </List>
+  </Note>
+)
 
 const SECTIONS: LegalSection[] = [
   {
@@ -24,8 +39,30 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <OperatorWho />
-        <P>The operator is responsible for this server and for what is stored on it. These terms are between you and the operator.</P>
+        <P>
+          The operator runs the server, is responsible for what is stored on it, and is the party you agree these terms with.
+        </P>
+        <OperatorLines
+          items={[
+            { which: "address", label: "Address", max: 300 },
+            { which: "hosting", label: "Where the server is hosted" },
+          ]}
+        />
       </>
+    ),
+  },
+  {
+    id: "eligibility",
+    title: "Who can use Rhenko",
+    body: (
+      <List>
+        <li>
+          You must be at least {MINIMUM_AGE}. Sign-up asks for your date of birth and refuses anyone younger. If we learn that an
+          account belongs to someone under {MINIMUM_AGE}, we will close it.
+        </li>
+        <li>Give accurate details when you sign up, and keep them up to date.</li>
+        <li>Use the service only if the law where you live allows you to.</li>
+      </List>
     ),
   },
   {
@@ -33,7 +70,6 @@ const SECTIONS: LegalSection[] = [
     title: "Your account",
     body: (
       <List>
-        <li>You must be at least 13. Sign-up asks for your date of birth and refuses anyone younger. Only you can see it.</li>
         <li>
           Your handle belongs to you alone. It has {HANDLE_MIN} to {HANDLE_MAX} letters, numbers or underscores, and you can change
           it in Settings, under Account.
@@ -42,6 +78,7 @@ const SECTIONS: LegalSection[] = [
           Your password has at least {MIN_PASSWORD} characters. Keep it private: you are responsible for what is done through your
           account. Settings, under Security, has two-factor sign-in and the list of devices signed in to your account.
         </li>
+        <li>Do not impersonate another person or organisation, or use a handle that suggests you are them.</li>
       </List>
     ),
   },
@@ -51,113 +88,151 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          You own what you post. By posting, you allow the operator to store it, to copy it (for example into backups) and to show
-          it to the people who can see it. That permission ends when you delete the content, except that a copy can remain in older
-          backups until they are replaced.
+          You own what you post. By posting, you give the operator a licence to host it, copy it (for example into backups),
+          show it to the people who can see it under your settings, and make the technical changes the service needs, such as
+          resizing a photo. The licence lasts while the content is on the service and ends when you delete it, except that a
+          copy can remain in backups until they are replaced.
         </P>
         <P>
-          You are responsible for what you post. Who can see it depends on your settings and on the post:{" "}
-          <TextLink href="/privacy#visibility">the Privacy Policy explains who can see what</TextLink>.
+          Rhenko does not use your posts to train AI models. The operator does not sell your content.
+        </P>
+        <P>
+          You confirm that you have the rights to what you post. You are responsible for it, including for the people and works
+          it shows.
+        </P>
+        <P>
+          Who can see what you post depends on your settings and on the post itself. <TextLink href="/privacy#visibility">The
+          Privacy Policy explains it</TextLink>.
         </P>
       </>
     ),
   },
   {
     id: "rules",
-    title: "Rules",
+    title: "Community Rules",
     body: (
       <>
-        <P>Do not use Rhenko to:</P>
-        <List>
-          <li>break the law;</li>
-          <li>threaten, harass or abuse anyone;</li>
-          <li>post spam, scams or the same thing over and over;</li>
-          <li>pretend to be someone else, or deceive people about who you are;</li>
-          <li>post sexual content that involves children;</li>
-          <li>
-            get around the limits on signing in, posting or messaging, overload the service, or collect other people&apos;s data in
-            bulk;
-          </li>
-          <li>use an account that is not yours.</li>
-        </List>
         <P>
-          When you post photos or videos that people should not see without a warning, use <B>Mark media as sensitive</B>. Everyone
-          except you then sees a warning first and chooses whether to look.
+          The <TextLink href="/rules">Community Rules</TextLink> say what is not allowed here: child sexual abuse material,
+          intimate images shared without consent, threats, harassment, impersonation, spam, scams, private information shared
+          without consent, and more. They apply on top of the law. Where the law of a place is stricter than a rule, the law is what
+          applies there.
+        </P>
+        <P>
+          The operator may hide or remove content, and suspend or close accounts, that break these terms, the Rules or the law.
         </P>
       </>
     ),
   },
   {
-    id: "messages",
-    title: "Messages",
+    id: "enforcement",
+    title: "When a rule is broken",
     body: (
       <>
-        <P>The rules above apply to messages too.</P>
+        <P>
+          When we hide something, the author gets a notice the same day. It says what was hidden, the category of the rule or law
+          it breaks, the reason, and when the appeal window closes. Nothing is deleted at that point.
+        </P>
         <List>
           <li>
-            A message from someone you do not follow arrives as a request, and you can accept or decline it. Being added to a group
-            works the same way. Blocking someone stops them from messaging you.
+            <B>Hidden content</B> disappears from feeds, profiles and searches for everyone else at once, with its replies.
           </li>
           <li>
-            Messages are not end-to-end encrypted, so the operator can technically read them.{" "}
-            <TextLink href="/privacy#messages">The Privacy Policy</TextLink> says how they are stored and when they are deleted.
+            <B>Notices about the most serious kinds</B>, such as intimate images shared without consent and child sexual abuse
+            material, hide the post as soon as the notice arrives, before a person reviews it. A person reviews it afterwards.
           </li>
           <li>
-            You can delete your own messages, which erases the text and any photo for everyone in the conversation. You cannot
-            delete other people&apos;s messages, but you can leave a conversation whenever you like.
+            <B>Appeals</B> are made from Notices within {APPEAL_DAYS} days. A person reads each appeal and decides it. If the
+            appeal succeeds, the post goes back as it was.
+          </li>
+          <li>
+            <B>Deletion.</B> If you do not appeal in time, or the appeal is decided against you, the hidden content and its files are
+            deleted.
+          </li>
+          <li>
+            <B>Repeat breaches</B> can lead to an account being suspended or closed. We tell you when that happens and why.
           </li>
         </List>
+        <P>
+          Where a law requires a faster step, for example a removal order from an authority, the operator follows it. The notice
+          you receive says so.
+        </P>
       </>
     ),
   },
   {
-    id: "reports",
-    title: "Reports",
+    id: "complaints",
+    title: "Complaints and disputes",
     body: (
       <>
         <P>
-          Every post has a <B>Report post</B> option. The reasons you can give are {andList(REPORT_REASONS)}.
+          If you think a decision is wrong, appeal it first. If the appeal is refused and you still disagree, write to the
+          operator. <OperatorValue which="grievanceEmail" missing="The operator has not yet published a complaints address." email />
+          {" "}You can also use the <TextLink href="/notice">notice form</TextLink> to tell us about content.
         </P>
         <P>
-          The operator reads reports and can remove a post together with the replies under it. A person handles each report, so
-          there is no promised response time, and neither the reporter nor the author is sent a notice of the outcome. The operator
-          may remove content that breaks these terms, and may close accounts that break them seriously or repeatedly.
-        </P>
-        <P>
-          You can also protect your posts, block accounts, and mute accounts or words yourself, in Settings, under Privacy and
-          safety.
+          Where the EU Digital Services Act applies to this service, you may take a decision on a complaint to an out-of-court
+          dispute settlement body certified under Article 21 of that Act. Your rights under consumer law in your country are not
+          affected by this.
         </P>
       </>
     ),
   },
   {
-    id: "leaving",
-    title: "Leaving",
-    body: (
-      <>
-        <P>You can leave at any time, from Settings, under Account.</P>
-        <List>
-          <li>
-            <B>Deactivate account</B> hides your profile and posts and signs you out everywhere. Log in again and everything is
-            back.
-          </li>
-          <li>
-            <B>Delete account</B> permanently removes your profile, your posts and the replies under them, the messages you sent,
-            and your photos and videos. It cannot be undone, so download your data first if you want a copy.
-          </li>
-        </List>
-      </>
-    ),
-  },
-  {
-    id: "service",
-    title: "The service",
+    id: "copyright",
+    title: "Copyright",
     body: (
       <P>
-        Rhenko is provided as it is. The operator does not promise that it will always be available, and it can change or stop.
-        Download your data now and then so that you keep a copy of your own. As far as the law allows, the operator is not liable
-        for loss caused by the service being unavailable or by what other people post.
+        If you believe something on Rhenko copies your work, use the <TextLink href="/copyright">copyright notice process</TextLink>.
+        Accounts that repeatedly post infringing material can be closed.
       </P>
+    ),
+  },
+  {
+    id: "availability",
+    title: "The service",
+    body: (
+      <>
+        <P>
+          Rhenko is provided as it is and as it is available. The operator does not promise that it will always be online, that
+          it will suit a particular purpose, or that it will never lose data. Backups are made where the operator makes them.
+        </P>
+        <P>
+          The operator may change or stop features. Where it stops the whole service, it will tell you in advance, when that is
+          possible, and give you a way to download your data.
+        </P>
+      </>
+    ),
+  },
+  {
+    id: "liability",
+    title: "Liability",
+    body: (
+      <>
+        <P>
+          To the extent the law allows, the operator is not responsible for what other people post, and is not liable for losses
+          that come from the service being unavailable or from content posted by others.
+        </P>
+        <P>
+          Nothing in these terms excludes or limits a right you have under a law that cannot be excluded. This includes the
+          consumer guarantees in Australia, the UK Consumer Rights Act 2015, consumer law in the EU and its member states, and
+          India&apos;s Consumer Protection Act 2019. Where those laws apply, they apply.
+        </P>
+      </>
+    ),
+  },
+  {
+    id: "law",
+    title: "Governing law",
+    body: (
+      <>
+        <P>
+          These terms are governed by the law of <OperatorValue which="governingLaw" missing="the place the operator has chosen, which it has not yet published" />.
+        </P>
+        <P>
+          If you use Rhenko as a consumer, you can also bring a claim in the courts of the country where you live.
+        </P>
+      </>
     ),
   },
   {
@@ -165,9 +240,26 @@ const SECTIONS: LegalSection[] = [
     title: "Changes",
     body: (
       <P>
-        When these terms change, the date at the top of this page changes. If you keep using Rhenko after that, the new terms apply
-        to you.
+        When these terms change in a way that matters, the date at the top of the page changes, and you are asked to agree to the
+        new version before you use Rhenko again. Carrying on without agreeing is not possible. The{" "}
+        <TextLink href="/privacy">Privacy Policy</TextLink> changes the same way.
       </P>
+    ),
+  },
+  {
+    id: "ending",
+    title: "Ending your use",
+    body: (
+      <>
+        <P>
+          You can deactivate or delete your account in Settings, under Account. Deleting an account deletes your posts, messages,
+          photos and videos. Some records are kept as the Privacy Policy describes, for example notices about content.
+        </P>
+        <P>
+          The operator can suspend or close an account that breaks these terms, and will tell the account holder why, unless the
+          law forbids it.
+        </P>
+      </>
     ),
   },
   {
@@ -175,8 +267,8 @@ const SECTIONS: LegalSection[] = [
     title: "Contact",
     body: (
       <OperatorContact
-        about="Questions about these terms, and anything the Report post option does not cover, go to the operator."
-        without="Until an address is published, use Report post on any post that breaks the rules."
+        about="Questions about these terms go to the operator."
+        without="Until an address is published, the in-app notices and appeals are the way to raise a decision."
       />
     ),
   },
@@ -186,8 +278,9 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
-      updated={UPDATED}
-      intro="These are the rules for using Rhenko on this server. By creating an account or using Rhenko, you agree to them."
+      updated={LEGAL_UPDATED}
+      intro="These terms are the agreement between you and the operator of this Rhenko server. Read them before you use Rhenko. They explain what you can post, how decisions about content are made and reviewed, and what each side can do."
+      summary={SUMMARY}
       sections={SECTIONS}
       other={{ href: "/privacy", label: "Read the Privacy Policy" }}
     />

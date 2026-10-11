@@ -44,14 +44,16 @@ export async function pickBirthday(page, date) {
   await dialog.waitFor({ state: "detached" })
 }
 
-// Fills the whole sign-up form. A field set to null is left empty.
-export async function fillSignup(page, { name, handle, birthday, password, email }) {
+// Fills the whole sign-up form. A field set to null is left empty, and the agreement box is ticked unless agree is false.
+export async function fillSignup(page, { name, handle, birthday, password, email, agree = true }) {
   await ready(page.locator("input[name=handle]"))
   await page.locator("input[name=name]").fill(name ?? "")
   await page.locator("input[name=handle]").fill(handle ?? "")
   if (birthday) await pickBirthday(page, birthday)
   await page.locator("input[name=password]").fill(password ?? "")
   if (email) await page.locator("input[name=email]").fill(email)
+  // The age and terms box is required. A test that leaves it empty says so with agree: false.
+  if (agree) await page.locator("input[name=agree]").check()
 }
 
 // After a form posts: where did the person end up? Waits for the page to move on, or for an error to show.

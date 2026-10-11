@@ -12,10 +12,12 @@ export const MAX_PASSWORD = 200
 // Profiles live at /<handle>, so a handle must never take the name of a top-level route. These lists follow the route
 // tree: each folder directly under app/(app), app/(auth), app/api and app/media, the app's own top-level routes, and
 // the pages the app links to. A new top-level route folder goes into its list here in the same change.
-const ROUTES_APP = ["analytics", "bookmarks", "drafts", "explore", "lists", "messages", "notifications", "search", "settings", "topics"]
+const ROUTES_APP = ["analytics", "bookmarks", "drafts", "explore", "lists", "messages", "notices", "notifications", "search", "settings", "topics"]
 const ROUTES_AUTH = ["login", "signup", "forgot-password", "reset-password"]
 const ROUTES_API = ["api", "account-data", "calls", "events", "feed", "health", "suggest"]
-const ROUTES_ROOT = ["media", "offline", "terms", "privacy", "manifest", "favicon"]
+const ROUTES_ROOT = [
+  "media", "offline", "terms", "privacy", "rules", "safety", "copyright", "transparency", "legal", "notice", "accept-terms", "manifest", "favicon",
+]
 // Words kept back for paths the app uses or would read as its own.
 const RESERVED_WORDS = ["logout", "status", "kit", "home", "compose", "admin", "rhenko"]
 
@@ -159,7 +161,8 @@ export function replyRefusal(setting: ReplySetting): string {
 // What every action says when its post is missing, unpublished, or hidden from the person acting.
 export const POST_UNAVAILABLE = "That post isn't available."
 
-export const REPORT_REASONS = ["Spam", "Abusive or harmful", "Misleading", "Something else"] as const
+// The reasons on a post's report menu. The intimate-image reason hides the post at once and sends it to priority review.
+export const REPORT_REASONS = ["Spam", "Abusive or harmful", "Misleading", "Intimate image without consent", "Illegal content", "Something else"] as const
 
 export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as const
 
@@ -177,6 +180,7 @@ export const NOTE_SHOW_MIN_HELPFUL = 2
 // The author can undo a new post for this long after it goes out.
 export const UNDO_WINDOW_MS = 10 * 1000
 export const RECENT_SEARCH_LIMIT = 15
+export const SAVED_SEARCH_LIMIT = 25
 export const MAX_SEARCH_LENGTH = 300
 // A profile visit from the same person counts once per window.
 export const PROFILE_VISIT_WINDOW_MS = 6 * 60 * 60 * 1000

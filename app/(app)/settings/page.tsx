@@ -9,6 +9,8 @@ const SECTIONS = [
   { href: "/settings/account", title: "Account" },
   { href: "/settings/security", title: "Security" },
   { href: "/settings/privacy", title: "Privacy and safety" },
+  { href: "/notices", title: "Notices and appeals" },
+  { href: "/legal", title: "Legal" },
   { href: "/settings/notifications", title: "Notifications" },
   { href: "/settings/shortcuts", title: "Keyboard shortcuts" },
 ]
@@ -42,6 +44,21 @@ export default function SettingsPage() {
           <li>
             <Link href="/privacy" className="underline-offset-4 hover:underline">
               Privacy
+            </Link>
+          </li>
+          <li>
+            <Link href="/rules" className="underline-offset-4 hover:underline">
+              Rules
+            </Link>
+          </li>
+          <li>
+            <Link href="/safety" className="underline-offset-4 hover:underline">
+              Safety
+            </Link>
+          </li>
+          <li>
+            <Link href="/legal" className="underline-offset-4 hover:underline">
+              All legal
             </Link>
           </li>
         </ul>

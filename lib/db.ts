@@ -446,6 +446,65 @@ CREATE TABLE IF NOT EXISTS conversation_departures (
   PRIMARY KEY (conversation_id, user_id)
 );
 `,
+  // 10. Legal and safety: the terms each account accepted, posts hidden by moderation with a notice and an appeal, the
+  // outcome of each report, the notices people send about content, and saved searches.
+  `
+ALTER TABLE users ADD COLUMN terms_version TEXT;
+ALTER TABLE users ADD COLUMN terms_accepted_at INTEGER;
+ALTER TABLE posts ADD COLUMN removed_at INTEGER;
+CREATE INDEX IF NOT EXISTS posts_removed ON posts(removed_at) WHERE removed_at IS NOT NULL;
+ALTER TABLE reports ADD COLUMN outcome TEXT;
+ALTER TABLE reports ADD COLUMN outcome_at INTEGER;
+
+CREATE TABLE IF NOT EXISTS moderation_notices (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id TEXT NOT NULL,
+  category TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  excerpt TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  appeal_until INTEGER NOT NULL,
+  restored_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS moderation_notices_user ON moderation_notices(user_id, created_at);
+CREATE TABLE IF NOT EXISTS appeals (
+  id TEXT PRIMARY KEY,
+  notice_id TEXT NOT NULL UNIQUE REFERENCES moderation_notices(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER,
+  decision TEXT,
+  decision_note TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS legal_notices (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  address TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  post_id TEXT,
+  work TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL,
+  good_faith INTEGER NOT NULL DEFAULT 0,
+  accurate INTEGER NOT NULL DEFAULT 0,
+  signature TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  decision_note TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS legal_notices_open ON legal_notices(status, created_at);
+CREATE TABLE IF NOT EXISTS saved_searches (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  query TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, query)
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

@@ -1,7 +1,13 @@
 import type { Metadata } from "next"
-import { OperatorContact, OperatorWho } from "@/app/_legal/operator"
+import { OperatorContact, OperatorLines, OperatorWho } from "@/app/_legal/operator"
 import { B, Code, LegalPage, List, Note, P, TextLink, type LegalSection } from "@/app/_legal/shell"
 import { EMAIL_CODE_MINUTES } from "@/lib/account-rules"
+import {
+  APPEAL_DAYS,
+  LEGAL_UPDATED,
+  MINIMUM_AGE,
+  RETENTION,
+} from "@/lib/legal"
 import {
   EDIT_WINDOW_MS,
   MAX_IMAGE_BYTES,
@@ -14,12 +20,12 @@ import {
 
 export const metadata: Metadata = {
   title: { absolute: "Privacy Policy · Rhenko" },
-  description: "What Rhenko stores about you, who can see it, and how you can remove it.",
+  description: "What Rhenko stores about you, why, who can see it, and the rights you have over it.",
 }
 
-// This policy describes what the software does. It is not legal advice: whoever runs a server should have it reviewed for
-// the place where they run it. Change UPDATED whenever the text changes.
-const UPDATED = "11 October 2026"
+// This policy describes what the software does. It is not legal advice. Whoever runs a server needs it reviewed for each
+// place it serves people, and the operator fills in the details shown in the Operator section. LEGAL_UPDATED and
+// TERMS_VERSION in lib/legal.ts change together whenever this text changes.
 
 const EDIT_MINUTES = EDIT_WINDOW_MS / 60_000
 const VISIT_HOURS = PROFILE_VISIT_WINDOW_MS / 3_600_000
@@ -36,9 +42,13 @@ const SUMMARY = (
   <Note title="The short version">
     <List>
       <li>There is no advertising, and nothing is sent to analytics or tracking services.</li>
+      <li>Rhenko does not sell your data, and does not share it for advertising.</li>
       <li>The operator can reach everything stored on this server, including messages, which are not end-to-end encrypted.</li>
-      <li>Your email address, if you add one, is used only to send you codes.</li>
-      <li>You can download or delete your data yourself, in Settings, under Account.</li>
+      <li>
+        Your email address, if you add one, is used only to send you codes. Date of birth is used only to check you are {MINIMUM_AGE} or
+        older.
+      </li>
+      <li>You can download, correct or delete your data yourself, in Settings, under Account.</li>
     </List>
   </Note>
 )
@@ -50,7 +60,21 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <OperatorWho />
-        <P>The operator controls this server, where it is hosted and how it is backed up.</P>
+        <P>
+          The operator decides why and how this server holds your data, so it is the controller of that data under the GDPR and
+          the UK GDPR, and the equivalent party under the other laws listed in this policy.
+        </P>
+        <OperatorLines
+          items={[
+            { which: "address", label: "Postal address", max: 300 },
+            { which: "privacyEmail", label: "Privacy contact", email: true },
+            { which: "grievanceOfficer", label: "Grievance officer (India)" },
+            { which: "grievanceEmail", label: "Grievance email (India)", email: true },
+            { which: "euRepresentative", label: "EU representative" },
+            { which: "ukRepresentative", label: "UK representative" },
+            { which: "hosting", label: "Where the server is hosted" },
+          ]}
+        />
       </>
     ),
   },
@@ -66,7 +90,10 @@ const SECTIONS: LegalSection[] = [
             You can add a bio, location, website, status, profile photo and banner.
           </li>
           <li>
-            <B>Date of birth.</B> Asked at sign-up, because you must be at least 13. Only you can see it.
+            <B>Date of birth.</B> Asked at sign-up, because you must be at least {MINIMUM_AGE}. Only you can see it.
+          </li>
+          <li>
+            <B>Agreement.</B> The version of the Terms and Privacy Policy you agreed to, and when you agreed.
           </li>
           <li>
             <B>Email address.</B> Optional. See Email below.
@@ -92,12 +119,18 @@ const SECTIONS: LegalSection[] = [
             one.
           </li>
           <li>
+            <B>Notices about content, and appeals.</B> When a notice is sent through the notice form, we keep what it says and how
+            to reach the sender (see Reports and notices below). If your post is hidden, we keep the notice we sent you, and any
+            appeal you make.
+          </li>
+          <li>
             <B>Sign-in sessions.</B> For each signed-in device: a hash of its sign-in token, the name its browser reports (up to
             200 characters), when the session started and when it was last used. A session lasts {SESSION_DAYS} days. You can see
             and end your sessions in Settings, under Security.
           </li>
           <li>
-            <B>Searches.</B> Your last {RECENT_SEARCH_LIMIT} searches. You can remove them one by one or all at once.
+            <B>Searches.</B> Your last {RECENT_SEARCH_LIMIT} searches, and any you save. You can remove them one by one or all at
+            once.
           </li>
           <li>
             <B>Views.</B> Rhenko records which account viewed a post, once, and which accounts visited a profile, once every{" "}
@@ -111,6 +144,33 @@ const SECTIONS: LegalSection[] = [
             in front of it may.
           </li>
         </List>
+      </>
+    ),
+  },
+  {
+    id: "basis",
+    title: "Why we use it",
+    body: (
+      <>
+        <P>Each use needs a reason in law. These are the reasons Rhenko relies on.</P>
+        <List>
+          <li>
+            <B>To run your account and the service you ask for</B>, including posts, messages, calls and notifications. This is
+            the contract between you and the operator.
+          </li>
+          <li>
+            <B>To keep the service safe and fair</B>: sign-in protection, moderation, reports and the record of decisions. This is
+            the operator&apos;s legitimate interest, weighed against your rights, and it is why you can appeal.
+          </li>
+          <li>
+            <B>To meet legal duties</B>: checking age, acting on notices and orders, keeping records the law requires, and telling
+            the regulator of a breach.
+          </li>
+          <li>
+            <B>With your consent</B>, only where you choose a feature that asks for it. You can withdraw that consent at any time.
+          </li>
+        </List>
+        <P>Rhenko does not use your data for advertising, for profiling that decides things about you, or for training AI models.</P>
       </>
     ),
   },
@@ -175,6 +235,7 @@ const SECTIONS: LegalSection[] = [
           <li>
             Anyone who has the address of a profile photo or banner can open it. A photo or video in a post can be opened only by
             signed-in people who may see that post. A photo in a message can be opened only by the people in that conversation.
+            While a post is hidden, its files are not served to anyone through the app.
           </li>
         </List>
       </>
@@ -203,7 +264,66 @@ const SECTIONS: LegalSection[] = [
           those notifications off.
         </li>
         <li>The earlier versions of an edited post can be seen by anyone who can see the post.</li>
+        <li>
+          A post hidden under the Community Rules is not visible to anyone, its author included. The author sees the notice and
+          can appeal it.
+        </li>
       </List>
+    ),
+  },
+  {
+    id: "ordering",
+    title: "How posts are ordered",
+    body: (
+      <>
+        <P>
+          Rhenko does not build a profile of you to decide what you see. Nothing is ranked by what it predicts you will like.
+        </P>
+        <List>
+          <li>
+            <B>For you</B> shows the posts you are allowed to see, newest first.
+          </li>
+          <li>
+            <B>Following</B> shows posts from the accounts and topics you follow, newest first.
+          </li>
+          <li>
+            <B>Explore</B> can be sorted by top, which adds up likes, reposts (counted twice) and replies, or by latest. Top uses
+            those counts and nothing else about you.
+          </li>
+        </List>
+        <P>
+          The main settings that shape what you see are your follows, blocks, mutes, muted words, and whether a post is hidden or
+          protected. You can change each one in Settings, under Privacy and safety.
+        </P>
+      </>
+    ),
+  },
+  {
+    id: "notices",
+    title: "Reports and notices about content",
+    body: (
+      <>
+        <List>
+          <li>
+            A <B>report</B> is kept with the post it is about, the reason and the reporter. Reports are read by people
+            who run the server.
+          </li>
+          <li>
+            A <B>notice</B> sent through the notice form is kept with the name, email address, optional postal address and link
+            the sender gave, what the notice is about, the description and the sender&apos;s signature. The sender gets a reference
+            and an email when the notice arrives, and an email with the decision. The author of the content is not told who sent a
+            notice, except that a copyright notice is passed on to the person who posted the work, as the law expects.
+          </li>
+          <li>
+            <B>Decisions</B> and the reasons for them are kept with the notice. So are the appeals and their decisions.
+          </li>
+        </List>
+        <P>
+          We keep notices and decisions for {RETENTION.legalNoticesDays / 365} years, because they may be needed to show that a
+          decision was lawful, and then delete them. A notice about content keeps the decision and reason even after the content
+          itself is deleted, but not the content.
+        </P>
+      </>
     ),
   },
   {
@@ -214,7 +334,7 @@ const SECTIONS: LegalSection[] = [
         <li>Adding an email address is optional. You confirm it with a six-digit code, in Settings, under Account.</li>
         <li>
           Rhenko uses it for two things only: verification codes, and password-reset codes. A reset code goes only to an address
-          that has been confirmed. It sends no newsletters.
+          that has been confirmed. It sends no newsletters or marketing.
         </li>
         <li>Codes work for {EMAIL_CODE_MINUTES} minutes. They are stored as hashes, not as the codes themselves.</li>
         <li>Your address is not shown to anyone else.</li>
@@ -254,6 +374,10 @@ const SECTIONS: LegalSection[] = [
           device. It does not store posts, messages or uploads.
         </P>
         <P>In production, the sign-in cookies are marked Secure, so browsers send them only over HTTPS.</P>
+        <P>
+          Because Rhenko sets no cookies for advertising or analytics, there is nothing for a cookie banner to switch off. The
+          cookies above are needed for the service you ask for.
+        </P>
       </>
     ),
   },
@@ -261,16 +385,33 @@ const SECTIONS: LegalSection[] = [
     id: "sharing",
     title: "Who else receives data",
     body: (
-      <List>
-        <li>
-          Advertisers, data brokers and analytics services receive nothing from Rhenko. The app&apos;s fonts, scripts and images
-          load from this server, not from other sites.
-        </li>
-        <li>The operator&apos;s mail service receives the address and the text of each verification or reset email.</li>
-        <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
-        <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
-        <li>The operator may disclose data where the law requires it.</li>
-      </List>
+      <>
+        <P>
+          Rhenko does not sell personal information and does not share it for cross-context behavioural advertising. Advertisers,
+          data brokers and analytics services receive nothing from Rhenko. The app&apos;s fonts, scripts and images load from this
+          server, not from other sites.
+        </P>
+        <List>
+          <li>The operator&apos;s mail service receives the address and the text of each verification, reset or notice email.</li>
+          <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
+          <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
+          <li>
+            Authorities receive data only where a law or a valid order requires it. The operator keeps a record of each such
+            request, and the <TextLink href="/transparency">transparency figures</TextLink> count them.
+          </li>
+        </List>
+      </>
+    ),
+  },
+  {
+    id: "transfers",
+    title: "Where data is kept",
+    body: (
+      <P>
+        Your data is stored where the operator hosts the server, shown above. If that is outside the country you live in, your
+        data is transferred there. The operator is responsible for putting in place any safeguard the law requires for that
+        transfer, such as the standard contractual clauses for transfers out of the EU or UK.
+      </P>
     ),
   },
   {
@@ -283,54 +424,83 @@ const SECTIONS: LegalSection[] = [
           deletes the replies under it and the photos and videos in them.
         </li>
         <li>
+          A hidden post is kept for {APPEAL_DAYS} days so that you can appeal. If no appeal is made, or the appeal fails, it is deleted
+          with its files.
+        </li>
+        <li>
+          Views and profile visits are kept for {RETENTION.viewsDays} days, and the counts shown to you cover that period.
+        </li>
+        <li>Read notifications are deleted after {RETENTION.readNotificationsDays} days. Unread ones are kept until you read them.</li>
+        <li>
+          Notices about content, their decisions and the appeals are kept for {RETENTION.legalNoticesDays / 365} years, then
+          deleted.
+        </li>
+        <li>
           Sign-in sessions last {SESSION_DAYS} days or until you end them. Emailed codes last {EMAIL_CODE_MINUTES} minutes. The
           step between your password and your two-factor code lasts {CHALLENGE_MINUTES} minutes.
         </li>
         <li>The counts that include network addresses last an hour at most, and only in the server&apos;s memory.</li>
-        <li>A deactivated account keeps its hidden data until you log in again or delete the account.</li>
+        <li>A deactivated account keeps its data until you log in again or delete the account.</li>
         <li>If the operator makes backups, a backup still holds what you deleted until that backup is replaced.</li>
       </List>
     ),
   },
   {
     id: "choices",
-    title: "Your choices",
+    title: "Your rights and choices",
     body: (
       <>
+        <P>
+          Wherever you live, you can use the tools in Settings to get a copy of your data, correct it, restrict or stop some uses,
+          and delete it. These are the rights the main laws give you, and what to do about each.
+        </P>
         <List>
           <li>
-            <B>Edit your profile</B> from your profile page.
+            <B>Access and a copy.</B> <TextLink href="/settings">Settings, under Account, Your data</TextLink>, downloads a ZIP of
+            your profile, posts, likes, bookmarks, lists, messages and your photos and videos.
           </li>
           <li>
-            <B>Download your data</B> in Settings, under Account, in Your data. It is a ZIP file with your profile, posts, likes,
-            bookmarks, lists, messages and your photos and videos.
+            <B>Correction.</B> Edit your profile from your profile page, and your handle and email address in Settings, under
+            Account.
           </li>
           <li>
-            <B>Deactivate or delete your account</B> in Settings, under Account.
+            <B>Deletion.</B> Delete your account in Settings, under Account. Some records are kept as the sections above describe.
           </li>
           <li>
-            <B>Add or remove your email address</B> in Settings, under Account.
+            <B>Objection and restriction.</B> Protect your posts, block or mute accounts and words, or turn off notifications, in
+            Settings, under Privacy and safety and Notifications.
           </li>
           <li>
-            <B>See and end your sessions</B> in Settings, under Security.
+            <B>Appeal a decision about your content</B> from <TextLink href="/notices">Notices</TextLink> within {APPEAL_DAYS} days.
           </li>
           <li>
-            <B>Protect your posts, block accounts, and mute accounts or words</B> in Settings, under Privacy and safety.
-          </li>
-          <li>
-            <B>Choose your notifications</B> in Settings, under Notifications.
-          </li>
-          <li>
-            <B>Clear your recent searches</B> from the list on the search page.
+            <B>Ask us.</B> For anything the settings do not cover, write to the privacy contact above. We reply within a month, and
+            tell you if we need more time or cannot do what you ask, and why.
           </li>
         </List>
-        <P>For anything the settings do not cover, ask the operator. See Contact below.</P>
+        <P>
+          <B>In the EU, UK and EEA</B>, you can also object to processing based on legitimate interests, ask for a restriction, and
+          complain to your national data protection authority.
+        </P>
+        <P>
+          <B>In California</B>, you can ask what personal information we hold, ask for it to be deleted or corrected, and you will
+          not be treated differently for using these rights. We do not sell or share personal information.
+        </P>
+        <P>
+          <B>In Australia</B>, you can ask for access to and correction of your information. Complaints can go to the Office of the
+          Australian Information Commissioner.
+        </P>
+        <P>
+          <B>In India</B>, you can ask for a summary of your data, for correction and erasure, and to nominate someone to act for
+          you. Complaints go first to the grievance officer named above. If that does not resolve it, you can complain to the Data
+          Protection Board of India.
+        </P>
       </>
     ),
   },
   {
     id: "security",
-    title: "Security",
+    title: "Security and breaches",
     body: (
       <>
         <List>
@@ -344,6 +514,11 @@ const SECTIONS: LegalSection[] = [
           These measures protect your data from other users. They do not hide it from whoever runs the server, who can reach
           everything stored on it.
         </P>
+        <P>
+          If a breach puts your personal information at real risk, the operator will tell you without undue delay, and will tell
+          the regulator within the time the law sets: 72 hours under the GDPR and UK GDPR, and as soon as practicable under the
+          Australian Notifiable Data Breaches scheme and India&apos;s Digital Personal Data Protection Act.
+        </P>
       </>
     ),
   },
@@ -352,8 +527,9 @@ const SECTIONS: LegalSection[] = [
     title: "Children",
     body: (
       <P>
-        Rhenko is not for anyone under 13, and sign-up refuses them. If you find that a child under 13 has an account, tell the
-        operator.
+        Rhenko is not for anyone under {MINIMUM_AGE}. Sign-up refuses them, and the operator does not knowingly collect information
+        from anyone younger. If you find that someone under {MINIMUM_AGE} has an account, tell the operator, and the account will be
+        closed and its data deleted.
       </P>
     ),
   },
@@ -362,8 +538,8 @@ const SECTIONS: LegalSection[] = [
     title: "Changes",
     body: (
       <P>
-        When this policy changes, the date at the top of this page changes. The <TextLink href="/terms">Terms of Service</TextLink>{" "}
-        say how changes apply to you.
+        When this policy changes in a way that matters, the date at the top of this page changes, and you are asked to agree to
+        the new version before you use Rhenko again. The <TextLink href="/terms">Terms of Service</TextLink> say how that works.
       </P>
     ),
   },
@@ -383,8 +559,8 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      updated={UPDATED}
-      intro="This page describes what Rhenko stores about you, who can see it, who else receives it, and how you can remove it. It describes what the software does. The operator of this server controls the server itself."
+      updated={LEGAL_UPDATED}
+      intro="This page describes what Rhenko stores about you, why, who can see it, who else receives it, how long it is kept, and what you can do about it. It describes what the software does. The operator of this server controls the server itself."
       summary={SUMMARY}
       sections={SECTIONS}
       other={{ href: "/terms", label: "Read the Terms of Service" }}

@@ -5,6 +5,7 @@ import { getViewer, newId } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost, canSeePost, editHistoryFor, visiblePostIds, type EditVersion } from "@/lib/data"
 import { notify } from "@/lib/notify"
+import { hidePost } from "@/lib/moderation"
 import { announcePost, mediaFilesFor, removeFiles, replyPermission, startPollClock, thread } from "@/lib/post-writes"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import {
@@ -191,8 +192,10 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
     publish_at: number | null
     body: string
     edited_at: number | null
-  }>("SELECT author_id, created_at, is_draft, publish_at, body, edited_at FROM posts WHERE id = ?", postId)
+    removed_at: number | null
+  }>("SELECT author_id, created_at, is_draft, publish_at, body, edited_at, removed_at FROM posts WHERE id = ?", postId)
   if (!post) return { ok: false, error: "That post was deleted." }
+  if (post.removed_at !== null) return { ok: false, error: POST_UNAVAILABLE }
   if (post.author_id !== viewer.id) return { ok: false, error: "You can only edit your own posts." }
   if (post.is_draft === 1 || post.publish_at !== null) return { ok: false, error: "Publish this post before editing it." }
   if (Date.now() - post.created_at > EDIT_WINDOW_MS) return { ok: false, error: "Posts can be edited for 30 minutes after they're posted." }
@@ -477,14 +480,24 @@ export async function reportPost(postId: string, reason: string): Promise<VoidRe
   if (!viewer) return { ok: false, error: "Sign in to report posts." }
   if (!isId(postId) || !postAuthor(postId)) return { ok: false, error: "That post was deleted." }
   if (!(REPORT_REASONS as readonly string[]).includes(reason)) return { ok: false, error: "Pick a reason." }
+  const reportId = newId()
   run(
     "INSERT INTO reports (id, reporter_id, post_id, user_id, reason, created_at) VALUES (?, ?, ?, NULL, ?, ?)",
-    newId(),
+    reportId,
     viewer.id,
     postId,
     reason,
     Date.now()
   )
+  // A picture of someone shared without their consent comes off the feeds at once, and a person reviews it after.
+  if (reason === "Intimate image without consent") {
+    hidePost({
+      postId,
+      category: "intimate_image",
+      explanation: "Hidden while we review a report that it was shared without the consent of the person in it.",
+      source: `report:${reportId}`,
+    })
+  }
   return { ok: true }
 }
 
