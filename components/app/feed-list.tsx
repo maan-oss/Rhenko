@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { BlurFade } from "@/components/ui/blur-fade"
+import { EmptyState } from "@/components/app/empty-state"
 import { MoveBookmark } from "@/components/app/move-bookmark"
 import { PostCard } from "@/components/app/post-card"
 import type { FeedItem } from "@/lib/data"
@@ -15,11 +16,13 @@ type Props = {
   viewer: Viewer
   emptyTitle: string
   emptyBody: string
+  // What to offer when the list is empty: a button, a link, a short list of people.
+  emptyAction?: ReactNode
   folders?: { id: string; name: string }[]
 }
 
 // Renders a feed and loads older pages as the reader reaches the end.
-export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, folders }: Props) {
+export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders }: Props) {
   const [items, setItems] = useState(initialItems)
   const [next, setNext] = useState<string | null>(initialNext)
   const [loading, setLoading] = useState(false)
@@ -73,10 +76,9 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
 
   if (items.length === 0 && !next) {
     return (
-      <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
-        <p className="text-lg font-semibold">{emptyTitle}</p>
-        <p className="max-w-sm text-[15px] text-muted-foreground">{emptyBody}</p>
-      </div>
+      <EmptyState title={emptyTitle} body={emptyBody}>
+        {emptyAction}
+      </EmptyState>
     )
   }
 
@@ -94,7 +96,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
             type="button"
             onClick={() => void loadMore()}
             disabled={loading}
-            className="h-9 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+            className="h-10 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
           >
             {loading ? "Loading" : "Show more"}
           </button>

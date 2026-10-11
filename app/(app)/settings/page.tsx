@@ -32,6 +32,20 @@ export default function SettingsPage() {
           ))}
         </ul>
       </nav>
+      <nav aria-label="Legal" className="px-4 pt-4 text-sm text-muted-foreground">
+        <ul className="flex gap-5">
+          <li>
+            <Link href="/terms" className="underline-offset-4 hover:underline">
+              Terms
+            </Link>
+          </li>
+          <li>
+            <Link href="/privacy" className="underline-offset-4 hover:underline">
+              Privacy
+            </Link>
+          </li>
+        </ul>
+      </nav>
       <form action={logout} className="px-4 pt-6 pb-10">
         <button
           type="submit"

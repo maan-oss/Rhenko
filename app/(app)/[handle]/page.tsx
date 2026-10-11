@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
 import { BarChart3, CalendarDays, FileText, Heart, Image as ImageIcon, Link as LinkIcon, Lock, MapPin, MessageCircle, Repeat2, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
-import { getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
+import { canSeePost, getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
 import { hostOf, joinedLabel, pluralize } from "@/lib/format"
@@ -93,7 +93,9 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   const spec: FeedSpec = { kind: "profile", tab, handle: profile.handle }
   const page = feedFor(spec, viewer.id)
   const locked = page.locked === true
-  const pinned = tab === "posts" && profile.pinnedPostId ? getPost(profile.pinnedPostId, viewer.id) : null
+  // The pinned post shows only where the profile's posts do, and only when this viewer may see that post.
+  const pinned =
+    tab === "posts" && !locked && profile.pinnedPostId && canSeePost(profile.pinnedPostId, viewer.id) ? getPost(profile.pinnedPostId, viewer.id) : null
   const followState: FollowState = rel.following ? "following" : rel.requested ? "requested" : "none"
   const base = `/${profile.handle}`
   const sections = SECTIONS.filter((t) => t !== "likes" || isSelf)
@@ -152,6 +154,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
               <span className="glass rounded-md px-1.5 py-0.5 text-xs font-medium text-foreground">Follows you</span>
             ) : null}
           </p>
+          {profile.status ? <p className="glass mt-2 w-fit max-w-full truncate rounded-full px-3 py-1 text-sm">{profile.status}</p> : null}
         </div>
         {rel.blockedByMe && !isSelf ? (
           <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>

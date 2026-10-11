@@ -1,27 +1,113 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Info } from "lucide-react"
 import { toast } from "sonner"
-import { addToGroup, leaveConversation, renameGroup } from "@/actions/messages"
+import { addToGroup, groupInfo, leaveConversation, removeFromGroup, renameGroup, type GroupMember } from "@/actions/messages"
+import { Avatar } from "@/components/app/avatar"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { MAX_GROUP_TITLE } from "@/lib/rules"
 
-type Member = { id: string; name: string; handle: string; status: "accepted" | "requested" }
+type Member = { id: string; name: string; handle: string; status: "accepted" | "requested"; avatarFile?: string | null }
+
+type Info = { title: string; viewerIsCreator: boolean; members: GroupMember[] }
 
 const INPUT =
   "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
-// Rename, add people, or leave a group.
+// Rename a group, see who is in it, add people, remove people (only the person who made it), or leave.
+// The conversation page hands over the people it already knows. The panel asks the server who made the group each time it
+// opens, and again whenever the group changes while it is open, so the creator's controls always match the truth.
 export function GroupPanel({ conversationId, title, members }: { conversationId: string; title: string; members: Member[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [info, setInfo] = useState<Info | null>(null)
+  const [lost, setLost] = useState<string | null>(null)
+  const [draft, setDraft] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<GroupMember | null>(null)
+  const [removeOpen, setRemoveOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const addRef = useRef<HTMLFormElement>(null)
-  const [nextTitle, setNextTitle] = useState(title)
+
+  // Fetch the group's details whenever the panel is open and the group changes.
+  const signature = `${title}|${members.map((member) => `${member.id}:${member.status}`).join(",")}`
+  useEffect(() => {
+    if (!open) return
+    let current = true
+    void groupInfo(conversationId).then((result) => {
+      if (!current) return
+      if (result.ok) {
+        setInfo({ title: result.title, viewerIsCreator: result.viewerIsCreator, members: result.members })
+        setLost(null)
+      } else {
+        setLost(result.error)
+      }
+    })
+    return () => {
+      current = false
+    }
+  }, [open, conversationId, signature])
+
+  async function reload() {
+    const result = await groupInfo(conversationId)
+    if (result.ok) setInfo({ title: result.title, viewerIsCreator: result.viewerIsCreator, members: result.members })
+    else setLost(result.error)
+  }
+
+  // Until the server answers, the people the page already knows stand in. They carry no creator or avatar details yet.
+  const rows: GroupMember[] =
+    info?.members ??
+    members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      handle: member.handle,
+      avatarFile: member.avatarFile ?? null,
+      status: member.status,
+      isCreator: false,
+      isYou: false,
+    }))
+  const serverTitle = info?.title ?? title
+  const shownTitle = draft ?? serverTitle
+  const viewerIsCreator = info?.viewerIsCreator ?? false
+  const creatorGone = info !== null && !info.members.some((member) => member.isCreator)
+  const alone = info !== null && info.members.length <= 1
+  // Someone invited to the group can look around, but renaming and adding people wait until they accept.
+  const invited = rows.some((member) => member.isYou && member.status === "requested")
+
+  function save() {
+    const next = shownTitle.trim()
+    startTransition(async () => {
+      const result = await renameGroup(conversationId, next)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      setDraft(null)
+      toast.success(next ? "Group renamed." : "Group name cleared. Its members' names show instead.")
+      await reload()
+      router.refresh()
+    })
+  }
+
+  function add(handle: string) {
+    startTransition(async () => {
+      const result = await addToGroup(conversationId, handle)
+      if (!result.ok) {
+        setAddError(result.error)
+        return
+      }
+      setAddError(null)
+      addRef.current?.reset()
+      const clean = handle.replace(/^@/, "")
+      toast.success(result.status === "requested" ? `Invited @${clean}. They join once they accept.` : `Added @${clean} to the group.`)
+      await reload()
+      router.refresh()
+    })
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -30,69 +116,111 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md" showCloseButton>
         <DialogTitle className="pr-8 text-lg font-semibold">Group info</DialogTitle>
-        <DialogDescription className="text-sm text-muted-foreground">Anyone in the group can see the name and members.</DialogDescription>
+        <DialogDescription className="text-sm text-muted-foreground">Anyone in the group can see the name and the members.</DialogDescription>
+
+        {lost ? (
+          <p role="alert" className="rounded-xl bg-muted px-3 py-2 text-sm">
+            {lost} Close this and go back to your messages.
+          </p>
+        ) : invited ? (
+          <p className="rounded-xl bg-muted px-3 py-2 text-sm">You&apos;re invited to this group. Accept the invite to rename it or add people.</p>
+        ) : null}
 
         <form
           className="flex gap-2"
           onSubmit={(event) => {
             event.preventDefault()
-            startTransition(async () => {
-              const result = await renameGroup(conversationId, nextTitle.trim())
-              if (!result.ok) toast.error(result.error)
-              else {
-                toast.success("Group renamed.")
-                router.refresh()
-              }
-            })
+            save()
           }}
         >
           <label htmlFor="group-title" className="sr-only">
             Group name
           </label>
-          <input id="group-title" value={nextTitle} maxLength={MAX_GROUP_TITLE} onChange={(e) => setNextTitle(e.target.value)} placeholder="Name this group" className={INPUT} />
-          <Button type="submit" disabled={pending} className="h-10 rounded-lg px-4">
+          <input
+            id="group-title"
+            value={shownTitle}
+            maxLength={MAX_GROUP_TITLE}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Name this group"
+            disabled={invited}
+            className={INPUT}
+          />
+          <Button type="submit" disabled={pending || invited || shownTitle.trim() === serverTitle} className="h-10 rounded-lg px-4">
             Save
           </Button>
         </form>
 
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-semibold">Members</p>
+          <p className="text-sm font-semibold">
+            Members <span className="font-normal text-muted-foreground">· {rows.length}</span>
+          </p>
           <ul className="flex flex-col divide-y divide-border">
-            {members.map((member) => (
-              <li key={member.id} className="flex items-center justify-between py-2 text-[15px]">
-                <span className="min-w-0 truncate">
-                  {member.name} <span className="text-muted-foreground">@{member.handle}</span>
-                </span>
-                {member.status === "requested" ? <span className="text-sm text-muted-foreground">Invited</span> : null}
+            {rows.map((member) => (
+              <li key={member.id} className="flex items-center gap-3 py-2">
+                <Avatar user={member} size={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-[15px] font-semibold">
+                    <span className="truncate">{member.name}</span>
+                    {member.isCreator ? <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">Creator</span> : null}
+                  </p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    @{member.handle}
+                    {member.isYou ? " · You" : ""}
+                    {member.status === "requested" ? " · Invited" : ""}
+                  </p>
+                </div>
+                {viewerIsCreator && !member.isYou ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={`Remove @${member.handle} from the group`}
+                    onClick={() => {
+                      setRemoveTarget(member)
+                      setRemoveOpen(true)
+                    }}
+                    className="h-8 rounded-full px-3 text-destructive"
+                  >
+                    Remove
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>
+          {info ? (
+            <p className="pt-1 text-xs text-muted-foreground">
+              {viewerIsCreator
+                ? "You made this group, so you can remove people from it."
+                : creatorGone
+                  ? "The person who made this group has left, so nobody can remove people from it."
+                  : "Only the person who made this group can remove people from it."}{" "}
+              Anyone in it can add people, rename it or leave.
+            </p>
+          ) : null}
         </div>
 
         <form
           ref={addRef}
-          className="flex gap-2"
+          className="flex flex-col gap-2"
           onSubmit={(event) => {
             event.preventDefault()
             const handle = String(new FormData(event.currentTarget).get("handle") ?? "").trim()
-            startTransition(async () => {
-              const result = await addToGroup(conversationId, handle)
-              if (!result.ok) toast.error(result.error)
-              else {
-                addRef.current?.reset()
-                toast.success(`Added @${handle.replace(/^@/, "")}.`)
-                router.refresh()
-              }
-            })
+            if (handle) add(handle)
           }}
         >
-          <label htmlFor="add-handle" className="sr-only">
-            Add a person by handle
-          </label>
-          <input id="add-handle" name="handle" required placeholder="Add by handle" className={INPUT} />
-          <Button type="submit" disabled={pending} variant="outline" className="h-10 rounded-lg px-4">
-            Add
-          </Button>
+          <div className="flex gap-2">
+            <label htmlFor="add-handle" className="sr-only">
+              Add a person by handle
+            </label>
+            <input id="add-handle" name="handle" required placeholder="Add by handle" autoComplete="off" disabled={invited} className={INPUT} />
+            <Button type="submit" disabled={pending || invited} variant="outline" className="h-10 rounded-lg px-4">
+              Add
+            </Button>
+          </div>
+          {addError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {addError}
+            </p>
+          ) : null}
         </form>
 
         <div className="pt-2">
@@ -103,12 +231,37 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
               </Button>
             }
             title="Leave this group?"
-            description="You won't see new messages from it. Someone in the group can add you back."
+            description={
+              alone
+                ? "You're the only one left, so leaving deletes the group and its messages."
+                : viewerIsCreator
+                  ? "You made this group. Once you leave, nobody can remove people from it. You won't get its messages, and someone in the group can add you back."
+                  : "You won't get its messages any more. Someone in the group can add you back."
+            }
             confirmLabel="Leave group"
             action={() => leaveConversation(conversationId)}
-            onDone={() => router.push("/messages")}
+            onDone={() => {
+              toast.success("You left the group.")
+              router.push("/messages")
+            }}
           />
         </div>
+
+        {removeTarget ? (
+          <ConfirmDialog
+            open={removeOpen}
+            onOpenChange={setRemoveOpen}
+            title={`Remove ${removeTarget.name} from the group?`}
+            description={`@${removeTarget.handle} stops getting this group's messages and can't see it. Anyone in the group can add them back.`}
+            confirmLabel="Remove"
+            action={() => removeFromGroup(conversationId, removeTarget.id)}
+            onDone={() => {
+              toast.success(`Removed @${removeTarget.handle} from the group.`)
+              void reload()
+              router.refresh()
+            }}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   )

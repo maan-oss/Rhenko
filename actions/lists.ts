@@ -10,11 +10,15 @@ export type ListResult = { ok: true; id: string } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
 export type FollowListResult = { ok: true; following: boolean } | { ok: false; error: string }
 
+// A handle is at most 15 characters, so anything much longer than that can't name an account.
+const MAX_HANDLE_INPUT = 50
+
 function refresh() {
   revalidatePath("/", "layout")
 }
 
-function ownedList(listId: string, userId: string): boolean {
+function ownedList(listId: unknown, userId: string): boolean {
+  if (typeof listId !== "string") return false
   return get("SELECT 1 AS found FROM lists WHERE id = ? AND owner_id = ?", listId, userId) !== undefined
 }
 
@@ -56,10 +60,17 @@ export async function addListMember(listId: string, handle: string): Promise<Voi
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
-  const clean = handle.trim().replace(/^@/, "")
-  const target = get<{ id: string }>("SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL", clean)
+  const clean = typeof handle === "string" ? handle.trim().replace(/^@/, "").slice(0, MAX_HANDLE_INPUT) : ""
+  if (!clean) return { ok: false, error: "Enter the handle of the person to add." }
+  const target = get<{ id: string; handle: string }>(
+    "SELECT id, handle FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL",
+    clean
+  )
   if (!target) return { ok: false, error: `@${clean} doesn't exist.` }
-  if (blockedEitherWay(viewer.id, target.id)) return { ok: false, error: `You can't add @${clean}.` }
+  if (blockedEitherWay(viewer.id, target.id)) return { ok: false, error: `You can't add @${target.handle}.` }
+  if (get("SELECT 1 AS found FROM list_members WHERE list_id = ? AND user_id = ?", listId, target.id)) {
+    return { ok: false, error: `@${target.handle} is already on this list.` }
+  }
   run("INSERT OR IGNORE INTO list_members (list_id, user_id, created_at) VALUES (?, ?, ?)", listId, target.id, Date.now())
   refresh()
   return { ok: true }
@@ -69,25 +80,34 @@ export async function removeListMember(listId: string, userId: string): Promise<
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
+  if (typeof userId !== "string" || !userId) return { ok: false, error: "Choose who to remove." }
   run("DELETE FROM list_members WHERE list_id = ? AND user_id = ?", listId, userId)
   refresh()
   return { ok: true }
 }
 
-// Following a list adds it to your lists tab. Private lists stay with their owner.
-export async function toggleListFollow(listId: string): Promise<FollowListResult> {
+// Following a list adds it to your lists tab. Private lists stay with their owner. A button that knows what the person
+// asked for sends it as `want` (true to follow, false to stop), so a stale page can't flip the opposite way. Without
+// `want` it flips.
+export async function toggleListFollow(listId: string, want?: boolean): Promise<FollowListResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow lists." }
+  if (typeof listId !== "string") return { ok: false, error: "That list no longer exists." }
+  if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose follow or unfollow." }
   const list = get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", listId)
   if (!list) return { ok: false, error: "That list no longer exists." }
   if (list.owner_id === viewer.id) return { ok: false, error: "You already own this list." }
-  if (list.private === 1) return { ok: false, error: "Private lists can't be followed." }
   const followed = get("SELECT 1 AS found FROM list_follows WHERE list_id = ? AND user_id = ?", listId, viewer.id)
+  // Unfollowing always works. Following needs a public list, the owner not to have blocked you, and you not to have blocked them.
   if (followed) {
+    if (want === true) return { ok: true, following: true }
     run("DELETE FROM list_follows WHERE list_id = ? AND user_id = ?", listId, viewer.id)
     refresh()
     return { ok: true, following: false }
   }
+  if (want === false) return { ok: true, following: false }
+  if (list.private === 1) return { ok: false, error: "Private lists can't be followed." }
+  if (blockedEitherWay(viewer.id, list.owner_id)) return { ok: false, error: "You can't follow this list." }
   run("INSERT OR IGNORE INTO list_follows (list_id, user_id, created_at) VALUES (?, ?, ?)", listId, viewer.id, Date.now())
   refresh()
   return { ok: true, following: true }

@@ -1,17 +1,9 @@
 "use client"
 
-import { useEffect, useOptimistic, useTransition } from "react"
+import { useOptimistic, useTransition } from "react"
 import Link from "next/link"
 import { Clock, X } from "lucide-react"
-import { clearSearches, forgetSearch, rememberSearch } from "@/actions/search"
-
-// Saves a search to the account's history when it is shown.
-export function RememberSearch({ query }: { query: string }) {
-  useEffect(() => {
-    void rememberSearch(query)
-  }, [query])
-  return null
-}
+import { clearSearches, forgetSearch } from "@/actions/search"
 
 // The searches an account ran most recently, with a way to remove one or all of them.
 export function RecentSearches({ queries }: { queries: string[] }) {
@@ -57,7 +49,7 @@ export function RecentSearches({ queries }: { queries: string[] }) {
                   await forgetSearch(query)
                 })
               }
-              className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:size-8"
             >
               <X className="size-4" />
             </button>

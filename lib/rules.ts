@@ -9,25 +9,17 @@ export const MAX_DM = 1000
 export const MIN_PASSWORD = 8
 export const MAX_PASSWORD = 200
 
-export const RESERVED_HANDLES = new Set([
-  "login",
-  "signup",
-  "logout",
-  "explore",
-  "notifications",
-  "messages",
-  "bookmarks",
-  "settings",
-  "status",
-  "media",
-  "kit",
-  "api",
-  "home",
-  "search",
-  "compose",
-  "admin",
-  "rhenko",
-])
+// Profiles live at /<handle>, so a handle must never take the name of a top-level route. These lists follow the route
+// tree: each folder directly under app/(app), app/(auth), app/api and app/media, the app's own top-level routes, and
+// the pages the app links to. A new top-level route folder goes into its list here in the same change.
+const ROUTES_APP = ["analytics", "bookmarks", "drafts", "explore", "lists", "messages", "notifications", "search", "settings", "topics"]
+const ROUTES_AUTH = ["login", "signup", "forgot-password", "reset-password"]
+const ROUTES_API = ["api", "account-data", "calls", "events", "feed", "health", "suggest"]
+const ROUTES_ROOT = ["media", "offline", "terms", "privacy", "manifest", "favicon"]
+// Words kept back for paths the app uses or would read as its own.
+const RESERVED_WORDS = ["logout", "status", "kit", "home", "compose", "admin", "rhenko"]
+
+export const RESERVED_HANDLES: ReadonlySet<string> = new Set([...ROUTES_APP, ...ROUTES_AUTH, ...ROUTES_API, ...ROUTES_ROOT, ...RESERVED_WORDS])
 
 export const HANDLE_PATTERN = /^[A-Za-z0-9_]{3,15}$/
 export const HANDLE_MIN = 3
@@ -90,24 +82,30 @@ export function validatePost(body: string, mediaCount: number, hasPoll: boolean)
   return null
 }
 
-// Mentions and hashtags. Used for rendering and for
-// mention notifications. Handles are compared case-insensitively.
-export const MENTION_PATTERN = /@([A-Za-z0-9_]{3,15})/g
+// Mentions and hashtags, read the same way the post text is drawn (components/app/post-body.tsx). Links are skipped
+// whole, and a mark that sits right after a letter, digit or one of @ # . / is part of something else (an address,
+// a URL path, "item#2"), so it is not counted. Handles and tags compare case-insensitively.
+export const MENTION_PATTERN = /@([A-Za-z0-9_]{3,15})(?![A-Za-z0-9_])/g
+const TAG_PATTERN = /#([\p{L}\p{N}_]{1,50})(?![\p{L}\p{N}_])/gu
+const JOINED_BEFORE = /[\p{L}\p{N}_@#./]/u
 
-export function extractMentions(body: string): string[] {
+function plainMarks(body: string, pattern: RegExp): string[] {
+  const text = body.replace(/https?:\/\/\S+/g, " ")
   const found = new Set<string>()
-  for (const match of body.matchAll(MENTION_PATTERN)) {
+  for (const match of text.matchAll(pattern)) {
+    const at = match.index ?? 0
+    if (at > 0 && JOINED_BEFORE.test(text[at - 1])) continue
     found.add(match[1].toLowerCase())
   }
   return [...found]
 }
 
+export function extractMentions(body: string): string[] {
+  return plainMarks(body, MENTION_PATTERN)
+}
+
 export function extractHashtags(body: string): string[] {
-  const found = new Set<string>()
-  for (const match of body.matchAll(/#([\p{L}\p{N}_]{1,50})/gu)) {
-    found.add(match[1].toLowerCase())
-  }
-  return [...found]
+  return plainMarks(body, TAG_PATTERN)
 }
 
 // Media, polls, scheduling and the other post features.
@@ -133,6 +131,33 @@ export const REPLY_SETTING_LABELS: Record<ReplySetting, string> = {
   following: "Accounts you follow",
   mentioned: "Only accounts you mention",
 }
+
+export function asReplySetting(value: string | null | undefined): ReplySetting {
+  return (REPLY_SETTINGS as readonly string[]).includes(value ?? "") ? (value as ReplySetting) : "everyone"
+}
+
+// Who may reply to a post under its reply setting, read the way the composer offers it: "Accounts you follow" means
+// accounts the post's author follows. The author can always reply, and so can the account the post answers, so two
+// people can keep a conversation going. Visibility and blocks are checked separately.
+export function replyAllowed(
+  setting: ReplySetting,
+  viewer: { isAuthor: boolean; isAnswered: boolean; followedByAuthor: boolean; mentioned: boolean }
+): boolean {
+  if (viewer.isAuthor || viewer.isAnswered) return true
+  if (setting === "following") return viewer.followedByAuthor
+  if (setting === "mentioned") return viewer.mentioned
+  return true
+}
+
+// Why a reply was refused under a post's reply setting.
+export function replyRefusal(setting: ReplySetting): string {
+  if (setting === "following") return "Only accounts the author follows can reply."
+  if (setting === "mentioned") return "Only accounts mentioned in this post can reply."
+  return "You can't reply to this post."
+}
+
+// What every action says when its post is missing, unpublished, or hidden from the person acting.
+export const POST_UNAVAILABLE = "That post isn't available."
 
 export const REPORT_REASONS = ["Spam", "Abusive or harmful", "Misleading", "Something else"] as const
 
@@ -162,6 +187,8 @@ export const CALL_SDP_MAX = 30_000
 export const CALL_CANDIDATE_MAX = 1_000
 // How much of a message a banner shows.
 export const BANNER_PREVIEW_MAX = 140
+// Notifications load this many at a time; "Show more" brings the next page.
+export const NOTIFICATION_PAGE_SIZE = 40
 
 export function validatePoll(options: string[], minutes: number): string | null {
   if (options.length < POLL_MIN_OPTIONS || options.length > POLL_MAX_OPTIONS) {

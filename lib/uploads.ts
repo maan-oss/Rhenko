@@ -3,6 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from "@/lib/rules"
 import { UPLOAD_DIR } from "@/lib/db"
+import { stripImageMetadata } from "@/lib/image-metadata"
 
 export type MediaKind = "image" | "video"
 
@@ -57,13 +58,32 @@ export async function saveUpload(
   if (value.size > limit) {
     return { ok: false, error: format.kind === "video" ? "Videos can be up to 25 MB." : "Images can be up to 4 MB." }
   }
-  const buf = Buffer.from(await value.arrayBuffer())
+  let buf: Buffer
+  try {
+    buf = Buffer.from(await value.arrayBuffer())
+  } catch {
+    return { ok: false, error: "That file didn't finish uploading. Try again." }
+  }
   if (!matchesSignature(buf, value.type)) {
     return { ok: false, error: format.kind === "video" ? "That file is not a valid video." : "That file is not a valid image." }
   }
+  // A photo keeps its picture only. Location, camera and time details are removed before anything is stored.
+  if (format.kind === "image") {
+    const clean = stripImageMetadata(buf, value.type)
+    if (!clean) return { ok: false, error: "That file is not a valid image." }
+    buf = clean
+  }
   const name = `${randomUUID().replace(/-/g, "")}.${format.ext}`
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
-  await fs.promises.writeFile(path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, name), buf)
+  const target = path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, name)
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+    await fs.promises.writeFile(target, buf)
+  } catch (error) {
+    // A write that fails part way leaves nothing behind.
+    await fs.promises.unlink(target).catch(() => undefined)
+    console.error("[uploads] saving a file failed", error)
+    return { ok: false, error: "That file couldn't be saved. Try again." }
+  }
   return { ok: true, name, kind: format.kind }
 }
 

@@ -7,6 +7,7 @@ import { setProtected, toggleBlock, toggleMute } from "@/actions/social"
 import { addMutedWord, removeMutedWord } from "@/actions/posts"
 import { ErrorLine, Field, FIELD_INPUT } from "@/components/app/form-bits"
 import { Button } from "@/components/ui/button"
+import { pluralize } from "@/lib/format"
 import { MAX_MUTED_WORD } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
@@ -29,7 +30,14 @@ export function ProtectedSwitch({ initial }: { initial: boolean }) {
             setOn(!next)
             toast.error(result.error)
           } else {
-            toast.success(next ? "Your account is protected." : "Your account is public.")
+            const cleared = result.cleared ?? 0
+            toast.success(
+              next
+                ? "Your account is protected. New followers need your approval."
+                : cleared > 0
+                  ? `Your account is public. ${cleared} pending follow ${pluralize(cleared, "request")} cleared, and anyone can follow you now.`
+                  : "Your account is public. Anyone can follow you and see your posts."
+            )
             router.refresh()
           }
         })
@@ -45,7 +53,7 @@ export function ProtectedSwitch({ initial }: { initial: boolean }) {
   )
 }
 
-// Unblock or unmute someone from the privacy page.
+// Unblock or unmute someone from the privacy page. It works for accounts that have been deactivated since.
 export function ReleaseButton({ handle, mode }: { handle: string; mode: "block" | "mute" }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -57,9 +65,13 @@ export function ReleaseButton({ handle, mode }: { handle: string; mode: "block" 
       className="h-8 rounded-full px-3"
       onClick={() =>
         startTransition(async () => {
-          const result = mode === "block" ? await toggleBlock(handle) : await toggleMute(handle)
-          if (!result.ok) toast.error(result.error)
-          else router.refresh()
+          const result = mode === "block" ? await toggleBlock(handle, false) : await toggleMute(handle, false)
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+          toast.success(mode === "block" ? `Unblocked @${handle}.` : `Unmuted @${handle}.`)
+          router.refresh()
         })
       }
     >
@@ -83,6 +95,7 @@ export function MutedWordsPanel({ words }: { words: string[] }) {
         return { error: result.error }
       }
       setError(undefined)
+      toast.success(`Muted “${word}”. Posts with it are hidden from your feeds, search and topics.`)
       router.refresh()
       return { ok: true }
     },
@@ -118,7 +131,10 @@ export function MutedWordsPanel({ words }: { words: string[] }) {
                   startTransition(async () => {
                     const result = await removeMutedWord(word)
                     if (!result.ok) toast.error(result.error)
-                    else router.refresh()
+                    else {
+                      toast.success(`Unmuted “${word}”.`)
+                      router.refresh()
+                    }
                   })
                 }
               >

@@ -1,0 +1,48 @@
+# Runs Rhenko with its data in ./data and its backups in ./backups.
+#
+#   cp .env.example .env      then edit .env (optional, the app starts without it)
+#   docker compose up -d --build
+#
+# Back up while it runs:  docker compose exec app node scripts/backup.mjs
+# Review reports:         docker compose exec app node scripts/moderation.mjs list
+# Grant a verified badge: docker compose exec app node scripts/grant-verified.mjs <handle>
+services:
+  # The app runs as the unprivileged "node" user, and Docker creates ./data and ./backups owned by root.
+  # This hands those folders to "node" before the app starts, then exits.
+  init:
+    build: .
+    image: rhenko
+    user: root
+    command:
+      - sh
+      - -c
+      - chown -R node:node /app/data /app/backups || echo "Could not make node the owner of ./data and ./backups. If the app cannot write to them, change their owner to user id 1000."
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+    restart: "no"
+
+  app:
+    build: .
+    image: rhenko
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Fixed here so that a value in .env cannot point the app away from the mounted folders.
+      RHENKO_DATA_DIR: /app/data
+      RHENKO_BACKUP_DIR: /app/backups
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

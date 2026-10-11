@@ -4,11 +4,17 @@ import { useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { editPost } from "@/actions/posts"
+import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
-import { MAX_ALT, MAX_POST, countChars } from "@/lib/rules"
+import { EDIT_WINDOW_MS, MAX_ALT, MAX_POST, countChars } from "@/lib/rules"
+import { cn } from "@/lib/utils"
 
+const WINDOW_MINUTES = Math.round(EDIT_WINDOW_MS / 60_000)
+
+// Editing a post that is live: its text, and the description of each picture or video. The form is built each time the dialog
+// opens, so it always starts from the post as it is now and a cancelled edit leaves nothing behind.
 export function EditPostDialog({
   open,
   onOpenChange,
@@ -22,14 +28,32 @@ export function EditPostDialog({
   body: string
   media: MediaItem[]
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={cn("sm:max-w-lg", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
+        <DialogTitle className="text-lg font-semibold">Edit post</DialogTitle>
+        <DialogDescription className="text-sm text-muted-foreground">
+          You can edit a post for {WINDOW_MINUTES} minutes after it&apos;s posted.
+        </DialogDescription>
+        <EditForm postId={postId} body={body} media={media} onDone={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditForm({ postId, body, media, onDone }: { postId: string; body: string; media: MediaItem[]; onDone: () => void }) {
   const router = useRouter()
   const [text, setText] = useState(body)
   const [alts, setAlts] = useState<Record<string, string>>(() => Object.fromEntries(media.map((m) => [m.id, m.alt])))
   const [pending, startTransition] = useTransition()
   const remaining = MAX_POST - countChars(text)
+  const empty = countChars(text) === 0 && media.length === 0
+  // Saving what is already there would only mark the post as edited, so Save waits for a change.
+  const changed = text.trim() !== body.trim() || media.some((m) => (alts[m.id] ?? "").trim() !== m.alt.trim())
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (pending || remaining < 0 || empty || !changed) return
     const form = new FormData()
     form.set("body", text)
     for (const item of media) form.set(`alt-${item.id}`, alts[item.id] ?? "")
@@ -37,7 +61,7 @@ export function EditPostDialog({
       const result = await editPost(postId, form)
       if (result.ok) {
         toast.success("Post updated.")
-        onOpenChange(false)
+        onDone()
         router.refresh()
       } else {
         toast.error(result.error)
@@ -46,45 +70,37 @@ export function EditPostDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg" showCloseButton>
-        <DialogTitle className="text-lg font-semibold">Edit post</DialogTitle>
-        <DialogDescription className="text-sm text-muted-foreground">You can edit a post for 30 minutes after it&apos;s posted.</DialogDescription>
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="sr-only">Post text</span>
-            <textarea
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              rows={4}
-              className="field-sizing-content min-h-24 w-full resize-none rounded-xl border border-border bg-background p-3 text-[15px] leading-relaxed outline-none focus:border-dusk"
-            />
-            <span className={remaining < 0 ? "text-right text-sm text-destructive" : "text-right text-sm text-muted-foreground tabular-nums"}>{remaining}</span>
-          </label>
-          {media.map((item, index) => (
-            <label key={item.id} className="flex flex-col gap-1 text-[13px]">
-              <span className="text-muted-foreground">
-                Alt text for {item.kind === "video" ? "video" : `image ${index + 1}`}
-              </span>
-              <textarea
-                value={alts[item.id] ?? ""}
-                maxLength={MAX_ALT}
-                rows={2}
-                onChange={(event) => setAlts((current) => ({ ...current, [item.id]: event.target.value }))}
-                className="resize-none rounded-lg border border-border bg-background p-2 text-sm outline-none focus:border-dusk"
-              />
-            </label>
-          ))}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9 rounded-full px-4">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending || remaining < 0 || countChars(text) === 0 && media.length === 0} className="h-9 rounded-full px-5 font-semibold">
-              {pending ? "Saving" : "Save"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          aria-label="Post text"
+          rows={4}
+          className="field-sizing-content min-h-24 w-full resize-none rounded-xl border border-border bg-background p-3 text-[15px] leading-relaxed outline-none focus:border-dusk"
+        />
+        <p className={cn("text-right text-sm tabular-nums", remaining < 0 ? "text-destructive" : "text-muted-foreground")}>{remaining}</p>
+      </div>
+      {media.map((item, index) => (
+        <label key={item.id} className="flex flex-col gap-1 text-[13px]">
+          <span className="text-muted-foreground">Alt text for {item.kind === "video" ? "video" : `image ${index + 1}`}</span>
+          <textarea
+            value={alts[item.id] ?? ""}
+            maxLength={MAX_ALT}
+            rows={2}
+            onChange={(event) => setAlts((current) => ({ ...current, [item.id]: event.target.value }))}
+            className="resize-none rounded-lg border border-border bg-background p-2 text-sm outline-none focus:border-dusk"
+          />
+        </label>
+      ))}
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="outline" onClick={onDone} className="h-10 rounded-full px-4 sm:h-9">
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending || remaining < 0 || empty || !changed} className="h-10 rounded-full px-5 font-semibold sm:h-9">
+          {pending ? "Saving" : "Save"}
+        </Button>
+      </div>
+    </form>
   )
 }

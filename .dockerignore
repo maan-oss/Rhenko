@@ -1,0 +1,14 @@
+node_modules
+.next
+data
+backups
+.git
+e2e
+# Settings and secrets reach the container when it runs, never inside the image.
+.env*
+*.pem
+.vercel
+coverage
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store

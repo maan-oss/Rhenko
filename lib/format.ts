@@ -38,13 +38,22 @@ export function pluralize(count: number, singular: string, plural: string = `${s
   return count === 1 ? singular : plural
 }
 
-// How a call ended: missed or declined before anyone talked, or ended after it connected.
-export type CallOutcome = "missed" | "declined" | "ended"
+// How a call ended: missed or declined before anyone talked, failed when it was answered but never connected, or
+// ended after it connected.
+export type CallOutcome = "missed" | "declined" | "failed" | "ended"
 
 // The words for a call in the thread and the list, from the viewer's side. Missed means the other person never answered.
-export function callSummary(outcome: CallOutcome, seconds: number, mine: boolean): string {
+// A group call says how many people joined and how long they talked. One nobody joined is a missed group call, and
+// the person who started it reads that no one joined.
+export function callSummary(outcome: CallOutcome, seconds: number, mine: boolean, kind: "dm" | "group" = "dm", people = 2): string {
+  if (kind === "group") {
+    if (outcome === "ended") return `Group call · ${people} ${pluralize(people, "person", "people")} · ${formatDuration(seconds)}`
+    if (outcome === "failed") return "Group call failed"
+    return mine ? "No one joined" : "Missed group call"
+  }
   if (outcome === "ended") return `Voice call · ${formatDuration(seconds)}`
   if (outcome === "declined") return mine ? "Declined" : "You declined"
+  if (outcome === "failed") return "Call failed"
   return mine ? "No answer" : "Missed call"
 }
 

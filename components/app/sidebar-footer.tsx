@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
 
-export type FooterViewer = { id: string; name: string; handle: string; avatarFile: string | null }
+export type FooterViewer = { id: string; name: string; handle: string; avatarFile: string | null; status?: string | null }
 
 // The bottom of the sidebar and the left panel: Post, then your profile with its account menu and log out.
 // The rail keeps the Post pill and your avatar, so they never disappear when it is narrow.
@@ -48,6 +48,7 @@ export function SidebarFooter({
           <span className={cn("min-w-0 flex-1 overflow-hidden transition-[opacity,translate] duration-300", EASE, collapsed ? "hidden" : "block")}>
             <span className="block truncate text-[15px] font-semibold">{viewer.name}</span>
             <span className="block truncate text-[13px] text-muted-foreground">@{viewer.handle}</span>
+            {viewer.status ? <span className="block truncate text-[13px] text-foreground/80">{viewer.status}</span> : null}
           </span>
         </Link>
         {collapsed ? null : (

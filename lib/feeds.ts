@@ -72,6 +72,8 @@ export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): Feed
       )
       if (!user || user.deactivated_at !== null) return EMPTY
       if (user.id !== viewerId) {
+        // Likes are listed only for the account's owner.
+        if (spec.tab === "likes") return EMPTY
         const blocked = get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", viewerId, user.id, user.id, viewerId)
         if (blocked) return EMPTY
         if (user.protected === 1 && !isFollowing(viewerId, user.id)) return { ...EMPTY, locked: true }
@@ -80,8 +82,12 @@ export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): Feed
     }
     case "bookmarks":
       return bookmarkFeed(viewerId, spec.folder, cursor)
-    case "list":
+    case "list": {
+      // A private list's timeline is for its owner only.
+      const list = get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", spec.listId)
+      if (!list || (list.private === 1 && list.owner_id !== viewerId)) return EMPTY
       return listFeed(spec.listId, viewerId, cursor)
+    }
     case "explore":
       return searchPostFeed(parseSearch(spec.media ? "filter:media" : ""), spec.sort, viewerId, cursor)
     case "topic":

@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, SmilePlus, Trash2 } from "lucide-react"
+import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, SmilePlus, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
-import { deleteMessage, toggleReaction } from "@/actions/messages"
+import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PostBody } from "@/components/app/post-body"
 import { LocalTime } from "@/components/app/time-text"
@@ -13,17 +13,75 @@ import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
-// Shows the conversation, reactions, photos and shared posts, and who is typing.
-export function ChatThread({ conversationId, messages, showNames }: { conversationId: string; messages: MessageView[]; showNames: boolean }) {
+// A call record as the thread reads it. Group records say so and how many people joined.
+type CallRecord = NonNullable<MessageView["call"]>
+
+// Oldest first, each message once.
+function mergeOlder(current: MessageView[], more: MessageView[]): MessageView[] {
+  const byId = new Map<string, MessageView>()
+  for (const message of [...current, ...more]) byId.set(message.id, message)
+  return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+function rowFor(list: HTMLElement | null, id: string): HTMLElement | null {
+  return list?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`) ?? null
+}
+
+// Shows the conversation, reactions, photos and shared posts, calls, and who is typing. The newest page comes from the
+// server; "Load earlier messages" adds older ones above it without moving what is on screen.
+export function ChatThread({
+  conversationId,
+  messages,
+  showNames,
+  mayHaveEarlier,
+}: {
+  conversationId: string
+  messages: MessageView[]
+  showNames: boolean
+  mayHaveEarlier: boolean
+}) {
   const endRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const anchor = useRef<{ id: string; top: number } | null>(null)
   const [typing, setTyping] = useState<string | null>(null)
   const timer = useRef<number | undefined>(undefined)
+  const [earlier, setEarlier] = useState<MessageView[]>([])
+  const [atStart, setAtStart] = useState(false)
+  const [loading, startLoading] = useTransition()
+  const [page, setPage] = useState(messages)
 
-  // Start at the newest message. The scroll waits for the first frame so the thread has its height before it moves.
+  // The newest page moves on as messages arrive. Once older messages are showing, whatever slides out of the page
+  // stays in the thread, so it never has a gap.
+  if (page !== messages) {
+    if (earlier.length > 0) {
+      const ids = new Set(messages.map((message) => message.id))
+      const oldest = messages[0]?.createdAt ?? Number.POSITIVE_INFINITY
+      const slid = page.filter((message) => !ids.has(message.id) && message.createdAt <= oldest)
+      if (slid.length > 0) setEarlier(mergeOlder(earlier, slid))
+    }
+    setPage(messages)
+  }
+
+  const pageIds = new Set(messages.map((message) => message.id))
+  const shown = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
+  const newest = messages[messages.length - 1]?.id ?? null
+
+  // Start at the newest message, and follow new ones. Older messages added above do not move the view. The scroll
+  // waits for the first frame so the thread has its height before it moves.
   useEffect(() => {
+    if (!newest) return
     const frame = requestAnimationFrame(() => endRef.current?.scrollIntoView({ block: "end" }))
     return () => cancelAnimationFrame(frame)
-  }, [messages.length])
+  }, [newest])
+
+  // After older messages are added, the message that was first stays where it was on screen.
+  useLayoutEffect(() => {
+    const saved = anchor.current
+    if (!saved) return
+    anchor.current = null
+    const row = rowFor(listRef.current, saved.id)
+    if (row) window.scrollBy(0, row.getBoundingClientRect().top - saved.top)
+  }, [earlier])
 
   useEffect(() => {
     function onTyping(event: Event) {
@@ -40,17 +98,55 @@ export function ChatThread({ conversationId, messages, showNames }: { conversati
     }
   }, [conversationId])
 
-  if (messages.length === 0) {
+  if (shown.length === 0) {
     return <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">No messages yet. Say hello.</p>
   }
 
-  const lastOwn = [...messages].reverse().find((m) => m.mine && !m.call)
+  const canLoad = (mayHaveEarlier || earlier.length > 0) && !atStart
+
+  function loadEarlier() {
+    const first = shown[0]
+    if (!first) return
+    const row = rowFor(listRef.current, first.id)
+    anchor.current = row ? { id: first.id, top: row.getBoundingClientRect().top } : null
+    startLoading(async () => {
+      try {
+        const older = await loadEarlierMessages(conversationId, first.createdAt)
+        if (older.length === 0) {
+          anchor.current = null
+          setAtStart(true)
+          return
+        }
+        setEarlier((current) => mergeOlder(current, older))
+      } catch {
+        anchor.current = null
+        toast.error("Couldn't load earlier messages. Check your connection and try again.")
+      }
+    })
+  }
+
+  const lastOwn = [...shown].reverse().find((m) => m.mine && !m.call)
 
   return (
-    <div className="flex flex-col pt-4 pb-12">
-      {messages.map((message, index) => {
-        const previous = messages[index - 1]
-        const next = messages[index + 1]
+    <div ref={listRef} className="flex flex-col pt-4 pb-12">
+      {canLoad ? (
+        <div className="flex justify-center px-4 pb-2">
+          <button
+            type="button"
+            onClick={loadEarlier}
+            disabled={loading}
+            aria-busy={loading}
+            className="glass h-9 rounded-full px-4 text-[14px] font-medium text-foreground outline-none transition-colors duration-200 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          >
+            {loading ? "Loading earlier messages…" : "Load earlier messages"}
+          </button>
+        </div>
+      ) : atStart ? (
+        <p className="px-4 pb-2 text-center text-xs text-muted-foreground">This is the start of the conversation.</p>
+      ) : null}
+      {shown.map((message, index) => {
+        const previous = shown[index - 1]
+        const next = shown[index + 1]
         return (
           <MessageRow
             key={message.id}
@@ -79,32 +175,33 @@ function sameRun(a: MessageView | undefined, b: MessageView | undefined): boolea
   return a.senderId === b.senderId && !a.deleted && !b.deleted && !a.call && !b.call && Math.abs(b.createdAt - a.createdAt) < RUN_MS
 }
 
-// A call in the thread: a centred line with what happened, from the viewer's side. A missed call stands out.
+// A call in the thread: a centred line with what happened, from the viewer's side. A missed call stands out. A group
+// call says how many joined and how long it ran.
 function CallEvent({ message }: { message: MessageView }) {
-  const call = message.call
+  const call: CallRecord | null = message.call
   if (!call) return null
-  const label = callSummary(call.outcome, call.seconds, message.mine)
+  const group = call.kind === "group"
+  const label = callSummary(call.outcome, call.seconds, message.mine, call.kind, call.people)
   const missed = call.outcome === "missed" && !message.mine
-  const Icon =
-    call.outcome === "ended"
-      ? message.mine
-        ? PhoneOutgoing
-        : PhoneIncoming
-      : missed
-        ? PhoneMissed
-        : call.outcome === "declined"
-          ? PhoneOff
+  const Icon = missed
+    ? PhoneMissed
+    : call.outcome === "failed" || call.outcome === "declined"
+      ? PhoneOff
+      : group
+        ? Users
+        : call.outcome === "ended" && !message.mine
+          ? PhoneIncoming
           : PhoneOutgoing
   return (
-    <div className="flex flex-col items-center gap-1.5 px-4 pt-4">
+    <div data-message-id={message.id} className="flex flex-col items-center gap-1.5 px-4 pt-4">
       <div
         className={cn(
-          "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] font-medium",
+          "inline-flex max-w-full items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] font-medium",
           missed ? "border-destructive/30 text-destructive" : "border-border text-foreground/80"
         )}
       >
-        <Icon className="size-[15px]" strokeWidth={2} aria-hidden="true" />
-        <span>{label}</span>
+        <Icon className="size-[15px] shrink-0" strokeWidth={2} aria-hidden="true" />
+        <span className="truncate">{label}</span>
       </div>
       <p className="text-xs text-muted-foreground">
         <LocalTime at={message.createdAt} variant="clock" />
@@ -140,7 +237,10 @@ function MessageRow({
   if (message.call) return <CallEvent message={message} />
 
   return (
-    <div className={cn("group flex flex-col gap-1 px-4", joinsPrev ? "pt-[3px]" : "pt-3", message.mine ? "items-end" : "items-start")}>
+    <div
+      data-message-id={message.id}
+      className={cn("group flex flex-col gap-1 px-4", joinsPrev ? "pt-[3px]" : "pt-3", message.mine ? "items-end" : "items-start")}
+    >
       {showName ? <span className="text-xs text-muted-foreground">{message.senderName}</span> : null}
       <div className={cn("flex items-end gap-2", message.mine && "flex-row-reverse")}>
         <div
@@ -170,6 +270,11 @@ function MessageRow({
                   <span className="text-sm font-semibold">{message.post.author.name}</span>
                   {message.post.body ? <span className="mt-1 line-clamp-3 block text-sm">{message.post.body}</span> : null}
                 </Link>
+              ) : null}
+              {message.postUnavailable ? (
+                <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                  This post is unavailable.
+                </p>
               ) : null}
             </>
           )}

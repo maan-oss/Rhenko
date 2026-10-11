@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -42,3 +43,6 @@ next-env.d.ts
 
 # local app data (database and uploads)
 /data
+
+# backups made by npm run backup
+/backups

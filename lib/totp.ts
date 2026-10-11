@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto"
+import { keyedHash } from "@/lib/secrets"
 
 // RFC 6238 time-based codes, compatible with common authenticator apps:
 // SHA-1, 6 digits, 30 second steps, one step of clock drift allowed each side.
@@ -44,6 +45,11 @@ export function generateSecret(): string {
   return base32Encode(randomBytes(20))
 }
 
+// A secret saved before secrets were encrypted: plain base32, the way generateSecret writes it.
+export function isBase32Secret(value: string): boolean {
+  return /^[A-Z2-7]{16,}=*$/.test(value)
+}
+
 function codeAt(secret: string, step: number): string {
   const counter = Buffer.alloc(8)
   counter.writeBigUInt64BE(BigInt(step))
@@ -54,7 +60,14 @@ function codeAt(secret: string, step: number): string {
   return String(binary % 10 ** DIGITS).padStart(DIGITS, "0")
 }
 
-// Returns the time step that matched, so the caller can refuse a code that is reused.
+// An authenticator code as typed, with any spaces taken out. Null unless it is six digits.
+export function normalizeAppCode(input: string): string | null {
+  const digits = input.replace(/\s+/g, "")
+  return /^\d{6}$/.test(digits) ? digits : null
+}
+
+// Returns the time step that matched, so the caller can refuse a code that is reused. Steps at or before
+// `lastStep` never match.
 export function matchTotp(secret: string, code: string, lastStep: number, now = Date.now()): number | null {
   if (!/^\d{6}$/.test(code)) return null
   const current = Math.floor(now / 1000 / STEP_SECONDS)
@@ -74,7 +87,15 @@ export function otpauthUri(secret: string, handle: string): string {
 
 const RECOVERY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
-// Ten one-time codes, shown once. Only their hashes are stored.
+// A recovery code as typed, in its stored form "abcd-efgh". Case, spaces and the dash are forgiven.
+// Null when it can't be a recovery code.
+export function normalizeRecoveryCode(input: string): string | null {
+  const compact = input.toLowerCase().replace(/[\s-]+/g, "")
+  if (!/^[a-z0-9]{8}$/.test(compact)) return null
+  return `${compact.slice(0, 4)}-${compact.slice(4)}`
+}
+
+// Ten one-time codes, shown once. Only their keyed hashes are stored.
 export function generateRecoveryCodes(count = 10): { plain: string[]; hashes: string[] } {
   const plain: string[] = []
   for (let i = 0; i < count; i++) {
@@ -86,6 +107,12 @@ export function generateRecoveryCodes(count = 10): { plain: string[]; hashes: st
   return { plain, hashes: plain.map(hashRecoveryCode) }
 }
 
+// Keyed with the server key, so a copy of the database alone can't be searched for codes. Takes a normalized code.
 export function hashRecoveryCode(code: string): string {
-  return createHash("sha256").update(code.trim().toLowerCase()).digest("hex")
+  return keyedHash("recovery", code)
+}
+
+// How codes were stored before keyed hashes: plain SHA-256 of the normalized code. Such codes still work once.
+export function legacyRecoveryHash(code: string): string {
+  return createHash("sha256").update(code).digest("hex")
 }

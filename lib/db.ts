@@ -411,6 +411,41 @@ ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT '';
 ALTER TABLE chat_messages ADD COLUMN call_status TEXT;
 ALTER TABLE chat_messages ADD COLUMN call_seconds INTEGER NOT NULL DEFAULT 0;
 `,
+
+  // 8. Email for password recovery and verification, poll durations and end notices,
+  // report review, and how many people took part in a call.
+  `
+ALTER TABLE users ADD COLUMN email TEXT;
+ALTER TABLE users ADD COLUMN email_verified_at INTEGER;
+CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email COLLATE NOCASE) WHERE email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS email_codes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL,
+  target TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS email_codes_user ON email_codes(user_id, purpose);
+
+ALTER TABLE polls ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE polls ADD COLUMN notified_at INTEGER;
+ALTER TABLE reports ADD COLUMN resolved_at INTEGER;
+ALTER TABLE chat_messages ADD COLUMN call_kind TEXT NOT NULL DEFAULT 'dm';
+ALTER TABLE chat_messages ADD COLUMN call_people INTEGER NOT NULL DEFAULT 2;
+`,
+  // 9. Who has left a direct conversation, so the other person still sees a name there after a declined request.
+  `
+CREATE TABLE IF NOT EXISTS conversation_departures (
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  left_at INTEGER NOT NULL,
+  PRIMARY KEY (conversation_id, user_id)
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

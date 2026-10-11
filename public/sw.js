@@ -1,6 +1,7 @@
 // Rhenko service worker. It keeps the app shell and the offline page available.
 // Pages, API responses and uploads always come from the network when possible.
-const CACHE = "rhenko-shell-v1"
+// Change the cache name whenever the offline page changes, so installed copies fetch the new one.
+const CACHE = "rhenko-shell-v2"
 const SHELL = ["/offline", "/icon.svg"]
 
 self.addEventListener("install", (event) => {

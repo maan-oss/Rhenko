@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import { LetterCascade } from "@/components/ui/letter-cascade"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 
 export default function NotFound() {
   return (
@@ -10,9 +10,13 @@ export default function NotFound() {
       <LetterCascade text="404" className="text-7xl font-semibold tracking-tight" />
       <div className="flex flex-col gap-2">
         <h1 className="text-xl font-semibold">This page is not here</h1>
-        <p className="text-sm text-muted-foreground">The link may be old, or the page moved.</p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          The link may be old, or the post or account may have been deleted. Check the address, or go back to Home.
+        </p>
       </div>
-      <Button render={<Link href="/" />}>Back to Rhenko</Button>
+      <Link href="/" className={buttonVariants()}>
+        Go to Home
+      </Link>
     </main>
   )
 }

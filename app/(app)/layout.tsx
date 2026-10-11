@@ -20,19 +20,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <RightRail />
       <MobileNav />
       <LiveMounts />
-      <CallSurface />
       <BannerHost />
       <ServiceWorkerRegister />
     </div>
   )
 }
 
+// The realtime stream belongs to the signed-in account and opens again when it changes. The call surface shows that
+// account as "You" in a group call.
 async function LiveMounts() {
   const viewer = await getViewer()
   if (!viewer) return null
   return (
     <>
-      <Realtime />
+      <Realtime viewerId={viewer.id} />
+      <CallSurface self={{ id: viewer.id, name: viewer.name, handle: viewer.handle, avatarFile: viewer.avatarFile }} />
       <Shortcuts handle={viewer.handle} />
     </>
   )

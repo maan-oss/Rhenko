@@ -1,12 +1,13 @@
 import { Suspense } from "react"
+import { CalendarClock, PenLine } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { ownPending } from "@/lib/data"
-import { fullTimestamp } from "@/lib/format"
+import { firstParam } from "@/lib/params"
+import { ComposeAction } from "@/components/app/compose-action"
+import { EmptyState } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
-import { PendingActions } from "@/components/app/pending-actions"
 import { PostCard } from "@/components/app/post-card"
 import { TabLinks } from "@/components/app/tabs"
-import { CalendarClock, PenLine } from "lucide-react"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
@@ -18,11 +19,15 @@ export default function DraftsPage({ searchParams }: { searchParams: SearchParam
   )
 }
 
+// Drafts and scheduled posts are the author's own. Each card offers Publish now and Delete, and nothing else: they have
+// no readers yet, so they are not edited, liked, shared or counted. A scheduled post goes out by itself at its time.
 async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const params = await searchParams
-  const tab = params.tab === "scheduled" ? "scheduled" : "drafts"
-  const posts = ownPending(viewer.id, tab === "drafts" ? "draft" : "scheduled")
+  const tab = firstParam(params.tab) === "scheduled" ? "scheduled" : "drafts"
+  const found = ownPending(viewer.id, tab === "drafts" ? "draft" : "scheduled")
+  // Scheduled posts are listed in the order they go out. Drafts keep the data layer's order, newest first.
+  const posts = tab === "scheduled" ? [...found].sort((a, b) => (a.publishAt ?? 0) - (b.publishAt ?? 0)) : found
 
   return (
     <>
@@ -36,23 +41,20 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
         />
       </div>
       {posts.length === 0 ? (
-        <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
-          <p className="text-lg font-semibold">{tab === "drafts" ? "No drafts" : "Nothing scheduled"}</p>
-          <p className="max-w-sm text-muted-foreground">
-            {tab === "drafts" ? "Save a post as a draft from the composer to finish it later." : "Schedule a post from the composer and it waits here until it goes out."}
-          </p>
-        </div>
+        <EmptyState
+          title={tab === "drafts" ? "No drafts" : "Nothing scheduled"}
+          body={
+            tab === "drafts"
+              ? "Start a post and press Save draft. It waits here until you publish it."
+              : "Write a post, press the calendar, and pick a time. It waits here and goes out by itself."
+          }
+        >
+          <ComposeAction>Write a post</ComposeAction>
+        </EmptyState>
       ) : (
         posts.map((post) => (
           <div key={post.id}>
-            {tab === "scheduled" && post.publishAt ? (
-              <p className="flex items-center gap-2 px-4 pt-3 text-sm text-muted-foreground">
-                <CalendarClock className="size-4" aria-hidden="true" />
-                Goes out {fullTimestamp(post.publishAt)}
-              </p>
-            ) : null}
             <PostCard post={post} viewer={viewer} draft />
-            <PendingActions postId={post.id} mode={tab === "drafts" ? "draft" : "scheduled"} />
           </div>
         ))
       )}

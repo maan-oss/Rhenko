@@ -5,6 +5,7 @@ import { recordViews } from "@/actions/posts"
 
 // Counts a post as viewed once it reaches the screen. Ids are batched so a
 // long feed sends a few requests rather than one per post.
+// A batch the server never received is taken out of `seen`, so those posts count the next time they reach the screen.
 const seen = new Set<string>()
 const queue = new Set<string>()
 let timer: number | undefined
@@ -13,7 +14,10 @@ function flush() {
   timer = undefined
   const ids = [...queue]
   queue.clear()
-  if (ids.length > 0) void recordViews(ids)
+  if (ids.length === 0) return
+  recordViews(ids).catch(() => {
+    for (const id of ids) seen.delete(id)
+  })
 }
 
 function enqueue(id: string) {

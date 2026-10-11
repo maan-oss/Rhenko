@@ -1,6 +1,6 @@
 "use client"
 
-import { useOptimistic, useTransition } from "react"
+import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { toggleFollow } from "@/actions/social"
 import { Button } from "@/components/ui/button"
@@ -9,40 +9,66 @@ import { cn } from "@/lib/utils"
 export type FollowState = "following" | "requested" | "none"
 
 // Follow, Requested (for protected accounts) or Following. Press again to undo.
+// The page tells the button where to start. After a press it shows what the server says happened, and it takes the
+// page's word again whenever the page sends a different state.
 export function FollowButton({ handle, state, className }: { handle: string; state: FollowState; className?: string }) {
-  const [shown, setShown] = useOptimistic(state)
-  const [, startTransition] = useTransition()
+  const [shown, setShown] = useState(state)
+  const fromPage = `${handle}:${state}`
+  const [seen, setSeen] = useState(fromPage)
+  const [pending, startTransition] = useTransition()
 
-  function onClick() {
-    const next: FollowState = shown === "none" ? "following" : "none"
+  if (seen !== fromPage) {
+    setSeen(fromPage)
+    setShown(state)
+  }
+
+  function press() {
+    const before = shown
+    const want = before === "none" ? "follow" : "unfollow"
+    // Backing out can only end one way, so it shows at once. Following ends as a follow or as a request, so it waits for the server.
+    if (want === "unfollow") setShown("none")
     startTransition(async () => {
-      setShown(shown === "none" ? "requested" : "none")
-      const result = await toggleFollow(handle)
-      if (!result.ok) toast.error(result.error)
-      else if (result.state === "requested") toast.success(`Requested @${handle}. They'll decide who can follow.`)
-      void next
+      const result = await toggleFollow(handle, want)
+      if (!result.ok) {
+        setShown(before)
+        toast.error(result.error)
+        return
+      }
+      setShown(result.state)
+      if (result.state === "following") toast.success(`You follow @${handle}.`)
+      else if (result.state === "requested") toast.success(`Request sent to @${handle}. They decide who can follow them.`)
+      else toast.success(before === "requested" ? `Request to @${handle} withdrawn.` : `You unfollowed @${handle}.`)
     })
   }
 
   if (shown === "none") {
     return (
-      <Button type="button" onClick={onClick} aria-label={`Follow ${handle}`} className={cn("h-8 min-w-24 rounded-full px-4 font-semibold", className)}>
+      <Button
+        type="button"
+        onClick={press}
+        disabled={pending}
+        aria-busy={pending}
+        aria-label={`Follow @${handle}`}
+        className={cn("h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
+      >
         Follow
       </Button>
     )
   }
 
-  const label = shown === "requested" ? "Requested" : "Following"
+  const requested = shown === "requested"
   return (
     <Button
       type="button"
       variant="outline"
-      onClick={onClick}
-      aria-label={shown === "requested" ? `Cancel request to follow ${handle}` : `Unfollow ${handle}`}
-      className={cn("group h-8 min-w-24 rounded-full px-4 font-semibold", className)}
+      onClick={press}
+      disabled={pending}
+      aria-busy={pending}
+      aria-label={requested ? `Withdraw follow request to @${handle}` : `Unfollow @${handle}`}
+      className={cn("group h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
     >
-      <span className="group-hover:hidden">{label}</span>
-      <span className="hidden group-hover:inline">{shown === "requested" ? "Cancel" : "Unfollow"}</span>
+      <span className="group-hover:hidden">{requested ? "Requested" : "Following"}</span>
+      <span className="hidden group-hover:inline">{requested ? "Withdraw" : "Unfollow"}</span>
     </Button>
   )
 }

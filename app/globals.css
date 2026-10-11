@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./shadcn-theme.css";
 
 /* Two themes only: light (a warm cream, like Claude) and dark (a neutral charcoal, like ChatGPT). */
 @custom-variant dark (&:is(.dark *));

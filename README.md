@@ -16,37 +16,67 @@ npm run build        # Turbopack build
 npm start -- -p 3100 # serves the built app on http://localhost:3100
 ```
 
-If `npm run build` fails on a machine where Turbopack can't load the Google font, build with webpack instead: `npx next build --webpack`. Both build the same app and both use the Tailwind PostCSS config in `postcss.config.mjs`.
+Or with Docker, which keeps the data and the backups in folders on the host:
+
+```bash
+cp .env.example .env   # optional: edit the settings you need
+docker compose up -d --build
+```
+
+The build downloads the Sora font from Google Fonts, so it needs network access. If `npm run build` fails because Turbopack can't load that font, build with `npx next build --webpack`.
+
+## Configure
+
+Every setting is optional. `.env.example` lists them, and a line that starts with `#` is off.
+
+- `RHENKO_SECRET` (16 characters or more) protects the stored two-factor keys. Without it the server makes `data/secret.key` on first use.
+- `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM` send the email codes for address confirmation and password reset. In production, without SMTP, those features say email isn't set up.
+- `RHENKO_TRUST_PROXY=1` when a reverse proxy sets `X-Forwarded-For`. Without it, every visitor shares one rate-limit bucket.
+- `RHENKO_ICE_SERVERS`, or `RHENKO_TURN_SECRET` with `RHENKO_TURN_URLS`, give voice calls a TURN relay for networks that block direct connections. Without them calls use Google's public STUN server.
+- `RHENKO_OPERATOR_NAME` and `RHENKO_CONTACT_EMAIL` appear on the Terms and Privacy pages.
+- `RHENKO_DATA_DIR` moves the data folder (default `./data`). `RHENKO_BACKUP_DIR` moves the backups (default `./backups`). `PORT` sets the port.
+
+Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls need a secure page.
 
 ## Data
 
 - Storage is one SQLite file, `data/rhenko.sqlite`, using Node's built-in `node:sqlite`. It runs in WAL mode with foreign keys on. Schema changes are versioned migrations in `lib/db.ts`.
-- Uploads (avatars, banners, post images and videos) are saved to `data/uploads/` under random names and served from `/media/[file]` with byte-range support.
-- Set `RHENKO_DATA_DIR` to keep the database and uploads somewhere else.
+- Uploads (avatars, banners, post images and videos, chat photos) are saved under random names in `data/uploads/` and served from `/media/[file]` with byte-range support.
+- Photos lose their location, camera and time details when they are uploaded. That covers EXIF, XMP, IPTC, text chunks and comments in JPEG, PNG, WebP and GIF. The picture itself is unchanged. Videos keep their metadata.
+- `npm run backup` writes a folder into `backups/` with a consistent copy of the database, the server key and the uploads. It keeps the newest 14. Copy the backup folder off the machine as well. The script's header has the restore steps.
+- A background tick runs every 15 seconds. It publishes scheduled posts on time, announces poll results, ends calls that have stopped answering, and removes expired sessions and codes.
 - Delete the data directory to reset the app to empty.
 
-## Verification
-
-Badges can't be requested in the app. An operator grants them from the command line:
+## Operations
 
 ```bash
-node scripts/grant-verified.mjs <handle>            # grant the badge
+npm run backup                          # back up now
+npm run moderation -- list              # open reports, oldest first
+npm run moderation -- resolve <id>      # close a report, leave the post
+npm run moderation -- remove <postId>   # delete a post for good (asks first)
+node scripts/grant-verified.mjs <handle>            # grant the verified badge
 node scripts/grant-verified.mjs <handle> --revoke   # remove it
 ```
 
-The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), and the server can keep running while it does.
+The scripts read the same database as the app, and the server can keep running while they do.
+
+## Testing
+
+`npm run test:e2e` drives a real Chromium through the whole product against a server that is already running. It creates its own accounts for each run, on desktop and phone sizes. Start the server with `RHENKO_TRUST_PROXY=1`. Settings the suite reads from the environment are `BASE_URL`, `CHROMIUM_PATH`, `SERVER_LOG` (the server's output, for codes it prints), `MAIL_LOG` (the log of a local mail sink when the server sends through SMTP), `RHENKO_DATA_DIR` and `ONLY` (for example `ONLY=auth,posts`). The header of `e2e/run.mjs` has the full list.
 
 ## What's in it
 
 **Accounts and security**
 - Sign up with a display name, handle, date of birth and password. The handle is `@` followed by 3 to 15 letters, numbers or underscores, with at least 3 letters and at most 5 underscores. Anything that breaks a rule turns red as you type. Accounts under 13 are refused.
 - The date of birth is picked from a round calendar that opens under the field.
+- Email is optional at sign-up. Add an address in Settings → Account and confirm it with the six-digit code that is mailed. Forgot your password? A code goes to the confirmed address. Setting a new password signs out every device, this one included.
 - Passwords are hashed with scrypt. Sessions are stored by SHA-256 token hash in an httpOnly cookie. New accounts land on home.
-- Two-factor sign-in with an authenticator app (TOTP, RFC 6238). Ten one-time recovery codes are issued when it is turned on. Codes can be regenerated.
+- Two-factor sign-in with an authenticator app (TOTP, RFC 6238). Ten one-time recovery codes are issued when it is turned on. Codes can be regenerated. Each code works once.
 - Signed-in devices can be reviewed and revoked, individually or all but the current one.
 - Several accounts can be signed in on one device, up to five. The `…` button beside your name in the sidebar and the left panel lists them, switches between them, adds an existing account, and logs out the account you are using. When you log out, the next remembered account takes over.
-- Change password, change handle, edit the birthday, deactivate the account (signing in again reactivates it), or delete it.
-- Export everything the account holds as JSON from Settings → Account.
+- Change password, change handle, edit the birthday, deactivate the account (signing in again reactivates it), or delete it. Deleting removes the account's posts, messages and media for everyone.
+- Export everything the account holds from Settings → Account. The export is a ZIP: `data.json` with the account's records, and a media folder with the files they point to.
+- Sign-in, sign-up, password reset, email codes, two-factor codes, posting, uploads, calls and exports are rate limited per visitor and per account.
 
 **Status**
 - A one-line status (up to 40 characters) set in Settings. It shows beside your name in the sidebar and as a pill on your profile.
@@ -56,7 +86,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
 - The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
 - Under the text are icon buttons for photos, poll, emoji and schedule. A "Who can reply" pill sits at the top right of the composer. It shows the current choice (everyone, accounts you follow, or accounts you mention), and opens an animated card with the three choices and a Done button. A "Mark media as sensitive" toggle appears when it applies. Replies inherit the post's settings.
-- Schedule picks a date and a quarter-hour time. The server checks the time is far enough ahead and reports a problem as a toast.
+- Schedule picks a date and a quarter-hour time. The server checks the time is far enough ahead and reports a problem as a toast. Scheduled posts go live within 15 seconds of their time.
 - Save draft keeps a new post on `/drafts` without publishing it. Cmd or Ctrl with Enter posts.
 - Posts with two or more photos or videos show as a carousel. Hover the post for the arrows, use the arrow keys once it has focus, swipe on a phone, or pick a dot.
 - Feeds load older posts as you scroll, with a "Show more" button as a fallback.
@@ -66,7 +96,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Hide a reply to your own post. Hidden replies disappear for everyone except the reply's writer and the post's author.
 - Community notes: signed-in people can add one note to a post. It is shown once at least two people rate it helpful, and more of them than not.
 - Share → Copy embed code gives a blockquote snippet for other sites.
-- Sensitive-media flag, and report.
+- Sensitive-media flag, and report. Reports are reviewed with `npm run moderation`.
 - Post view counts. The author's view count opens that post's analytics page.
 
 **Profiles and relationships**
@@ -74,15 +104,15 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Posts holds the account's own posts. Reposts have their own tab, so they no longer mix in with posts.
 - A profile lists the people you follow who also follow it ("Followed by …"). The Message button sits below that line.
 - Follow, unfollow, and follow requests for protected accounts. Protected accounts show only to approved followers.
-- Block and mute, with the expected visibility rules in both directions.
+- Block and mute, with the expected visibility rules in both directions. A blocked account's profile, posts and messages are hidden from the other person. For them it looks exactly like an account that doesn't exist.
 - Followers and following lists. Owners can remove a follower.
 - Muted words hide matching posts from your feeds and search results.
 - Post notifications: the bell on a profile you follow sends an alert for each new post from that account. It stops when you unfollow.
 
 **Explore and search**
 - Explore is a search field, one icon button that switches between ranked posts (the default) and the latest, and a Media switch that shows only posts with photos or videos. Both controls live in the URL, so a view can be shared.
-- The sidebar search is one surface. Clicking or focusing it grows the field into a card of recent searches, which fades in one row after another, the way the America.gov menu opens. The card sits over the nav without pushing it. Typing adds a "Search for" row, arrow down moves into the card, and Escape closes it.
-- Search posts and people with `from:handle`, `to:handle`, `since:YYYY-MM-DD`, `until:YYYY-MM-DD`, `filter:images|videos|media|links|replies`, `min_likes:N`, `min_reposts:N`, and `-word` to leave a word out.
+- The sidebar search is one surface. Clicking or focusing it grows the field into a card of recent searches, which fades in one row after another. The card sits over the nav without pushing it. Typing adds a "Search for" row, arrow down moves into the card, and Escape closes it.
+- Search posts and people with `from:handle`, `to:handle`, `since:YYYY-MM-DD`, `until:YYYY-MM-DD`, `filter:images|videos|media|links|replies`, `min_likes:N`, `min_reposts:N`, and `-word` to leave a word out. Each search you run is kept as a recent search, and you can remove one or clear them all.
 - The right rail shows trending hashtags, topics (`/topics/[tag]`) and suggested people.
 
 **Notifications**
@@ -92,25 +122,26 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - The tabs are icons and slide between sections.
 
 **Messages**
-- Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave.
+- Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave. Anyone who doesn't follow the creator gets an invite and joins once they accept.
 - Message requests: someone you don't follow lands in Requests until you accept. Declining removes the conversation.
-- Emoji reactions, deleting your own message for everyone, images, shared posts, typing indicators, and read receipts ("Seen").
-- Mute a conversation from its header. A muted conversation doesn't count toward the unread total.
-- The call button in a conversation's header is a placeholder. It says calls aren't live yet; no audio or video signalling runs in this build.
+- Emoji reactions, deleting your own message for everyone, photos, shared posts, dictation where the browser supports it, typing indicators, and read receipts ("Seen").
+- Mute a conversation from its header. A muted conversation doesn't count toward the unread total and doesn't send banners.
+- Voice calls. Start a call from a conversation's header, one to one or with a group. The others get a ring, and a Join banner reaches anyone who opens the app during the call. Anyone can mute their own microphone, leave, or come back. A call with no one left ends, and the conversation keeps a record of it. A group call holds up to six people. Members who muted the conversation are not rung. Calls need the microphone, and a secure page.
+- Group info shows the members. Any member can rename the group. Only the person who made it can remove someone, and every member can leave.
 
 **Analytics**
 - Owners get an Analytics page: post views and profile visits over the last 28 days, follower counts, a 14-day chart, and the top posts.
 - A profile visit from the same person counts once every six hours. Visits from the owner don't count.
-- Post analytics: the author sees one post's views, engagement rate (likes, reposts, quotes, replies and bookmarks as a share of views), each action's count, and a 14-day chart. Other people get a 404 for that page. Drafts and scheduled posts have no analytics until they go out.
+- Post analytics: the author sees one post's views, engagement rate (likes, reposts, quotes, replies and bookmarks as a share of views), each action's count, and a 14-day chart. Other people get the same "This page is not here" page as for a post that doesn't exist. Drafts and scheduled posts have no analytics until they go out.
 
 **Lists**
-- Lists with members, a public or private setting, and a timeline for each list. Private lists can't be followed.
+- Lists with members, a public or private setting, and a timeline for each list. Private lists can't be followed, and anyone else sees the same "This page is not here" page as for a list that doesn't exist.
 
 **Bookmarks**
 - Bookmarks can be sorted into folders. Deleting a folder keeps its bookmarks.
 
 **Settings**
-- One page holds the status, the appearance (Light and Dark, each a card with a small window preview), the account pages (Account, Security, Privacy and safety, Notifications), the keyboard shortcuts, and a full-width Log out button that turns red on hover.
+- One page holds the status, the appearance (Light and Dark, each a card with a small window preview), the account pages (Account, Security, Privacy and safety, Notifications), the keyboard shortcuts, the Terms and the Privacy policy, and a full-width Log out button that turns red on hover.
 - Native controls such as checkboxes and sliders use the neutral gray, not the browser's blue.
 - The gear at the top right of the sidebar (and of the left panel) opens this page. It sits in a pair with the sun/moon switch: click the pair to separate it, then the switch changes the theme and the gear opens Settings.
 - The app follows the operating system's reduced-motion setting. There is no in-app switch.
@@ -119,25 +150,26 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - The sidebar is one full-height, opaque surface. The logo leads at the top left. At the top right, the settings gear and the sun/moon switch sit as a pair, and a collapse button closes the sidebar (its arrow points left). Expanded, the labels show. Collapsed, the logo becomes the open button on hover (its arrow points right), and each icon's label appears beside it. The state is kept in a cookie, so the page never flashes the wrong width.
 - The sidebar footer holds the Post button, then your profile, with the `…` account switcher and a log out button beside it. Post is always there, even when the sidebar is collapsed.
 - The switch between light and dark sweeps a panel down the screen in the new colour, then the page converts underneath it. The pair squashes under the pointer and wobbles apart on a press.
-- On phones the bottom navigation is a glass dock: Home, Explore, Notifications, Messages and Bookmarks. The active item is a metal pill that slides between them. The avatar at the end opens the left panel.
+- On phones the bottom navigation is a glass dock: Home, Explore, Notifications and Messages. The active item is a metal pill that slides between them. The avatar at the end opens the left panel, which holds every section. In a conversation the dock stays folded so the composer's Send button stays free, and tapping it opens the left panel.
 - The left panel slides in from the left with rounded edges that overlap the page, and it is fully opaque. The logo leads at the top, the same settings and theme pair and a close button sit at the top right, then every section, with Post above your profile at the foot. Swipe right from the left edge to open it; swipe left, press Escape, or tap the dimmed page to close it.
 - The sign-in art is liquid metal: a polished medallion carries the Rhenko mark, cut out of it, and droplets drift in and merge with it. The medallion swells toward the pointer, the light in the metal follows the pointer, and a click sends a ripple through it and throws droplets off that fall back in. The metal uses the theme's colours, and it holds still under reduced motion.
 - The sign-in handle always shows its `@` in the normal text colour, and the Rhenko wordmark is the same size as the logo.
 - Installable as a PWA with an offline fallback page. The service worker only registers in production.
+- Security headers on every response: no sniffing, a strict referrer policy, a permissions policy that allows the microphone only for this site, frames refused, and HSTS in production.
 
 **Realtime**
-- Open tabs receive new posts, notifications and messages through `/api/events` (server-sent events). The page refreshes after a short debounce.
+- Open tabs receive new posts, notifications, messages, banners and call events through `/api/events` (server-sent events). The page refreshes after a short debounce.
 
 ## Known limits
 
-- Realtime uses an in-process event bus. It works on one server; several instances would need a shared broker such as Redis.
-- SQLite and local uploads assume one machine with a writable disk. They are not built for serverless hosting.
-- No email verification and no password reset. Recovery relies on two-factor codes, so keep the recovery codes somewhere safe.
-- No rate limiting on sign-in or posting yet.
-- Calls are not built. The call button is a placeholder.
-- Communities were removed from the interface. Their database tables remain in place, unused, so existing data stays intact. Community notes on posts are still available.
-- Drafts and scheduled posts live on `/drafts`. Scheduled posts go out when a feed is next read after their time, so a scheduled post can be late if nobody has opened the app since.
-- Not-found pages for missing accounts, posts, lists and conversations return HTTP 200 with a `noindex` tag and the "This page is not here" view. Cache Components sends a static shell before the page runs, so the status is already fixed. Unknown URLs outside the app routes get a real 404.
+- One server process. Live events, call state and rate-limit counters are kept in memory, so a restart ends any call in progress and starts the rate-limit windows again. Several instances would need a shared store (for example Redis) first.
+- SQLite and local uploads need one machine with a persistent disk. They are not built for serverless hosting.
+- A page that doesn't exist, or that the viewer may not see, answers HTTP 200 with the "This page is not here" view and a `noindex` tag. Cache Components sends the page shell before the page's checks run, so the status can't change. The app is behind sign-in, so search engines see only the sign-in, terms and privacy pages. A path with no matching route at all, such as `/nope/a/b`, gets a real 404. A single unknown name is read as a handle, so it gets the same "not here" view as any missing profile.
+- Messages are stored as readable text on the server. They are not end-to-end encrypted.
+- Videos keep their metadata. Only photos are cleaned on upload.
+- Voice calls use Google's public STUN server unless `RHENKO_ICE_SERVERS` or the TURN settings are set. Some networks only connect through TURN. Calls are voice only, and a group call holds up to six people.
+- Email codes need SMTP. Without it, in production, the email features say they are not set up.
+- Scheduled posts are published by the 15-second tick, so a post can be up to 15 seconds late.
 - The likes tab shows only to the account's owner, matching X's default.
 - Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs. Drafts and scheduled posts are reached from the Drafts icon.
 - Not included: ads and ad billing, premium tiers and payments, tip jar, the AI assistant, Spaces, jobs, articles, live video, shopping, saved searches, and a lists tab in search.

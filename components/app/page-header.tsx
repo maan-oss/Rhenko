@@ -30,7 +30,7 @@ export function PageHeader({
     <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
       <div className="flex h-14 items-center gap-3 px-4">
         {backHref ? (
-          <Link href={backHref} aria-label="Back" className="grid size-9 shrink-0 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5">
+          <Link href={backHref} aria-label="Back" className="grid size-10 shrink-0 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5 sm:size-9">
             <ArrowLeft className="size-5" />
           </Link>
         ) : null}

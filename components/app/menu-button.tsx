@@ -7,10 +7,10 @@ export function MenuButton() {
   return (
     <button
       type="button"
-      aria-label="Open menu"
-      title="Open menu"
+      aria-label="Open side panel"
+      title="Open side panel"
       onClick={() => window.dispatchEvent(new Event("rhenko:open-menu"))}
-      className="grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+      className="grid size-10 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
     >
       <PanelLeft className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
     </button>

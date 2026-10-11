@@ -54,7 +54,7 @@ function Tile({
 }
 
 const ARROW =
-  "absolute top-1/2 z-20 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border transition-[opacity,translate] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:hidden"
+  "absolute top-1/2 z-20 grid size-10 -translate-y-1/2 sm:size-9 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border transition-[opacity,translate] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:hidden"
 
 // Two or more items sit side by side, one per view. Hover the post to bring up the arrows,
 // use the arrow keys once the carousel has focus, swipe on a phone, or pick a dot.
@@ -194,7 +194,7 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
             <button
               type="button"
               onClick={() => setRevealed(true)}
-              className="mt-1 h-9 rounded-full bg-foreground px-5 text-sm font-semibold text-background transition-opacity hover:opacity-85"
+              className="mt-1 h-10 rounded-full bg-foreground sm:h-9  px-5 text-sm font-semibold text-background transition-opacity hover:opacity-85"
             >
               View media
             </button>

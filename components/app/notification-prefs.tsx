@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 type Row = { kind: string; title: string; hint: string; enabled: boolean }
 
-// Each kind of notification can be turned off. Turning one off stops it from appearing.
+// Each kind of notification can be turned off. Turning one off stops new ones of that kind from arriving.
 export function NotificationPrefs({ rows }: { rows: Row[] }) {
   return (
     <ul className="flex flex-col divide-y divide-border">
@@ -21,17 +21,21 @@ export function NotificationPrefs({ rows }: { rows: Row[] }) {
 function PrefRow({ row }: { row: Row }) {
   const [on, setOn] = useState(row.enabled)
   const [pending, startTransition] = useTransition()
+  const hintId = `notification-pref-${row.kind}`
   return (
     <li className="flex items-center justify-between gap-4 py-3.5">
       <div className="min-w-0">
         <p className="font-semibold">{row.title}</p>
-        <p className="text-sm text-muted-foreground">{row.hint}</p>
+        <p id={hintId} className="text-sm text-muted-foreground">
+          {row.hint}
+        </p>
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={on}
         aria-label={row.title}
+        aria-describedby={hintId}
         disabled={pending}
         onClick={() => {
           const next = !on
@@ -41,6 +45,8 @@ function PrefRow({ row }: { row: Row }) {
             if (!result.ok) {
               setOn(!next)
               toast.error(result.error)
+            } else {
+              toast.success(`${row.title}: ${next ? "on" : "off"}`)
             }
           })
         }}

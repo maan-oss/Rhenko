@@ -21,8 +21,12 @@ export function AcceptBar({ conversationId }: { conversationId: string }) {
           onClick={() =>
             startTransition(async () => {
               const result = await acceptConversation(conversationId)
-              if (!result.ok) toast.error(result.error)
-              else router.refresh()
+              if (!result.ok) {
+                toast.error(result.error)
+                return
+              }
+              toast.success("Request accepted. You can reply now.")
+              router.refresh()
             })
           }
         >
@@ -36,8 +40,12 @@ export function AcceptBar({ conversationId }: { conversationId: string }) {
           onClick={() =>
             startTransition(async () => {
               const result = await declineConversation(conversationId)
-              if (!result.ok) toast.error(result.error)
-              else router.push("/messages?tab=requests")
+              if (!result.ok) {
+                toast.error(result.error)
+                return
+              }
+              toast.success("Request declined. It's gone from your messages.")
+              router.push("/messages?tab=requests")
             })
           }
         >

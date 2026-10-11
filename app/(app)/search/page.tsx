@@ -1,14 +1,16 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { Clock, Flame, Image as ImageIcon, Users } from "lucide-react"
-import { requireViewer } from "@/lib/auth"
+import { requireViewer, type Viewer } from "@/lib/auth"
 import { parseSearch, recentSearches, searchUsers } from "@/lib/data"
+import { recordSearch } from "@/lib/search-history"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
+import { EmptyState, emptyActionClass } from "@/components/app/empty-state"
 import { FeedList } from "@/components/app/feed-list"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
-import { RecentSearches, RememberSearch } from "@/components/app/recent-searches"
+import { RecentSearches } from "@/components/app/recent-searches"
 import { TabLinks } from "@/components/app/tabs"
 import { SearchField } from "@/components/app/search-field"
 
@@ -35,6 +37,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
   const q = (firstParam(params.q) ?? "").slice(0, 300).trim()
   const requested = firstParam(params.f)
   const type = TYPES.find((t) => t.key === requested)?.key ?? "top"
+  if (q) recordSearch(viewer.id, q)
 
   return (
     <>
@@ -44,7 +47,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
         <div className="px-4 pt-3">
           <TabLinks
             items={TYPES.map((t) => ({
-              href: `/search?q=${encodeURIComponent(q)}&f=${t.key}`,
+              href: searchHref(q, t.key),
               label: t.label,
               icon: t.icon,
               active: t.key === type,
@@ -54,8 +57,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
       ) : null}
       {q ? (
         <>
-          <RememberSearch query={q} />
-          <Results q={q} type={type} viewerId={viewer.id} viewer={viewer} />
+          <Results q={q} type={type} viewer={viewer} />
         </>
       ) : (
         <SearchHelp recent={recentSearches(viewer.id)} />
@@ -64,17 +66,38 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
   )
 }
 
-async function Results({ q, type, viewerId, viewer }: { q: string; type: (typeof TYPES)[number]["key"]; viewerId: string; viewer: Awaited<ReturnType<typeof requireViewer>> }) {
+// What a search with nothing found offers next: the same words in another kind of search, or a way to find something else.
+function searchHref(q: string, type: (typeof TYPES)[number]["key"]): string {
+  return `/search?q=${encodeURIComponent(q)}&f=${type}`
+}
+
+function NoPeople({ q, hasTerms }: { q: string; hasTerms: boolean }) {
+  return (
+    <EmptyState
+      title={hasTerms ? `No people match “${q}”` : "Search people by name"}
+      body={hasTerms ? "Try a name or a handle, or search posts for the same words." : "Operators like from: work on posts. To find people, type a name or a handle."}
+    >
+      <Link href={searchHref(q, "top")} className={emptyActionClass("primary")}>
+        Search posts
+      </Link>
+      <Link href="/explore?tab=trending" className={emptyActionClass("secondary")}>
+        Browse trending topics
+      </Link>
+    </EmptyState>
+  )
+}
+
+async function Results({ q, type, viewer }: { q: string; type: (typeof TYPES)[number]["key"]; viewer: Viewer }) {
   if (type === "people") {
     const terms = parseSearch(q).terms.join(" ")
-    const users = terms ? searchUsers(terms, viewerId, 40) : []
-    return <PeopleList users={users} viewerId={viewerId} removable={false} emptyText={`No people match “${q}”.`} />
+    const users = terms ? searchUsers(terms, viewer.id, 40) : []
+    if (users.length === 0) return <NoPeople q={q} hasTerms={terms !== ""} />
+    return <PeopleList users={users} viewerId={viewer.id} removable={false} emptyText="" />
   }
-  const spec: FeedSpec =
-    type === "media"
-      ? { kind: "search", q: `${q} filter:media`, sort: "latest" }
-      : { kind: "search", q, sort: type === "latest" ? "latest" : "top" }
-  const page = feedFor(spec, viewerId)
+  const media = type === "media"
+  const spec: FeedSpec = media ? { kind: "search", q: `${q} filter:media`, sort: "latest" } : { kind: "search", q, sort: type === "latest" ? "latest" : "top" }
+  const page = feedFor(spec, viewer.id)
+  const empty = page.items.length === 0 && !page.next
   return (
     <FeedList
       key={type}
@@ -82,8 +105,26 @@ async function Results({ q, type, viewerId, viewer }: { q: string; type: (typeof
       next={page.next}
       spec={spec}
       viewer={viewer}
-      emptyTitle={`No results for “${q}”`}
-      emptyBody="Check the spelling, or try a different word or operator."
+      emptyTitle={media ? `No photos or videos for “${q}”` : `No results for “${q}”`}
+      emptyBody={media ? "Posts with photos or videos that match your words show up here." : "Check the spelling, or try a different word or operator."}
+      emptyAction={
+        empty ? (
+          media ? (
+            <Link href={searchHref(q, "top")} className={emptyActionClass("primary")}>
+              Search all posts
+            </Link>
+          ) : (
+            <>
+              <Link href={searchHref(q, "people")} className={emptyActionClass("primary")}>
+                Search people
+              </Link>
+              <Link href="/explore?tab=trending" className={emptyActionClass("secondary")}>
+                Browse trending topics
+              </Link>
+            </>
+          )
+        ) : undefined
+      }
     />
   )
 }
@@ -114,13 +155,12 @@ function SearchHelp({ recent }: { recent: string[] }) {
           ))}
         </ul>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Looking for a topic instead?{" "}
-        <Link href="/explore?tab=trending" className="font-semibold text-dusk underline underline-offset-4">
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-sm text-muted-foreground">Looking for a topic instead?</p>
+        <Link href="/explore?tab=trending" className={emptyActionClass("secondary")}>
           Browse trending topics
         </Link>
-        .
-      </p>
+      </div>
     </div>
   )
 }

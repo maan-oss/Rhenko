@@ -174,14 +174,18 @@ export function MobileTabBar({
       <nav
         ref={navRef}
         aria-label="Main"
-        // A folded dock opens on a tap instead of navigating, so the first tap only shows the sections.
+        // A folded dock does not navigate on a tap. Elsewhere the first tap shows the sections. In a conversation the
+        // dock stays folded, because the composer needs the bottom row, so the tap opens the left panel, which has every section.
         onClickCapture={(event) => {
           if (!folded) return
           event.preventDefault()
           event.stopPropagation()
-          setFolded(false)
+          if (conversation) setOpen(true)
+          else setFolded(false)
         }}
-        className="fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden"
+        // The bar spans the width of the screen, but only the pill and the Post button take taps. The space between
+        // them passes through to the page, so the composer's Send button stays reachable under the dock.
+        className="pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden"
       >
         <motion.ul
           initial={false}
@@ -192,7 +196,10 @@ export function MobileTabBar({
             y: folded && !conversation ? 12 : 0,
           }}
           transition={SPRING}
-          className={cn("glass flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5", !navWidth && "w-[calc(100%-72px)]")}
+          className={cn(
+            "glass pointer-events-auto flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5",
+            !navWidth && "w-[calc(100%-72px)]"
+          )}
         >
           {items.map(({ href, label, Icon, badge, active }) => {
             const isActive = active(path)
@@ -250,7 +257,7 @@ export function MobileTabBar({
           initial={false}
           animate={{ width: folded ? 0 : POST_SIZE, marginLeft: folded ? 0 : 10, opacity: folded ? 0 : 1 }}
           transition={SPRING}
-          className={cn(DOCK_CLIP, folded && "pointer-events-none")}
+          className={cn(DOCK_CLIP, folded ? "pointer-events-none" : "pointer-events-auto")}
         >
           <Link
             href="/#compose"

@@ -1,203 +1,190 @@
 "use server"
 
-import { getViewer, newId } from "@/lib/auth"
-import { all, get, run } from "@/lib/db"
-import { publish, type CallSignal, type EventPerson, type IceCandidateJson, type IceServerConfig } from "@/lib/bus"
-import type { CallOutcome } from "@/lib/format"
-import { iceServers } from "@/lib/ice"
+import { currentSessionHash, getViewer } from "@/lib/auth"
+import { all, get } from "@/lib/db"
+import type { CallAction, CallPeerRef, IceCandidateJson } from "@/lib/bus"
+import {
+  callInfo,
+  heartbeat,
+  joinGroupCall as joinGroup,
+  personOf,
+  serverBootId,
+  signalCall,
+  startDmCall,
+  startGroupCall as startGroup,
+  type Device,
+  type JoinResult,
+  type SignalResult,
+  type StartResult,
+} from "@/lib/call-state"
 import { blockedEitherWay } from "@/lib/notify"
-import { CALL_CANDIDATE_MAX, CALL_RING_MS, CALL_SDP_MAX } from "@/lib/rules"
+import { consume, waitLabel } from "@/lib/rate-limit"
+import { CALL_CANDIDATE_MAX, CALL_SDP_MAX } from "@/lib/rules"
 
-// The steps the browser takes in a call. The ring, and how a call ended, come from the server.
-export type CallAction =
-  | { kind: "accept" }
-  | { kind: "decline" }
-  | { kind: "end" }
-  | { kind: "offer"; sdp: string }
-  | { kind: "answer"; sdp: string }
-  | { kind: "ice"; candidate: IceCandidateJson }
+// The server side of calls. Each action checks who is asking and what they may touch, then hands the step to the
+// live call state in lib/call-state.ts. Every tab sends its own device id, so a call talks to the one tab in it.
 
-export type StartedCall = { ok: true; callId: string; iceServers: IceServerConfig[] } | { ok: false; error: string }
-export type CallResult = { ok: true } | { ok: false; error: string }
+export type StartedCall = StartResult
+export type JoinedCall = JoinResult
+export type CallResult = SignalResult
+export type BeatResult = { ok: boolean; bootId: string }
 
-// A call is live state: who is ringing or talking, and the timer that gives up on a ring nobody answers. It is kept in
-// memory beside the event bus, so calls last as long as this server process does.
-type Call = {
-  id: string
-  conversationId: string
-  callerId: string
-  calleeId: string
-  answeredAt: number | null
-  timer: ReturnType<typeof setTimeout> | null
-}
-
-type Globals = { __rhenkoCalls?: Map<string, Call> }
-const globals = globalThis as unknown as Globals
-const calls: Map<string, Call> = globals.__rhenkoCalls ?? new Map()
-globals.__rhenkoCalls = calls
-
+const ID = /^[A-Za-z0-9-]{8,64}$/
 const GONE = "That call has ended."
+// Starting calls is limited, so nobody can ring someone over and over.
+const START_LIMIT = 12
+const START_WINDOW_MS = 60_000
 
-function relay(userId: string, callId: string, signal: CallSignal): void {
-  publish([userId], { type: "call", callId, signal })
+function asId(value: unknown): string | null {
+  return typeof value === "string" && ID.test(value) ? value : null
 }
 
-function personOf(userId: string): EventPerson | null {
-  const row = get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
-    "SELECT id, name, handle, avatar_file FROM users WHERE id = ? AND deactivated_at IS NULL",
-    userId
+function startLimited(userId: string): string | null {
+  const limit = consume(`call:start:${userId}`, START_LIMIT, START_WINDOW_MS)
+  return limit.ok ? null : `You're starting calls too quickly. Try again in ${waitLabel(limit.retryAfterSeconds)}.`
+}
+
+function memberStatus(conversationId: string, userId: string): "accepted" | "requested" | null {
+  return (
+    get<{ status: "accepted" | "requested" }>(
+      "SELECT status FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+      conversationId,
+      userId
+    )?.status ?? null
   )
-  return row ? { id: row.id, name: row.name, handle: row.handle, avatarFile: row.avatar_file } : null
 }
 
-function inCall(userId: string): boolean {
-  for (const call of calls.values()) {
-    if (call.callerId === userId || call.calleeId === userId) return true
+function peerRef(value: unknown): CallPeerRef | null {
+  if (!value || typeof value !== "object") return null
+  const { userId, deviceId } = value as Record<string, unknown>
+  const user = asId(userId)
+  const device = asId(deviceId)
+  return user && device ? { userId: user, deviceId: device } : null
+}
+
+function candidateOf(value: unknown): IceCandidateJson | null {
+  if (!value || typeof value !== "object") return null
+  const { candidate, sdpMid, sdpMLineIndex } = value as Record<string, unknown>
+  if (typeof candidate !== "string" || candidate.length === 0 || candidate.length > CALL_CANDIDATE_MAX) return null
+  return {
+    candidate,
+    sdpMid: typeof sdpMid === "string" && sdpMid.length <= 64 ? sdpMid : null,
+    sdpMLineIndex: typeof sdpMLineIndex === "number" && Number.isInteger(sdpMLineIndex) && sdpMLineIndex >= 0 && sdpMLineIndex < 64 ? sdpMLineIndex : null,
   }
-  return false
 }
 
-function memberIds(conversationId: string): string[] {
-  return all<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ?", conversationId).map((r) => r.user_id)
-}
-
-function clearRing(call: Call): void {
-  if (call.timer !== null) clearTimeout(call.timer)
-  call.timer = null
-}
-
-// Ends a call for good. It leaves a record in the thread, and a missed call also tells the person who did not answer.
-function finish(call: Call, outcome: CallOutcome, seconds: number): void {
-  clearRing(call)
-  calls.delete(call.id)
-  const now = Date.now()
-  run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, call_status, call_seconds, created_at) VALUES (?, ?, ?, '', ?, ?, ?)",
-    newId(),
-    call.conversationId,
-    call.callerId,
-    outcome,
-    seconds,
-    now
-  )
-  run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, call.conversationId)
-  publish(memberIds(call.conversationId), { type: "message", conversationId: call.conversationId })
-  if (outcome !== "missed") return
-  const caller = personOf(call.callerId)
-  if (!caller) return
-  publish([call.calleeId], {
-    type: "banner",
-    kind: "missed-call",
-    conversationId: call.conversationId,
-    title: caller.name,
-    line: "Missed call",
-    preview: null,
-    href: `/messages/${call.conversationId}`,
-    from: caller,
-  })
-}
-
-// A ring that nobody answered in time.
-function finishUnanswered(callId: string): void {
-  const call = calls.get(callId)
-  if (!call || call.answeredAt !== null) return
-  finish(call, "missed", 0)
-  relay(call.callerId, callId, { kind: "end", reason: "missed", seconds: 0 })
-  relay(call.calleeId, callId, { kind: "end", reason: "missed", seconds: 0 })
-}
-
-// Rings the other person in a one-to-one chat. Both must have accepted the conversation, and neither can be on a call.
-export async function startCall(conversationId: string): Promise<StartedCall> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
-  const conversation = get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", conversationId)
-  if (!conversation) return { ok: false, error: "That conversation doesn't exist." }
-  const members = all<{ user_id: string; status: string }>("SELECT user_id, status FROM conversation_members WHERE conversation_id = ?", conversationId)
-  const mine = members.find((m) => m.user_id === viewer.id)
-  const others = members.filter((m) => m.user_id !== viewer.id)
-  if (conversation.kind !== "dm" || members.length !== 2 || others.length !== 1) return { ok: false, error: "Calls work in one-to-one chats." }
-  if (mine?.status !== "accepted") return { ok: false, error: "Accept this conversation first." }
-  const callee = others[0]
-  if (callee.status !== "accepted") return { ok: false, error: "You can call once they accept your message." }
-  if (blockedEitherWay(viewer.id, callee.user_id)) return { ok: false, error: "You can't call this account." }
-  if (inCall(viewer.id)) return { ok: false, error: "You're already on a call." }
-  if (inCall(callee.user_id)) return { ok: false, error: "They're on another call." }
-  const from = personOf(viewer.id)
-  if (!from) return { ok: false, error: "Sign in first." }
-
-  const id = newId()
-  const call: Call = { id, conversationId, callerId: viewer.id, calleeId: callee.user_id, answeredAt: null, timer: null }
-  call.timer = setTimeout(() => finishUnanswered(id), CALL_RING_MS)
-  calls.set(id, call)
-  const servers = iceServers()
-  relay(callee.user_id, id, { kind: "ring", conversationId, from, iceServers: servers })
-  return { ok: true, callId: id, iceServers: servers }
-}
-
-// One step of a call from the browser. The person called accepts or declines. The caller sends the offer, the callee the
-// answer, and either side sends network candidates. Ending a call is allowed to either side.
-export async function sendCallSignal(callId: string, action: CallAction): Promise<CallResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
-  const call = calls.get(callId)
-  if (!call) return { ok: false, error: GONE }
-  const isCaller = call.callerId === viewer.id
-  if (!isCaller && call.calleeId !== viewer.id) return { ok: false, error: GONE }
-  const peer = isCaller ? call.calleeId : call.callerId
-  const answered = call.answeredAt !== null
-
+// A call step from the browser, rebuilt field by field so nothing unexpected passes through.
+function actionOf(value: unknown): CallAction | null {
+  if (!value || typeof value !== "object") return null
+  const action = value as Record<string, unknown>
   switch (action.kind) {
-    case "accept": {
-      if (isCaller || answered) return { ok: false, error: GONE }
-      call.answeredAt = Date.now()
-      clearRing(call)
-      relay(peer, callId, { kind: "accept" })
-      // The person's other devices were ringing too. They stop, since this one answered.
-      relay(viewer.id, callId, { kind: "claimed" })
-      return { ok: true }
-    }
-    case "decline": {
-      if (isCaller || answered) return { ok: false, error: GONE }
-      finish(call, "declined", 0)
-      relay(peer, callId, { kind: "decline" })
-      return { ok: true }
-    }
+    case "accept":
+    case "decline":
+    case "connected":
+      return { kind: action.kind }
     case "end": {
-      if (!answered) {
-        // Cancelling your own ring is a missed call for the other person. Turning one down is a decline.
-        if (isCaller) {
-          finish(call, "missed", 0)
-          relay(peer, callId, { kind: "end", reason: "missed", seconds: 0 })
-        } else {
-          finish(call, "declined", 0)
-          relay(peer, callId, { kind: "decline" })
-        }
-        return { ok: true }
-      }
-      const seconds = Math.round((Date.now() - (call.answeredAt ?? Date.now())) / 1000)
-      finish(call, "ended", seconds)
-      relay(peer, callId, { kind: "end", reason: "ended", seconds })
-      return { ok: true }
+      const lost = action.lostMs
+      return { kind: "end", lostMs: typeof lost === "number" && Number.isFinite(lost) && lost > 0 ? Math.min(lost, 60_000) : 0 }
     }
-    case "offer": {
-      if (!isCaller || !answered || typeof action.sdp !== "string" || action.sdp.length > CALL_SDP_MAX) return { ok: false, error: GONE }
-      relay(peer, callId, { kind: "offer", sdp: action.sdp })
-      return { ok: true }
-    }
+    case "offer":
     case "answer": {
-      if (isCaller || !answered || typeof action.sdp !== "string" || action.sdp.length > CALL_SDP_MAX) return { ok: false, error: GONE }
-      relay(peer, callId, { kind: "answer", sdp: action.sdp })
-      return { ok: true }
+      if (typeof action.sdp !== "string" || action.sdp.length === 0 || action.sdp.length > CALL_SDP_MAX) return null
+      const to = action.to == null ? null : peerRef(action.to)
+      if (action.to != null && !to) return null
+      return action.kind === "offer" ? { kind: "offer", to, sdp: action.sdp, restart: action.restart === true } : { kind: "answer", to, sdp: action.sdp }
     }
     case "ice": {
-      const candidate = action.candidate
-      if (typeof candidate?.candidate !== "string" || candidate.candidate.length > CALL_CANDIDATE_MAX) return { ok: false, error: GONE }
-      relay(peer, callId, {
-        kind: "ice",
-        candidate: { candidate: candidate.candidate, sdpMid: candidate.sdpMid ?? null, sdpMLineIndex: candidate.sdpMLineIndex ?? null },
-      })
-      return { ok: true }
+      const candidate = candidateOf(action.candidate)
+      const to = action.to == null ? null : peerRef(action.to)
+      if (!candidate || (action.to != null && !to)) return null
+      return { kind: "ice", to, candidate }
     }
   }
-  return { ok: false, error: GONE }
+  return null
+}
+
+// Rings the other person in a one-to-one chat. Both must have accepted the conversation and neither can be on a call.
+export async function startCall(conversationId: string, deviceId: string): Promise<StartedCall> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const device = asId(deviceId)
+  if (!id || !device) return { ok: false, error: "That conversation doesn't exist." }
+  const conversation = get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", id)
+  const members = all<{ user_id: string; status: string }>("SELECT user_id, status FROM conversation_members WHERE conversation_id = ?", id)
+  const mine = members.find((member) => member.user_id === viewer.id)
+  if (!conversation || !mine) return { ok: false, error: "That conversation doesn't exist." }
+  const others = members.filter((member) => member.user_id !== viewer.id)
+  if (conversation.kind !== "dm" || others.length !== 1) return { ok: false, error: "Use the group call button to call a group." }
+  if (mine.status !== "accepted") return { ok: false, error: "Accept this conversation first." }
+  const other = others[0]
+  if (other.status !== "accepted") return { ok: false, error: "You can call once they accept your message." }
+  if (blockedEitherWay(viewer.id, other.user_id)) return { ok: false, error: "You can't call this account." }
+  const callee = personOf(other.user_id)
+  if (!callee) return { ok: false, error: "This account isn't available." }
+  const from = personOf(viewer.id)
+  if (!from) return { ok: false, error: "Sign in first." }
+  const limited = startLimited(viewer.id)
+  if (limited) return { ok: false, error: limited }
+  const caller: Device = { userId: viewer.id, deviceId: device, session: await currentSessionHash() }
+  return startDmCall(id, caller, callee, from)
+}
+
+// Starts a voice call in a group, or joins the one already going there.
+export async function startGroupCall(conversationId: string, deviceId: string): Promise<JoinedCall> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const device = asId(deviceId)
+  if (!id || !device) return { ok: false, error: "That conversation doesn't exist." }
+  const conversation = get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", id)
+  const status = memberStatus(id, viewer.id)
+  if (!conversation || !status) return { ok: false, error: "That conversation doesn't exist." }
+  if (conversation.kind !== "group") return { ok: false, error: "Group calls start in group chats." }
+  if (status !== "accepted") return { ok: false, error: "Accept this group first." }
+  const person = personOf(viewer.id)
+  if (!person) return { ok: false, error: "Sign in first." }
+  const limited = startLimited(viewer.id)
+  if (limited) return { ok: false, error: limited }
+  return startGroup(id, { userId: viewer.id, deviceId: device, session: await currentSessionHash() }, person)
+}
+
+// Joins a group call that is going on, from its ring or a Join banner. Only accepted members of the group can.
+export async function joinGroupCall(callId: string, deviceId: string): Promise<JoinedCall> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(callId)
+  const device = asId(deviceId)
+  const info = id ? callInfo(id) : null
+  if (!id || !device || !info || info.kind !== "group") return { ok: false, error: GONE }
+  const status = memberStatus(info.conversationId, viewer.id)
+  if (!status) return { ok: false, error: GONE }
+  if (status !== "accepted") return { ok: false, error: "Accept this group first." }
+  const person = personOf(viewer.id)
+  if (!person) return { ok: false, error: "Sign in first." }
+  return joinGroup(id, { userId: viewer.id, deviceId: device, session: await currentSessionHash() }, person)
+}
+
+// One step of a call from the browser: answering, declining or ending, saying the audio connected, or passing an
+// offer, an answer or a network route to the other side.
+export async function sendCallSignal(callId: string, deviceId: string, action: CallAction): Promise<CallResult> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(callId)
+  const device = asId(deviceId)
+  const step = actionOf(action)
+  if (!id || !device || !step) return { ok: false, error: GONE }
+  const session = step.kind === "accept" ? await currentSessionHash() : null
+  return signalCall(id, { userId: viewer.id, deviceId: device, session }, step)
+}
+
+// Sent every few seconds by a tab in a call. A false answer means the call is over. The boot id lets the tab tell
+// when that is because the server restarted.
+export async function callHeartbeat(callId: string, deviceId: string): Promise<BeatResult> {
+  const bootId = serverBootId()
+  const viewer = await getViewer()
+  const id = asId(callId)
+  const device = asId(deviceId)
+  if (!viewer || !id || !device) return { ok: false, bootId }
+  return { ok: heartbeat(id, { userId: viewer.id, deviceId: device, session: null }), bootId }
 }

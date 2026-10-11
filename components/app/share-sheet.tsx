@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { sharePostWith, shareRecipients } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { BottomSheet } from "@/components/app/bottom-sheet"
+import { DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { MiniUser } from "@/lib/data"
 import { MAX_DM } from "@/lib/rules"
@@ -31,7 +32,7 @@ export function ShareSheet({ open, onOpenChange, post }: { open: boolean; onOpen
   if (desktop) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent showCloseButton className="gap-0 overflow-hidden rounded-[28px] p-0 sm:max-w-[440px]">
+        <DialogContent showCloseButton className={cn("gap-0 overflow-hidden rounded-[28px] p-0 sm:max-w-[440px]", DIALOG_FIT)}>
           <DialogTitle className="sr-only">Share post</DialogTitle>
           <ShareBody post={post} onDone={close} />
         </DialogContent>
@@ -58,6 +59,41 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 }
 
+// The embed is pasted into other people's pages, which have none of this app's CSS, so every look it has is written into
+// the snippet itself: the card (border, radius, padding, background, text), the type, and the link. It carries colours of
+// its own, so it reads the same on a light or a dark page, and it sets the few text styles a page's own blockquote rule
+// would otherwise bend. It holds no class, no script and no image.
+const EMBED_CARD = [
+  "margin:16px 0",
+  "padding:16px 18px",
+  "max-width:550px",
+  "box-sizing:border-box",
+  "border:1px solid #ddd5c2",
+  "border-radius:16px",
+  "background:#f5f1e8",
+  "color:#1f1d1a",
+  "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
+  "font-size:16px",
+  "font-style:normal",
+  "font-weight:400",
+  "line-height:1.5",
+  "text-align:left",
+  "quotes:none",
+].join(";")
+const EMBED_TEXT = "margin:0 0 12px;white-space:pre-line;overflow-wrap:anywhere"
+const EMBED_BYLINE = "margin:0;font-size:14px;line-height:1.4;color:#6b655a"
+const EMBED_LINK = "color:#1f1d1a;font-weight:600;text-decoration:underline"
+
+function embedCode(post: SharePost, link: string): string {
+  const text = post.body.trim()
+  return [
+    `<blockquote style="${EMBED_CARD};">`,
+    ...(text ? [`  <p style="${EMBED_TEXT};">${escapeHtml(text)}</p>`] : []),
+    `  <p style="${EMBED_BYLINE};">&mdash; ${escapeHtml(post.author.name)} (@${escapeHtml(post.author.handle)}) <a href="${escapeHtml(link)}" style="${EMBED_LINK};">View on Rhenko</a></p>`,
+    `</blockquote>`,
+  ].join("\n")
+}
+
 type Sent = { handles: string[]; conversationId: string | null; failed: { handle: string; error: string }[] }
 
 function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
@@ -67,7 +103,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
   const [note, setNote] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<Sent | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<"link" | "embed" | null>(null)
   const [sending, startSending] = useTransition()
 
   // Recent chats first. Typing searches everyone who can be reached, a moment after the last key.
@@ -90,6 +126,13 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
       window.clearTimeout(timer)
     }
   }, [query])
+
+  // The tile that was copied says "Copied" for a moment.
+  useEffect(() => {
+    if (copied === null) return
+    const timer = window.setTimeout(() => setCopied(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [copied])
 
   function toggle(person: MiniUser) {
     setSelected((list) => {
@@ -125,23 +168,16 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(linkOf(post))
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
+      setCopied("link")
     } catch {
       toast.error("Couldn't copy the link.")
     }
   }
 
   async function copyEmbed() {
-    const snippet = [
-      `<blockquote class="rhenko-embed">`,
-      `  <p>${escapeHtml(post.body)}</p>`,
-      `  <footer>&mdash; ${escapeHtml(post.author.name)} (@${escapeHtml(post.author.handle)}) <a href="${escapeHtml(linkOf(post))}">Rhenko</a></footer>`,
-      `</blockquote>`,
-    ].join("\n")
     try {
-      await navigator.clipboard.writeText(snippet)
-      toast.success("Embed code copied.")
+      await navigator.clipboard.writeText(embedCode(post, linkOf(post)))
+      setCopied("embed")
     } catch {
       toast.error("Couldn't copy the embed code.")
     }
@@ -185,14 +221,14 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
       <div className="px-5 pt-4">
         <div className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-[18px] border border-input bg-background px-2.5 py-1.5 transition-colors focus-within:border-foreground/50">
           {selected.map((person) => (
-            <span key={person.handle} className="inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pr-1 pl-1">
+            <span key={person.handle} className="inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pr-1 pl-1 max-sm:h-10 max-sm:py-0 max-sm:pl-1.5 max-sm:pr-0">
               <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={22} />
               <span className="max-w-[9rem] truncate text-[13px] font-medium">{person.name}</span>
               <button
                 type="button"
                 onClick={() => toggle(person)}
                 aria-label={`Remove ${person.name}`}
-                className="grid size-5 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                className="grid size-5 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground max-sm:size-10"
               >
                 <X className="size-3" strokeWidth={2.4} aria-hidden="true" />
               </button>
@@ -206,7 +242,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
               placeholder={selected.length ? "Add more people" : "Search people"}
               aria-label="Search people"
               autoComplete="off"
-              className="h-8 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+              className="h-8 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground max-sm:h-10"
             />
           </label>
         </div>
@@ -275,9 +311,9 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
       </div>
 
       <div className={cn("mt-5 grid gap-2 border-t border-border px-5 pt-4", canNativeShare ? "grid-cols-3" : "grid-cols-2")}>
-        <ActionTile icon={copied ? Check : Link2} label={copied ? "Copied" : "Copy link"} onClick={copyLink} />
+        <ActionTile icon={copied === "link" ? Check : Link2} label={copied === "link" ? "Copied" : "Copy link"} onClick={copyLink} />
         {canNativeShare ? <ActionTile icon={Share2} label="Share…" onClick={nativeShare} /> : null}
-        <ActionTile icon={Code2} label="Embed" onClick={copyEmbed} />
+        <ActionTile icon={copied === "embed" ? Check : Code2} label={copied === "embed" ? "Copied" : "Copy embed code"} onClick={copyEmbed} />
       </div>
     </div>
   )
@@ -288,7 +324,7 @@ function ActionTile({ icon: Icon, label, onClick }: { icon: LucideIcon; label: s
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2 rounded-[18px] py-3 text-[13px] font-medium transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex flex-col items-center gap-2 rounded-[18px] px-1 py-3 text-center text-[13px] leading-tight font-medium transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="grid size-11 place-items-center rounded-full bg-muted">
         <Icon className="size-[19px]" strokeWidth={2} aria-hidden="true" />

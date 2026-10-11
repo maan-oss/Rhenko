@@ -2,17 +2,22 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { getViewer } from "@/lib/auth"
+import { firstParam } from "@/lib/params"
 import { AuthForm } from "@/components/app/auth-form"
+import { AuthNotice } from "../auth-notice"
 
-export default function SignupPage() {
+type SearchParams = Promise<{ notice?: string | string[] }>
+
+export default function SignupPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <Suspense fallback={null}>
-      <SignupBody />
+      <SignupBody searchParams={searchParams} />
     </Suspense>
   )
 }
 
-async function SignupBody() {
+async function SignupBody({ searchParams }: { searchParams: SearchParams }) {
+  const deleted = firstParam((await searchParams).notice) === "deleted"
   if (await getViewer()) redirect("/")
   return (
     <>
@@ -20,7 +25,19 @@ async function SignupBody() {
         <h1 className="text-[28px] font-semibold tracking-tight">Create your account</h1>
         <p className="text-[15px] text-muted-foreground">It takes a minute. You can change your name later.</p>
       </div>
+      {deleted ? <AuthNotice>Your account is deleted, along with its posts, messages and media.</AuthNotice> : null}
       <AuthForm mode="signup" />
+      <p className="text-center text-[13px] leading-relaxed text-muted-foreground">
+        By creating an account, you agree to the{" "}
+        <Link href="/terms" className="font-semibold text-foreground underline underline-offset-4">
+          Terms of Service
+        </Link>{" "}
+        and the{" "}
+        <Link href="/privacy" className="font-semibold text-foreground underline underline-offset-4">
+          Privacy Policy
+        </Link>
+        .
+      </p>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link href="/login" className="font-semibold text-foreground underline underline-offset-4">

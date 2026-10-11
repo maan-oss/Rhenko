@@ -4,6 +4,7 @@ import { Lock } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { listsFor, type ListSummary } from "@/lib/data"
 import { formatCount } from "@/lib/format"
+import { listOwnersVisibleTo } from "@/lib/people-state"
 import { CreateListForm } from "@/components/app/list-controls"
 import { PageHeader } from "@/components/app/page-header"
 
@@ -18,12 +19,18 @@ export default function ListsPage() {
 async function ListsBody() {
   const viewer = await requireViewer()
   const { owned, followed } = listsFor(viewer.id)
+  // A followed list stays out of sight when its owner's account is gone or the owner has blocked the viewer.
+  const visible = listOwnersVisibleTo(viewer.id, followed.map((list) => list.owner.id))
   return (
     <>
       <PageHeader title="Lists" />
       <CreateListForm />
-      <Section title="Your lists" lists={owned} empty="Lists you make show up here." />
-      <Section title="Lists you follow" lists={followed} empty="Follow a public list and it will show up here." />
+      <Section title="Your lists" lists={owned} empty="You haven't made a list yet. Make one above, then add people to it." />
+      <Section
+        title="Lists you follow"
+        lists={followed.filter((list) => visible.has(list.owner.id))}
+        empty="When you follow someone's public list, it shows up here."
+      />
     </>
   )
 }

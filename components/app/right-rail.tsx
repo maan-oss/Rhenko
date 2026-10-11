@@ -14,24 +14,26 @@ export async function RightRail() {
       <section className="overflow-hidden rounded-[24px] border border-border bg-card">
         <h2 className="px-5 pt-4 pb-2 text-[18px] font-semibold tracking-tight">Trending</h2>
         {tags.length === 0 ? (
-          <p className="px-5 pt-1 pb-5 text-sm text-muted-foreground">Hashtags from this week show up here.</p>
+          <p className="px-5 pt-1 pb-5 text-sm text-muted-foreground">Nothing is trending yet. Put a #hashtag in a post and it shows up here.</p>
         ) : (
-          <ul className="pb-1">
-            {tags.map((item) => (
-              <li key={item.tag}>
-                <Link href={`/topics/${item.tag}`} className="block px-5 py-2.5 transition-colors duration-200 hover:bg-foreground/5">
-                  <p className="text-[15px] font-semibold">#{item.tag}</p>
-                  <p className="text-[13px] text-muted-foreground">
-                    {formatCount(item.count)} {item.count === 1 ? "post" : "posts"} this week
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="pb-1">
+              {tags.map((item) => (
+                <li key={item.tag}>
+                  <Link href={`/topics/${encodeURIComponent(item.tag)}`} className="block px-5 py-2.5 transition-colors duration-200 hover:bg-foreground/5">
+                    <p className="text-[15px] font-semibold">#{item.tag}</p>
+                    <p className="text-[13px] text-muted-foreground">
+                      {formatCount(item.count)} {item.count === 1 ? "post" : "posts"} this week
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link href="/explore?tab=trending" className="block border-t border-border px-5 py-3 text-sm font-medium transition-colors duration-200 hover:bg-foreground/5">
+              Show more
+            </Link>
+          </>
         )}
-        <Link href="/explore" className="block border-t border-border px-5 py-3 text-sm font-medium transition-colors duration-200 hover:bg-foreground/5">
-          Show more
-        </Link>
       </section>
 
       {suggestions.length > 0 ? (

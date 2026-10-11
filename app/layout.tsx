@@ -15,6 +15,16 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: "Rhenko",
   description: "Public conversation, built for slow networks.",
+  // Every page is behind sign-in, so nothing is meant for search engines. A not-found page (for a missing, private or
+  // blocked address) still answers 200 and cannot carry its own status, so it is kept out of search results this way.
+  robots: { index: false, follow: false },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

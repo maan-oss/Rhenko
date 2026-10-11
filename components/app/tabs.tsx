@@ -41,8 +41,8 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
           aria-label={item.label}
           aria-current={item.active ? "page" : undefined}
           className={cn(
-            "relative flex h-8 shrink-0 items-center justify-center gap-2 rounded-full text-[14px] font-semibold whitespace-nowrap transition-colors duration-200",
-            item.active ? "px-3.5 text-[var(--metal-text)]" : "w-9 text-muted-foreground hover:text-foreground"
+            "relative flex h-10 shrink-0 items-center justify-center gap-2 sm:h-8 rounded-full text-[14px] font-semibold whitespace-nowrap transition-colors duration-200",
+            item.active ? "px-3.5 text-[var(--metal-text)]" : "w-10 text-muted-foreground hover:text-foreground sm:w-9"
           )}
         >
           {item.active ? (

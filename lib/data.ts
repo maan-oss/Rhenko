@@ -1,5 +1,15 @@
 import { all, get, type Param } from "@/lib/db"
-import { extractHashtags, extractMentions, NOTE_SHOW_MIN_HELPFUL, normalizeTag, RECENT_SEARCH_LIMIT, type ReplySetting } from "@/lib/rules"
+import {
+  asReplySetting,
+  extractHashtags,
+  extractMentions,
+  NOTE_SHOW_MIN_HELPFUL,
+  NOTIFICATION_PAGE_SIZE,
+  normalizeTag,
+  RECENT_SEARCH_LIMIT,
+  replyAllowed,
+  type ReplySetting,
+} from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
 import { callSummary, type CallOutcome } from "@/lib/format"
 
@@ -60,7 +70,10 @@ export type PostCore = {
   hasNote: boolean
 }
 
-export type PostView = PostCore & { quoted: PostCore | null }
+// `quoted` is null when the post quotes nothing, and also when the quoted post is hidden from the viewer (a block, a
+// protected account they don't follow, a hidden reply, a deactivated author). `quotedUnavailable` is true in that
+// second case, so the card can say the quoted post isn't available without showing any of it.
+export type PostView = PostCore & { quoted: PostCore | null; quotedUnavailable: boolean }
 
 export type FeedItem = {
   key: string
@@ -100,7 +113,7 @@ type PostRow = {
   highlighted: number
   pinned: number
   blocked: number
-  follows_author: number
+  author_follows_viewer: number
   hidden_by_parent: number
   parent_is_mine: number
   has_note: number
@@ -116,6 +129,9 @@ type FeedRow = {
 
 const FAR_FUTURE = Number.MAX_SAFE_INTEGER
 const LAST_KEY = "￿"
+// Default page sizes for "Load earlier" messages and for followers and following.
+const MESSAGE_PAGE_SIZE = 100
+const PEOPLE_PAGE_SIZE = 50
 
 export function parseCursor(cursor: string | undefined): [number, string] {
   if (!cursor) return [FAR_FUTURE, LAST_KEY]
@@ -131,6 +147,40 @@ function likePattern(term: string): string {
 }
 
 const LIVE = "p.is_draft = 0 AND p.publish_at IS NULL"
+
+// Direct-access visibility for one viewer, applied to posts (alias p) and their authors (alias au). canSeePost and
+// visiblePostIds share it, so a post, its quote and its media follow one rule. It takes the viewer's id seven times.
+const CAN_SEE = `((p.is_draft = 0 AND p.publish_at IS NULL) OR p.author_id = ?)
+  AND au.deactivated_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = au.id) OR (b.blocker_id = au.id AND b.blocked_id = ?))
+  AND (p.hidden_by_parent = 0 OR p.author_id = ? OR EXISTS (SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?))
+  AND (au.protected = 0 OR au.id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = au.id))`
+
+function canSeeParams(viewerId: string): Param[] {
+  return [viewerId, viewerId, viewerId, viewerId, viewerId, viewerId, viewerId]
+}
+
+// One page of rows, newest first by a timestamp column, strictly older than `beforeAt` (null starts at the newest).
+// Rows that share the timestamp at the end of a page all stay on that page, so the next page can start strictly
+// before it without skipping or repeating a row. `select` is a full SELECT ending in its WHERE conditions.
+function pageBefore<T>(
+  select: string,
+  params: Param[],
+  atColumn: string,
+  idColumn: string,
+  atOf: (row: T) => number,
+  beforeAt: number | null,
+  limit: number
+): { rows: T[]; next: number | null } {
+  const before = beforeAt ?? FAR_FUTURE
+  const rows = all<T>(`${select} AND ${atColumn} < ? ORDER BY ${atColumn} DESC, ${idColumn} DESC LIMIT ?`, ...params, before, limit + 1)
+  if (rows.length <= limit) return { rows, next: null }
+  const boundary = atOf(rows[limit - 1])
+  if (atOf(rows[limit]) !== boundary) return { rows: rows.slice(0, limit), next: boundary }
+  const tied = all<T>(`${select} AND ${atColumn} = ? ORDER BY ${idColumn} DESC`, ...params, boundary)
+  const older = get<{ found: number }>(`SELECT EXISTS (${select} AND ${atColumn} < ?) AS found`, ...params, boundary)?.found === 1
+  return { rows: [...rows.slice(0, limit).filter((row) => atOf(row) !== boundary), ...tied], next: older ? boundary : null }
+}
 
 // Feed visibility for a viewer, applied to posts (alias p) and their authors (alias au).
 function visibilityClause(viewerId: string): { sql: string; params: Param[] } {
@@ -178,8 +228,17 @@ function pollsFor(ids: string[], viewerId: string): Map<string, PollView> {
   const result = new Map<string, PollView>()
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
-  const polls = all<{ post_id: string; ends_at: number }>(`SELECT post_id, ends_at FROM polls WHERE post_id IN (${marks})`, ...ids)
-  if (polls.length === 0) return result
+  const rows = all<{ post_id: string; ends_at: number; duration_ms: number; is_draft: number }>(
+    `SELECT pl.post_id, pl.ends_at, pl.duration_ms, p.is_draft FROM polls pl JOIN posts p ON p.id = pl.post_id WHERE pl.post_id IN (${marks})`,
+    ...ids
+  )
+  if (rows.length === 0) return result
+  // A draft's poll starts when the draft is published, so until then it shows its full length.
+  const now = Date.now()
+  const polls = rows.map((row) => ({
+    post_id: row.post_id,
+    ends_at: row.is_draft === 1 && row.duration_ms > 0 ? now + row.duration_ms : row.ends_at,
+  }))
   const options = all<{ id: string; post_id: string; label: string; votes: number }>(
     `SELECT o.id, o.post_id, o.label, (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id = o.id) AS votes
      FROM poll_options o WHERE o.post_id IN (${marks}) ORDER BY o.position ASC`,
@@ -220,14 +279,14 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
        (SELECT COUNT(*) FROM reposts rp WHERE rp.post_id = p.id) AS reposts,
        (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes,
        (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id = p.id AND q.is_draft = 0 AND q.publish_at IS NULL) AS quotes,
-       (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id) AS views,
+       (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id) AS views,
        EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) AS liked,
        EXISTS(SELECT 1 FROM reposts rp WHERE rp.post_id = p.id AND rp.user_id = ?) AS reposted,
        EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked,
        EXISTS(SELECT 1 FROM highlights h WHERE h.post_id = p.id AND h.user_id = u.id) AS highlighted,
        (u.pinned_post_id = p.id) AS pinned,
        EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?)) AS blocked,
-       EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = u.id) AS follows_author,
+       EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = u.id AND f.followee_id = ?) AS author_follows_viewer,
        p.hidden_by_parent,
        EXISTS(SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?) AS parent_is_mine,
        EXISTS(
@@ -245,7 +304,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
     viewerId, // bookmarked
     viewerId, // blocked, first direction
     viewerId, // blocked, second direction
-    viewerId, // follows the author
+    viewerId, // the author follows the viewer
     viewerId, // is the author of the post this replies to
     NOTE_SHOW_MIN_HELPFUL,
     ...ids
@@ -254,13 +313,17 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   const polls = pollsFor(ids, viewerId)
   const media = mediaFor(ids)
   for (const r of rows) {
-    const mentioned = r.reply_setting === "mentioned" && extractMentions(r.body).includes(handle)
+    const replySetting = asReplySetting(r.reply_setting)
+    // The same rule the server applies when a reply is sent, so the reply button never offers what would be refused.
     const canReply =
       r.author_id === viewerId ||
       (r.blocked === 0 &&
-        (r.reply_setting === "everyone" ||
-          (r.reply_setting === "following" && r.follows_author === 1) ||
-          (r.reply_setting === "mentioned" && mentioned)))
+        replyAllowed(replySetting, {
+          isAuthor: false,
+          isAnswered: r.parent_is_mine === 1,
+          followedByAuthor: r.author_follows_viewer === 1,
+          mentioned: replySetting === "mentioned" && extractMentions(r.body).includes(handle),
+        }))
     result.set(r.id, {
       id: r.id,
       body: r.body,
@@ -273,7 +336,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       replyToId: r.reply_to_id,
       replyToHandle: r.reply_to_handle,
       quoteOfId: r.quote_of_id,
-      replySetting: (r.reply_setting as ReplySetting) ?? "everyone",
+      replySetting,
       canReply,
       poll: polls.get(r.id) ?? null,
       author: {
@@ -301,21 +364,58 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   return result
 }
 
+// Posts by id, in the order given. Callers pass posts the viewer may see; a quoted post is checked here, and one the
+// viewer may not see comes back as unavailable rather than shown.
 export function loadPosts(ids: string[], viewerId: string): PostView[] {
   const unique = [...new Set(ids)]
   const cores = fetchCores(unique, viewerId)
   const quoteIds = [...cores.values()].map((core) => core.quoteOfId).filter((id): id is string => id !== null)
-  const quotes = fetchCores([...new Set(quoteIds)], viewerId)
+  const visibleQuotes = visiblePostIds(quoteIds, viewerId)
+  const quotes = fetchCores([...visibleQuotes], viewerId)
   return ids.flatMap((id) => {
     const core = cores.get(id)
     if (!core) return []
     const quoted = core.quoteOfId ? quotes.get(core.quoteOfId) ?? null : null
-    return [{ ...core, quoted }]
+    return [{ ...core, quoted, quotedUnavailable: core.quoteOfId !== null && quoted === null }]
   })
 }
 
+// One post for its own page, or null when it is missing or hidden from this viewer.
 export function getPost(id: string, viewerId: string): PostView | null {
+  if (!canSeePost(id, viewerId)) return null
   return loadPosts([id], viewerId)[0] ?? null
+}
+
+// Whether a viewer may open a post directly, by its link or as a quote or a shared post. Drafts and scheduled posts
+// are only for their author. Blocks, deactivated accounts, protected accounts and hidden replies apply. Mutes and
+// muted words only hide posts from feeds and search, so they do not apply here.
+export function canSeePost(postId: string, viewerId: string): boolean {
+  return get(`SELECT 1 AS found FROM posts p JOIN users au ON au.id = p.author_id WHERE p.id = ? AND ${CAN_SEE}`, postId, ...canSeeParams(viewerId)) !== undefined
+}
+
+// canSeePost for a post that has gone live. Likes, reposts, bookmarks, votes, views, notes, replies and quotes need it:
+// a draft or scheduled post has nothing to act on yet, even for its author.
+export function canSeeLivePost(postId: string, viewerId: string): boolean {
+  return (
+    get(
+      `SELECT 1 AS found FROM posts p JOIN users au ON au.id = p.author_id WHERE p.id = ? AND ${LIVE} AND ${CAN_SEE}`,
+      postId,
+      ...canSeeParams(viewerId)
+    ) !== undefined
+  )
+}
+
+// canSeePost for many posts at once: the ids this viewer may see. With `liveOnly`, drafts and scheduled posts are left out.
+export function visiblePostIds(ids: string[], viewerId: string, liveOnly = false): Set<string> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return new Set()
+  const marks = unique.map(() => "?").join(",")
+  const rows = all<{ id: string }>(
+    `SELECT p.id FROM posts p JOIN users au ON au.id = p.author_id WHERE p.id IN (${marks}) ${liveOnly ? `AND ${LIVE}` : ""} AND ${CAN_SEE}`,
+    ...unique,
+    ...canSeeParams(viewerId)
+  )
+  return new Set(rows.map((row) => row.id))
 }
 
 export function loadMiniUsers(ids: string[]): Map<string, MiniUser> {
@@ -341,7 +441,7 @@ function feedPage(
   cursor: string | undefined,
   limit: number,
   viewerId: string,
-  postFilter?: (post: PostView) => boolean
+  postFilter?: (post: PostView, row: FeedRow) => boolean
 ): Page<FeedItem> {
   const [cursorAt, cursorKey] = parseCursor(cursor)
   const vis = visibilityClause(viewerId)
@@ -379,7 +479,7 @@ function feedPage(
   for (const row of page) {
     const post = postById.get(row.post_id)
     if (!post) continue
-    if (postFilter && !postFilter(post)) continue
+    if (postFilter && !postFilter(post, row)) continue
     items.push({
       key: row.key,
       sortAt: row.sort_at,
@@ -395,18 +495,43 @@ function feedPage(
 
 const FOLLOWING = "SELECT followee_id FROM follows WHERE follower_id = ?"
 
+// For you: every post and repost. Following: the viewer's own posts, posts and reposts from accounts they follow, and
+// posts that use a hashtag they follow. Every row still passes the feed's visibility rules.
 export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
-  const scope = mode === "following" ? "following" : "all"
+  if (mode === "for-you") {
+    const source = `
+      SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
+      FROM posts p WHERE p.reply_to_id IS NULL
+      UNION ALL
+      SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
+      FROM reposts r`
+    return feedPage(source, [], cursor, limit, viewerId)
+  }
+  const tags = new Set(followedTopics(viewerId))
+  // SQL finds posts whose text contains a followed #tag. A tag that only starts the same way (#art in #artist) is
+  // dropped afterwards by reading the post's hashtags exactly.
+  const topicMatch =
+    tags.size > 0
+      ? `OR EXISTS (SELECT 1 FROM topic_follows tf WHERE tf.user_id = ? AND instr(lower(p.body), '#' || tf.tag) > 0)`
+      : ""
   const source = `
     SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
     FROM posts p
     WHERE p.reply_to_id IS NULL
-      AND (? = 'all' OR p.author_id = ? OR p.author_id IN (${FOLLOWING}))
+      AND (p.author_id = ? OR p.author_id IN (${FOLLOWING}) ${topicMatch})
     UNION ALL
     SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
     FROM reposts r
-    WHERE (? = 'all' OR r.user_id = ? OR r.user_id IN (${FOLLOWING}))`
-  return feedPage(source, [scope, viewerId, viewerId, scope, viewerId, viewerId], cursor, limit, viewerId)
+    WHERE r.user_id = ? OR r.user_id IN (${FOLLOWING})`
+  const params: Param[] = tags.size > 0 ? [viewerId, viewerId, viewerId, viewerId, viewerId] : [viewerId, viewerId, viewerId, viewerId]
+  if (tags.size === 0) return feedPage(source, params, cursor, limit, viewerId)
+  const followed = new Set(all<{ followee_id: string }>(FOLLOWING, viewerId).map((r) => r.followee_id))
+  return feedPage(source, params, cursor, limit, viewerId, (post, row) =>
+    row.reposter_id !== null ||
+    post.author.id === viewerId ||
+    followed.has(post.author.id) ||
+    extractHashtags(post.body).some((tag) => tags.has(tag))
+  )
 }
 
 // "highlights" is a feed of its own, shown inside the Posts section of a profile.
@@ -888,6 +1013,48 @@ export function peopleOf(kind: "followers" | "following", userId: string, viewer
   ).map(toCard)
 }
 
+export type PeopleOfPage = { users: UserCard[]; next: number | null }
+
+// Followers or following for one account, newest follow first, one page at a time. `beforeAt` is the `next` of the
+// previous page (a follow date); null starts at the newest. The account's own visibility applies: nothing for a
+// deactivated account or one that blocked the viewer, and a protected account's lists only for its followers.
+export function peopleOfPage(
+  kind: "followers" | "following",
+  userId: string,
+  viewerId: string,
+  beforeAt: number | null,
+  limit = PEOPLE_PAGE_SIZE
+): PeopleOfPage {
+  const empty: PeopleOfPage = { users: [], next: null }
+  if (beforeAt !== null && !Number.isFinite(beforeAt)) return empty
+  const owner = get<{ protected: number; deactivated_at: number | null }>("SELECT protected, deactivated_at FROM users WHERE id = ?", userId)
+  if (!owner) return empty
+  if (userId !== viewerId) {
+    if (owner.deactivated_at !== null) return empty
+    if (get("SELECT 1 AS found FROM blocks WHERE blocker_id = ? AND blocked_id = ?", userId, viewerId)) return empty
+    if (owner.protected === 1 && !get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewerId, userId)) return empty
+  }
+  const join = kind === "followers" ? "f.follower_id = u.id AND f.followee_id = ?" : "f.followee_id = u.id AND f.follower_id = ?"
+  const select = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.bio,
+       EXISTS(SELECT 1 FROM follows x WHERE x.follower_id = ? AND x.followee_id = u.id) AS following,
+       EXISTS(SELECT 1 FROM follows x WHERE x.follower_id = u.id AND x.followee_id = ?) AS follows_me,
+       f.created_at AS followed_at
+     FROM users u
+     JOIN follows f ON ${join}
+     WHERE ${NOT_HIDDEN}`
+  const size = Math.min(Math.max(Math.floor(limit), 1), 200)
+  const { rows, next } = pageBefore<CardRow & { followed_at: number }>(
+    select,
+    [viewerId, viewerId, userId, viewerId, viewerId],
+    "f.created_at",
+    "u.id",
+    (r) => r.followed_at,
+    beforeAt,
+    size
+  )
+  return { users: rows.map(toCard), next }
+}
+
 export function followRequestsFor(viewerId: string): (MiniUser & { createdAt: number })[] {
   return all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number; created_at: number }>(
     `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, fr.created_at
@@ -897,10 +1064,13 @@ export function followRequestsFor(viewerId: string): (MiniUser & { createdAt: nu
   ).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1, createdAt: r.created_at }))
 }
 
+// Hashtags used most in the last week, counted from live posts by active accounts.
 export function trendingTags(limit = 6): { tag: string; count: number }[] {
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
   const rows = all<{ body: string }>(
-    `SELECT body FROM posts WHERE created_at > ? AND is_draft = 0 AND publish_at IS NULL ORDER BY created_at DESC LIMIT 2000`,
+    `SELECT p.body FROM posts p JOIN users u ON u.id = p.author_id
+     WHERE p.created_at > ? AND ${LIVE} AND u.deactivated_at IS NULL
+     ORDER BY p.created_at DESC LIMIT 2000`,
     weekAgo
   )
   const counts = new Map<string, number>()
@@ -926,52 +1096,76 @@ export type NotificationView = {
   read: boolean
 }
 
-export function notificationsFor(viewerId: string, filter: "all" | "mentions", limit = 80): NotificationView[] {
+// The notifications a person's list shows (alias n, with the actor as u): from active accounts, with no block either
+// way and no mute from the recipient. The unread badge counts the same rows.
+const SHOWN_NOTIFICATION = `n.recipient_id = ?
+  AND u.deactivated_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = n.recipient_id AND b.blocked_id = n.actor_id) OR (b.blocker_id = n.actor_id AND b.blocked_id = n.recipient_id))
+  AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = n.recipient_id AND m.muted_id = n.actor_id)`
+
+type NotificationRow = {
+  id: string
+  kind: NotificationKind
+  created_at: number
+  read: number
+  post_id: string | null
+  post_body: string | null
+  actor_id: string
+  actor_handle: string
+  actor_name: string
+  actor_avatar: string | null
+  actor_verified: number
+}
+
+export type NotificationPage = { items: NotificationView[]; next: number | null }
+
+// Notifications newest first, older than `beforeAt` (a created_at from the previous page's `next`; null for the first
+// page). A post's text is included only when the recipient can see that post; otherwise `post` is null.
+export function notificationsPage(
+  viewerId: string,
+  filter: "all" | "mentions",
+  beforeAt: number | null,
+  limit = NOTIFICATION_PAGE_SIZE
+): NotificationPage {
   const kinds = filter === "mentions" ? "AND n.kind IN ('mention', 'reply', 'quote')" : ""
-  return all<{
-    id: string
-    kind: NotificationKind
-    created_at: number
-    read: number
-    post_id: string | null
-    post_body: string | null
-    actor_id: string
-    actor_handle: string
-    actor_name: string
-    actor_avatar: string | null
-    actor_verified: number
-  }>(
-    `SELECT n.id, n.kind, n.created_at, n.read, n.post_id, pst.body AS post_body,
+  const select = `SELECT n.id, n.kind, n.created_at, n.read, n.post_id, pst.body AS post_body,
        u.id AS actor_id, u.handle AS actor_handle, u.name AS actor_name, u.avatar_file AS actor_avatar, u.verified AS actor_verified
      FROM notifications n
      JOIN users u ON u.id = n.actor_id
      LEFT JOIN posts pst ON pst.id = n.post_id
-     WHERE n.recipient_id = ? AND u.deactivated_at IS NULL
-       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = n.recipient_id AND b.blocked_id = n.actor_id)
-       ${kinds}
-     ORDER BY n.created_at DESC
-     LIMIT ?`,
-    viewerId,
-    limit
-  ).map((r) => ({
+     WHERE ${SHOWN_NOTIFICATION} ${kinds}`
+  const { rows, next } = pageBefore<NotificationRow>(select, [viewerId], "n.created_at", "n.id", (r) => r.created_at, beforeAt, limit)
+  const visible = visiblePostIds(
+    rows.flatMap((r) => (r.post_id ? [r.post_id] : [])),
+    viewerId
+  )
+  const items = rows.map((r) => ({
     id: r.id,
     kind: r.kind,
     actor: { id: r.actor_id, handle: r.actor_handle, name: r.actor_name, avatarFile: r.actor_avatar, verified: r.actor_verified === 1 },
-    post: r.post_id && r.post_body !== null ? { id: r.post_id, body: r.post_body } : null,
+    post: r.post_id && r.post_body !== null && visible.has(r.post_id) ? { id: r.post_id, body: r.post_body } : null,
     createdAt: r.created_at,
     read: r.read === 1,
   }))
+  return { items, next }
 }
 
 export function unreadNotificationCount(viewerId: string): number {
-  return get<{ c: number }>("SELECT COUNT(*) AS c FROM notifications WHERE recipient_id = ? AND read = 0", viewerId)?.c ?? 0
+  return (
+    get<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM notifications n JOIN users u ON u.id = n.actor_id WHERE ${SHOWN_NOTIFICATION} AND n.read = 0`,
+      viewerId
+    )?.c ?? 0
+  )
 }
 
 export function pendingFollowRequestCount(viewerId: string): number {
   return get<{ c: number }>("SELECT COUNT(*) AS c FROM follow_requests WHERE target_id = ?", viewerId)?.c ?? 0
 }
 
-export type ChatMemberView = MiniUser & { status: "accepted" | "requested"; lastReadAt: number }
+// `departed` marks someone who has left a direct conversation (a declined request, say). They are still named there,
+// because their messages stay in the thread, but they can no longer receive anything in it.
+export type ChatMemberView = MiniUser & { status: "accepted" | "requested"; lastReadAt: number; departed?: boolean }
 
 export type ConversationSummary = {
   id: string
@@ -996,11 +1190,13 @@ type LastMessage = {
   post_id: string | null
   call_status: CallOutcome | null
   call_seconds: number
+  call_kind: "dm" | "group"
+  call_people: number
 }
 
 function lastMessageOf(conversationId: string): LastMessage | undefined {
   return get<LastMessage>(
-    `SELECT body, sender_id, created_at, deleted_at, media_file, post_id, call_status, call_seconds FROM chat_messages
+    `SELECT body, sender_id, created_at, deleted_at, media_file, post_id, call_status, call_seconds, call_kind, call_people FROM chat_messages
      WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
     conversationId
   )
@@ -1009,18 +1205,63 @@ function lastMessageOf(conversationId: string): LastMessage | undefined {
 // What the conversation list says about the latest message, from the viewer's side.
 function previewOfLast(last: LastMessage | undefined, viewerId: string): string {
   if (!last || last.deleted_at) return ""
-  if (last.call_status) return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId)
+  if (last.call_status) {
+    return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId, last.call_kind, last.call_people)
+  }
   return last.body || (last.media_file ? "Sent a photo" : last.post_id ? "Shared a post" : "")
+}
+
+// A one-to-one conversation (alias c) where the viewer and the other person have blocked each other, in either
+// direction. Such a conversation stays out of the viewer's lists and can't be opened. Groups are unaffected. It takes
+// the viewer's id three times.
+const DM_BLOCKED = `c.kind = 'dm' AND EXISTS (
+  SELECT 1 FROM conversation_members o JOIN blocks b
+    ON (b.blocker_id = ? AND b.blocked_id = o.user_id) OR (b.blocker_id = o.user_id AND b.blocked_id = ?)
+  WHERE o.conversation_id = c.id AND o.user_id <> ?)`
+
+// Whether the viewer may read a conversation: they are a member of it, and it isn't a one-to-one chat with someone
+// either of them has blocked.
+export function canReadConversation(conversationId: string, viewerId: string): boolean {
+  return (
+    get(
+      `SELECT 1 AS found FROM conversations c JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
+       WHERE c.id = ? AND NOT (${DM_BLOCKED})`,
+      viewerId,
+      conversationId,
+      viewerId,
+      viewerId,
+      viewerId
+    ) !== undefined
+  )
+}
+
+// People who have left a conversation and are no longer in it: anyone who wrote in it, and anyone who declined or left.
+// Only a direct conversation names them afterwards.
+function departedMembers(conversationId: string, currentIds: string[]): MiniUser[] {
+  const present = new Set(currentIds)
+  const ids = new Set<string>(
+    all<{ user_id: string }>("SELECT user_id FROM conversation_departures WHERE conversation_id = ?", conversationId).map((row) => row.user_id)
+  )
+  for (const row of all<{ sender_id: string }>(
+    "SELECT DISTINCT sender_id FROM chat_messages WHERE conversation_id = ? AND deleted_at IS NULL",
+    conversationId
+  )) {
+    ids.add(row.sender_id)
+  }
+  return [...loadMiniUsers([...ids].filter((id) => !present.has(id))).values()]
 }
 
 export function conversationSummaries(viewerId: string, status: "accepted" | "requested", limit = 60): ConversationSummary[] {
   const rows = all<{ id: string; kind: "dm" | "group"; title: string; updated_at: number; last_read_at: number }>(
     `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at
      FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
-     WHERE cm.user_id = ? AND cm.status = ?
+     WHERE cm.user_id = ? AND cm.status = ? AND NOT (${DM_BLOCKED})
      ORDER BY c.updated_at DESC LIMIT ?`,
     viewerId,
     status,
+    viewerId,
+    viewerId,
+    viewerId,
     limit
   )
   return rows.map((row) => {
@@ -1030,6 +1271,7 @@ export function conversationSummaries(viewerId: string, status: "accepted" | "re
     ).map((m) => m.user_id)
     const users = loadMiniUsers(members)
     const others = members.filter((id) => id !== viewerId).map((id) => users.get(id)).filter((u): u is MiniUser => Boolean(u))
+    if (row.kind === "dm") others.push(...departedMembers(row.id, members).filter((u) => u.id !== viewerId))
     const last = lastMessageOf(row.id)
     const unread =
       get<{ c: number }>(
@@ -1054,12 +1296,18 @@ export function conversationSummaries(viewerId: string, status: "accepted" | "re
   })
 }
 
+// Unread messages across the conversations the list shows, so the badge never counts a hidden conversation.
 export function unreadMessageCount(viewerId: string): number {
   return (
     get<{ c: number }>(
       `SELECT COUNT(*) AS c FROM chat_messages m
        JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
-       WHERE cm.status = 'accepted' AND cm.muted = 0 AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL`,
+       JOIN conversations c ON c.id = m.conversation_id
+       WHERE cm.status = 'accepted' AND cm.muted = 0 AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL
+         AND NOT (${DM_BLOCKED})`,
+      viewerId,
+      viewerId,
+      viewerId,
       viewerId,
       viewerId
     )?.c ?? 0
@@ -1067,7 +1315,16 @@ export function unreadMessageCount(viewerId: string): number {
 }
 
 export function requestCount(viewerId: string): number {
-  return get<{ c: number }>("SELECT COUNT(*) AS c FROM conversation_members WHERE user_id = ? AND status = 'requested'", viewerId)?.c ?? 0
+  return (
+    get<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
+       WHERE cm.user_id = ? AND cm.status = 'requested' AND NOT (${DM_BLOCKED})`,
+      viewerId,
+      viewerId,
+      viewerId,
+      viewerId
+    )?.c ?? 0
+  )
 }
 
 // People the viewer chats with one to one, most recent first. The share sheet offers them before a search.
@@ -1099,7 +1356,7 @@ export type ConversationView = {
   muted: boolean
 }
 
-// The conversation, if the viewer is a member. Null otherwise.
+// The conversation, if the viewer is a member and it isn't a one-to-one chat across a block. Null otherwise.
 export function conversationFor(id: string, viewerId: string): ConversationView | null {
   const base = get<{
     id: string
@@ -1111,9 +1368,12 @@ export function conversationFor(id: string, viewerId: string): ConversationView 
   }>(
     `SELECT c.id, c.kind, c.title, c.created_by, cm.status, cm.muted
      FROM conversations c JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
-     WHERE c.id = ?`,
+     WHERE c.id = ? AND NOT (${DM_BLOCKED})`,
     viewerId,
-    id
+    id,
+    viewerId,
+    viewerId,
+    viewerId
   )
   if (!base) return null
   const rows = all<{ user_id: string; status: "accepted" | "requested"; last_read_at: number }>(
@@ -1125,6 +1385,11 @@ export function conversationFor(id: string, viewerId: string): ConversationView 
   for (const row of rows) {
     const user = users.get(row.user_id)
     if (user) members.push({ ...user, status: row.status, lastReadAt: row.last_read_at })
+  }
+  if (base.kind === "dm") {
+    for (const user of departedMembers(id, rows.map((r) => r.user_id))) {
+      if (user.id !== viewerId) members.push({ ...user, status: "accepted", lastReadAt: 0, departed: true })
+    }
   }
   return {
     id: base.id,
@@ -1146,36 +1411,57 @@ export type MessageView = {
   body: string
   deleted: boolean
   mediaFile: string | null
+  // A shared post the viewer may see. When the viewer may not see it, `post` is null and `postUnavailable` is true.
   post: PostView | null
+  postUnavailable: boolean
   // A call that ended, was missed or declined. Calls sit in the thread like messages.
-  call: { outcome: CallOutcome; seconds: number } | null
+  call: { outcome: CallOutcome; seconds: number; kind: "dm" | "group"; people: number } | null
   createdAt: number
   seen: boolean
   reactions: { emoji: string; count: number; mine: boolean }[]
 }
 
-export function conversationMessages(conversationId: string, viewerId: string, limit = 200): MessageView[] {
-  const rows = all<{
-    id: string
-    sender_id: string
-    body: string
-    media_file: string | null
-    post_id: string | null
-    created_at: number
-    deleted_at: number | null
-    call_status: CallOutcome | null
-    call_seconds: number
-    sender_name: string
-    sender_handle: string
-  }>(
-    `SELECT m.id, m.sender_id, m.body, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds,
+type MessageRow = {
+  id: string
+  sender_id: string
+  body: string
+  media_file: string | null
+  post_id: string | null
+  created_at: number
+  deleted_at: number | null
+  call_status: CallOutcome | null
+  call_seconds: number
+  call_kind: "dm" | "group"
+  call_people: number
+  sender_name: string
+  sender_handle: string
+}
+
+const MESSAGE_SELECT = `SELECT m.id, m.sender_id, m.body, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
        u.name AS sender_name, u.handle AS sender_handle
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
-     WHERE m.conversation_id = ?
-     ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
-    conversationId,
-    limit
-  ).reverse()
+     WHERE m.conversation_id = ?`
+
+// The latest messages in a conversation, oldest first. Empty for anyone who may not read it.
+export function conversationMessages(conversationId: string, viewerId: string, limit = 200): MessageView[] {
+  if (!canReadConversation(conversationId, viewerId)) return []
+  const { rows } = pageBefore<MessageRow>(MESSAGE_SELECT, [conversationId], "m.created_at", "m.id", (r) => r.created_at, null, limit)
+  return toMessageViews(rows.reverse(), conversationId, viewerId)
+}
+
+// Messages sent before `beforeCreatedAt` (the createdAt of the oldest message on screen), oldest first, for "Load
+// earlier". A page holds `limit` messages, plus any that share the oldest one's timestamp, so passing the oldest
+// createdAt back never skips a message. Fewer than `limit` means the start of the conversation was reached. Empty for
+// anyone who may not read the conversation.
+export function messagesBefore(conversationId: string, viewerId: string, beforeCreatedAt: number, limit = MESSAGE_PAGE_SIZE): MessageView[] {
+  if (!Number.isFinite(beforeCreatedAt)) return []
+  if (!canReadConversation(conversationId, viewerId)) return []
+  const size = Math.min(Math.max(Math.floor(limit), 1), 200)
+  const { rows } = pageBefore<MessageRow>(MESSAGE_SELECT, [conversationId], "m.created_at", "m.id", (r) => r.created_at, beforeCreatedAt, size)
+  return toMessageViews(rows.reverse(), conversationId, viewerId)
+}
+
+function toMessageViews(rows: MessageRow[], conversationId: string, viewerId: string): MessageView[] {
   if (rows.length === 0) return []
   const ids = rows.map((r) => r.id)
   const marks = ids.map(() => "?").join(",")
@@ -1196,10 +1482,17 @@ export function conversationMessages(conversationId: string, viewerId: string, l
     "SELECT user_id, last_read_at FROM conversation_members WHERE conversation_id = ? AND status = 'accepted'",
     conversationId
   )
-  const posts = new Map(loadPosts([...new Set(rows.flatMap((r) => (r.post_id ? [r.post_id] : [])))], viewerId).map((p) => [p.id, p]))
+  // A shared post shows only while the viewer may see it, the same rule as opening its link.
+  const shared = visiblePostIds(
+    rows.flatMap((r) => (r.post_id && !r.deleted_at ? [r.post_id] : [])),
+    viewerId,
+    true
+  )
+  const posts = new Map(loadPosts([...shared], viewerId).map((p) => [p.id, p]))
   return rows.map((r) => {
     const others = readers.filter((m) => m.user_id !== r.sender_id)
     const seen = r.sender_id === viewerId && others.length > 0 && others.every((m) => m.last_read_at >= r.created_at)
+    const post = r.post_id && !r.deleted_at ? posts.get(r.post_id) ?? null : null
     return {
       id: r.id,
       senderId: r.sender_id,
@@ -1209,8 +1502,11 @@ export function conversationMessages(conversationId: string, viewerId: string, l
       body: r.deleted_at ? "" : r.body,
       deleted: r.deleted_at !== null,
       mediaFile: r.deleted_at ? null : r.media_file,
-      post: r.post_id && !r.deleted_at ? posts.get(r.post_id) ?? null : null,
-      call: r.call_status ? { outcome: r.call_status, seconds: r.call_seconds } : null,
+      post,
+      postUnavailable: r.post_id !== null && !r.deleted_at && post === null,
+      call: r.call_status
+        ? { outcome: r.call_status, seconds: r.call_seconds, kind: r.call_kind, people: r.call_people }
+        : null,
       createdAt: r.created_at,
       seen,
       reactions: reactions.get(r.id) ?? [],
@@ -1335,12 +1631,15 @@ export function getMiniUserByHandle(handle: string): MiniUser | null {
   return row ? { id: row.id, handle: row.handle, name: row.name, avatarFile: row.avatar_file, verified: row.verified === 1 } : null
 }
 
-export function suggestHandles(prefix: string, limit = 6): MiniUser[] {
+// Accounts to offer while someone types an @mention. Deactivated accounts and accounts blocked either way are left out.
+export function suggestHandles(prefix: string, viewerId: string, limit = 6): MiniUser[] {
   return all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number }>(
-    `SELECT id, handle, name, avatar_file, verified FROM users
-     WHERE handle LIKE ? ESCAPE '\\' AND deactivated_at IS NULL
-     ORDER BY (SELECT COUNT(*) FROM follows f WHERE f.followee_id = users.id) DESC LIMIT ?`,
+    `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified FROM users u
+     WHERE u.handle LIKE ? ESCAPE '\\' AND ${NOT_HIDDEN}
+     ORDER BY (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) DESC, u.handle COLLATE NOCASE LIMIT ?`,
     `${prefix.replace(/[\\%_]/g, (m) => `\\${m}`)}%`,
+    viewerId,
+    viewerId,
     limit
   ).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 }))
 }
@@ -1411,7 +1710,9 @@ export function notesFor(postId: string, viewerId: string): NoteView[] {
 // versions that were replaced by edits.
 export type EditVersion = { body: string; at: number; current: boolean }
 
-export function editHistoryFor(postId: string): EditVersion[] {
+// Empty when the viewer may not see the post, so a draft's or scheduled post's history stays with its author.
+export function editHistoryFor(postId: string, viewerId: string): EditVersion[] {
+  if (!canSeePost(postId, viewerId)) return []
   const post = get<{ body: string; created_at: number; edited_at: number | null }>(
     "SELECT body, created_at, edited_at FROM posts WHERE id = ?",
     postId
@@ -1445,6 +1746,7 @@ export type AnalyticsView = {
   followers: number
   newFollowers28: number
   days: AnalyticsDay[]
+  // The posts seen most in the last 28 days. `views` is each post's view count over those 28 days.
   topPosts: { id: string; handle: string; body: string; views: number; likes: number }[]
 }
 
@@ -1480,18 +1782,20 @@ export function analyticsFor(userId: string, handle: string, now = Date.now()): 
     })
   }
 
+  // Ranked by views in the last 28 days. The author's own views never count, here or on the post cards.
   const topPosts = all<{ id: string; body: string; views: number; likes: number }>(
-    `SELECT p.id, p.body,
-       (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id) AS views,
-       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes
-     FROM posts p
-     WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL
-     ORDER BY views DESC, p.created_at DESC
+    `SELECT id, body, views, likes FROM (
+       SELECT p.id, p.body, p.created_at,
+         (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id AND v.created_at >= ?) AS views,
+         (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes
+       FROM posts p
+       WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL
+     ) WHERE views > 0
+     ORDER BY views DESC, created_at DESC
      LIMIT 5`,
+    now - 28 * DAY_MS,
     userId
-  )
-    .filter((row) => row.views > 0)
-    .map((row) => ({ ...row, handle }))
+  ).map((row) => ({ ...row, handle }))
 
   return {
     visits7: count("SELECT COUNT(*) AS c FROM profile_visits WHERE profile_id = ? AND created_at >= ?", userId, now - 7 * DAY_MS),
@@ -1581,4 +1885,24 @@ export function postAnalytics(postId: string, viewerId: string, now = Date.now()
     engagementRate: views > 0 ? Math.round((actions / views) * 1000) / 10 : null,
     days,
   }
+}
+
+// Who may load an uploaded file. Avatars and banners are public. A post's photo or video goes to anyone who may see a
+// post that uses it, and a photo sent in a chat goes to the members who may read that conversation. "none" covers
+// everything else, including files nothing uses any more.
+export function mediaAccess(file: string, viewerId: string | null): "public" | "private" | "none" {
+  if (get("SELECT 1 AS found FROM users WHERE avatar_file = ? OR banner_file = ? LIMIT 1", file, file)) return "public"
+  if (!viewerId) return "none"
+  const posts = all<{ post_id: string }>(
+    "SELECT post_id FROM post_media WHERE file = ? UNION SELECT id AS post_id FROM posts WHERE media_file = ?",
+    file,
+    file
+  )
+  if (visiblePostIds(posts.map((row) => row.post_id), viewerId).size > 0) return "private"
+  const chats = all<{ conversation_id: string }>(
+    "SELECT DISTINCT conversation_id FROM chat_messages WHERE media_file = ? AND deleted_at IS NULL",
+    file
+  )
+  if (chats.some((row) => canReadConversation(row.conversation_id, viewerId))) return "private"
+  return "none"
 }

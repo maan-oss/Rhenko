@@ -1,11 +1,14 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
-import { AtSign, BellRing, Heart, ListChecks, MessageCircle, PhoneMissed, Quote, Repeat2, UserPlus, UserRound, type LucideIcon } from "lucide-react"
+import { toast } from "sonner"
+import { AtSign, BellRing, Heart, ListChecks, MessageCircle, Phone, PhoneMissed, Quote, Repeat2, UserPlus, UserRound, X, type LucideIcon } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import type { BannerKind, RealtimeEvent } from "@/lib/bus"
+import { dismissLiveCall, getCallState, getServerCallState, joinLiveCall, subscribeCall, type LiveGroupCall } from "@/lib/call-engine"
+import { pluralize } from "@/lib/format"
 
 type Banner = Extract<RealtimeEvent, { type: "banner" }> & { key: string }
 
@@ -29,13 +32,18 @@ const LIFETIME_MS = 6000
 // The newest few are shown; older ones make way.
 const MAX_SHOWN = 3
 
+const CARD =
+  "group pointer-events-auto relative overflow-hidden rounded-[24px] border border-border bg-popover/95 text-popover-foreground shadow-[0_26px_60px_-20px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+
 let nextKey = 0
 
 // The in-app banners: a new message, a request, a notification or a missed call. They sit in the top right on a
-// computer and across the top on a phone, where a swipe clears them. Tapping one opens what it is about.
+// computer and across the top on a phone, where a swipe clears them. Tapping one opens what it is about. A group call
+// going on in one of your groups gets a Join banner that stays until the call ends, you join, or you dismiss it.
 export function BannerHost() {
   const router = useRouter()
   const pathname = usePathname()
+  const call = useSyncExternalStore(subscribeCall, getCallState, getServerCallState)
   const [banners, setBanners] = useState<Banner[]>([])
   const pathRef = useRef(pathname)
 
@@ -65,12 +73,21 @@ export function BannerHost() {
     router.push(banner.href)
   }
 
+  // Join banners wait while this tab is on a call, and the group's own page has its Join button instead.
+  const free = call.status === "idle" || call.status === "ended"
+  const joinable = free
+    ? call.live.filter((live) => !live.quiet && !live.mine && !live.dismissed && pathname !== `/messages/${live.conversationId}` && live.people.length > 0)
+    : []
+
   return (
     <div
       aria-live="polite"
       className="pointer-events-none fixed inset-x-3 top-[max(12px,env(safe-area-inset-top))] z-[75] flex flex-col gap-2.5 lg:inset-x-auto lg:top-5 lg:right-5 lg:w-[360px]"
     >
       <AnimatePresence initial={false}>
+        {joinable.map((live) => (
+          <JoinBanner key={`join-${live.callId}`} live={live} onOpen={() => router.push(`/messages/${live.conversationId}`)} />
+        ))}
         {banners.map((banner) => (
           <BannerCard key={banner.key} banner={banner} onOpen={() => open(banner)} onDismiss={() => dismiss(banner.key)} />
         ))}
@@ -93,7 +110,7 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
       onDragEnd={(_, info) => {
         if (Math.abs(info.offset.x) > 90 || Math.abs(info.velocity.x) > 600) onDismiss()
       }}
-      className="group pointer-events-auto relative overflow-hidden rounded-[24px] border border-border bg-popover/95 text-popover-foreground shadow-[0_26px_60px_-20px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+      className={CARD}
     >
       <button
         type="button"
@@ -121,6 +138,74 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
         style={{ animation: `banner-drain ${LIFETIME_MS}ms linear forwards` }}
         className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-dusk/70 group-focus-within:[animation-play-state:paused] group-hover:[animation-play-state:paused]"
       />
+    </motion.div>
+  )
+}
+
+// A group call you can join. It has no countdown: it goes when the call ends, when you join, or when you dismiss it.
+function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void }) {
+  const [pending, startTransition] = useTransition()
+  const count = live.people.length
+  const first = live.people[0]
+
+  function join() {
+    startTransition(async () => {
+      const result = await joinLiveCall(live.callId)
+      if (!result.ok) toast.error(result.error)
+    })
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -22, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -14, scale: 0.97, transition: { duration: 0.18 } }}
+      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.7}
+      onDragEnd={(_, info) => {
+        if (Math.abs(info.offset.x) > 90 || Math.abs(info.velocity.x) > 600) dismissLiveCall(live.callId)
+      }}
+      className={CARD}
+    >
+      <div className="flex items-center gap-2 p-3 pl-3.5">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-[18px] text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="relative shrink-0">
+            {first ? <Avatar user={first} size={44} /> : null}
+            <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-dusk text-background ring-[2.5px] ring-popover">
+              <Phone className="size-[12px]" strokeWidth={2.4} aria-hidden="true" />
+            </span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] leading-tight font-semibold">{live.title}</span>
+            <span className="mt-0.5 block truncate text-[14px] leading-snug text-muted-foreground">
+              Group call · {count} {pluralize(count, "person", "people")}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={join}
+          disabled={pending}
+          aria-busy={pending}
+          className="metal h-10 shrink-0 rounded-full px-4 text-[14px] font-semibold whitespace-nowrap outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-35"
+        >
+          Join
+        </button>
+        <button
+          type="button"
+          onClick={() => dismissLiveCall(live.callId)}
+          aria-label="Dismiss"
+          className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors duration-200 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </div>
     </motion.div>
   )
 }

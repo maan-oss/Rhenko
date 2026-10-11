@@ -1,31 +1,38 @@
-import { all, get, run } from "@/lib/db"
-import { notify, blockedEitherWay } from "@/lib/notify"
-import { extractMentions } from "@/lib/rules"
+import { all, get, run, transaction } from "@/lib/db"
+import { canSeeLivePost } from "@/lib/data"
+import { notify } from "@/lib/notify"
+import { asReplySetting, extractMentions, POST_UNAVAILABLE, replyAllowed, replyRefusal, type ReplySetting } from "@/lib/rules"
 import { removeUpload } from "@/lib/uploads"
 
 export function isFollowing(followerId: string, followeeId: string): boolean {
   return get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", followerId, followeeId) !== undefined
 }
 
-// Whether a viewer may reply to a post, honouring the author's reply setting.
-export function replyPermission(viewerId: string, parentId: string): { ok: true } | { ok: false; error: string } {
-  const parent = get<{ author_id: string; reply_setting: string; body: string }>(
-    "SELECT author_id, reply_setting, body FROM posts WHERE id = ?",
+// Whether a viewer may reply to a post. The post must be live and visible to them (which also rules out blocks), and
+// its reply setting must allow them. On success it returns that setting, which the reply inherits.
+export function replyPermission(viewerId: string, parentId: string): { ok: true; setting: ReplySetting } | { ok: false; error: string } {
+  if (!canSeeLivePost(parentId, viewerId)) return { ok: false, error: POST_UNAVAILABLE }
+  const parent = get<{ author_id: string; reply_setting: string; body: string; answered_id: string | null }>(
+    `SELECT p.author_id, p.reply_setting, p.body, (SELECT pp.author_id FROM posts pp WHERE pp.id = p.reply_to_id) AS answered_id
+     FROM posts p WHERE p.id = ?`,
     parentId
   )
-  if (!parent) return { ok: false, error: "That post was deleted." }
-  if (parent.author_id === viewerId) return { ok: true }
-  if (blockedEitherWay(viewerId, parent.author_id)) return { ok: false, error: "You can't reply to this post." }
-  if (parent.reply_setting === "following" && !isFollowing(parent.author_id, viewerId)) {
-    return { ok: false, error: "Only accounts the author follows can reply." }
-  }
-  if (parent.reply_setting === "mentioned") {
-    const handle = get<{ handle: string }>("SELECT handle FROM users WHERE id = ?", viewerId)?.handle.toLowerCase() ?? ""
-    if (!extractMentions(parent.body).includes(handle)) {
-      return { ok: false, error: "Only accounts mentioned in this post can reply." }
-    }
-  }
-  return { ok: true }
+  if (!parent) return { ok: false, error: POST_UNAVAILABLE }
+  const setting = asReplySetting(parent.reply_setting)
+  const handle = get<{ handle: string }>("SELECT handle FROM users WHERE id = ?", viewerId)?.handle.toLowerCase() ?? ""
+  const allowed = replyAllowed(setting, {
+    isAuthor: parent.author_id === viewerId,
+    isAnswered: parent.answered_id === viewerId,
+    followedByAuthor: setting === "following" && isFollowing(parent.author_id, viewerId),
+    mentioned: setting === "mentioned" && handle !== "" && extractMentions(parent.body).includes(handle),
+  })
+  return allowed ? { ok: true, setting } : { ok: false, error: replyRefusal(setting) }
+}
+
+// A poll's clock starts when its post goes live: it ends its chosen length after `liveAt`. Polls made before lengths
+// were stored (duration 0) keep the end time they have.
+export function startPollClock(postId: string, liveAt: number): void {
+  run("UPDATE polls SET ends_at = ? + duration_ms WHERE post_id = ? AND duration_ms > 0", liveAt, postId)
 }
 
 type Announced = { id: string; author_id: string; body: string; reply_to_id: string | null; quote_of_id: string | null }
@@ -86,7 +93,10 @@ export function publishDue(now = Date.now()): void {
     now
   )
   for (const post of due) {
-    run("UPDATE posts SET publish_at = NULL, created_at = ? WHERE id = ?", post.publish_at, post.id)
+    transaction(() => {
+      run("UPDATE posts SET publish_at = NULL, created_at = ? WHERE id = ?", post.publish_at, post.id)
+      startPollClock(post.id, post.publish_at)
+    })
     announcePost(post)
   }
 }

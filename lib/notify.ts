@@ -1,7 +1,7 @@
 import { newId } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { publish } from "@/lib/bus"
-import type { NotificationKind } from "@/lib/data"
+import { canSeePost, type NotificationKind } from "@/lib/data"
 import { BANNER_PREVIEW_MAX } from "@/lib/rules"
 
 export type { NotificationKind }
@@ -36,10 +36,16 @@ const NOTICE: Record<NotificationKind, string> = {
   post: "posted",
 }
 
+// True when `muterId` muted `mutedId`. A muted account's activity doesn't notify the person who muted it.
+export function hasMuted(muterId: string, mutedId: string): boolean {
+  return get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", muterId, mutedId) !== undefined
+}
+
 export function notify(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): void {
   if (recipientId === actorId) return
   if (!wantsNotification(recipientId, kind)) return
   if (blockedEitherWay(recipientId, actorId)) return
+  if (hasMuted(recipientId, actorId)) return
   run(
     "INSERT INTO notifications (id, recipient_id, actor_id, kind, post_id, read, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)",
     newId(),
@@ -53,14 +59,15 @@ export function notify(recipientId: string, actorId: string, kind: NotificationK
   announceNotification(recipientId, actorId, kind, postId)
 }
 
-// A banner for the notification, with a short excerpt of the post it is about.
+// A banner for the notification, with a short excerpt of the post it is about. The excerpt appears only when the
+// recipient may see that post, so a mention or reply from an account hidden from them shows no text.
 function announceNotification(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): void {
   const actor = get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
     "SELECT id, name, handle, avatar_file FROM users WHERE id = ?",
     actorId
   )
   if (!actor) return
-  const post = postId ? get<{ body: string }>("SELECT body FROM posts WHERE id = ?", postId) : undefined
+  const post = postId && canSeePost(postId, recipientId) ? get<{ body: string }>("SELECT body FROM posts WHERE id = ?", postId) : undefined
   const text = post?.body.replace(/\s+/g, " ").trim() ?? ""
   const preview = text.length > BANNER_PREVIEW_MAX ? `${text.slice(0, BANNER_PREVIEW_MAX - 1)}…` : text
   publish([recipientId], {

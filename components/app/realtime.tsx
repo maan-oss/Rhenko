@@ -1,17 +1,25 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { RealtimeEvent } from "@/lib/bus"
-import { receiveCallSignal } from "@/lib/call-engine"
+import { attachCalls, receiveCallEvent, receiveHello } from "@/lib/call-engine"
+
+// After the stream is refused (a sign-in that ended), it is tried again this much later.
+const RETRY_MS = 15_000
 
 // Keeps the open page current. Messages and notifications refresh the route. Typing and banners go to the page through
-// window events. Call steps go straight to the call engine, which keeps a call going across page changes.
-export function Realtime() {
+// window events. Call steps go straight to the call engine, which keeps a call going across page changes. The stream
+// belongs to one account: switching accounts opens a new one.
+export function Realtime({ viewerId }: { viewerId: string }) {
   const router = useRouter()
+  const [attempt, setAttempt] = useState(0)
+
   useEffect(() => {
     if (typeof EventSource === "undefined") return
+    attachCalls(viewerId)
     let timer: number | undefined
+    let retry: number | undefined
     const source = new EventSource("/api/events")
     const refresh = () => {
       if (timer !== undefined) window.clearTimeout(timer)
@@ -24,24 +32,41 @@ export function Realtime() {
       } catch {
         return
       }
-      if (event.type === "typing") {
-        window.dispatchEvent(new CustomEvent("rhenko:typing", { detail: event }))
-        return
+      switch (event.type) {
+        case "hello":
+          receiveHello(event.bootId)
+          return
+        case "call":
+          receiveCallEvent(event)
+          return
+        case "typing":
+          window.dispatchEvent(new CustomEvent("rhenko:typing", { detail: event }))
+          return
+        case "banner":
+          window.dispatchEvent(new CustomEvent("rhenko:banner", { detail: event }))
+          return
+        default:
+          refresh()
       }
-      if (event.type === "banner") {
-        window.dispatchEvent(new CustomEvent("rhenko:banner", { detail: event }))
-        return
-      }
-      if (event.type === "call") {
-        receiveCallSignal(event.callId, event.signal)
-        return
-      }
-      refresh()
     }
+    // The browser reconnects on its own after a dropped connection. A refused one stays closed: the page refreshes,
+    // which signs out a session that ended, and the stream is tried again later.
+    source.onerror = () => {
+      if (source.readyState !== EventSource.CLOSED || retry !== undefined) return
+      router.refresh()
+      retry = window.setTimeout(() => setAttempt((count) => count + 1), RETRY_MS)
+    }
+    // A page restored from the back-forward cache has a closed stream; open a new one.
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setAttempt((count) => count + 1)
+    }
+    window.addEventListener("pageshow", onShow)
     return () => {
       if (timer !== undefined) window.clearTimeout(timer)
+      if (retry !== undefined) window.clearTimeout(retry)
+      window.removeEventListener("pageshow", onShow)
       source.close()
     }
-  }, [router])
+  }, [router, viewerId, attempt])
   return null
 }

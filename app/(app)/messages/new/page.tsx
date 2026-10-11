@@ -16,7 +16,9 @@ export default function NewMessagePage() {
       </section>
       <section className="flex flex-col gap-3 px-4 py-5">
         <h2 className="text-lg font-semibold">Start a group</h2>
-        <p className="text-sm text-muted-foreground">Add two or more people. Groups hold up to 50 people.</p>
+        <p className="text-sm text-muted-foreground">
+          Add two or more people. Groups hold up to 50 people. Anyone who doesn&apos;t follow you gets an invite and joins once they accept.
+        </p>
         <NewGroupForm />
       </section>
       <div className="px-4 pb-6">

@@ -31,19 +31,56 @@ export type BannerKind =
 export type IceCandidateJson = { candidate: string; sdpMid: string | null; sdpMLineIndex: number | null }
 export type IceServerConfig = { urls: string | string[]; username?: string; credential?: string }
 
-// Steps of a call relayed to the other person. The server adds ring and the outcome of a call.
+// One open tab of one person. Every tab is its own device in a call, so signals can go to the one tab taking part.
+export type CallPeerRef = { userId: string; deviceId: string }
+
+// Someone in a group call. A higher seq joined later, and the later joiner always makes the offer.
+export type GroupMember = { userId: string; deviceId: string; seq: number; person: EventPerson }
+
+// Why a call ended, so each side can say so in plain words.
+export type CallEndReason =
+  | "ended"
+  | "missed"
+  | "declined"
+  | "failed"
+  | "dropped"
+  | "nobody"
+  | "signed-out"
+  | "deactivated"
+  | "deleted"
+  | "left"
+  | "removed"
+  | "moved"
+  | "blocked"
+
+// Steps of a call relayed between people. The server adds the ring, the group's state and how a call ended.
 export type CallSignal =
-  | { kind: "ring"; conversationId: string; from: EventPerson; iceServers: IceServerConfig[] }
+  // A ring. The servers in it are for the person rung alone. A group ring carries the group's name.
+  | { kind: "ring"; call: "dm" | "group"; conversationId: string; from: EventPerson; title: string | null; iceServers: IceServerConfig[] }
   | { kind: "accept" }
-  // Sent to the person's own devices when one of them answers, so the others stop ringing.
-  | { kind: "claimed" }
+  // Sent to all of a person's tabs when one of them answers or joins. The others stop ringing.
+  | { kind: "claimed"; device: string }
   | { kind: "decline" }
-  | { kind: "end"; reason: "ended" | "missed"; seconds: number }
-  | { kind: "offer"; sdp: string }
-  | { kind: "answer"; sdp: string }
-  | { kind: "ice"; candidate: IceCandidateJson }
+  | { kind: "end"; reason: CallEndReason; seconds: number }
+  | { kind: "offer"; sdp: string; restart: boolean; from: CallPeerRef; person: EventPerson | null }
+  | { kind: "answer"; sdp: string; from: CallPeerRef }
+  | { kind: "ice"; candidate: IceCandidateJson; from: CallPeerRef }
+  // Who is in a group call, sent to every member whenever it changes. Quiet means the member muted the group.
+  | { kind: "group"; conversationId: string; title: string; live: boolean; members: GroupMember[]; quiet: boolean }
+
+// The steps a browser sends. In a group call, offers, answers and routes name the device they are for.
+export type CallAction =
+  | { kind: "accept" }
+  | { kind: "decline" }
+  | { kind: "end"; lostMs?: number }
+  | { kind: "connected" }
+  | { kind: "offer"; to: CallPeerRef | null; sdp: string; restart: boolean }
+  | { kind: "answer"; to: CallPeerRef | null; sdp: string }
+  | { kind: "ice"; to: CallPeerRef | null; candidate: IceCandidateJson }
 
 export type RealtimeEvent =
+  // The first event on every stream. The boot id changes when the server restarts.
+  | { type: "hello"; bootId: string }
   | { type: "notification" }
   | { type: "message"; conversationId: string }
   | { type: "typing"; conversationId: string; name: string }
@@ -57,7 +94,8 @@ export type RealtimeEvent =
       href: string
       from: EventPerson
     }
-  | { type: "call"; callId: string; signal: CallSignal }
+  // A call step. With a device, only that tab acts on it.
+  | { type: "call"; callId: string; signal: CallSignal; device?: string }
 
 export function publish(userIds: string[], event: RealtimeEvent): void {
   for (const id of new Set(userIds)) bus.emit(`user:${id}`, event)
@@ -67,4 +105,9 @@ export function subscribe(userId: string, listener: (event: RealtimeEvent) => vo
   const key = `user:${userId}`
   bus.on(key, listener)
   return () => bus.off(key, listener)
+}
+
+// How many event streams a person has open right now. Zero means nothing of theirs can ring.
+export function listenerCount(userId: string): number {
+  return bus.listenerCount(`user:${userId}`)
 }

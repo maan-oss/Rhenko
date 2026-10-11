@@ -7,14 +7,19 @@ import { votePoll } from "@/actions/posts"
 import type { PollView as PollData } from "@/lib/data"
 import { cn } from "@/lib/utils"
 
-// Re-renders every 30 seconds so the time left stays roughly right. The timer
-// only runs while a poll is on screen, and never during server rendering.
+// Re-renders every 30 seconds so the time left stays roughly right. The timer only runs while a poll is on screen, and
+// the clock is read from one value that changes only on a tick, so the store's snapshot stays the same between renders.
 const tickers = new Set<() => void>()
 let timerId: number | undefined
+let clockNow = 0
 function subscribeToClock(onChange: () => void) {
   tickers.add(onChange)
+  clockNow = Date.now()
   if (timerId === undefined) {
-    timerId = window.setInterval(() => tickers.forEach((notify) => notify()), 30_000)
+    timerId = window.setInterval(() => {
+      clockNow = Date.now()
+      tickers.forEach((notify) => notify())
+    }, 30_000)
   }
   return () => {
     tickers.delete(onChange)
@@ -23,6 +28,9 @@ function subscribeToClock(onChange: () => void) {
       timerId = undefined
     }
   }
+}
+function readClock() {
+  return clockNow
 }
 
 function timeLeft(endsAt: number, now: number): string {
@@ -37,7 +45,7 @@ function timeLeft(endsAt: number, now: number): string {
 }
 
 export function PollView({ postId, poll }: { postId: string; poll: PollData }) {
-  const now = useSyncExternalStore(subscribeToClock, () => Date.now(), () => 0)
+  const now = useSyncExternalStore(subscribeToClock, readClock, () => 0)
   const ended = now > 0 && poll.endsAt <= now
   const [myVote, setMyVote] = useOptimistic(poll.myOptionId)
   const [pending, startTransition] = useTransition()

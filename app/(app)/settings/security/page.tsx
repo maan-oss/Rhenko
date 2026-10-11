@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { requireViewer, currentSessionHash } from "@/lib/auth"
-import { recoveryCodesLeft, sessionsFor } from "@/lib/settings-data"
+import { sessionsFor, twoFactorFor } from "@/lib/settings-data"
 import { formatCount } from "@/lib/format"
 import { RelativeTime } from "@/components/app/time-text"
 import { PageHeader } from "@/components/app/page-header"
@@ -18,7 +18,7 @@ async function SecurityBody() {
   const viewer = await requireViewer()
   const current = await currentSessionHash()
   const sessions = sessionsFor(viewer.id)
-  const codesLeft = recoveryCodesLeft(viewer.id)
+  const twoFactor = twoFactorFor(viewer.id)
   return (
     <>
       <PageHeader title="Security" backHref="/settings" />
@@ -26,7 +26,7 @@ async function SecurityBody() {
         <ChangePasswordForm />
       </Section>
       <Section title="Two-factor sign-in">
-        <TwoFactorPanel enabled={viewer.totpEnabled} codesLeft={codesLeft} />
+        <TwoFactorPanel enabled={twoFactor.enabled} usable={twoFactor.usable} codesLeft={twoFactor.recoveryLeft} />
       </Section>
       <Section title="Signed-in devices">
         <p className="text-[15px] text-muted-foreground">

@@ -1,6 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#4b3f72"/>
-  <g transform="translate(96 96) scale(0.5)">
-    <path fill="#ffffff" fill-rule="evenodd" transform="translate(-585 -310)" d="M735 310H823A150 150 0 0 0 973 460V548A150 150 0 0 0 823 698H735A150 150 0 0 0 585 548V460A150 150 0 0 0 735 310Z M779 450Q789 494 833 504Q789 514 779 558Q769 514 725 504Q769 494 779 450Z"/>
-  </g>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a4742"/>
+      <stop offset="0.55" stop-color="#1f1d1a"/>
+      <stop offset="1" stop-color="#12110f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#metal)"/>
+  <path fill="#f5f1e8" fill-rule="evenodd" transform="translate(256 256) scale(0.76) translate(-779 -504)" d="M735 310H823A150 150 0 0 0 973 460V548A150 150 0 0 0 823 698H735A150 150 0 0 0 585 548V460A150 150 0 0 0 735 310Z M779 450Q789 494 833 504Q789 514 779 558Q769 514 725 504Q769 494 779 450Z"/>
 </svg>
