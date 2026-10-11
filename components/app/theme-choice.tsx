@@ -2,13 +2,15 @@
 
 import { useSyncExternalStore } from "react"
 import { useTheme } from "next-themes"
-import { Monitor, Moon, Sun } from "lucide-react"
+import { CloudMoon, Monitor, Moon, MoonStar, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const OPTIONS = [
   { value: "system", label: "System", Icon: Monitor },
   { value: "light", label: "Light", Icon: Sun },
   { value: "dark", label: "Dark", Icon: Moon },
+  { value: "dim", label: "Dim", Icon: CloudMoon },
+  { value: "lights-out", label: "Lights out", Icon: MoonStar },
 ] as const
 
 const noopSubscribe = () => () => {}
@@ -18,7 +20,7 @@ export function ThemeChoice() {
   const ready = useSyncExternalStore(noopSubscribe, () => true, () => false)
 
   return (
-    <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2">
+    <div role="radiogroup" aria-label="Theme" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = ready && theme === value
         return (

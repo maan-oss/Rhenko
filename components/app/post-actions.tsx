@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { BookmarkIcon, HeartIcon, MessageCircleIcon } from "lucide-animated"
-import { Ban, Eye, Flag, Link2, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Send, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
+import { Ban, Code2, Eye, EyeOff, Flag, Link2, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Send, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
-import { deletePost, pinPost, reportPost, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
+import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
 import { toggleBlock, toggleMute } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { Composer } from "@/components/app/composer"
@@ -21,6 +21,10 @@ import type { MediaItem, MiniUser } from "@/lib/data"
 import { REPORT_REASONS, type ReplySetting, REPLY_SETTING_LABELS } from "@/lib/rules"
 import { formatCount } from "@/lib/format"
 import { cn } from "@/lib/utils"
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+}
 
 type Props = {
   viewer: AvatarUser
@@ -45,6 +49,8 @@ type Props = {
   media: MediaItem[]
   quoteAuthor: { name: string; handle: string; body: string }
   redirectAfterDelete?: string
+  canHideReply: boolean
+  hiddenByParent: boolean
 }
 
 const BUTTON =
@@ -100,6 +106,8 @@ export function PostActions(props: Props) {
     media,
     quoteAuthor,
     redirectAfterDelete,
+    canHideReply,
+    hiddenByParent,
   } = props
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -162,6 +170,21 @@ export function PostActions(props: Props) {
     )
   }
 
+  // A static quote of the post that anyone can paste into their own page.
+  function copyEmbed() {
+    const url = `${window.location.origin}${statusHref}`
+    const snippet = [
+      `<blockquote class="rhenko-embed">`,
+      `  <p>${escapeHtml(props.body)}</p>`,
+      `  <footer>&mdash; ${escapeHtml(author.name)} (@${escapeHtml(author.handle)}) <a href="${escapeHtml(url)}">Rhenko</a></footer>`,
+      `</blockquote>`,
+    ].join("\n")
+    navigator.clipboard?.writeText(snippet).then(
+      () => toast.success("Embed code copied."),
+      () => toast.error("Couldn't copy the embed code.")
+    )
+  }
+
   function submitReport() {
     startReport(async () => {
       const result = await reportPost(postId, reason)
@@ -198,6 +221,16 @@ export function PostActions(props: Props) {
         <DropdownMenuSeparator key="sep-own" />,
         <DropdownMenuItem key="delete" variant="destructive" onClick={() => setDeleteOpen(true)}>
           <Trash2 className="size-4" /> Delete post
+        </DropdownMenuItem>,
+      ]
+    : []
+
+  // The author of the post a reply belongs to can hide that reply, whoever wrote it.
+  const replyItems = canHideReply
+    ? [
+        <DropdownMenuItem key="hide-reply" onClick={() => run(() => setReplyHidden(postId, !hiddenByParent), hiddenByParent ? "Reply unhidden." : "Reply hidden.")}>
+          {hiddenByParent ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+          {hiddenByParent ? "Unhide reply" : "Hide reply"}
         </DropdownMenuItem>,
       ]
     : []
@@ -288,15 +321,20 @@ export function PostActions(props: Props) {
           <DropdownMenuItem onClick={() => setShareOpen(true)}>
             <Send className="size-4" /> Send in a message
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={copyEmbed}>
+            <Code2 className="size-4" /> Copy embed code
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {ownItems.length > 0 || otherItems.length > 0 ? (
+      {replyItems.length > 0 || ownItems.length > 0 || otherItems.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="More options" className={cn(BUTTON, "relative z-10")}>
             <MoreHorizontal className="size-[18px]" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-52">
+            {replyItems}
+            {replyItems.length > 0 && (isOwn ? ownItems : otherItems).length > 0 ? <DropdownMenuSeparator key="sep-reply" /> : null}
             {isOwn ? ownItems : otherItems}
           </DropdownMenuContent>
         </DropdownMenu>

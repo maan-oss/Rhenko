@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { getViewer, newId } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
+import { editHistoryFor, type EditVersion } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { announcePost, mediaFilesFor, removeFiles, replyPermission, thread } from "@/lib/post-writes"
 import {
@@ -15,6 +16,7 @@ import {
   MAX_VIDEOS,
   REPLY_SETTINGS,
   REPORT_REASONS,
+  UNDO_WINDOW_MS,
   validatePoll,
   validatePost,
   validateSchedule,
@@ -152,10 +154,14 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
 export async function editPost(postId: string, formData: FormData): Promise<VoidResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to edit posts." }
-  const post = get<{ author_id: string; created_at: number; is_draft: number; publish_at: number | null; body: string }>(
-    "SELECT author_id, created_at, is_draft, publish_at, body FROM posts WHERE id = ?",
-    postId
-  )
+  const post = get<{
+    author_id: string
+    created_at: number
+    is_draft: number
+    publish_at: number | null
+    body: string
+    edited_at: number | null
+  }>("SELECT author_id, created_at, is_draft, publish_at, body, edited_at FROM posts WHERE id = ?", postId)
   if (!post) return { ok: false, error: "That post was deleted." }
   if (post.author_id !== viewer.id) return { ok: false, error: "You can only edit your own posts." }
   if (post.is_draft === 1 || post.publish_at !== null) return { ok: false, error: "Publish this post before editing it." }
@@ -168,6 +174,16 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
   if (validation) return { ok: false, error: validation }
 
   transaction(() => {
+    // The text being replaced is kept, dated to when it was written, for the edit history.
+    if (body !== post.body) {
+      run(
+        "INSERT INTO post_edits (id, post_id, body, created_at) VALUES (?, ?, ?, ?)",
+        newId(),
+        postId,
+        post.body,
+        post.edited_at ?? post.created_at
+      )
+    }
     run("UPDATE posts SET body = ?, edited_at = ? WHERE id = ?", body, Date.now(), postId)
     for (const item of media) {
       const raw = formData.get(`alt-${item.id}`)
@@ -197,6 +213,44 @@ export async function deletePost(postId: string): Promise<VoidResult> {
   removeFiles(files)
   refresh()
   return { ok: true }
+}
+
+// Takes back a post moments after it went out, while the undo window is open.
+export async function undoPost(postId: string): Promise<VoidResult> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const post = get<{ author_id: string; created_at: number }>("SELECT author_id, created_at FROM posts WHERE id = ?", postId)
+  if (!post || post.author_id !== viewer.id) return { ok: false, error: "That post was deleted." }
+  if (Date.now() - post.created_at > UNDO_WINDOW_MS) return { ok: false, error: "The undo window has closed." }
+  const files = mediaFilesFor(thread(postId))
+  run("DELETE FROM posts WHERE id = ? AND author_id = ?", postId, viewer.id)
+  removeFiles(files)
+  refresh()
+  return { ok: true }
+}
+
+// The author of a post can hide replies to it. Hidden replies stay visible to the
+// person who wrote them and to the post's author, and are hidden from everyone else.
+export async function setReplyHidden(replyId: string, hidden: boolean): Promise<VoidResult> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const reply = get<{ reply_to_id: string | null }>("SELECT reply_to_id FROM posts WHERE id = ?", replyId)
+  if (!reply?.reply_to_id) return { ok: false, error: "That reply was deleted." }
+  const parentAuthor = postAuthor(reply.reply_to_id)
+  if (parentAuthor !== viewer.id) return { ok: false, error: "Only the author of the post can hide its replies." }
+  run("UPDATE posts SET hidden_by_parent = ? WHERE id = ?", hidden ? 1 : 0, replyId)
+  refresh()
+  return { ok: true }
+}
+
+export type EditHistoryResult = { ok: true; versions: EditVersion[] } | { ok: false; error: string }
+
+export async function getEditHistory(postId: string): Promise<EditHistoryResult> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in to see edit history." }
+  const versions = editHistoryFor(postId)
+  if (versions.length === 0) return { ok: false, error: "That post was deleted." }
+  return { ok: true, versions }
 }
 
 export async function publishNow(postId: string): Promise<VoidResult> {
@@ -355,8 +409,14 @@ export async function recordViews(postIds: string[]): Promise<void> {
   const viewer = await getViewer()
   if (!viewer) return
   const now = Date.now()
+  // A post can be deleted between the page render and this call, so only live rows are counted.
   for (const id of [...new Set(postIds)].slice(0, 50)) {
-    run("INSERT OR IGNORE INTO post_views (post_id, viewer_id, created_at) VALUES (?, ?, ?)", id, viewer.id, now)
+    run(
+      "INSERT OR IGNORE INTO post_views (post_id, viewer_id, created_at) SELECT id, ?, ? FROM posts WHERE id = ?",
+      viewer.id,
+      now,
+      id
+    )
   }
 }
 

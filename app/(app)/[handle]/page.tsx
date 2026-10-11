@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { CalendarDays, Link as LinkIcon, Lock, MapPin } from "lucide-react"
+import { BarChart3, CalendarDays, Link as LinkIcon, Lock, MapPin } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { getPost, getProfileByHandle, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -12,6 +12,7 @@ import type { FollowState } from "@/components/app/follow-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
 import { ProfileActions } from "@/components/app/profile-actions"
+import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { LockedBadge, VerifiedBadge } from "@/components/app/badges"
 import { TabLinks } from "@/components/app/tabs"
@@ -74,6 +75,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   return (
     <>
       <PageHeader title={profile.name} backHref="/" />
+      {isSelf ? null : <ProfileVisit profileId={profile.id} />}
       <div className="relative h-36 overflow-hidden bg-dusk text-background md:h-44">
         {profile.bannerFile ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -89,9 +91,18 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         </div>
         <div className="flex items-center gap-2 pb-1">
           {isSelf ? (
-            <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio, location: profile.location, website: profile.website }} />
+            <>
+              <Link
+                href="/analytics"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-semibold transition-colors hover:bg-muted"
+              >
+                <BarChart3 className="size-4" />
+                Analytics
+              </Link>
+              <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio, location: profile.location, website: profile.website }} />
+            </>
           ) : (
-            <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} />
+            <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} />
           )}
         </div>
       </div>

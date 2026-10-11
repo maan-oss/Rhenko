@@ -47,11 +47,32 @@ export function announcePost(post: Announced): void {
       notified.add(quoted.author_id)
     }
   }
+  const author = get<{ verified: number }>("SELECT verified FROM users WHERE id = ?", post.author_id)
   for (const handle of extractMentions(post.body)) {
-    const user = get<{ id: string }>("SELECT id FROM users WHERE handle = ? COLLATE NOCASE", handle)
-    if (user && user.id !== post.author_id && !notified.has(user.id)) {
+    const user = get<{ id: string; mentions_verified_only: number }>(
+      "SELECT id, mentions_verified_only FROM users WHERE handle = ? COLLATE NOCASE",
+      handle
+    )
+    // Someone who only wants mentions from verified accounts doesn't hear about the rest.
+    const filtered = user?.mentions_verified_only === 1 && author?.verified !== 1
+    if (user && user.id !== post.author_id && !notified.has(user.id) && !filtered) {
       notify(user.id, post.author_id, "mention", post.id)
       notified.add(user.id)
+    }
+  }
+  // People who turned on post notifications for this account hear about new posts,
+  // not replies. They must still follow the account, so an unfollow ends the alert.
+  if (!post.reply_to_id) {
+    const subscribers = all<{ user_id: string }>(
+      `SELECT s.user_id FROM post_subscriptions s
+       JOIN follows f ON f.follower_id = s.user_id AND f.followee_id = s.author_id
+       WHERE s.author_id = ?`,
+      post.author_id
+    )
+    for (const { user_id } of subscribers) {
+      if (user_id === post.author_id || notified.has(user_id)) continue
+      notify(user_id, post.author_id, "post", post.id)
+      notified.add(user_id)
     }
   }
 }

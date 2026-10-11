@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition, type ChangeEvent, type Form
 import { motion } from "motion/react"
 import { CalendarClock, ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
-import { createPost } from "@/actions/posts"
+import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,7 @@ import {
   REPLY_SETTINGS,
   SCHEDULE_MAX_AHEAD_MS,
   SCHEDULE_MIN_LEAD_MS,
+  UNDO_WINDOW_MS,
   countChars,
   type ReplySetting,
 } from "@/lib/rules"
@@ -120,6 +121,9 @@ export function Composer({
   const [sensitive, setSensitive] = useState(false)
   const [replySetting, setReplySetting] = useState<ReplySetting>("everyone")
   const [scheduling, setScheduling] = useState(false)
+  // A thread in progress: each post goes out as a reply to the one before it.
+  const [threadTail, setThreadTail] = useState<string | null>(null)
+  const [threadCount, setThreadCount] = useState(0)
   const [scheduleValue, setScheduleValue] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [active, setActive] = useState(0)
@@ -149,7 +153,11 @@ export function Composer({
   const hasContent = count > 0 || media.length > 0 || (poll && pollReady)
   const canPost = hasContent && !over && !pending && pollReady && !scheduleError && !(poll && media.length > 0)
   const isReply = Boolean(replyToId)
-  const showDraft = !isReply && !quoteOfId
+  const showDraft = !isReply && !quoteOfId && threadTail === null
+  // The post this one goes out as a reply to: the post being replied to, or the last post of a thread.
+  const replyTarget = replyToId ?? threadTail
+  // Threads are for plain posts: no replies, quotes, polls, schedules or community posts.
+  const canThread = !replyToId && !quoteOfId && !communityId && !poll && !scheduling
 
   const label = pending
     ? "Posting"
@@ -310,7 +318,7 @@ export function Composer({
     setCaret(event.target.selectionStart ?? event.target.value.length)
   }
 
-  function submit(event?: FormEvent<HTMLFormElement>, asDraft = false) {
+  function submit(event?: FormEvent<HTMLFormElement>, asDraft = false, asThread = false) {
     event?.preventDefault()
     if (!canPost && !(asDraft && hasContent && !over)) return
     const body = new FormData()
@@ -326,29 +334,46 @@ export function Composer({
     }
     if (sensitive && media.length > 0) body.set("sensitive", "on")
     if (asDraft && showDraft) body.set("draft", "on")
-    if (!asDraft && scheduleAt !== null && !scheduleError) body.set("scheduleAt", String(scheduleAt))
-    if (replyToId) body.set("replyTo", replyToId)
+    if (!asDraft && !asThread && !replyTarget && scheduleAt !== null && !scheduleError) body.set("scheduleAt", String(scheduleAt))
+    if (replyTarget) body.set("replyTo", replyTarget)
     if (quoteOfId) body.set("quoteOf", quoteOfId)
-    if (communityId && !replyToId) body.set("communityId", communityId)
-    if (!replyToId) body.set("replySetting", replySetting)
+    if (communityId && !replyTarget) body.set("communityId", communityId)
+    if (!replyTarget) body.set("replySetting", replySetting)
 
     startTransition(async () => {
       const result = await createPost(body)
       if (result.ok) {
-        setText("")
-        setCaret(0)
-        setMedia((current) => {
-          for (const m of current) {
-            URL.revokeObjectURL(m.url)
-            urlsRef.current.delete(m.url)
-          }
-          return []
-        })
-        setPoll(false)
-        setPollOptions(["", ""])
-        setSensitive(false)
-        setScheduling(false)
-        setScheduleValue("")
+        // Clears the fields for the next post. Media goes too, so a thread post never repeats the last one's image.
+        const clearFields = () => {
+          setText("")
+          setCaret(0)
+          setMedia((current) => {
+            for (const m of current) {
+              URL.revokeObjectURL(m.url)
+              urlsRef.current.delete(m.url)
+            }
+            return []
+          })
+          setPoll(false)
+          setPollOptions(["", ""])
+          setSensitive(false)
+          setScheduling(false)
+          setScheduleValue("")
+        }
+        if (asThread) {
+          // The post stays in the composer as the next reply's target.
+          clearFields()
+          setThreadTail(result.id)
+          setThreadCount((n) => n + 1)
+          textareaRef.current?.focus()
+          toast.success(threadCount === 0 ? "Thread started. Keep writing, then post." : "Added to your thread.")
+          return
+        }
+        if (threadTail !== null) {
+          setThreadTail(null)
+          setThreadCount(0)
+        }
+        clearFields()
         const message =
           result.status === "draft"
             ? "Saved to drafts."
@@ -359,7 +384,24 @@ export function Composer({
                 : quoteOfId
                   ? "Quote posted."
                   : "Posted."
-        toast.success(message)
+        if (result.status === "published") {
+          // The post can be taken back for a few seconds, the same window the server enforces.
+          const postId = result.id
+          toast.success(message, {
+            duration: UNDO_WINDOW_MS,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                undoPost(postId).then((undone) => {
+                  if (undone.ok) toast.success("Post deleted.")
+                  else toast.error(undone.error)
+                })
+              },
+            },
+          })
+        } else {
+          toast.success(message)
+        }
         onPosted?.()
       } else {
         toast.error(result.error)
@@ -535,7 +577,7 @@ export function Composer({
           </label>
         ) : null}
 
-        {!isReply && !compact ? (
+        {!isReply && !compact && threadTail === null ? (
           <label className="flex w-fit items-center gap-2 text-[13px] text-muted-foreground">
             <span>Who can reply</span>
             <select
@@ -593,7 +635,7 @@ export function Composer({
               {sensitive ? "Marked sensitive" : "Mark sensitive"}
             </button>
           ) : null}
-          {!isReply ? (
+          {!isReply && threadTail === null ? (
             <button
               type="button"
               onClick={() => {
@@ -609,13 +651,30 @@ export function Composer({
           ) : null}
           <EmojiPicker onPick={insertAt} />
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            {threadTail !== null ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setThreadTail(null)
+                  setThreadCount(0)
+                }}
+                className="rounded-full px-2 py-1 text-[13px] text-dusk hover:bg-dusk/10"
+              >
+                Finish thread ({threadCount})
+              </button>
+            ) : null}
             {count > 0 ? <CountRing progress={Math.min(count / MAX_POST, 1)} over={over} /> : null}
             {count > 0 && remaining <= 20 ? (
               <span className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>{remaining}</span>
             ) : null}
             {poll ? (
               <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span>
+            ) : null}
+            {canThread ? (
+              <Button type="button" variant="outline" disabled={!canPost} onClick={() => submit(undefined, false, true)} className="h-9 rounded-full px-4 font-semibold">
+                Add to thread
+              </Button>
             ) : null}
             {showDraft ? (
               <Button

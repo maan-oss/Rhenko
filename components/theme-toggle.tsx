@@ -13,7 +13,7 @@ export function ThemeToggle() {
   // render after mount to avoid a hydration mismatch.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false)
 
-  const isDark = mounted && resolvedTheme === "dark"
+  const isDark = mounted && (resolvedTheme === "dark" || resolvedTheme === "dim" || resolvedTheme === "lights-out")
 
   return (
     <Button

@@ -244,3 +244,24 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
   refresh()
   return { ok: true }
 }
+
+// Post notifications: an alert for every new post from an account you follow.
+export async function togglePostNotifications(handle: string): Promise<VoidResult & { notifying?: boolean }> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const target = userByHandle(handle)
+  if (!target) return { ok: false, error: "That account no longer exists." }
+  if (target.id === viewer.id) return { ok: false, error: "You can't turn on notifications for yourself." }
+
+  const existing = get("SELECT 1 AS found FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewer.id, target.id)
+  if (existing) {
+    run("DELETE FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewer.id, target.id)
+    refresh()
+    return { ok: true, notifying: false }
+  }
+  const following = get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
+  if (!following) return { ok: false, error: `Follow @${handle} first, then turn on post notifications.` }
+  run("INSERT INTO post_subscriptions (user_id, author_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
+  refresh()
+  return { ok: true, notifying: true }
+}

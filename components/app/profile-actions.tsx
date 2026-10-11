@@ -2,10 +2,10 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Ban, Mail, MoreHorizontal, Volume2, VolumeX } from "lucide-react"
+import { Ban, Bell, BellRing, Mail, MoreHorizontal, Volume2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { startConversation } from "@/actions/messages"
-import { toggleBlock, toggleMute } from "@/actions/social"
+import { toggleBlock, toggleMute, togglePostNotifications } from "@/actions/social"
 import { FollowButton, type FollowState } from "@/components/app/follow-button"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -17,11 +17,13 @@ export function ProfileActions({
   state,
   blocked,
   muted,
+  notifying,
 }: {
   handle: string
   state: FollowState
   blocked: boolean
   muted: boolean
+  notifying: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -31,6 +33,14 @@ export function ProfileActions({
       const result = await startConversation(handle)
       if (!result.ok) toast.error(result.error)
       else router.push(`/messages/${result.id}`)
+    })
+  }
+
+  function togglePosts() {
+    startTransition(async () => {
+      const result = await togglePostNotifications(handle)
+      if (!result.ok) toast.error(result.error)
+      else toast.success(result.notifying ? `You'll hear about new posts from @${handle}.` : `Post notifications off for @${handle}.`)
     })
   }
 
@@ -63,6 +73,20 @@ export function ProfileActions({
       >
         <Mail className="size-4" />
       </Button>
+      {state === "following" ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={notifying ? `Stop post notifications for @${handle}` : `Get post notifications for @${handle}`}
+          aria-pressed={notifying}
+          disabled={pending}
+          onClick={togglePosts}
+          className={cn("rounded-full", notifying && "border-dusk text-dusk")}
+        >
+          {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
+        </Button>
+      ) : null}
       <FollowButton handle={handle} state={state} />
       <DropdownMenu>
         <DropdownMenuTrigger

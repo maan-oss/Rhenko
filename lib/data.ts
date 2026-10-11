@@ -1,5 +1,5 @@
 import { all, get, type Param } from "@/lib/db"
-import { extractHashtags, extractMentions, normalizeTag, type ReplySetting } from "@/lib/rules"
+import { extractHashtags, extractMentions, NOTE_SHOW_MIN_HELPFUL, normalizeTag, RECENT_SEARCH_LIMIT, type ReplySetting } from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
 
 // Shared read models. Everything a page or API route renders comes from here,
@@ -54,6 +54,12 @@ export type PostCore = {
   bookmarked: boolean
   highlighted: boolean
   pinned: boolean
+  // A reply the parent's author hid. Only the parent's author and the reply's author see it.
+  hiddenByParent: boolean
+  // The viewer wrote the post this one replies to, so they can hide this reply.
+  canHideReply: boolean
+  // At least one community note on this post has earned a public display.
+  hasNote: boolean
 }
 
 export type PostView = PostCore & { quoted: PostCore | null }
@@ -99,6 +105,9 @@ type PostRow = {
   pinned: number
   blocked: number
   follows_author: number
+  hidden_by_parent: number
+  parent_is_mine: number
+  has_note: number
 }
 
 type FeedRow = {
@@ -135,11 +144,21 @@ function visibilityClause(viewerId: string): { sql: string; params: Param[] } {
     AND au.deactivated_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = au.id) OR (b.blocker_id = au.id AND b.blocked_id = ?))
     AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = au.id)
+    AND (p.hidden_by_parent = 0 OR p.author_id = ? OR EXISTS (SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?))
     AND (au.protected = 0 OR au.id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = au.id))
     ${wordClauses}`
   return {
     sql,
-    params: [viewerId, viewerId, viewerId, viewerId, viewerId, ...words.map((w) => likePattern(w.toLowerCase()))],
+    params: [
+      viewerId, // blocks, first direction
+      viewerId, // blocks, second direction
+      viewerId, // mutes
+      viewerId, // hidden reply: the reply's own author
+      viewerId, // hidden reply: the parent's author
+      viewerId, // protected: the viewer's own account
+      viewerId, // protected: follows
+      ...words.map((w) => likePattern(w.toLowerCase())),
+    ],
   }
 }
 
@@ -212,17 +231,28 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
        EXISTS(SELECT 1 FROM highlights h WHERE h.post_id = p.id AND h.user_id = u.id) AS highlighted,
        (u.pinned_post_id = p.id) AS pinned,
        EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?)) AS blocked,
-       EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = u.id) AS follows_author
+       EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = u.id) AS follows_author,
+       p.hidden_by_parent,
+       EXISTS(SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?) AS parent_is_mine,
+       EXISTS(
+         SELECT 1 FROM community_notes cn
+         WHERE cn.post_id = p.id
+           AND (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = cn.id AND r.helpful = 1) >= ?
+           AND (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = cn.id AND r.helpful = 1)
+             > (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = cn.id AND r.helpful = 0)
+       ) AS has_note
      FROM posts p
      JOIN users u ON u.id = p.author_id
      LEFT JOIN communities c ON c.id = p.community_id
      WHERE p.id IN (${marks})`,
-    viewerId,
-    viewerId,
-    viewerId,
-    viewerId,
-    viewerId,
-    viewerId,
+    viewerId, // liked
+    viewerId, // reposted
+    viewerId, // bookmarked
+    viewerId, // blocked, first direction
+    viewerId, // blocked, second direction
+    viewerId, // follows the author
+    viewerId, // is the author of the post this replies to
+    NOTE_SHOW_MIN_HELPFUL,
     ...ids
   )
   const handle = viewerHandle(viewerId).toLowerCase()
@@ -269,6 +299,9 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       bookmarked: r.bookmarked === 1,
       highlighted: r.highlighted === 1,
       pinned: r.pinned === 1,
+      hiddenByParent: r.hidden_by_parent === 1,
+      canHideReply: r.parent_is_mine === 1,
+      hasNote: r.has_note === 1,
     })
   }
   return result
@@ -462,30 +495,61 @@ export function topicFeed(tag: string, viewerId: string, cursor?: string, limit 
 // filter:images|videos|media|links|replies. Other words are matched in the text.
 export type SearchQuery = {
   terms: string[]
+  // Words that must not appear in the post, written as -word.
+  exclude: string[]
   from: string | null
+  // Replies to posts by this account.
+  to: string | null
   since: number | null
   until: number | null
+  minLikes: number | null
+  minReposts: number | null
   filter: "images" | "videos" | "media" | "links" | "replies" | null
   raw: string
 }
 
+// Operators: from:, to:, since:, until:, filter:, min_likes:, min_reposts:, and -word to leave a word out.
 export function parseSearch(raw: string): SearchQuery {
-  const query: SearchQuery = { terms: [], from: null, since: null, until: null, filter: null, raw: raw.trim() }
+  const query: SearchQuery = {
+    terms: [],
+    exclude: [],
+    from: null,
+    to: null,
+    since: null,
+    until: null,
+    minLikes: null,
+    minReposts: null,
+    filter: null,
+    raw: raw.trim(),
+  }
   const tokens = raw.match(/"[^"]+"|\S+/g) ?? []
   for (const token of tokens) {
-    const op = /^(from|since|until|filter):(.+)$/i.exec(token)
+    const op = /^(from|to|since|until|filter|min_likes|min_reposts):(.+)$/i.exec(token)
     if (op) {
       const key = op[1].toLowerCase()
       const value = op[2].replace(/^"|"$/g, "")
       if (key === "from") query.from = value.replace(/^@/, "")
+      if (key === "to") query.to = value.replace(/^@/, "")
       if (key === "since" || key === "until") {
         const time = Date.parse(value)
         if (Number.isFinite(time)) query[key] = time
+      }
+      if (key === "min_likes" || key === "min_reposts") {
+        const count = Math.floor(Number(value))
+        if (Number.isFinite(count) && count >= 0) {
+          if (key === "min_likes") query.minLikes = count
+          else query.minReposts = count
+        }
       }
       if (key === "filter") {
         const v = value.toLowerCase()
         if (v === "images" || v === "videos" || v === "media" || v === "links" || v === "replies") query.filter = v
       }
+      continue
+    }
+    if (/^-[^-"]/.test(token)) {
+      const word = token.slice(1).replace(/^"|"$/g, "").trim().toLowerCase()
+      if (word) query.exclude.push(word)
       continue
     }
     const term = token.replace(/^"|"$/g, "").trim()
@@ -495,7 +559,16 @@ export function parseSearch(raw: string): SearchQuery {
 }
 
 export function hasSearchContent(query: SearchQuery): boolean {
-  return query.terms.length > 0 || query.from !== null || query.filter !== null || query.since !== null || query.until !== null
+  return (
+    query.terms.length > 0 ||
+    query.from !== null ||
+    query.to !== null ||
+    query.filter !== null ||
+    query.since !== null ||
+    query.until !== null ||
+    query.minLikes !== null ||
+    query.minReposts !== null
+  )
 }
 
 export function searchPostFeed(
@@ -522,6 +595,24 @@ export function searchPostFeed(
   if (query.until !== null) {
     clauses.push("p.created_at < ?")
     params.push(query.until + 24 * 60 * 60 * 1000)
+  }
+  if (query.to) {
+    clauses.push(
+      "EXISTS (SELECT 1 FROM posts parent JOIN users pu ON pu.id = parent.author_id WHERE parent.id = p.reply_to_id AND pu.handle = ? COLLATE NOCASE)"
+    )
+    params.push(query.to)
+  }
+  for (const word of query.exclude) {
+    clauses.push("lower(p.body) NOT LIKE ? ESCAPE '\\'")
+    params.push(likePattern(word))
+  }
+  if (query.minLikes !== null) {
+    clauses.push("(SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) >= ?")
+    params.push(query.minLikes)
+  }
+  if (query.minReposts !== null) {
+    clauses.push("(SELECT COUNT(*) FROM reposts rp WHERE rp.post_id = p.id) >= ?")
+    params.push(query.minReposts)
   }
   if (query.filter === "replies") clauses.push("p.reply_to_id IS NOT NULL")
   if (query.filter === "links") clauses.push("p.body LIKE '%http%'")
@@ -552,17 +643,15 @@ export function ownPending(viewerId: string, mode: "draft" | "scheduled"): PostV
   )
 }
 
+// Replies under a post, oldest first. They pass through the same visibility rules as
+// every feed, so blocked, muted and hidden replies stay out of the thread.
 export function repliesTo(postId: string, viewerId: string): PostView[] {
-  const rows = all<{ id: string }>(
-    `SELECT p.id FROM posts p
-     WHERE p.reply_to_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL
-     ORDER BY p.created_at ASC LIMIT 200`,
-    postId
-  )
-  return loadPosts(
-    rows.map((r) => r.id),
-    viewerId
-  )
+  const source = `
+    SELECT 'reply:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
+    FROM posts p WHERE p.reply_to_id = ?`
+  return feedPage(source, [postId], undefined, 200, viewerId)
+    .items.map((item) => item.post)
+    .reverse()
 }
 
 export type Relationship = {
@@ -637,6 +726,8 @@ export type ProfileView = {
   pinnedPostId: string | null
   birthday: string | null
   relationship: Relationship
+  // The viewer asked to hear about every new post from this account.
+  notifying: boolean
 }
 
 export function getProfileByHandle(handle: string, viewerId: string): ProfileView | null {
@@ -689,6 +780,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     pinnedPostId: row.pinned_post_id,
     birthday: isSelf ? row.birthday : null,
     relationship,
+    notifying: !isSelf && get("SELECT 1 AS found FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewerId, row.id) !== undefined,
   }
 }
 
@@ -808,7 +900,7 @@ export function trendingTags(limit = 6): { tag: string; count: number }[] {
     .map(([tag, count]) => ({ tag, count }))
 }
 
-export type NotificationKind = "like" | "repost" | "reply" | "quote" | "follow" | "mention" | "follow_request" | "poll"
+export type NotificationKind = "like" | "repost" | "reply" | "quote" | "follow" | "mention" | "follow_request" | "poll" | "post"
 
 export type NotificationView = {
   id: string
@@ -934,7 +1026,7 @@ export function unreadMessageCount(viewerId: string): number {
     get<{ c: number }>(
       `SELECT COUNT(*) AS c FROM chat_messages m
        JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
-       WHERE cm.status = 'accepted' AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL`,
+       WHERE cm.status = 'accepted' AND cm.muted = 0 AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL`,
       viewerId,
       viewerId
     )?.c ?? 0
@@ -952,12 +1044,20 @@ export type ConversationView = {
   status: "accepted" | "requested"
   members: ChatMemberView[]
   viewerIsCreator: boolean
+  muted: boolean
 }
 
 // The conversation, if the viewer is a member. Null otherwise.
 export function conversationFor(id: string, viewerId: string): ConversationView | null {
-  const base = get<{ id: string; kind: "dm" | "group"; title: string; created_by: string | null; status: "accepted" | "requested" }>(
-    `SELECT c.id, c.kind, c.title, c.created_by, cm.status
+  const base = get<{
+    id: string
+    kind: "dm" | "group"
+    title: string
+    created_by: string | null
+    status: "accepted" | "requested"
+    muted: number
+  }>(
+    `SELECT c.id, c.kind, c.title, c.created_by, cm.status, cm.muted
      FROM conversations c JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
      WHERE c.id = ?`,
     viewerId,
@@ -981,6 +1081,7 @@ export function conversationFor(id: string, viewerId: string): ConversationView 
     status: base.status,
     members,
     viewerIsCreator: base.created_by === viewerId,
+    muted: base.muted === 1,
   }
 }
 
@@ -1215,4 +1316,164 @@ export function suggestTags(prefix: string, limit = 6): string[] {
     .map((t) => t.tag)
     .filter((tag) => tag.startsWith(normalized))
     .slice(0, limit)
+}
+
+// Community notes. A note is shown to everyone once enough people rate it helpful
+// and helpful ratings outnumber unhelpful ones. Others see it in the rating list.
+export type NoteView = {
+  id: string
+  body: string
+  createdAt: number
+  author: MiniUser
+  helpful: number
+  unhelpful: number
+  myRating: boolean | null
+  mine: boolean
+  shown: boolean
+}
+
+export function notesFor(postId: string, viewerId: string): NoteView[] {
+  return all<{
+    id: string
+    body: string
+    created_at: number
+    author_id: string
+    author_handle: string
+    author_name: string
+    author_avatar: string | null
+    author_verified: number
+    helpful: number
+    unhelpful: number
+    my_rating: number | null
+  }>(
+    `SELECT n.id, n.body, n.created_at,
+       u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
+       (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = n.id AND r.helpful = 1) AS helpful,
+       (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = n.id AND r.helpful = 0) AS unhelpful,
+       (SELECT r.helpful FROM community_note_ratings r WHERE r.note_id = n.id AND r.user_id = ?) AS my_rating
+     FROM community_notes n
+     JOIN users u ON u.id = n.author_id
+     WHERE n.post_id = ? AND u.deactivated_at IS NULL
+     ORDER BY (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = n.id AND r.helpful = 1)
+       - (SELECT COUNT(*) FROM community_note_ratings r WHERE r.note_id = n.id AND r.helpful = 0) DESC,
+       n.created_at ASC`,
+    viewerId,
+    postId
+  ).map((r) => ({
+    id: r.id,
+    body: r.body,
+    createdAt: r.created_at,
+    author: { id: r.author_id, handle: r.author_handle, name: r.author_name, avatarFile: r.author_avatar, verified: r.author_verified === 1 },
+    helpful: r.helpful,
+    unhelpful: r.unhelpful,
+    myRating: r.my_rating === null ? null : r.my_rating === 1,
+    mine: r.author_id === viewerId,
+    shown: r.helpful >= NOTE_SHOW_MIN_HELPFUL && r.helpful > r.unhelpful,
+  }))
+}
+
+// Earlier versions of a post, newest first. The live version comes first, then the
+// versions that were replaced by edits.
+export type EditVersion = { body: string; at: number; current: boolean }
+
+export function editHistoryFor(postId: string): EditVersion[] {
+  const post = get<{ body: string; created_at: number; edited_at: number | null }>(
+    "SELECT body, created_at, edited_at FROM posts WHERE id = ?",
+    postId
+  )
+  if (!post) return []
+  const earlier = all<{ body: string; created_at: number }>(
+    "SELECT body, created_at FROM post_edits WHERE post_id = ? ORDER BY created_at DESC",
+    postId
+  )
+  return [
+    { body: post.body, at: post.edited_at ?? post.created_at, current: true },
+    ...earlier.map((row) => ({ body: row.body, at: row.created_at, current: false })),
+  ]
+}
+
+export function recentSearches(viewerId: string): string[] {
+  return all<{ query: string }>(
+    "SELECT query FROM recent_searches WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+    viewerId,
+    RECENT_SEARCH_LIMIT
+  ).map((row) => row.query)
+}
+
+// Analytics for an account's own posts and profile. Visits and views are counted per day in UTC.
+export type AnalyticsDay = { label: string; visits: number; views: number }
+
+export type AnalyticsView = {
+  visits7: number
+  visits28: number
+  views28: number
+  followers: number
+  newFollowers28: number
+  days: AnalyticsDay[]
+  topPosts: { id: string; handle: string; body: string; views: number; likes: number }[]
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export function analyticsFor(userId: string, handle: string, now = Date.now()): AnalyticsView {
+  const today = Math.floor(now / DAY_MS)
+  const windowStart = (today - 13) * DAY_MS
+  const count = (sql: string, ...params: Param[]) => get<{ c: number }>(sql, ...params)?.c ?? 0
+
+  const visitDays = all<{ day: number; c: number }>(
+    `SELECT CAST(created_at / ? AS INTEGER) AS day, COUNT(*) AS c FROM profile_visits
+     WHERE profile_id = ? AND created_at >= ? GROUP BY day`,
+    DAY_MS,
+    userId,
+    windowStart
+  )
+  const viewDays = all<{ day: number; c: number }>(
+    `SELECT CAST(v.created_at / ? AS INTEGER) AS day, COUNT(*) AS c FROM post_views v
+     JOIN posts p ON p.id = v.post_id
+     WHERE p.author_id = ? AND v.viewer_id <> p.author_id AND v.created_at >= ? GROUP BY day`,
+    DAY_MS,
+    userId,
+    windowStart
+  )
+  const days: AnalyticsDay[] = []
+  for (let offset = 13; offset >= 0; offset--) {
+    const day = today - offset
+    days.push({
+      label: new Date(day * DAY_MS).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+      visits: visitDays.find((row) => row.day === day)?.c ?? 0,
+      views: viewDays.find((row) => row.day === day)?.c ?? 0,
+    })
+  }
+
+  const topPosts = all<{ id: string; body: string; views: number; likes: number }>(
+    `SELECT p.id, p.body,
+       (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id) AS views,
+       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes
+     FROM posts p
+     WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL
+     ORDER BY views DESC, p.created_at DESC
+     LIMIT 5`,
+    userId
+  )
+    .filter((row) => row.views > 0)
+    .map((row) => ({ ...row, handle }))
+
+  return {
+    visits7: count("SELECT COUNT(*) AS c FROM profile_visits WHERE profile_id = ? AND created_at >= ?", userId, now - 7 * DAY_MS),
+    visits28: count("SELECT COUNT(*) AS c FROM profile_visits WHERE profile_id = ? AND created_at >= ?", userId, now - 28 * DAY_MS),
+    views28: count(
+      `SELECT COUNT(*) AS c FROM post_views v JOIN posts p ON p.id = v.post_id
+       WHERE p.author_id = ? AND v.viewer_id <> p.author_id AND v.created_at >= ?`,
+      userId,
+      now - 28 * DAY_MS
+    ),
+    followers: count("SELECT COUNT(*) AS c FROM follows WHERE followee_id = ?", userId),
+    newFollowers28: count("SELECT COUNT(*) AS c FROM follows WHERE followee_id = ? AND created_at >= ?", userId, now - 28 * DAY_MS),
+    days,
+    topPosts,
+  }
+}
+
+export function mentionsVerifiedOnly(userId: string): boolean {
+  return get<{ mentions_verified_only: number }>("SELECT mentions_verified_only FROM users WHERE id = ?", userId)?.mentions_verified_only === 1
 }

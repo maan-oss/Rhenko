@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { AtSign, Heart, ListChecks, MessageCircle, Quote, Repeat2, UserPlus, UserRound } from "lucide-react"
+import { AtSign, BellRing, Heart, ListChecks, MessageCircle, Quote, Repeat2, UserPlus, UserRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
 import { followRequestsFor, notificationsFor, type NotificationKind, type NotificationView } from "@/lib/data"
@@ -24,6 +24,7 @@ const COPY: Record<NotificationKind, { text: string; Icon: LucideIcon }> = {
   mention: { text: "mentioned you", Icon: AtSign },
   follow_request: { text: "asked to follow you", Icon: UserRound },
   poll: { text: "A poll you voted in has ended", Icon: ListChecks },
+  post: { text: "posted", Icon: BellRing },
 }
 
 export default function NotificationsPage({ searchParams }: { searchParams: SearchParams }) {

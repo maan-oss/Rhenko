@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
-import { getPost, repliesTo } from "@/lib/data"
+import { getPost, notesFor, repliesTo } from "@/lib/data"
+import { CommunityNotes } from "@/components/app/community-notes"
 import { Composer } from "@/components/app/composer"
 import { FeedList } from "@/components/app/feed-list"
 import { PageHeader } from "@/components/app/page-header"
@@ -37,6 +38,7 @@ async function StatusBody({ params }: { params: Params }) {
       <PageHeader title="Post" backHref="/" />
       {parent ? <PostCard post={parent} viewer={viewer} /> : null}
       <PostCard post={post} viewer={viewer} detail />
+      <CommunityNotes postId={post.id} notes={notesFor(post.id, viewer.id)} signedIn />
       {post.canReply ? (
         <Composer viewer={viewer} replyToId={post.id} id="reply" placeholder="Post your reply" compact />
       ) : (

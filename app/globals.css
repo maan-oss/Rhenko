@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .dim *, .lights-out *));
 
 @theme inline {
   --color-background: var(--background);
@@ -86,7 +86,11 @@
   --destructive-foreground: var(--color-red-500);
 }
 
-.dark {
+/* Dim and Lights out are dark palettes. The dark tokens apply to all three, and each
+   palette below overrides the surfaces it changes. */
+.dark,
+.dim,
+.lights-out {
   --background: #0a0a0a;
   --foreground: #f5f5f5;
   --card: #161519;
@@ -122,6 +126,42 @@
   --destructive-foreground: var(--color-red-400);
 }
 
+.dim {
+  --background: #15141b;
+  --foreground: #f1f0f4;
+  --card: #1d1b25;
+  --card-foreground: #f1f0f4;
+  --popover: #1d1b25;
+  --popover-foreground: #f1f0f4;
+  --secondary: #1d1b25;
+  --muted: #1d1b25;
+  --muted-foreground: #a7a4b3;
+  --accent: #1d1b25;
+  --border: #34313f;
+  --input: #34313f;
+  --sidebar: #15141b;
+  --sidebar-accent: #1d1b25;
+  --sidebar-border: #34313f;
+}
+
+.lights-out {
+  --background: #000000;
+  --foreground: #f5f5f5;
+  --card: #000000;
+  --card-foreground: #f5f5f5;
+  --popover: #000000;
+  --popover-foreground: #f5f5f5;
+  --secondary: #16181c;
+  --muted: #16181c;
+  --muted-foreground: #8b98a5;
+  --accent: #16181c;
+  --border: #2f3336;
+  --input: #2f3336;
+  --sidebar: #000000;
+  --sidebar-accent: #16181c;
+  --sidebar-border: #2f3336;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -144,6 +184,15 @@
 ::selection {
   background: color-mix(in oklab, var(--dusk) 28%, transparent);
 }
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -6,6 +6,7 @@ import { AcceptBar } from "@/components/app/accept-bar"
 import { ChatComposer } from "@/components/app/chat-composer"
 import { ChatThread } from "@/components/app/chat-thread"
 import { GroupPanel } from "@/components/app/group-panel"
+import { MuteConversationButton } from "@/components/app/mute-conversation-button"
 import { PageHeader } from "@/components/app/page-header"
 import { ThreadMarker } from "@/components/app/thread-marker"
 
@@ -39,7 +40,8 @@ async function ConversationBody({ params }: { params: Params }) {
         title={title}
         backHref="/messages"
         actions={
-          isGroup ? (
+          <div className="flex items-center gap-2">
+          {isGroup ? (
             <GroupPanel
               conversationId={conversation.id}
               title={conversation.title}
@@ -54,7 +56,9 @@ async function ConversationBody({ params }: { params: Params }) {
             <Link href={`/${others[0].handle}`} className="text-sm font-semibold text-dusk hover:underline">
               @{others[0].handle}
             </Link>
-          ) : null
+          ) : null}
+          <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
+          </div>
         }
       />
       <ThreadMarker conversationId={conversation.id} />

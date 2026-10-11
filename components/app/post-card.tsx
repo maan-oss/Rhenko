@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { Pin, Repeat2, Sparkles } from "lucide-react"
+import { EyeOff, Info, Pin, Repeat2, Sparkles } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
-import { EditedMark, VerifiedBadge } from "@/components/app/badges"
+import { VerifiedBadge } from "@/components/app/badges"
+import { EditHistory } from "@/components/app/edit-history"
 import { MediaGrid } from "@/components/app/media-grid"
 import { PollView } from "@/components/app/poll-view"
 import { PostActions } from "@/components/app/post-actions"
@@ -71,6 +72,12 @@ export function PostCard({
           <span>{repostedBy.id === viewer.id ? "You reposted" : `${repostedBy.name} reposted`}</span>
         </p>
       ) : null}
+      {post.hiddenByParent ? (
+        <p className="mb-1 flex items-center gap-2 pl-12 text-[13px] text-muted-foreground">
+          <EyeOff className="size-3.5" />
+          <span>Hidden reply</span>
+        </p>
+      ) : null}
       {post.highlighted && !detail && !showPinned ? (
         <p className="mb-1 flex items-center gap-2 pl-12 text-[13px] text-muted-foreground">
           <Sparkles className="size-3.5" />
@@ -98,7 +105,7 @@ export function PostCard({
                 {post.community.name}
               </Link>
             ) : null}
-            {post.editedAt ? <EditedMark /> : null}
+            {post.editedAt ? <EditHistory postId={post.id} /> : null}
           </header>
           {post.replyToHandle && !detail ? (
             <p className="text-[13px] text-muted-foreground">
@@ -114,6 +121,15 @@ export function PostCard({
           {post.media.length > 0 ? <MediaGrid media={post.media} sensitive={post.sensitive && !isOwn} /> : null}
           {post.poll ? <PollView postId={post.id} poll={post.poll} /> : null}
           {post.quoted ? <QuotedPost post={post.quoted} /> : null}
+          {post.hasNote ? (
+            <Link
+              href={`${statusHref}#notes`}
+              className="relative z-10 mt-2 flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Info className="size-4 shrink-0" />
+              <span>Readers added context to this post. See the community note.</span>
+            </Link>
+          ) : null}
           {detail ? (
             <div className="mt-3 flex flex-col gap-3 border-y border-border py-3 text-[15px]">
               <p className="text-muted-foreground">
@@ -167,6 +183,8 @@ export function PostCard({
             replySetting={post.replySetting}
             media={post.media}
             quoteAuthor={{ name: post.author.name, handle: post.author.handle, body: post.body }}
+            canHideReply={post.canHideReply}
+            hiddenByParent={post.hiddenByParent}
             redirectAfterDelete={detail ? `/${post.author.handle}` : undefined}
           />
         </div>

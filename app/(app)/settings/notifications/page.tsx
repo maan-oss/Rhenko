@@ -1,7 +1,9 @@
 import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
+import { mentionsVerifiedOnly } from "@/lib/data"
 import { NOTIFICATION_KINDS, NOTIFICATION_LABELS, notificationPrefsFor } from "@/lib/settings-data"
 import { NotificationPrefs } from "@/components/app/notification-prefs"
+import { MentionFilterChoice } from "@/components/app/mention-filter"
 import { PageHeader } from "@/components/app/page-header"
 
 export default function NotificationSettingsPage() {
@@ -27,6 +29,10 @@ async function NotificationBody() {
       <div className="px-4 py-2">
         <NotificationPrefs rows={rows} />
       </div>
+      <section className="flex flex-col gap-3 border-t border-border px-4 py-6">
+        <h2 className="text-lg font-semibold">Mentions</h2>
+        <MentionFilterChoice initial={mentionsVerifiedOnly(viewer.id)} />
+      </section>
     </>
   )
 }

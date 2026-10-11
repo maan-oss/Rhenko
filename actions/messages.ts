@@ -271,3 +271,15 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   refresh()
   return { ok: true }
 }
+
+// Muting a conversation keeps its messages but stops them from counting as unread.
+export async function toggleConversationMute(conversationId: string): Promise<VoidResult & { muted?: boolean }> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const member = get<{ muted: number }>("SELECT muted FROM conversation_members WHERE conversation_id = ? AND user_id = ?", conversationId, viewer.id)
+  if (!member) return { ok: false, error: "That conversation doesn't exist." }
+  const muted = member.muted === 1 ? 0 : 1
+  run("UPDATE conversation_members SET muted = ? WHERE conversation_id = ? AND user_id = ?", muted, conversationId, viewer.id)
+  refresh()
+  return { ok: true, muted: muted === 1 }
+}

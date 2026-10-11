@@ -1,6 +1,6 @@
 import { all, get } from "@/lib/db"
 
-export const NOTIFICATION_KINDS = ["like", "repost", "reply", "quote", "follow", "mention", "follow_request", "poll"] as const
+export const NOTIFICATION_KINDS = ["like", "repost", "reply", "quote", "follow", "mention", "follow_request", "poll", "post"] as const
 export type PrefKind = (typeof NOTIFICATION_KINDS)[number]
 
 export const NOTIFICATION_LABELS: Record<PrefKind, { title: string; hint: string }> = {
@@ -12,6 +12,7 @@ export const NOTIFICATION_LABELS: Record<PrefKind, { title: string; hint: string
   mention: { title: "Mentions", hint: "When someone mentions you" },
   follow_request: { title: "Follow requests", hint: "When someone asks to follow a protected account you run" },
   poll: { title: "Polls", hint: "When a poll you voted in or made ends" },
+  post: { title: "New posts", hint: "When an account you follow, and switched post notifications on for, posts" },
 }
 
 export type SessionRow = {

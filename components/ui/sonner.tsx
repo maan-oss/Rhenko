@@ -6,10 +6,12 @@ import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  // Dim and Lights out are dark backgrounds, so the toasts use the dark style.
+  const toastTheme = theme === "dim" || theme === "lights-out" ? "dark" : theme
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={toastTheme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
         success: (

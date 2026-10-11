@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/app/page-header"
 import { FontSizeChoice } from "@/components/app/font-size-choice"
 import { ThemeChoice } from "@/components/app/theme-choice"
+import { ReduceMotionChoice } from "@/components/app/motion-preference"
 import { SHORTCUTS } from "@/lib/shortcuts"
 
 export default function DisplaySettingsPage() {
@@ -16,6 +17,10 @@ export default function DisplaySettingsPage() {
         <h2 className="text-lg font-semibold">Text size</h2>
         <p className="text-sm text-muted-foreground">Saved on this device.</p>
         <FontSizeChoice />
+      </section>
+      <section className="flex flex-col gap-3 border-b border-border px-4 py-6">
+        <h2 className="text-lg font-semibold">Motion</h2>
+        <ReduceMotionChoice />
       </section>
       <section className="flex flex-col gap-3 px-4 py-6">
         <h2 className="text-lg font-semibold">Keyboard shortcuts</h2>

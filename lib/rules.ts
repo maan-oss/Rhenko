@@ -129,6 +129,16 @@ export const MAX_GROUP_TITLE = 50
 export const MAX_GROUP_MEMBERS = 50
 export const MAX_FOLDER_NAME = 25
 export const MAX_HIGHLIGHTS = 50
+export const MAX_NOTE = 280
+// A community note is shown to everyone once this many people rate it helpful,
+// and helpful ratings outnumber unhelpful ones.
+export const NOTE_SHOW_MIN_HELPFUL = 2
+// The author can undo a new post for this long after it goes out.
+export const UNDO_WINDOW_MS = 10 * 1000
+export const RECENT_SEARCH_LIMIT = 15
+export const MAX_SEARCH_LENGTH = 300
+// A profile visit from the same person counts once per window.
+export const PROFILE_VISIT_WINDOW_MS = 6 * 60 * 60 * 1000
 
 export function validatePoll(options: string[], minutes: number): string | null {
   if (options.length < POLL_MIN_OPTIONS || options.length > POLL_MAX_OPTIONS) {

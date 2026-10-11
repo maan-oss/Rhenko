@@ -340,6 +340,66 @@ INSERT INTO chat_messages (id, conversation_id, sender_id, body, created_at)
 
 DROP TABLE IF EXISTS messages;
 `,
+
+  // 4. Hidden replies, edit history, post notifications, community notes,
+  // recent searches and profile visits.
+  `
+ALTER TABLE posts ADD COLUMN hidden_by_parent INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS post_edits (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS post_edits_post ON post_edits(post_id, created_at);
+
+CREATE TABLE IF NOT EXISTS post_subscriptions (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, author_id)
+);
+CREATE INDEX IF NOT EXISTS post_subscriptions_author ON post_subscriptions(author_id);
+
+CREATE TABLE IF NOT EXISTS community_notes (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS community_notes_post ON community_notes(post_id);
+CREATE TABLE IF NOT EXISTS community_note_ratings (
+  note_id TEXT NOT NULL REFERENCES community_notes(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  helpful INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (note_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS recent_searches (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  query TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, query)
+);
+CREATE INDEX IF NOT EXISTS recent_searches_user ON recent_searches(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS profile_visits (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS profile_visits_profile ON profile_visits(profile_id, created_at);
+`,
+
+  // 5. Mentions from verified accounts only, and muted conversations.
+  `
+ALTER TABLE users ADD COLUMN mentions_verified_only INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE conversation_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }
