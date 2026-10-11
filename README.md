@@ -53,7 +53,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 **Home and posts**
 - The top bar has Home, For you and Following, and a plus button for lists and timelines.
 - Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
-- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options. Photos and the poll sit in a three-dot menu. That is all it does.
+- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options. Photos and the poll are icon buttons under the text. That is all it does.
 - Posts with two or more photos or videos show as a carousel. Hover the post for the arrows, use the arrow keys once it has focus, swipe on a phone, or pick a dot.
 - Feeds load older posts as you scroll, with a "Show more" button as a fallback.
 - Reply, quote, repost, like, bookmark, share, pin to your profile, and highlight.
@@ -77,7 +77,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 
 **Explore and search**
 - Explore is a search field, one icon button that switches between ranked posts (the default) and the latest, and a Media switch that shows only posts with photos or videos. Both controls live in the URL, so a view can be shared.
-- The sidebar search is a field. Clicking or focusing it opens a card that fades in with the recent searches, one row after another, the way the America.gov menu opens. Typing adds a "Search for" row, arrow down moves into the card, and Escape closes it.
+- The sidebar search is one surface. Clicking or focusing it grows the field into a card of recent searches, which fades in one row after another, the way the America.gov menu opens. The card sits over the nav without pushing it. Typing adds a "Search for" row, arrow down moves into the card, and Escape closes it.
 - Search posts and people with `from:handle`, `to:handle`, `since:YYYY-MM-DD`, `until:YYYY-MM-DD`, `filter:images|videos|media|links|replies`, `min_likes:N`, `min_reposts:N`, and `-word` to leave a word out.
 - The right rail shows trending hashtags, topics (`/topics/[tag]`) and suggested people.
 
@@ -111,7 +111,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - The app follows the operating system's reduced-motion setting. There is no in-app switch.
 
 **Display and PWA**
-- The sidebar is one full-height surface. Its logo becomes the open and close toggle on hover. Collapsed, it shows icons only, and each label appears beside its icon on hover. The state is kept in a cookie, so the page never flashes the wrong width.
+- The sidebar is one full-height surface. Expanded, a close button sits at the top right. Collapsed, the logo becomes the open button on hover, and each icon's label appears beside it. The state is kept in a cookie, so the page never flashes the wrong width.
 - Installable as a PWA with an offline fallback page. The service worker only registers in production.
 
 **Realtime**

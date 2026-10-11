@@ -1,12 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { motion } from "motion/react"
-import { ImageIcon, ListChecks, MoreHorizontal, Plus, Trash2, X } from "lucide-react"
+import { ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   MAX_ALT,
   MAX_IMAGE_BYTES,
@@ -57,6 +56,40 @@ const DURATION_LABELS: Record<number, string> = {
 }
 
 const POLL_DEFAULT_MINUTES = 1440
+
+// A toolbar icon. Hover shows a faint tint, like the close control on the America.gov menu.
+function ToolButton({
+  label,
+  hint,
+  onClick,
+  disabled = false,
+  pressed = false,
+  children,
+}: {
+  label: string
+  hint: string
+  onClick: () => void
+  disabled?: boolean
+  pressed?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={pressed || undefined}
+      title={disabled ? hint : label}
+      className={cn(
+        "grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent",
+        pressed && "bg-foreground/5"
+      )}
+    >
+      {children}
+    </button>
+  )
+}
 
 function CountRing({ progress, over }: { progress: number; over: boolean }) {
   const radius = 9
@@ -457,27 +490,23 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
         ) : null}
 
         <div className="flex items-center gap-1 pt-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label="Add to post"
-              className={cn(
-                "grid size-9 place-items-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-foreground/5 data-popup-open:bg-foreground/5",
-                poll && "text-foreground"
-              )}
-            >
-              <MoreHorizontal className="size-[20px]" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-44">
-              <DropdownMenuItem disabled={poll} onClick={() => fileRef.current?.click()}>
-                <ImageIcon />
-                Photos or video
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={media.length > 0} onClick={() => setPoll((value) => !value)}>
-                <ListChecks />
-                {poll ? "Remove poll" : "Poll"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ToolButton
+            label="Add photos or video"
+            hint="Remove the poll to add photos or video"
+            disabled={poll}
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+          </ToolButton>
+          <ToolButton
+            label={poll ? "Remove poll" : "Add a poll"}
+            hint="Remove the photos or video to add a poll"
+            disabled={media.length > 0}
+            pressed={poll}
+            onClick={() => setPoll((value) => !value)}
+          >
+            <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+          </ToolButton>
           <input
             ref={fileRef}
             type="file"

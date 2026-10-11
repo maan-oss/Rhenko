@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { motion } from "motion/react"
-import { PanelLeftClose, PanelLeftOpen, PenLine } from "lucide-react"
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
 import { SidebarSearch } from "@/components/app/sidebar-search"
@@ -28,8 +27,7 @@ type Props = {
   initialCollapsed: boolean
 }
 
-// One full-height surface. No card, no gaps, no curve. The main column sits on top of its
-// edge, so the sidebar reads as the layer behind it.
+// One full-height surface. No card, no gaps, no curve. The main column sits beside its edge.
 export function SidebarPanel({ viewer, recent, notifications, messages, initialCollapsed }: Props) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const path = usePathname()
@@ -59,27 +57,44 @@ export function SidebarPanel({ viewer, recent, notifications, messages, initialC
           <SidebarSearch recent={recent} collapsed={collapsed} onExpand={() => save(false)} />
           <SidebarNav path={path} notifications={notifications} messages={messages} collapsed={collapsed} />
         </div>
-        <div className="flex flex-col gap-3">
-          <ComposeLink collapsed={collapsed} />
-          <AccountLink viewer={viewer} collapsed={collapsed} />
-        </div>
+        <AccountLink viewer={viewer} collapsed={collapsed} />
       </div>
     </aside>
   )
 }
 
-// The logo becomes the toggle on hover or focus. Clicking it opens or closes the rail.
+// Expanded: the logo sits left, and a close button is always visible on the right.
+// Collapsed: the logo is the open button. On hover it turns into the open icon.
 function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const Toggle = collapsed ? PanelLeftOpen : PanelLeftClose
-  const label = collapsed ? "Open sidebar" : "Close sidebar"
+  if (!collapsed) {
+    return (
+      <div className="flex h-11 items-center justify-between">
+        <span className="grid size-11 place-items-center">
+          <RhenkoSymbol className="size-7" />
+        </span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Close sidebar"
+          title="Close sidebar"
+          className={cn(
+            "grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            EASE
+          )}
+        >
+          <PanelLeftClose className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      </div>
+    )
+  }
   return (
     <div className="flex h-11 items-center">
       <button
         type="button"
         onClick={onToggle}
-        aria-label={label}
-        aria-expanded={!collapsed}
-        title={label}
+        aria-label="Open sidebar"
+        aria-expanded={false}
+        title="Open sidebar"
         className="group/brand relative grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <RhenkoSymbol
@@ -88,7 +103,7 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
             EASE
           )}
         />
-        <Toggle
+        <PanelLeftOpen
           className={cn(
             "absolute size-[22px] scale-75 text-foreground opacity-0 transition-[opacity,scale] duration-300 group-hover/brand:scale-100 group-hover/brand:opacity-100 group-focus-visible/brand:scale-100 group-focus-visible/brand:opacity-100",
             EASE
@@ -129,15 +144,6 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
   const { href, label, Icon, badge = 0, filled } = item
   return (
     <li className="relative">
-      {/* One ink bar slides between sections. It sits on the sidebar's own edge. */}
-      {active ? (
-        <motion.span
-          layoutId="sidebar-bar"
-          aria-hidden="true"
-          className="absolute top-1/2 -left-3.5 h-6 w-1 -translate-y-1/2 rounded-r-full bg-foreground"
-          transition={{ type: "spring", stiffness: 480, damping: 40 }}
-        />
-      ) : null}
       <Link
         href={href}
         aria-current={active ? "page" : undefined}
@@ -196,29 +202,6 @@ function CountPill({ count }: { count: number }) {
     <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold tabular-nums text-background">
       {count > 99 ? "99+" : count}
     </span>
-  )
-}
-
-function ComposeLink({ collapsed }: { collapsed: boolean }) {
-  return (
-    <Link
-      href="/#compose"
-      className={cn(
-        "flex h-11 items-center justify-center rounded-full bg-foreground text-[16px] font-semibold text-background transition-[opacity,scale] duration-200 hover:opacity-85 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        EASE
-      )}
-    >
-      <PenLine className="size-[18px] shrink-0" strokeWidth={2} aria-hidden="true" />
-      <span
-        className={cn(
-          "overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300",
-          EASE,
-          collapsed ? "max-w-0 opacity-0" : "max-w-24 opacity-100"
-        )}
-      >
-        <span className="pl-2">Post</span>
-      </span>
-    </Link>
   )
 }
 
