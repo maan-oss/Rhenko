@@ -1,50 +1,32 @@
-import { Suspense } from "react"
-import { logout } from "@/actions/auth"
-import { requireViewer } from "@/lib/auth"
+import Link from "next/link"
+import { ChevronRight } from "lucide-react"
 import { PageHeader } from "@/components/app/page-header"
-import { ProfileEditDialog } from "@/components/app/profile-edit"
-import { ThemeChoice } from "@/components/app/theme-choice"
-import { Button } from "@/components/ui/button"
+
+const SECTIONS = [
+  { href: "/settings/account", title: "Account", hint: "Handle, date of birth, your data, deactivating or deleting" },
+  { href: "/settings/security", title: "Security", hint: "Password, two-factor sign-in, signed-in devices" },
+  { href: "/settings/privacy", title: "Privacy and safety", hint: "Protected posts, blocked and muted people, muted words" },
+  { href: "/settings/notifications", title: "Notifications", hint: "Choose which activity reaches you" },
+  { href: "/settings/display", title: "Display", hint: "Theme, text size and keyboard shortcuts" },
+]
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={null}>
-      <SettingsBody />
-    </Suspense>
-  )
-}
-
-async function SettingsBody() {
-  const viewer = await requireViewer()
-  return (
     <>
       <PageHeader title="Settings" />
-      <section className="flex flex-col gap-3 border-b border-border px-4 py-5">
-        <h2 className="text-lg font-semibold">Appearance</h2>
-        <p className="text-sm text-muted-foreground">Pick a theme. System follows your device.</p>
-        <ThemeChoice />
-      </section>
-      <section className="flex flex-col gap-3 border-b border-border px-4 py-5">
-        <h2 className="text-lg font-semibold">Profile</h2>
-        <p className="text-[15px]">
-          <span className="font-semibold">{viewer.name}</span>{" "}
-          <span className="text-muted-foreground">@{viewer.handle}</span>
-        </p>
-        <div>
-          <ProfileEditDialog
-            defaults={{ name: viewer.name, bio: viewer.bio, location: viewer.location, website: viewer.website }}
-          />
-        </div>
-      </section>
-      <section className="flex flex-col gap-3 px-4 py-5">
-        <h2 className="text-lg font-semibold">Session</h2>
-        <p className="text-sm text-muted-foreground">Log out on this device. Your posts stay up.</p>
-        <form action={logout}>
-          <Button type="submit" variant="outline" className="h-9 rounded-lg px-4">
-            Log out
-          </Button>
-        </form>
-      </section>
+      <ul className="list-none">
+        {SECTIONS.map((section) => (
+          <li key={section.href} className="border-b border-border">
+            <Link href={section.href} className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/50">
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[17px] font-semibold">{section.title}</span>
+                <span className="text-sm text-muted-foreground">{section.hint}</span>
+              </span>
+              <ChevronRight className="size-5 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </>
   )
 }

@@ -53,6 +53,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         placeholder="your_handle"
         hint={isLogin ? undefined : "3 to 15 letters, numbers or underscores."}
       />
+      {isLogin ? null : (
+        <Field label="Date of birth" name="birthday" type="date" hint="You must be at least 13. Only you can see this." />
+      )}
       <Field
         label="Password"
         name="password"

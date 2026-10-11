@@ -4,6 +4,7 @@ import { PenLine, LogOut } from "lucide-react"
 import { logout } from "@/actions/auth"
 import { getViewer } from "@/lib/auth"
 import { unreadMessageCount, unreadNotificationCount } from "@/lib/data"
+import { ownPending } from "@/lib/data"
 import { Avatar } from "@/components/app/avatar"
 import { MobileTabBar, NavRail } from "@/components/app/nav"
 import { RhenkoSymbol } from "@/components/brand/symbol"
@@ -14,6 +15,7 @@ export async function Sidebar() {
   if (!viewer) redirect("/login")
   const notifications = unreadNotificationCount(viewer.id)
   const messages = unreadMessageCount(viewer.id)
+  const drafts = ownPending(viewer.id, "draft").length
   return (
     <aside className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col justify-between py-4 pr-4 lg:flex">
       <div className="flex flex-col gap-4">
@@ -21,7 +23,7 @@ export async function Sidebar() {
           <RhenkoSymbol className="size-7" />
           <span className="text-xl font-semibold tracking-tight">Rhenko</span>
         </Link>
-        <NavRail handle={viewer.handle} notifications={notifications} messages={messages} />
+        <NavRail handle={viewer.handle} notifications={notifications} messages={messages} drafts={drafts} />
         <Button render={<Link href="/#compose" />} className="h-12 w-full rounded-full text-[16px] font-semibold">
           <PenLine className="size-4" />
           Post
@@ -53,6 +55,7 @@ export async function MobileNav() {
       handle={viewer.handle}
       notifications={unreadNotificationCount(viewer.id)}
       messages={unreadMessageCount(viewer.id)}
+      drafts={0}
     />
   )
 }

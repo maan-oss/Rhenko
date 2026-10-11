@@ -1,12 +1,12 @@
 "use client"
 
 import { useEffect } from "react"
-import { markThreadRead } from "@/actions/messages"
+import { markConversationRead } from "@/actions/messages"
 
-// Marks the open conversation as read once it is on screen.
-export function ThreadMarker({ handle }: { handle: string }) {
+// Opening a conversation marks it read.
+export function ThreadMarker({ conversationId }: { conversationId: string }) {
   useEffect(() => {
-    void markThreadRead(handle)
-  }, [handle])
+    void markConversationRead(conversationId)
+  }, [conversationId])
   return null
 }

@@ -1,9 +1,9 @@
 import Link from "next/link"
-import { Search } from "lucide-react"
 import { getViewer } from "@/lib/auth"
 import { trendingTags, whoToFollow } from "@/lib/data"
 import { Avatar } from "@/components/app/avatar"
 import { FollowButton } from "@/components/app/follow-button"
+import { SearchField } from "@/components/app/search-field"
 import { formatCount } from "@/lib/format"
 
 export async function RightRail() {
@@ -12,34 +12,31 @@ export async function RightRail() {
   const suggestions = viewer ? whoToFollow(viewer.id) : []
   return (
     <aside className="sticky top-0 hidden h-dvh w-[340px] shrink-0 flex-col gap-5 overflow-y-auto py-4 pl-6 xl:flex">
-      <form action="/explore" role="search" className="relative">
-        <label htmlFor="rail-search" className="sr-only">Search Rhenko</label>
-        <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          id="rail-search"
-          name="q"
-          type="search"
-          placeholder="Search Rhenko"
-          className="h-12 w-full rounded-full border border-transparent bg-muted pr-4 pl-11 text-[15px] outline-none transition-colors placeholder:text-muted-foreground focus:border-dusk focus:bg-background"
-        />
-      </form>
+      <SearchField defaultQuery="" />
 
       <section className="overflow-hidden rounded-2xl bg-muted/50">
-        <h2 className="px-4 pt-3.5 pb-1 text-[19px] font-bold tracking-tight">Trending</h2>
+        <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
+          <h2 className="text-[19px] font-bold tracking-tight">Trending</h2>
+        </div>
         {tags.length === 0 ? (
           <p className="px-4 pt-1 pb-4 text-sm text-muted-foreground">Hashtags from this week show up here.</p>
         ) : (
           <ul className="pb-2">
             {tags.map((item) => (
               <li key={item.tag}>
-                <Link href={`/explore?q=${encodeURIComponent(`#${item.tag}`)}`} className="block px-4 py-2.5 transition-colors hover:bg-muted">
+                <Link href={`/topics/${item.tag}`} className="block px-4 py-2.5 transition-colors hover:bg-muted">
                   <p className="text-[15px] font-semibold">#{item.tag}</p>
-                  <p className="text-[13px] text-muted-foreground">{formatCount(item.count)} {item.count === 1 ? "post" : "posts"} this week</p>
+                  <p className="text-[13px] text-muted-foreground">
+                    {formatCount(item.count)} {item.count === 1 ? "post" : "posts"} this week
+                  </p>
                 </Link>
               </li>
             ))}
           </ul>
         )}
+        <Link href="/explore" className="block px-4 py-3 text-sm text-dusk transition-colors hover:bg-muted">
+          Show more
+        </Link>
       </section>
 
       {suggestions.length > 0 ? (
@@ -55,7 +52,7 @@ export async function RightRail() {
                     <span className="block truncate text-sm text-muted-foreground">@{user.handle}</span>
                   </span>
                 </Link>
-                <FollowButton handle={user.handle} following={user.following} />
+                <FollowButton handle={user.handle} state={user.following ? "following" : "none"} />
               </li>
             ))}
           </ul>

@@ -8,7 +8,6 @@ export const MAX_WEBSITE = 100
 export const MAX_DM = 1000
 export const MIN_PASSWORD = 8
 export const MAX_PASSWORD = 200
-export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 
 export const RESERVED_HANDLES = new Set([
   "login",
@@ -66,10 +65,10 @@ export function validateWebsite(url: string): string | null {
   return null
 }
 
-export function validatePost(body: string, hasMedia: boolean): string | null {
+export function validatePost(body: string, mediaCount: number, hasPoll: boolean): string | null {
   const length = countChars(body)
   if (length > MAX_POST) return `Posts can have up to ${MAX_POST} characters.`
-  if (length === 0 && !hasMedia) return "Write something or add an image."
+  if (length === 0 && mediaCount === 0 && !hasPoll) return "Write something, or add media or a poll."
   return null
 }
 
@@ -91,4 +90,82 @@ export function extractHashtags(body: string): string[] {
     found.add(match[1].toLowerCase())
   }
   return [...found]
+}
+
+// Media, polls, scheduling and the other post features.
+export const MAX_IMAGES = 4
+export const MAX_VIDEOS = 1
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+export const MAX_VIDEO_BYTES = 25 * 1024 * 1024
+export const MAX_ALT = 1000
+export const POLL_MIN_OPTIONS = 2
+export const POLL_MAX_OPTIONS = 4
+export const MAX_POLL_OPTION = 25
+// Poll lengths in minutes: 5 minutes, 30 minutes, 1, 6, 24, 72 hours, 7 days.
+export const POLL_DURATIONS = [5, 30, 60, 360, 1440, 4320, 10080] as const
+export const EDIT_WINDOW_MS = 30 * 60 * 1000
+export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000
+export const SCHEDULE_MAX_AHEAD_MS = 75 * 24 * 60 * 60 * 1000
+
+export const REPLY_SETTINGS = ["everyone", "following", "mentioned"] as const
+export type ReplySetting = (typeof REPLY_SETTINGS)[number]
+
+export const REPLY_SETTING_LABELS: Record<ReplySetting, string> = {
+  everyone: "Everyone",
+  following: "Accounts you follow",
+  mentioned: "Only accounts you mention",
+}
+
+export const REPORT_REASONS = ["Spam", "Abusive or harmful", "Misleading", "Something else"] as const
+
+export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as const
+
+export const MAX_LIST_NAME = 25
+export const MAX_LIST_DESCRIPTION = 100
+export const MAX_COMMUNITY_NAME = 50
+export const MAX_COMMUNITY_DESCRIPTION = 160
+export const MAX_MUTED_WORD = 50
+export const MAX_GROUP_TITLE = 50
+export const MAX_GROUP_MEMBERS = 50
+export const MAX_FOLDER_NAME = 25
+export const MAX_HIGHLIGHTS = 50
+
+export function validatePoll(options: string[], minutes: number): string | null {
+  if (options.length < POLL_MIN_OPTIONS || options.length > POLL_MAX_OPTIONS) {
+    return `Polls need ${POLL_MIN_OPTIONS} to ${POLL_MAX_OPTIONS} choices.`
+  }
+  if (options.some((option) => countChars(option) > MAX_POLL_OPTION)) {
+    return `Poll choices can have up to ${MAX_POLL_OPTION} characters.`
+  }
+  if (!(POLL_DURATIONS as readonly number[]).includes(minutes)) return "Pick a poll length."
+  return null
+}
+
+export function validateSchedule(at: number, now: number): string | null {
+  if (!Number.isFinite(at)) return "Pick a valid time."
+  if (at < now + SCHEDULE_MIN_LEAD_MS) return "Schedule at least 5 minutes ahead."
+  if (at > now + SCHEDULE_MAX_AHEAD_MS) return "Schedule up to 75 days ahead."
+  return null
+}
+
+export function normalizeTag(tag: string): string {
+  return tag.replace(/^#/, "").toLowerCase()
+}
+
+export function normalizeWord(word: string): string {
+  return word.trim().replace(/^#/, "").toLowerCase()
+}
+
+// Age is checked against the date given, so a 13th birthday today counts.
+export function ageFrom(birthday: string, now = new Date()): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthday)
+  if (!match) return null
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+  let age = now.getUTCFullYear() - year
+  const beforeBirthday =
+    now.getUTCMonth() + 1 < month || (now.getUTCMonth() + 1 === month && now.getUTCDate() < day)
+  if (beforeBirthday) age -= 1
+  return age
 }

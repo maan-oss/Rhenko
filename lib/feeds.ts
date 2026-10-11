@@ -1,0 +1,96 @@
+import { get } from "@/lib/db"
+import {
+  bookmarkFeed,
+  communityFeed,
+  hasSearchContent,
+  homeFeed,
+  listFeed,
+  parseSearch,
+  profileFeed,
+  searchPostFeed,
+  topicFeed,
+  type FeedItem,
+  type Page,
+  type ProfileTab,
+} from "@/lib/data"
+import { publishDue, isFollowing } from "@/lib/post-writes"
+import { normalizeTag } from "@/lib/rules"
+
+// A feed is described by plain data so the same spec can render on the server
+// and be fetched by the client for infinite scroll.
+export type FeedSpec =
+  | { kind: "home"; mode: "for-you" | "following" }
+  | { kind: "profile"; tab: ProfileTab; handle: string }
+  | { kind: "bookmarks"; folder?: string }
+  | { kind: "list"; listId: string }
+  | { kind: "community"; communityId: string }
+  | { kind: "topic"; tag: string }
+  | { kind: "search"; q: string; sort: "top" | "latest" }
+
+const PROFILE_TABS: ProfileTab[] = ["posts", "replies", "media", "likes", "highlights"]
+
+const isString = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 300
+
+export function parseSpec(input: unknown): FeedSpec | null {
+  if (!input || typeof input !== "object") return null
+  const spec = input as Record<string, unknown>
+  switch (spec.kind) {
+    case "home":
+      return spec.mode === "following" || spec.mode === "for-you" ? { kind: "home", mode: spec.mode } : null
+    case "profile":
+      if (!isString(spec.handle) || !PROFILE_TABS.includes(spec.tab as ProfileTab)) return null
+      return { kind: "profile", tab: spec.tab as ProfileTab, handle: spec.handle }
+    case "bookmarks":
+      if (spec.folder === undefined) return { kind: "bookmarks" }
+      return isString(spec.folder) ? { kind: "bookmarks", folder: spec.folder } : null
+    case "list":
+      return isString(spec.listId) ? { kind: "list", listId: spec.listId } : null
+    case "community":
+      return isString(spec.communityId) ? { kind: "community", communityId: spec.communityId } : null
+    case "topic":
+      return isString(spec.tag) ? { kind: "topic", tag: normalizeTag(spec.tag) } : null
+    case "search":
+      if (typeof spec.q !== "string" || spec.q.length > 300) return null
+      return { kind: "search", q: spec.q, sort: spec.sort === "latest" ? "latest" : "top" }
+    default:
+      return null
+  }
+}
+
+export type FeedResult = Page<FeedItem> & { locked?: boolean }
+
+const EMPTY: Page<FeedItem> = { items: [], next: null }
+
+export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): FeedResult {
+  publishDue()
+  switch (spec.kind) {
+    case "home":
+      return homeFeed(spec.mode, viewerId, cursor)
+    case "profile": {
+      const user = get<{ id: string; protected: number; deactivated_at: number | null }>(
+        "SELECT id, protected, deactivated_at FROM users WHERE handle = ? COLLATE NOCASE",
+        spec.handle
+      )
+      if (!user || user.deactivated_at !== null) return EMPTY
+      if (user.id !== viewerId) {
+        const blocked = get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", viewerId, user.id, user.id, viewerId)
+        if (blocked) return EMPTY
+        if (user.protected === 1 && !isFollowing(viewerId, user.id)) return { ...EMPTY, locked: true }
+      }
+      return profileFeed(spec.tab, user.id, viewerId, cursor)
+    }
+    case "bookmarks":
+      return bookmarkFeed(viewerId, spec.folder, cursor)
+    case "list":
+      return listFeed(spec.listId, viewerId, cursor)
+    case "community":
+      return communityFeed(spec.communityId, viewerId, cursor)
+    case "topic":
+      return topicFeed(spec.tag, viewerId, cursor)
+    case "search": {
+      const query = parseSearch(spec.q)
+      if (!hasSearchContent(query)) return EMPTY
+      return searchPostFeed(query, spec.sort, viewerId, cursor)
+    }
+  }
+}

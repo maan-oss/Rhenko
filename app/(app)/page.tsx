@@ -1,14 +1,14 @@
 import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
-import { homeFeed } from "@/lib/data"
+import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
 import { PageHeader } from "@/components/app/page-header"
 import { TabLinks } from "@/components/app/tabs"
 import { Composer } from "@/components/app/composer"
-import { FeedList, MoreLink } from "@/components/app/feed-list"
+import { FeedList } from "@/components/app/feed-list"
 import { Skeleton } from "@/components/ui/skeleton"
 
-type SearchParams = Promise<{ tab?: string | string[]; before?: string | string[] }>
+type SearchParams = Promise<{ tab?: string | string[] }>
 
 export default function HomePage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -22,7 +22,8 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const params = await searchParams
   const mode = firstParam(params.tab) === "following" ? "following" : "for-you"
-  const page = homeFeed(mode, viewer.id, firstParam(params.before))
+  const spec: FeedSpec = { kind: "home", mode }
+  const page = feedFor(spec, viewer.id)
   const following = mode === "following"
   return (
     <>
@@ -34,9 +35,12 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
           ]}
         />
       </PageHeader>
-      <Composer viewer={viewer} placeholder="Write a post" id="compose" />
+      <Composer viewer={viewer} placeholder="What's happening?" id="compose" />
       <FeedList
+        key={mode}
         items={page.items}
+        next={page.next}
+        spec={spec}
         viewer={viewer}
         emptyTitle={following ? "Nothing from people you follow yet" : "No posts yet"}
         emptyBody={
@@ -45,7 +49,6 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
             : "Write the first post, or follow people to fill this page."
         }
       />
-      <MoreLink href={page.next ? `/?tab=${mode}&before=${encodeURIComponent(page.next)}` : null} />
     </>
   )
 }

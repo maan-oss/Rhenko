@@ -1,82 +1,106 @@
-import { Suspense, type ReactNode } from "react"
+import { Suspense } from "react"
 import Link from "next/link"
-import { AtSign, Heart, MessageCircle, Quote, Repeat2, UserPlus } from "lucide-react"
-import { requireViewer } from "@/lib/auth"
-import { notificationsFor, type NotificationView } from "@/lib/data"
-import { timeAgo } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { AtSign, Heart, ListChecks, MessageCircle, Quote, Repeat2, UserPlus, UserRound } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import { requireViewer, type Viewer } from "@/lib/auth"
+import { followRequestsFor, notificationsFor, type NotificationKind, type NotificationView } from "@/lib/data"
+import { firstParam } from "@/lib/params"
+import { RelativeTime } from "@/components/app/time-text"
 import { Avatar } from "@/components/app/avatar"
+import { FollowRequestRow } from "@/components/app/follow-request-row"
 import { NotificationsMarker } from "@/components/app/notifications-marker"
 import { PageHeader } from "@/components/app/page-header"
+import { TabLinks } from "@/components/app/tabs"
+import { cn } from "@/lib/utils"
 
-export default function NotificationsPage() {
+type SearchParams = Promise<{ tab?: string | string[] }>
+
+const COPY: Record<NotificationKind, { text: string; Icon: LucideIcon }> = {
+  like: { text: "liked your post", Icon: Heart },
+  repost: { text: "reposted your post", Icon: Repeat2 },
+  reply: { text: "replied to you", Icon: MessageCircle },
+  quote: { text: "quoted your post", Icon: Quote },
+  follow: { text: "followed you", Icon: UserPlus },
+  mention: { text: "mentioned you", Icon: AtSign },
+  follow_request: { text: "asked to follow you", Icon: UserRound },
+  poll: { text: "A poll you voted in has ended", Icon: ListChecks },
+}
+
+export default function NotificationsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <Suspense fallback={null}>
-      <NotificationsBody />
+      <NotificationsBody searchParams={searchParams} />
     </Suspense>
   )
 }
 
-const LABELS: Record<NotificationView["kind"], { text: string; icon: ReactNode }> = {
-  like: { text: "liked your post", icon: <Heart className="size-4 text-dusk" /> },
-  repost: { text: "reposted your post", icon: <Repeat2 className="size-4 text-dusk" /> },
-  reply: { text: "replied to you", icon: <MessageCircle className="size-4 text-dusk" /> },
-  quote: { text: "quoted your post", icon: <Quote className="size-4 text-dusk" /> },
-  follow: { text: "followed you", icon: <UserPlus className="size-4 text-dusk" /> },
-  mention: { text: "mentioned you", icon: <AtSign className="size-4 text-dusk" /> },
-}
-
-async function NotificationsBody() {
+async function NotificationsBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  const items = notificationsFor(viewer.id)
+  const tab = firstParam((await searchParams).tab) === "mentions" ? "mentions" : "all"
+  const notes = notificationsFor(viewer.id, tab)
+  const requests = tab === "all" ? followRequestsFor(viewer.id) : []
+
   return (
     <>
       <PageHeader title="Notifications" />
+      <TabLinks
+        items={[
+          { href: "/notifications", label: "All", active: tab === "all" },
+          { href: "/notifications?tab=mentions", label: "Mentions", active: tab === "mentions" },
+        ]}
+      />
       <NotificationsMarker />
-      {items.length === 0 ? (
+      {requests.length > 0 ? (
+        <section aria-label="Follow requests">
+          <h2 className="px-4 pt-4 pb-2 text-sm font-semibold text-muted-foreground">Follow requests</h2>
+          <ul className="list-none">
+            {requests.map((request) => (
+              <FollowRequestRow key={request.id} user={request} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {notes.length === 0 ? (
         <div className="flex flex-col gap-2 px-4 py-16">
-          <p className="text-lg font-semibold">Nothing yet</p>
-          <p className="max-w-sm text-muted-foreground">Likes, reposts, replies and new followers show up here.</p>
+          <p className="text-lg font-semibold">{tab === "mentions" ? "No mentions yet" : "Nothing here yet"}</p>
+          <p className="max-w-sm text-muted-foreground">Likes, replies, reposts and follows from other people show up here.</p>
         </div>
       ) : (
-        <ul>
-          {items.map((item) => {
-            const label = LABELS[item.kind]
-            const ownPost = item.kind === "like" || item.kind === "repost"
-            const postHandle = ownPost ? viewer.handle : item.actor.handle
-            return (
-              <li key={item.id} className={cn("flex gap-3 border-b border-border px-4 py-3", !item.read && "bg-muted/60")}>
-                <span className={cn("mt-2 w-0.5 shrink-0 self-stretch", item.read ? "bg-transparent" : "bg-dusk")} aria-hidden="true" />
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <div className="flex items-start gap-3">
-                    <Link href={`/${item.actor.handle}`} className="shrink-0">
-                      <Avatar user={item.actor} size={36} />
-                    </Link>
-                    <div className="min-w-0 flex-1">
-                      <p className="flex flex-wrap items-center gap-x-1.5 text-[15px]">
-                        <span className="shrink-0">{label.icon}</span>
-                        <Link href={`/${item.actor.handle}`} className="font-semibold hover:underline">
-                          {item.actor.name}
-                        </Link>
-                        <span>{label.text}</span>
-                        <span className="text-sm text-muted-foreground">{timeAgo(item.createdAt)}</span>
-                      </p>
-                      {item.post ? (
-                        <Link
-                          href={`/${postHandle}/status/${item.post.id}`}
-                          className="mt-1 line-clamp-2 block text-[15px] text-muted-foreground hover:text-foreground"
-                        >
-                          {item.post.body || "Image post"}
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            )
-          })}
+        <ul className="list-none">
+          {notes.map((note) => (
+            <NoteRow key={note.id} note={note} viewer={viewer} />
+          ))}
         </ul>
       )}
     </>
+  )
+}
+
+function NoteRow({ note, viewer }: { note: NotificationView; viewer: Viewer }) {
+  const { text, Icon } = COPY[note.kind]
+  // Likes, reposts and poll results point at your own post. Replies, quotes and mentions point at theirs.
+  const ownPost = note.kind === "like" || note.kind === "repost" || note.kind === "poll"
+  const href = note.post && note.kind !== "follow" && note.kind !== "follow_request" ? `/${ownPost ? viewer.handle : note.actor.handle}/status/${note.post.id}` : `/${note.actor.handle}`
+  const showActor = note.kind !== "poll"
+  return (
+    <li className={cn("border-b border-border", !note.read && "bg-dusk/5")}>
+      <Link href={href} className="flex gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+        <Icon className="mt-1 size-5 shrink-0 text-dusk" aria-hidden="true" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {showActor ? (
+            <span className="flex items-center gap-2">
+              <Avatar user={note.actor} size={32} />
+            </span>
+          ) : null}
+          <p className="text-[15px]">
+            {showActor ? <span className="font-semibold">{note.actor.name}</span> : null}
+            {showActor ? " " : null}
+            <span className="text-muted-foreground">{text}</span>
+            <span className="ml-1 text-sm text-muted-foreground">· <RelativeTime at={note.createdAt} /></span>
+          </p>
+          {note.post?.body ? <p className="line-clamp-2 text-[15px] text-muted-foreground">{note.post.body}</p> : null}
+        </div>
+      </Link>
+    </li>
   )
 }
