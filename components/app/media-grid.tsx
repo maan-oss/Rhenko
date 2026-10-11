@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, type KeyboardEvent } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
@@ -53,11 +53,17 @@ function Tile({
   )
 }
 
-// Two or more items scroll sideways, one per view, and snap to each. Swipe on a phone, scroll or use the arrows elsewhere.
+const ARROW =
+  "absolute top-1/2 z-20 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border transition-[opacity,translate] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:hidden"
+
+// Two or more items sit side by side, one per view. Hover the post to bring up the arrows,
+// use the arrow keys once the carousel has focus, swipe on a phone, or pick a dot.
 function Carousel({ media, onOpen }: { media: MediaItem[]; onOpen: (item: MediaItem) => void }) {
   const track = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(0)
   const count = media.length
+  const canPrev = index > 0
+  const canNext = index < count - 1
 
   function onScroll() {
     const el = track.current
@@ -71,15 +77,25 @@ function Carousel({ media, onOpen }: { media: MediaItem[]; onOpen: (item: MediaI
     el.scrollTo({ left: Math.min(Math.max(to, 0), count - 1) * el.clientWidth, behavior: "smooth" })
   }
 
-  const arrow = "absolute top-1/2 z-20 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-background/90 text-foreground ring-1 ring-border transition-opacity duration-200 disabled:opacity-0"
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowLeft" && canPrev) {
+      event.preventDefault()
+      go(index - 1)
+    } else if (event.key === "ArrowRight" && canNext) {
+      event.preventDefault()
+      go(index + 1)
+    }
+  }
 
   return (
-    <div className="group relative">
+    <div className="relative">
       <div
         role="region"
         aria-roledescription="carousel"
         aria-label={`Media, ${count} items`}
-        className="relative overflow-hidden rounded-2xl border border-border bg-muted"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        className="group/media relative overflow-hidden rounded-2xl border border-border bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div
           ref={track}
@@ -92,29 +108,44 @@ function Carousel({ media, onOpen }: { media: MediaItem[]; onOpen: (item: MediaI
             </div>
           ))}
         </div>
-        <span aria-hidden="true" className="pointer-events-none absolute top-2 right-2 z-20 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
+
+        <span aria-hidden="true" className="pointer-events-none absolute top-2.5 right-2.5 z-20 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
           {index + 1} / {count}
         </span>
+
         <button
           type="button"
           onClick={() => go(index - 1)}
-          disabled={index === 0}
-          aria-label="Previous media"
-          className={cn(arrow, "left-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:hidden")}
+          disabled={!canPrev}
+          aria-label="Previous photo"
+          className={cn(
+            ARROW,
+            "left-3",
+            canPrev
+              ? "-translate-x-1 opacity-0 group-hover/media:translate-x-0 group-hover/media:opacity-100 group-focus-within/media:translate-x-0 group-focus-within/media:opacity-100 focus-visible:opacity-100"
+              : "pointer-events-none opacity-0"
+          )}
         >
-          <ChevronLeft className="size-4" />
+          <ChevronLeft className="size-4" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => go(index + 1)}
-          disabled={index === count - 1}
-          aria-label="Next media"
-          className={cn(arrow, "right-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:hidden")}
+          disabled={!canNext}
+          aria-label="Next photo"
+          className={cn(
+            ARROW,
+            "right-3",
+            canNext
+              ? "translate-x-1 opacity-0 group-hover/media:translate-x-0 group-hover/media:opacity-100 group-focus-within/media:translate-x-0 group-focus-within/media:opacity-100 focus-visible:opacity-100"
+              : "pointer-events-none opacity-0"
+          )}
         >
-          <ChevronRight className="size-4" />
+          <ChevronRight className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <div className="mt-2 flex justify-center gap-1.5">
+
+      <div className="mt-1 flex justify-center">
         {media.map((item, i) => (
           <button
             key={item.id}
@@ -122,11 +153,15 @@ function Carousel({ media, onOpen }: { media: MediaItem[]; onOpen: (item: MediaI
             onClick={() => go(i)}
             aria-label={`Show media ${i + 1} of ${count}`}
             aria-current={i === index ? "true" : undefined}
-            className={cn(
-              "h-1.5 rounded-full transition-[width,background-color] duration-200",
-              i === index ? "w-4 bg-foreground" : "w-1.5 bg-foreground/30 hover:bg-foreground/60"
-            )}
-          />
+            className="group grid place-items-center p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+          >
+            <span
+              className={cn(
+                "block h-1.5 rounded-full transition-[width,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                i === index ? "w-5 bg-foreground" : "w-1.5 bg-foreground/30 group-hover:bg-foreground/60"
+              )}
+            />
+          </button>
         ))}
       </div>
     </div>
