@@ -12,7 +12,7 @@ import { ViewBeacon } from "@/components/app/view-beacon"
 import { NumberTicker } from "@/components/ui/number-ticker"
 import type { MiniUser, PostCore, PostView } from "@/lib/data"
 import type { Viewer } from "@/lib/auth"
-import { fullTimestamp } from "@/lib/format"
+import { fullTimestamp, pluralize } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 function QuotedPost({ post }: { post: PostCore }) {
@@ -45,12 +45,15 @@ export function PostCard({
   repostedBy,
   detail = false,
   showPinned = false,
+  draft = false,
 }: {
   post: PostView
   viewer: Viewer
   repostedBy?: MiniUser | null
   detail?: boolean
   showPinned?: boolean
+  // A draft or scheduled post, which has no public engagement yet.
+  draft?: boolean
 }) {
   const statusHref = `/${post.author.handle}/status/${post.id}`
   const isOwn = post.author.id === viewer.id
@@ -139,19 +142,19 @@ export function PostCard({
               <div className="flex flex-wrap gap-5">
                 <p>
                   <NumberTicker value={post.views} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">Views</span>
+                  <span className="text-muted-foreground">{pluralize(post.views, "View")}</span>
                 </p>
                 <p>
                   <NumberTicker value={post.reposts} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">Reposts</span>
+                  <span className="text-muted-foreground">{pluralize(post.reposts, "Repost", "Reposts")}</span>
                 </p>
                 <p>
                   <NumberTicker value={post.quotes} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">Quotes</span>
+                  <span className="text-muted-foreground">{pluralize(post.quotes, "Quote", "Quotes")}</span>
                 </p>
                 <p>
                   <NumberTicker value={post.likes} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">Likes</span>
+                  <span className="text-muted-foreground">{pluralize(post.likes, "Like", "Likes")}</span>
                 </p>
                 {isOwn ? (
                   <Link href={`${statusHref}/analytics`} className="relative z-10 font-semibold text-foreground underline underline-offset-4 hover:text-dusk">
@@ -162,6 +165,7 @@ export function PostCard({
             </div>
           ) : null}
           <PostActions
+            draft={draft}
             viewer={viewer}
             postId={post.id}
             body={post.body}

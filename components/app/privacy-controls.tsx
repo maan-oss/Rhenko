@@ -90,15 +90,15 @@ export function MutedWordsPanel({ words }: { words: string[] }) {
   )
   return (
     <div className="flex flex-col gap-4">
-      <form action={action} className="flex gap-2">
-        <Field label="Word, phrase or #hashtag">
-          <input name="word" required maxLength={MAX_MUTED_WORD} placeholder="Words you'd rather not see" className={FIELD_INPUT} />
-        </Field>
-        <div className="flex items-end">
-          <Button type="submit" className="h-11 rounded-lg px-4">
-            Mute
-          </Button>
+      <form action={action} className="flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <Field label="Word, phrase or #hashtag">
+            <input name="word" required maxLength={MAX_MUTED_WORD} placeholder="Words you'd rather not see" className={`${FIELD_INPUT} w-full`} />
+          </Field>
         </div>
+        <Button type="submit" className="h-11 shrink-0 rounded-lg px-4">
+          Mute
+        </Button>
       </form>
       <ErrorLine message={error} />
       {words.length === 0 ? (

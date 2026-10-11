@@ -35,7 +35,7 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
           <TabLinks
             label="Messages sections"
             items={[
-              { href: "/messages", label: "Messages", icon: <MessageCircle />, active: tab === "messages" },
+              { href: "/messages", label: "Chats", icon: <MessageCircle />, active: tab === "messages" },
               { href: "/messages?tab=requests", label: "Requests", icon: <UserRoundPlus />, active: tab === "requests", badge: requests },
             ]}
           />

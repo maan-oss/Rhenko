@@ -65,12 +65,14 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
         </div>
       ) : null}
 
-      <TabLinks
-        items={[
-          { href: `/lists/${list.id}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
-          { href: `/lists/${list.id}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
-        ]}
-      />
+      <div className="px-4 pt-3">
+        <TabLinks
+          items={[
+            { href: `/lists/${list.id}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
+            { href: `/lists/${list.id}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
+          ]}
+        />
+      </div>
 
       {tab === "posts" && page ? (
         <FeedList

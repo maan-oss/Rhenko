@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
 import { getProfileByHandle, peopleOf } from "@/lib/data"
+import { formatCount, pluralize } from "@/lib/format"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
 import { UserCheck, Users } from "lucide-react"
@@ -19,12 +20,19 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: "foll
   return (
     <>
       <PageHeader title={profile.name} backHref={base} />
-      <TabLinks
-        items={[
-          { href: `${base}/followers`, label: `${profile.followers} Followers`, icon: <Users />, active: kind === "followers" },
-          { href: `${base}/following`, label: `${profile.following} Following`, icon: <UserCheck />, active: kind === "following" },
-        ]}
-      />
+      <div className="px-4 pt-3">
+        <TabLinks
+          items={[
+            {
+              href: `${base}/followers`,
+              label: `${formatCount(profile.followers)} ${pluralize(profile.followers, "Follower")}`,
+              icon: <Users />,
+              active: kind === "followers",
+            },
+            { href: `${base}/following`, label: `${formatCount(profile.following)} Following`, icon: <UserCheck />, active: kind === "following" },
+          ]}
+        />
+      </div>
       {hidden ? (
         <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">This account is protected. Follow it to see who it follows.</p>
       ) : (

@@ -27,12 +27,14 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       <PageHeader title="Drafts" />
-      <TabLinks
-        items={[
-          { href: "/drafts", label: "Drafts", icon: <PenLine />, active: tab === "drafts" },
-          { href: "/drafts?tab=scheduled", label: "Scheduled", icon: <CalendarClock />, active: tab === "scheduled" },
-        ]}
-      />
+      <div className="px-4 pt-3">
+        <TabLinks
+          items={[
+            { href: "/drafts", label: "Drafts", icon: <PenLine />, active: tab === "drafts" },
+            { href: "/drafts?tab=scheduled", label: "Scheduled", icon: <CalendarClock />, active: tab === "scheduled" },
+          ]}
+        />
+      </div>
       {posts.length === 0 ? (
         <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
           <p className="text-lg font-semibold">{tab === "drafts" ? "No drafts" : "Nothing scheduled"}</p>
@@ -49,7 +51,7 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
                 Goes out {fullTimestamp(post.publishAt)}
               </p>
             ) : null}
-            <PostCard post={post} viewer={viewer} />
+            <PostCard post={post} viewer={viewer} draft />
             <PendingActions postId={post.id} mode={tab === "drafts" ? "draft" : "scheduled"} />
           </div>
         ))

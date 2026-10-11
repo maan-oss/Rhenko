@@ -33,6 +33,11 @@ export function formatCount(value: number): string {
   return new Intl.NumberFormat("en-US", { notation: value >= 10000 ? "compact" : "standard" }).format(value)
 }
 
+// The word for a count: "1 like", "2 likes". Pass the capitalised forms when the word starts a label.
+export function pluralize(count: number, singular: string, plural: string = `${singular}s`): string {
+  return count === 1 ? singular : plural
+}
+
 // How a call ended: missed or declined before anyone talked, or ended after it connected.
 export type CallOutcome = "missed" | "declined" | "ended"
 

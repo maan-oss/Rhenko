@@ -41,14 +41,16 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader title={q ? q : "Search"} backHref="/explore" />
       <SearchField defaultQuery={q} type={type} />
       {q ? (
-        <TabLinks
-          items={TYPES.map((t) => ({
-            href: `/search?q=${encodeURIComponent(q)}&f=${t.key}`,
-            label: t.label,
-            icon: t.icon,
-            active: t.key === type,
-          }))}
-        />
+        <div className="px-4 pt-3">
+          <TabLinks
+            items={TYPES.map((t) => ({
+              href: `/search?q=${encodeURIComponent(q)}&f=${t.key}`,
+              label: t.label,
+              icon: t.icon,
+              active: t.key === type,
+            }))}
+          />
+        </div>
       ) : null}
       {q ? (
         <>

@@ -42,6 +42,9 @@ const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
 const DOCK_ITEM = 48
 const POST_SIZE = 62
 const FOLDED_WIDTH = DOCK_ITEM + 12
+// Items collapse by clipping their width. The clip leaves room for the metal shadow beneath each button, which would
+// otherwise end in a hard edge at the clip line.
+const DOCK_CLIP = "flex-none [overflow:clip] [overflow-clip-margin:24px]"
 
 // A conversation, not the list of conversations. Conversations start with the dock folded (see below).
 function isConversation(path: string): boolean {
@@ -200,7 +203,7 @@ export function MobileTabBar({
                 initial={false}
                 animate={{ width: hidden ? 0 : DOCK_ITEM, opacity: hidden ? 0 : 1 }}
                 transition={SPRING}
-                className="flex-none overflow-hidden"
+                className={cn(DOCK_CLIP, hidden && "pointer-events-none")}
               >
                 <Link
                   href={href}
@@ -229,7 +232,7 @@ export function MobileTabBar({
             initial={false}
             animate={{ width: folded ? 0 : DOCK_ITEM, opacity: folded ? 0 : 1 }}
             transition={SPRING}
-            className="flex-none overflow-hidden"
+            className={cn(DOCK_CLIP, folded && "pointer-events-none")}
           >
             <button
               type="button"
@@ -247,7 +250,7 @@ export function MobileTabBar({
           initial={false}
           animate={{ width: folded ? 0 : POST_SIZE, marginLeft: folded ? 0 : 10, opacity: folded ? 0 : 1 }}
           transition={SPRING}
-          className="flex-none overflow-hidden"
+          className={cn(DOCK_CLIP, folded && "pointer-events-none")}
         >
           <Link
             href="/#compose"

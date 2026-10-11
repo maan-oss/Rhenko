@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { deactivateAccount, deleteAccount, type AccountState } from "@/actions/account"
 import { changeHandle, updateBirthday, type ProfileState } from "@/actions/social"
 import { ErrorLine, Field, FIELD_INPUT } from "@/components/app/form-bits"
+import { DateField } from "@/components/app/date-field"
 import { Button } from "@/components/ui/button"
 
 function Submit({ label, pendingLabel, danger = false }: { label: string; pendingLabel: string; danger?: boolean }) {
@@ -59,9 +60,13 @@ export function BirthdayForm({ birthday }: { birthday: string | null }) {
   )
   return (
     <form action={action} className="flex flex-col gap-3">
-      <Field label="Date of birth" hint="Only you can see this.">
-        <input name="birthday" type="date" required defaultValue={birthday ?? ""} className={FIELD_INPUT} />
-      </Field>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="account-birthday" className="text-sm font-semibold">
+          Date of birth
+        </label>
+        <DateField id="account-birthday" name="birthday" defaultValue={birthday ?? ""} placeholder="Pick your birthday" />
+        <span className="text-xs text-muted-foreground">Only you can see this.</span>
+      </div>
       <ErrorLine message={state.error} />
       <div className="flex justify-end">
         <Submit label="Save date" pendingLabel="Saving" />

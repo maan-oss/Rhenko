@@ -40,7 +40,9 @@ async function StatusBody({ params }: { params: Params }) {
       <PostCard post={post} viewer={viewer} detail />
       <CommunityNotes postId={post.id} notes={notesFor(post.id, viewer.id)} signedIn />
       {post.canReply ? (
-        <Composer viewer={viewer} replyToId={post.id} id="reply" placeholder="Post your reply" compact />
+        <div className="border-b border-border px-4 py-3">
+          <Composer viewer={viewer} replyToId={post.id} id="reply" placeholder="Post your reply" compact />
+        </div>
       ) : (
         <p className="border-b border-border px-4 py-4 text-sm text-muted-foreground">
           {post.author.id === viewer.id

@@ -36,8 +36,10 @@ async function ConversationBody({ params }: { params: Params }) {
   const requested = conversation.status === "requested"
   const orderedMembers = conversation.members.filter((m) => m.status === "requested" || m.status === "accepted")
 
+  // The page fills the screen, so the thread takes the room above and the composer (or the request notice) sits at the bottom.
+  // On a phone the main column reserves room for the dock; a conversation has its own bottom row, so that room is given back.
   return (
-    <>
+    <div className="-mb-24 flex min-h-dvh flex-col lg:mb-0">
       <PageHeader
         title={title}
         subtitle={!isGroup && others[0] ? `@${others[0].handle}` : isGroup ? `${conversation.members.length} people` : undefined}
@@ -76,14 +78,17 @@ async function ConversationBody({ params }: { params: Params }) {
       />
       <ThreadMarker conversationId={conversation.id} />
       {requested ? <AcceptBar conversationId={conversation.id} /> : null}
-      <ChatThread conversationId={conversation.id} messages={messages} showNames={isGroup} />
+      <div className="flex flex-1 flex-col">
+        <ChatThread conversationId={conversation.id} messages={messages} showNames={isGroup} />
+      </div>
       {requested ? (
-        <p className="sticky bottom-0 border-t border-border bg-background/95 px-4 py-4 text-sm text-muted-foreground backdrop-blur">
+        // Left space matches the composer, so the folded dock on a phone never sits over the text.
+        <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
           Accept the request to reply.
         </p>
       ) : (
         <ChatComposer conversationId={conversation.id} />
       )}
-    </>
+    </div>
   )
 }

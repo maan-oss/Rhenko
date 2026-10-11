@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { requireViewer } from "@/lib/auth"
 import { analyticsFor } from "@/lib/data"
-import { formatCount } from "@/lib/format"
+import { formatCount, pluralize } from "@/lib/format"
 import { PageHeader } from "@/components/app/page-header"
 import { cn } from "@/lib/utils"
 
@@ -78,7 +78,7 @@ export default async function AnalyticsPage() {
                 <Link href={`/${post.handle}/status/${post.id}`} className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/50">
                   <p className="line-clamp-2 text-[15px]">{post.body}</p>
                   <span className="text-[13px] text-muted-foreground tabular-nums">
-                    {formatCount(post.views)} views · {formatCount(post.likes)} likes
+                    {formatCount(post.views)} {pluralize(post.views, "view")} · {formatCount(post.likes)} {pluralize(post.likes, "like")}
                   </span>
                 </Link>
               </li>

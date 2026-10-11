@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth"
 import { getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
-import { hostOf, joinedLabel } from "@/lib/format"
+import { hostOf, joinedLabel, pluralize } from "@/lib/format"
 import { Avatar } from "@/components/app/avatar"
 import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
@@ -182,7 +182,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           </Link>
           <Link href={`${base}/followers`} className="hover:underline">
             <NumberTicker value={profile.followers} className="font-semibold text-foreground" />{" "}
-            <span className="text-muted-foreground">Followers</span>
+            <span className="text-muted-foreground">{pluralize(profile.followers, "Follower")}</span>
           </Link>
         </div>
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
@@ -204,7 +204,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           <TabLinks
             label="Posts or highlights"
             items={[
-              { href: base, label: SECTION_LABEL.posts, icon: SECTION_ICON.posts, active: tab === "posts" },
+              { href: base, label: "All posts", icon: SECTION_ICON.posts, active: tab === "posts" },
               { href: `${base}?tab=highlights`, label: SECTION_LABEL.highlights, icon: SECTION_ICON.highlights, active: tab === "highlights" },
             ]}
           />

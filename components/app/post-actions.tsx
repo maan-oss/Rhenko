@@ -20,11 +20,13 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { MediaItem, MiniUser } from "@/lib/data"
 import { REPORT_REASONS, type ReplySetting, REPLY_SETTING_LABELS } from "@/lib/rules"
-import { formatCount } from "@/lib/format"
+import { formatCount, pluralize } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type Props = {
   viewer: AvatarUser
+  // An unpublished draft or scheduled post: no public engagement, so only the owner's controls show.
+  draft?: boolean
   postId: string
   body: string
   author: MiniUser
@@ -84,6 +86,7 @@ function Labelled({ label, children }: { label: string; children: ReactNode }) {
 export function PostActions(props: Props) {
   const {
     viewer,
+    draft = false,
     postId,
     author,
     replies,
@@ -180,7 +183,7 @@ export function PostActions(props: Props) {
               </DropdownMenuItem>,
             ]
           : []),
-        ...(isRoot
+        ...(isRoot && !draft
           ? [
               <DropdownMenuItem key="pin" onClick={() => run(() => pinPost(pinned ? null : postId), pinned ? "Unpinned from your profile." : "Pinned to your profile.")}>
                 {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
@@ -188,10 +191,14 @@ export function PostActions(props: Props) {
               </DropdownMenuItem>,
             ]
           : []),
-        <DropdownMenuItem key="highlight" onClick={() => run(() => toggleHighlight(postId), highlighted ? "Removed from highlights." : "Added to highlights.")}>
-          <Sparkles className="size-4" />
-          {highlighted ? "Remove from highlights" : "Add to highlights"}
-        </DropdownMenuItem>,
+        ...(draft
+          ? []
+          : [
+              <DropdownMenuItem key="highlight" onClick={() => run(() => toggleHighlight(postId), highlighted ? "Removed from highlights." : "Added to highlights.")}>
+                <Sparkles className="size-4" />
+                {highlighted ? "Remove from highlights" : "Add to highlights"}
+              </DropdownMenuItem>,
+            ]),
         <DropdownMenuSeparator key="sep-own" />,
         <DropdownMenuItem key="delete" variant="destructive" onClick={() => setDeleteOpen(true)}>
           <Trash2 className="size-4" /> Delete post
@@ -225,76 +232,81 @@ export function PostActions(props: Props) {
 
   return (
     <div className="mt-2 -ml-2 flex items-center gap-1 text-muted-foreground">
-      <Labelled label={`${replies} replies`}>
+      {draft ? null : (
+        <>
+        <Labelled label={`${replies} replies`}>
+          <button
+            type="button"
+            onClick={() => setReplyOpen(true)}
+            disabled={!canReply}
+            title={canReply ? "Reply" : REPLY_SETTING_LABELS[replySetting]}
+            className={cn(BUTTON, "group")}
+          >
+            <MessageCircleIcon size={18} className="transition-none" />
+            <Count value={replies} />
+          </button>
+        </Labelled>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Repost, ${repostState.count} ${pluralize(repostState.count, "repost", "reposts")}`}
+            className={cn(BUTTON, "relative z-10", repostState.active && "text-foreground font-semibold")}
+          >
+            <Repeat2 className="size-[18px]" />
+            <Count value={repostState.count} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-44">
+            <DropdownMenuItem onClick={onRepost}>
+              <Repeat2 className="size-4" />
+              {repostState.active ? "Undo repost" : "Repost"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setQuoteOpen(true)}>
+              <Quote className="size-4" />
+              Quote post
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <button
           type="button"
-          onClick={() => setReplyOpen(true)}
-          disabled={!canReply}
-          title={canReply ? "Reply" : REPLY_SETTING_LABELS[replySetting]}
-          className={cn(BUTTON, "group")}
+          onClick={onLike}
+          aria-pressed={likeState.active}
+          aria-label={likeState.active ? `Unlike, ${likeState.count} ${pluralize(likeState.count, "like")}` : `Like, ${likeState.count} ${pluralize(likeState.count, "like")}`}
+          className={cn(BUTTON, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
         >
-          <MessageCircleIcon size={18} className="transition-none" />
-          <Count value={replies} />
+          <HeartIcon size={18} className="transition-none" />
+          <Count value={likeState.count} />
         </button>
-      </Labelled>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`Repost, ${repostState.count} reposts`}
-          className={cn(BUTTON, "relative z-10", repostState.active && "text-foreground font-semibold")}
+        {isOwn ? (
+          // The author's view count opens the post's analytics.
+          <Link href={`${statusHref}/analytics`} aria-label={`${views} views, post analytics`} title="Post analytics" className={cn(BUTTON, "relative z-10")}>
+            <Eye className="size-[18px]" />
+            <Count value={views} />
+          </Link>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1.5 text-[13px] tabular-nums" aria-label={`${views} views`} title={`${views} views`}>
+            <Eye className="size-[18px]" />
+            <Count value={views} />
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={onBookmark}
+          aria-pressed={bookmarkState}
+          aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
+          className={cn(BUTTON, "relative z-10 ml-auto", bookmarkState && "text-dusk")}
         >
-          <Repeat2 className="size-[18px]" />
-          <Count value={repostState.count} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-44">
-          <DropdownMenuItem onClick={onRepost}>
-            <Repeat2 className="size-4" />
-            {repostState.active ? "Undo repost" : "Repost"}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setQuoteOpen(true)}>
-            <Quote className="size-4" />
-            Quote post
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <BookmarkIcon size={18} className="transition-none" />
+        </button>
 
-      <button
-        type="button"
-        onClick={onLike}
-        aria-pressed={likeState.active}
-        aria-label={likeState.active ? `Unlike, ${likeState.count} likes` : `Like, ${likeState.count} likes`}
-        className={cn(BUTTON, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
-      >
-        <HeartIcon size={18} className="transition-none" />
-        <Count value={likeState.count} />
-      </button>
+        <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" title="Share" className={cn(BUTTON, "relative z-10")}>
+          <Share2 className="size-[18px]" />
+        </button>
 
-      {isOwn ? (
-        // The author's view count opens the post's analytics.
-        <Link href={`${statusHref}/analytics`} aria-label={`${views} views, post analytics`} title="Post analytics" className={cn(BUTTON, "relative z-10")}>
-          <Eye className="size-[18px]" />
-          <Count value={views} />
-        </Link>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 px-2 py-1.5 text-[13px] tabular-nums" aria-label={`${views} views`} title={`${views} views`}>
-          <Eye className="size-[18px]" />
-          <Count value={views} />
-        </span>
+        </>
       )}
-
-      <button
-        type="button"
-        onClick={onBookmark}
-        aria-pressed={bookmarkState}
-        aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
-        className={cn(BUTTON, "relative z-10 ml-auto", bookmarkState && "text-dusk")}
-      >
-        <BookmarkIcon size={18} className="transition-none" />
-      </button>
-
-      <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" title="Share" className={cn(BUTTON, "relative z-10")}>
-        <Share2 className="size-[18px]" />
-      </button>
 
       {replyItems.length > 0 || ownItems.length > 0 || otherItems.length > 0 ? (
         <DropdownMenu>

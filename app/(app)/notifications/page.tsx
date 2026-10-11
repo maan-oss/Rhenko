@@ -44,12 +44,14 @@ async function NotificationsBody({ searchParams }: { searchParams: SearchParams 
   return (
     <>
       <PageHeader title="Notifications" />
-      <TabLinks
-        items={[
-          { href: "/notifications", label: "All", icon: <Bell />, active: tab === "all" },
-          { href: "/notifications?tab=mentions", label: "Mentions", icon: <AtSign />, active: tab === "mentions" },
-        ]}
-      />
+      <div className="px-4 pt-3">
+        <TabLinks
+          items={[
+            { href: "/notifications", label: "All", icon: <Bell />, active: tab === "all" },
+            { href: "/notifications?tab=mentions", label: "Mentions", icon: <AtSign />, active: tab === "mentions" },
+          ]}
+        />
+      </div>
       <NotificationsMarker />
       {requests.length > 0 ? (
         <section aria-label="Follow requests">
