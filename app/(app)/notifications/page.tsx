@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { AtSign, BellRing, Heart, ListChecks, MessageCircle, Quote, Repeat2, UserPlus, UserRound } from "lucide-react"
+import { AtSign, Bell, BellRing, Heart, ListChecks, MessageCircle, Quote, Repeat2, UserPlus, UserRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
 import { followRequestsFor, notificationsFor, type NotificationKind, type NotificationView } from "@/lib/data"
@@ -46,8 +46,8 @@ async function NotificationsBody({ searchParams }: { searchParams: SearchParams 
       <PageHeader title="Notifications" />
       <TabLinks
         items={[
-          { href: "/notifications", label: "All", active: tab === "all" },
-          { href: "/notifications?tab=mentions", label: "Mentions", active: tab === "mentions" },
+          { href: "/notifications", label: "All", icon: <Bell />, active: tab === "all" },
+          { href: "/notifications?tab=mentions", label: "Mentions", icon: <AtSign />, active: tab === "mentions" },
         ]}
       />
       <NotificationsMarker />
@@ -84,23 +84,44 @@ function NoteRow({ note, viewer }: { note: NotificationView; viewer: Viewer }) {
   const href = note.post && note.kind !== "follow" && note.kind !== "follow_request" ? `/${ownPost ? viewer.handle : note.actor.handle}/status/${note.post.id}` : `/${note.actor.handle}`
   const showActor = note.kind !== "poll"
   return (
-    <li className={cn("border-b border-border", !note.read && "bg-dusk/5")}>
-      <Link href={href} className="flex gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
-        <Icon className="mt-1 size-5 shrink-0 text-dusk" aria-hidden="true" />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+    <li className="border-b border-border">
+      <Link
+        href={href}
+        className={cn("flex gap-3 px-4 py-3.5 transition-colors duration-200 hover:bg-muted/60", !note.read && "bg-muted/40")}
+      >
+        {/* The kind of notification sits on the avatar, so the row reads at a glance. */}
+        <span className="relative shrink-0">
           {showActor ? (
-            <span className="flex items-center gap-2">
-              <Avatar user={note.actor} size={32} />
+            <Avatar user={note.actor} size={40} />
+          ) : (
+            <span className="grid size-10 place-items-center rounded-full bg-muted">
+              <Icon className="size-5" aria-hidden="true" />
+            </span>
+          )}
+          {showActor ? (
+            <span
+              aria-hidden="true"
+              className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full bg-foreground text-background ring-2 ring-background"
+            >
+              <Icon className="size-3" />
             </span>
           ) : null}
-          <p className="text-[15px]">
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="text-[15px] leading-snug">
+            {note.read ? null : <span className="sr-only">Unread: </span>}
             {showActor ? <span className="font-semibold">{note.actor.name}</span> : null}
             {showActor ? " " : null}
-            <span className="text-muted-foreground">{text}</span>
-            <span className="ml-1 text-sm text-muted-foreground">· <RelativeTime at={note.createdAt} /></span>
+            <span className={cn(showActor && "text-muted-foreground")}>{text}</span>
           </p>
-          {note.post?.body ? <p className="line-clamp-2 text-[15px] text-muted-foreground">{note.post.body}</p> : null}
+          <p className="text-[13px] text-muted-foreground">
+            <RelativeTime at={note.createdAt} />
+          </p>
+          {note.post?.body ? (
+            <p className="mt-1 line-clamp-2 rounded-xl bg-muted px-3 py-2 text-[14px] leading-snug text-muted-foreground">{note.post.body}</p>
+          ) : null}
         </div>
+        {note.read ? null : <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-foreground" />}
       </Link>
     </li>
   )

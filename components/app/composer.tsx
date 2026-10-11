@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react"
 import { motion } from "motion/react"
-import { ImageIcon, ListChecks, Plus, Trash2, X } from "lucide-react"
+import { ImageIcon, ListChecks, MoreHorizontal, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   MAX_ALT,
   MAX_IMAGE_BYTES,
@@ -456,15 +457,27 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
         ) : null}
 
         <div className="flex items-center gap-1 pt-1">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            aria-label="Add photos or video"
-            disabled={poll}
-            className="grid size-9 place-items-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-40"
-          >
-            <ImageIcon className="size-[20px]" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Add to post"
+              className={cn(
+                "grid size-9 place-items-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-foreground/5 data-popup-open:bg-foreground/5",
+                poll && "text-foreground"
+              )}
+            >
+              <MoreHorizontal className="size-[20px]" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-44">
+              <DropdownMenuItem disabled={poll} onClick={() => fileRef.current?.click()}>
+                <ImageIcon />
+                Photos or video
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={media.length > 0} onClick={() => setPoll((value) => !value)}>
+                <ListChecks />
+                {poll ? "Remove poll" : "Poll"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <input
             ref={fileRef}
             type="file"
@@ -476,19 +489,6 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
               event.target.value = ""
             }}
           />
-          <button
-            type="button"
-            onClick={() => setPoll((value) => !value)}
-            aria-label={poll ? "Remove poll" : "Add a poll"}
-            aria-pressed={poll}
-            disabled={media.length > 0}
-            className={cn(
-              "grid size-9 place-items-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-40",
-              poll && "bg-foreground/10 text-foreground"
-            )}
-          >
-            <ListChecks className="size-[20px]" />
-          </button>
 
           <div className="ml-auto flex items-center gap-3">
             {count > 0 ? <CountRing progress={Math.min(count / MAX_POST, 1)} over={over} /> : null}

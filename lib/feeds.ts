@@ -26,7 +26,7 @@ export type FeedSpec =
   | { kind: "topic"; tag: string }
   | { kind: "search"; q: string; sort: "top" | "latest" }
 
-const PROFILE_TABS: ProfileTab[] = ["posts", "replies", "media", "likes", "highlights"]
+const PROFILE_TABS: ProfileTab[] = ["posts", "highlights", "replies", "media", "reposts", "likes"]
 
 const isString = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 300
 

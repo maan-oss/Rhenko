@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/app/page-header"
 import { PendingActions } from "@/components/app/pending-actions"
 import { PostCard } from "@/components/app/post-card"
 import { TabLinks } from "@/components/app/tabs"
-import { CalendarClock } from "lucide-react"
+import { CalendarClock, PenLine } from "lucide-react"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
@@ -29,8 +29,8 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader title="Drafts" />
       <TabLinks
         items={[
-          { href: "/drafts", label: "Drafts", active: tab === "drafts" },
-          { href: "/drafts?tab=scheduled", label: "Scheduled", active: tab === "scheduled" },
+          { href: "/drafts", label: "Drafts", icon: <PenLine />, active: tab === "drafts" },
+          { href: "/drafts?tab=scheduled", label: "Scheduled", icon: <CalendarClock />, active: tab === "scheduled" },
         ]}
       />
       {posts.length === 0 ? (

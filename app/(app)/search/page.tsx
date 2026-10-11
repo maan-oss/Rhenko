@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
+import { Clock, Flame, Image as ImageIcon, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { parseSearch, recentSearches, searchUsers } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -14,10 +15,10 @@ import { SearchField } from "@/components/app/search-field"
 type SearchParams = Promise<{ q?: string | string[]; f?: string | string[] }>
 
 const TYPES = [
-  { key: "top", label: "Top" },
-  { key: "latest", label: "Latest" },
-  { key: "people", label: "People" },
-  { key: "media", label: "Media" },
+  { key: "top", label: "Top", icon: <Flame /> },
+  { key: "latest", label: "Latest", icon: <Clock /> },
+  { key: "people", label: "People", icon: <Users /> },
+  { key: "media", label: "Media", icon: <ImageIcon /> },
 ] as const
 
 export default function SearchPage({ searchParams }: { searchParams: SearchParams }) {
@@ -44,6 +45,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
           items={TYPES.map((t) => ({
             href: `/search?q=${encodeURIComponent(q)}&f=${t.key}`,
             label: t.label,
+            icon: t.icon,
             active: t.key === type,
           }))}
         />

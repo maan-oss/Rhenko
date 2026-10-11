@@ -3,6 +3,7 @@ import { requireViewer } from "@/lib/auth"
 import { getProfileByHandle, peopleOf } from "@/lib/data"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
+import { UserCheck, Users } from "lucide-react"
 import { TabLinks } from "@/components/app/tabs"
 
 // Followers or following for one account, with the same visibility rules as the profile.
@@ -20,8 +21,8 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: "foll
       <PageHeader title={profile.name} backHref={base} />
       <TabLinks
         items={[
-          { href: `${base}/followers`, label: `${profile.followers} Followers`, active: kind === "followers" },
-          { href: `${base}/following`, label: `${profile.following} Following`, active: kind === "following" },
+          { href: `${base}/followers`, label: `${profile.followers} Followers`, icon: <Users />, active: kind === "followers" },
+          { href: `${base}/following`, label: `${profile.following} Following`, icon: <UserCheck />, active: kind === "following" },
         ]}
       />
       {hidden ? (

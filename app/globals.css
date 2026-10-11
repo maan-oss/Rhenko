@@ -135,6 +135,8 @@
   html {
     @apply font-sans;
     -webkit-font-smoothing: antialiased;
+    /* Native checkboxes, radios and sliders take the neutral gray, not the browser's blue. */
+    accent-color: var(--ring);
   }
   p,
   h1,

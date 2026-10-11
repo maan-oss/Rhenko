@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { MessageCircle, Plus, UserRoundPlus } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { conversationSummaries, requestCount } from "@/lib/data"
 import { firstParam } from "@/lib/params"
@@ -39,8 +39,8 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
       />
       <TabLinks
         items={[
-          { href: "/messages", label: "Messages", active: tab === "messages" },
-          { href: "/messages?tab=requests", label: requests > 0 ? `Requests (${requests})` : "Requests", active: tab === "requests" },
+          { href: "/messages", label: "Messages", icon: <MessageCircle />, active: tab === "messages" },
+          { href: "/messages?tab=requests", label: "Requests", icon: <UserRoundPlus />, active: tab === "requests", badge: requests },
         ]}
       />
       {conversations.length === 0 ? (

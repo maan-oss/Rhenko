@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { BarChart3, CalendarDays, Link as LinkIcon, Lock, MapPin } from "lucide-react"
+import type { ReactNode } from "react"
+import { BarChart3, CalendarDays, FileText, Heart, Image as ImageIcon, Link as LinkIcon, Lock, MapPin, MessageCircle, Repeat2, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
-import { getPost, getProfileByHandle, type ProfileTab } from "@/lib/data"
+import { getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
 import { hostOf, joinedLabel } from "@/lib/format"
@@ -11,33 +12,57 @@ import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
-import { ProfileActions } from "@/components/app/profile-actions"
+import { MessageButton, ProfileActions } from "@/components/app/profile-actions"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { LockedBadge, VerifiedBadge } from "@/components/app/badges"
-import { TabLinks } from "@/components/app/tabs"
+import { IconTabs, TabLinks } from "@/components/app/tabs"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
 type SearchParams = Promise<{ tab?: string | string[] }>
 
-const TABS: ProfileTab[] = ["posts", "replies", "media", "likes", "highlights"]
+// Every feed a profile can show. Highlights is one of them, but it lives inside the Posts section.
+const FEEDS: ProfileTab[] = ["posts", "highlights", "replies", "media", "reposts", "likes"]
 
-const EMPTY: Record<ProfileTab, [string, string]> = {
-  posts: ["No posts yet", "Posts and reposts show up here."],
-  replies: ["No replies yet", "Replies show up here."],
-  media: ["No media yet", "Photos and videos show up here."],
-  likes: ["No likes yet", "Posts this person likes show up here."],
-  highlights: ["No highlights yet", "Posts this person highlights show up here."],
+// The main tab row. Highlights is merged into Posts, so the row has five sections.
+const SECTIONS: ProfileTab[] = ["posts", "replies", "media", "reposts", "likes"]
+
+const SECTION_OF: Record<ProfileTab, ProfileTab> = {
+  posts: "posts",
+  highlights: "posts",
+  replies: "replies",
+  media: "media",
+  reposts: "reposts",
+  likes: "likes",
 }
 
-const LABELS: Record<ProfileTab, string> = {
+const SECTION_LABEL: Record<ProfileTab, string> = {
   posts: "Posts",
+  highlights: "Highlights",
   replies: "Replies",
   media: "Media",
+  reposts: "Reposts",
   likes: "Likes",
-  highlights: "Highlights",
+}
+
+const SECTION_ICON: Record<ProfileTab, ReactNode> = {
+  posts: <FileText />,
+  highlights: <Star />,
+  replies: <MessageCircle />,
+  media: <ImageIcon />,
+  reposts: <Repeat2 />,
+  likes: <Heart />,
+}
+
+const EMPTY: Record<ProfileTab, [string, string]> = {
+  posts: ["No posts yet", "Posts show up here."],
+  highlights: ["No highlights yet", "Posts this person highlights show up here."],
+  replies: ["No replies yet", "Replies show up here."],
+  media: ["No media yet", "Photos and videos show up here."],
+  reposts: ["No reposts yet", "Posts this person reposts show up here."],
+  likes: ["No likes yet", "Posts this person likes show up here."],
 }
 
 // Nothing here streams: the existence checks run first, so a missing account gets a real 404.
@@ -60,9 +85,10 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
 
   const rel = profile.relationship
   const requestedParam = firstParam((await searchParams).tab)
-  const requested = TABS.find((t) => t === requestedParam)
+  const requested = FEEDS.find((t) => t === requestedParam)
   // Likes are only listed for the account's owner.
   const tab: ProfileTab = requested && (requested !== "likes" || isSelf) ? requested : "posts"
+  const section = SECTION_OF[tab]
 
   const spec: FeedSpec = { kind: "profile", tab, handle: profile.handle }
   const page = feedFor(spec, viewer.id)
@@ -70,7 +96,11 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   const pinned = tab === "posts" && profile.pinnedPostId ? getPost(profile.pinnedPostId, viewer.id) : null
   const followState: FollowState = rel.following ? "following" : rel.requested ? "requested" : "none"
   const base = `/${profile.handle}`
-  const tabs = TABS.filter((t) => t !== "likes" || isSelf)
+  const sections = SECTIONS.filter((t) => t !== "likes" || isSelf)
+
+  // Mutual followers only show where the profile itself is visible to the viewer.
+  const showMutual = !isSelf && !rel.blockedByMe && (!profile.protected || rel.following)
+  const mutual = showMutual ? mutualFollowers(profile.id, viewer.id) : null
 
   return (
     <>
@@ -156,15 +186,31 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             <span className="text-muted-foreground">Followers</span>
           </Link>
         </div>
+        {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
+        {isSelf ? null : <MessageButton handle={profile.handle} />}
       </div>
 
-      <TabLinks
-        items={tabs.map((t) => ({
+      <IconTabs
+        label="Profile sections"
+        items={sections.map((t) => ({
           href: t === "posts" ? base : `${base}?tab=${t}`,
-          label: LABELS[t],
-          active: t === tab,
+          label: SECTION_LABEL[t],
+          icon: SECTION_ICON[t],
+          active: t === section,
         }))}
       />
+
+      {section === "posts" ? (
+        <div className="px-4 pt-3">
+          <TabLinks
+            label="Posts or highlights"
+            items={[
+              { href: base, label: SECTION_LABEL.posts, icon: SECTION_ICON.posts, active: tab === "posts" },
+              { href: `${base}?tab=highlights`, label: SECTION_LABEL.highlights, icon: SECTION_ICON.highlights, active: tab === "highlights" },
+            ]}
+          />
+        </div>
+      ) : null}
 
       {pinned ? <PostCard post={pinned} viewer={viewer} showPinned /> : null}
 
@@ -188,5 +234,32 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         />
       )}
     </>
+  )
+}
+
+// "Followed by Ana, Ben and 4 others", with the first few avatars overlapping.
+function MutualLine({ users, total }: { users: MiniUser[]; total: number }) {
+  const names = users.map((u) => u.name)
+  const others = total - names.length
+  const list =
+    others > 0
+      ? names.join(", ")
+      : names.length <= 1
+        ? (names[0] ?? "")
+        : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+  return (
+    <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+      <div className="flex shrink-0 -space-x-2">
+        {users.map((u) => (
+          <span key={u.id} className="rounded-full ring-2 ring-background">
+            <Avatar user={u} size={22} />
+          </span>
+        ))}
+      </div>
+      <p className="min-w-0">
+        Followed by <span className="font-medium text-foreground">{list}</span>
+        {others > 0 ? ` and ${others} ${others === 1 ? "other" : "others"}` : null}
+      </p>
+    </div>
   )
 }

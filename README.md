@@ -52,7 +52,9 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 
 **Home and posts**
 - The top bar has Home, For you and Following, and a plus button for lists and timelines.
-- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options. That is all it does.
+- Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
+- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options. Photos and the poll sit in a three-dot menu. That is all it does.
+- Posts with two or more photos or videos show as a carousel. Swipe, use the arrows on a desktop, or pick a dot.
 - Feeds load older posts as you scroll, with a "Show more" button as a fallback.
 - Reply, quote, repost, like, bookmark, share, pin to your profile, and highlight.
 - Undo: a new post can be taken back for 10 seconds, from the toast that confirms it.
@@ -64,7 +66,9 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Post view counts, shown on the Analytics page.
 
 **Profiles and relationships**
-- A banner that fades into the page, a circle avatar, and Posts, Replies, Media, Likes (visible only to the account's owner) and Highlights tabs. Empty tabs say so in the middle of the page.
+- A banner that fades into the page and a circle avatar. The tabs are icons, and the active one shows its name: Posts, Replies, Media, Reposts and Likes (visible only to the account's owner). Highlights sits inside Posts as a second option. Empty tabs say so in the middle of the page.
+- Posts holds the account's own posts. Reposts have their own tab, so they no longer mix in with posts.
+- A profile lists the people you follow who also follow it ("Followed by …"). The Message button sits below that line.
 - Follow, unfollow, and follow requests for protected accounts. Protected accounts show only to approved followers.
 - Block and mute, with the expected visibility rules in both directions.
 - Followers and following lists. Owners can remove a follower.
@@ -80,7 +84,8 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 **Notifications**
 - Likes, reposts, replies, quotes, follows, mentions, poll results, follow requests, and new posts from accounts you've switched alerts on for. Each kind has an on/off switch in Settings → Notifications.
 - Mentions can be limited to verified accounts in Settings → Notifications.
-- The tabs slide between sections.
+- Each row shows the kind of notification as a small badge on the avatar, with the time under the name and a preview of the post when there is one. Unread rows are shaded and carry a dot.
+- The tabs are icons and slide between sections.
 
 **Messages**
 - Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave.
@@ -100,7 +105,8 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Bookmarks can be sorted into folders. Deleting a folder keeps its bookmarks.
 
 **Settings**
-- One page holds the status, Light and Dark appearance, the account pages (Account, Security, Privacy and safety, Notifications), the keyboard shortcuts, and a full-width Log out button that turns red on hover.
+- One page holds the status, the appearance (Light and Dark, each a card with a small window preview), the account pages (Account, Security, Privacy and safety, Notifications), the keyboard shortcuts, and a full-width Log out button that turns red on hover.
+- Native controls such as checkboxes and sliders use the neutral gray, not the browser's blue.
 - The bottom-left account in the sidebar opens this page.
 - The app follows the operating system's reduced-motion setting. There is no in-app switch.
 
@@ -121,4 +127,5 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Drafts and scheduled posts are still stored by the server and their page still exists at `/drafts`, but the composer no longer creates them and the sidebar no longer links there.
 - Not-found pages for missing accounts, posts, lists and conversations return HTTP 200 with a `noindex` tag and the "This page is not here" view. Cache Components sends a static shell before the page runs, so the status is already fixed. Unknown URLs outside the app routes get a real 404.
 - The likes tab shows only to the account's owner, matching X's default.
+- Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs.
 - Not included: ads and ad billing, premium tiers and payments, tip jar, the AI assistant, Spaces, jobs, articles, live video, shopping, saved searches, and a lists tab in search.

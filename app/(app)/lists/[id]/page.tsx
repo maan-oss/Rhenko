@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Lock } from "lucide-react"
+import { FileText, Lock, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { listDetail } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -67,8 +67,8 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
 
       <TabLinks
         items={[
-          { href: `/lists/${list.id}`, label: "Posts", active: tab === "posts" },
-          { href: `/lists/${list.id}?tab=members`, label: "Members", active: tab === "members" },
+          { href: `/lists/${list.id}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
+          { href: `/lists/${list.id}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
         ]}
       />
 

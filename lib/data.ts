@@ -408,7 +408,8 @@ export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor
   return feedPage(source, [scope, viewerId, viewerId, scope, viewerId, viewerId], cursor, limit, viewerId)
 }
 
-export type ProfileTab = "posts" | "replies" | "media" | "likes" | "highlights"
+// "highlights" is a feed of its own, shown inside the Posts section of a profile.
+export type ProfileTab = "posts" | "highlights" | "replies" | "media" | "reposts" | "likes"
 
 export function profileFeed(tab: ProfileTab, userId: string, viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
   if (tab === "replies") {
@@ -435,15 +436,19 @@ export function profileFeed(tab: ProfileTab, userId: string, viewerId: string, c
       FROM highlights h WHERE h.user_id = ?`
     return feedPage(source, [userId], cursor, limit, viewerId)
   }
+  if (tab === "reposts") {
+    const source = `
+      SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
+      FROM reposts r WHERE r.user_id = ?`
+    return feedPage(source, [userId], cursor, limit, viewerId)
+  }
+  // Original posts only: reposts have their own tab, and the pinned post is shown above the list.
   const source = `
     SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
     FROM posts p
     WHERE p.author_id = ? AND p.reply_to_id IS NULL
-      AND p.id IS NOT (SELECT pinned_post_id FROM users WHERE id = ?)
-    UNION ALL
-    SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
-    FROM reposts r WHERE r.user_id = ?`
-  return feedPage(source, [userId, userId, userId], cursor, limit, viewerId)
+      AND p.id IS NOT (SELECT pinned_post_id FROM users WHERE id = ?)`
+  return feedPage(source, [userId, userId], cursor, limit, viewerId)
 }
 
 // folder: undefined = every bookmark, "none" = not in a folder, otherwise a folder id.
@@ -770,6 +775,26 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     birthday: isSelf ? row.birthday : null,
     relationship,
     notifying: !isSelf && get("SELECT 1 AS found FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewerId, row.id) !== undefined,
+  }
+}
+
+// People the viewer follows who also follow this account, for the "Followed by" line on a profile.
+export function mutualFollowers(profileId: string, viewerId: string, limit = 3): { users: MiniUser[]; total: number } {
+  const from = `FROM follows a
+    JOIN follows b ON b.follower_id = a.followee_id AND b.followee_id = ?
+    JOIN users u ON u.id = a.followee_id
+    WHERE a.follower_id = ? AND u.deactivated_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM blocks x WHERE x.blocker_id = ? AND x.blocked_id = u.id)`
+  const params = [profileId, viewerId, viewerId]
+  const total = get<{ c: number }>(`SELECT COUNT(*) AS c ${from}`, ...params)?.c ?? 0
+  const rows = all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number }>(
+    `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified ${from} ORDER BY u.name COLLATE NOCASE LIMIT ?`,
+    ...params,
+    limit
+  )
+  return {
+    users: rows.map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 })),
+    total,
   }
 }
 

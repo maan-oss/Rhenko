@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Plus, Sparkles, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
@@ -34,8 +34,8 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         tabs={
           <TabLinks
             items={[
-              { href: "/", label: "For you", active: !following },
-              { href: "/?tab=following", label: "Following", active: following },
+              { href: "/", label: "For you", icon: <Sparkles />, active: !following },
+              { href: "/?tab=following", label: "Following", icon: <Users />, active: following },
             ]}
           />
         }

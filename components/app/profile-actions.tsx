@@ -11,7 +11,28 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// Message, follow, mute and block for someone else's profile.
+// Opens a direct message with someone. The profile page places it under the mutual followers line.
+export function MessageButton({ handle }: { handle: string }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  function message() {
+    startTransition(async () => {
+      const result = await startConversation(handle)
+      if (!result.ok) toast.error(result.error)
+      else router.push(`/messages/${result.id}`)
+    })
+  }
+
+  return (
+    <Button type="button" variant="outline" disabled={pending} onClick={message} className="h-9 w-fit rounded-full px-4">
+      <Mail className="size-4" />
+      Message
+    </Button>
+  )
+}
+
+// Follow, notifications, mute and block for someone else's profile.
 export function ProfileActions({
   handle,
   state,
@@ -25,16 +46,7 @@ export function ProfileActions({
   muted: boolean
   notifying: boolean
 }) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
-
-  function message() {
-    startTransition(async () => {
-      const result = await startConversation(handle)
-      if (!result.ok) toast.error(result.error)
-      else router.push(`/messages/${result.id}`)
-    })
-  }
 
   function togglePosts() {
     startTransition(async () => {
@@ -62,17 +74,6 @@ export function ProfileActions({
 
   return (
     <div className="flex items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        aria-label={`Message @${handle}`}
-        disabled={pending}
-        onClick={message}
-        className="rounded-full"
-      >
-        <Mail className="size-4" />
-      </Button>
       {state === "following" ? (
         <Button
           type="button"

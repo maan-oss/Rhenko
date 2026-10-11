@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
+import { Bookmark, Folder, Inbox } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { bookmarkFolders } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -29,9 +30,9 @@ async function BookmarksBody({ searchParams }: { searchParams: SearchParams }) {
   const page = feedFor(spec, viewer.id)
 
   const tabs = [
-    { href: "/bookmarks", label: "All", active: folder === undefined },
-    { href: "/bookmarks?folder=none", label: "Unfiled", active: folder === "none" },
-    ...folders.map((f) => ({ href: `/bookmarks?folder=${f.id}`, label: f.name, active: folder === f.id })),
+    { href: "/bookmarks", label: "All", icon: <Bookmark />, active: folder === undefined },
+    { href: "/bookmarks?folder=none", label: "Unfiled", icon: <Inbox />, active: folder === "none" },
+    ...folders.map((f) => ({ href: `/bookmarks?folder=${f.id}`, label: f.name, icon: <Folder />, active: folder === f.id })),
   ]
 
   return (

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
 import { cn } from "@/lib/utils"
@@ -52,37 +53,106 @@ function Tile({
   )
 }
 
+// Two or more items scroll sideways, one per view, and snap to each. Swipe on a phone, scroll or use the arrows elsewhere.
+function Carousel({ media, onOpen }: { media: MediaItem[]; onOpen: (item: MediaItem) => void }) {
+  const track = useRef<HTMLDivElement>(null)
+  const [index, setIndex] = useState(0)
+  const count = media.length
+
+  function onScroll() {
+    const el = track.current
+    if (!el || el.clientWidth === 0) return
+    setIndex(Math.round(el.scrollLeft / el.clientWidth))
+  }
+
+  function go(to: number) {
+    const el = track.current
+    if (!el) return
+    el.scrollTo({ left: Math.min(Math.max(to, 0), count - 1) * el.clientWidth, behavior: "smooth" })
+  }
+
+  const arrow = "absolute top-1/2 z-20 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-background/90 text-foreground ring-1 ring-border transition-opacity duration-200 disabled:opacity-0"
+
+  return (
+    <div className="group relative">
+      <div
+        role="region"
+        aria-roledescription="carousel"
+        aria-label={`Media, ${count} items`}
+        className="relative overflow-hidden rounded-2xl border border-border bg-muted"
+      >
+        <div
+          ref={track}
+          onScroll={onScroll}
+          className="flex aspect-[4/3] max-h-[520px] snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {media.map((item, i) => (
+            <div key={item.id} role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`} className="relative h-full w-full shrink-0 snap-start">
+              <Tile item={item} onOpen={onOpen} className="size-full rounded-none border-0" />
+            </div>
+          ))}
+        </div>
+        <span aria-hidden="true" className="pointer-events-none absolute top-2 right-2 z-20 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
+          {index + 1} / {count}
+        </span>
+        <button
+          type="button"
+          onClick={() => go(index - 1)}
+          disabled={index === 0}
+          aria-label="Previous media"
+          className={cn(arrow, "left-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:hidden")}
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => go(index + 1)}
+          disabled={index === count - 1}
+          aria-label="Next media"
+          className={cn(arrow, "right-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:hidden")}
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+      <div className="mt-2 flex justify-center gap-1.5">
+        {media.map((item, i) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => go(i)}
+            aria-label={`Show media ${i + 1} of ${count}`}
+            aria-current={i === index ? "true" : undefined}
+            className={cn(
+              "h-1.5 rounded-full transition-[width,background-color] duration-200",
+              i === index ? "w-4 bg-foreground" : "w-1.5 bg-foreground/30 hover:bg-foreground/60"
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; sensitive?: boolean }) {
   const [revealed, setRevealed] = useState(!sensitive)
   const [open, setOpen] = useState<MediaItem | null>(null)
   if (media.length === 0) return null
 
-  const count = media.length
-  const frame =
-    count === 1
-      ? media[0].kind === "video"
-        ? "aspect-video"
-        : "max-h-[420px] min-h-40"
-      : count === 2
-        ? "aspect-[7/4] gap-0.5"
-        : "aspect-[4/3] gap-0.5"
+  const single = media.length === 1
+  const frame = media[0]?.kind === "video" ? "aspect-video" : "max-h-[420px] min-h-40"
 
   return (
-    <div className={cn("relative z-10 mt-2 grid gap-1", count > 1 ? "grid-cols-2" : "grid-cols-1", frame)}>
-      {count === 1 ? (
-        <Tile item={media[0]} onOpen={setOpen} className="size-full" />
-      ) : count === 3 ? (
-        <>
-          <Tile item={media[0]} onOpen={setOpen} className="row-span-2 size-full" />
-          <Tile item={media[1]} onOpen={setOpen} className="size-full" />
-          <Tile item={media[2]} onOpen={setOpen} className="size-full" />
-        </>
+    <div className="relative z-10 mt-2">
+      {single ? (
+        <div className={cn("grid", frame)}>
+          <Tile item={media[0]} onOpen={setOpen} className="size-full" />
+        </div>
       ) : (
-        media.map((item) => <Tile key={item.id} item={item} onOpen={setOpen} className="size-full" />)
+        <Carousel media={media} onOpen={setOpen} />
       )}
 
       {!revealed ? (
-        <div className="absolute inset-0 z-20 grid place-items-center overflow-hidden rounded-2xl bg-background/80 backdrop-blur-xl">
+        <div className="absolute inset-0 z-30 grid place-items-center overflow-hidden rounded-2xl bg-background/80 backdrop-blur-xl">
           <div className="flex flex-col items-center gap-2 px-6 text-center">
             <p className="font-semibold">Sensitive content</p>
             <p className="text-sm text-muted-foreground">This media may be upsetting to some people.</p>
