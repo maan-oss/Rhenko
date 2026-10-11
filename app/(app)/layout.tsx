@@ -2,6 +2,8 @@ import type { ReactNode } from "react"
 import { getViewer } from "@/lib/auth"
 import { MobileNav, Sidebar } from "@/components/app/sidebar"
 import { RightRail } from "@/components/app/right-rail"
+import { BannerHost } from "@/components/app/banner-host"
+import { CallSurface } from "@/components/app/call-surface"
 import { Realtime } from "@/components/app/realtime"
 import { Shortcuts } from "@/components/app/shortcuts"
 import { ServiceWorkerRegister } from "@/components/app/sw-register"
@@ -18,6 +20,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <RightRail />
       <MobileNav />
       <LiveMounts />
+      <CallSurface />
+      <BannerHost />
       <ServiceWorkerRegister />
     </div>
   )

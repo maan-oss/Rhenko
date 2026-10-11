@@ -405,6 +405,12 @@ ALTER TABLE conversation_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;
   `
 ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT '';
 `,
+
+  // 7. Calls leave a record in the thread: missed, declined, or how long a call lasted.
+  `
+ALTER TABLE chat_messages ADD COLUMN call_status TEXT;
+ALTER TABLE chat_messages ADD COLUMN call_seconds INTEGER NOT NULL DEFAULT 0;
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

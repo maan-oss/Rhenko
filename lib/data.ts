@@ -1,6 +1,7 @@
 import { all, get, type Param } from "@/lib/db"
 import { extractHashtags, extractMentions, NOTE_SHOW_MIN_HELPFUL, normalizeTag, RECENT_SEARCH_LIMIT, type ReplySetting } from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
+import { callSummary, type CallOutcome } from "@/lib/format"
 
 // Shared read models. Everything a page or API route renders comes from here,
 // so visibility rules (blocks, mutes, protected accounts, muted words) are
@@ -986,12 +987,30 @@ export type ConversationSummary = {
   status: "accepted" | "requested"
 }
 
-function lastMessageOf(conversationId: string) {
-  return get<{ body: string; sender_id: string; created_at: number; deleted_at: number | null; media_file: string | null; post_id: string | null }>(
-    `SELECT body, sender_id, created_at, deleted_at, media_file, post_id FROM chat_messages
+type LastMessage = {
+  body: string
+  sender_id: string
+  created_at: number
+  deleted_at: number | null
+  media_file: string | null
+  post_id: string | null
+  call_status: CallOutcome | null
+  call_seconds: number
+}
+
+function lastMessageOf(conversationId: string): LastMessage | undefined {
+  return get<LastMessage>(
+    `SELECT body, sender_id, created_at, deleted_at, media_file, post_id, call_status, call_seconds FROM chat_messages
      WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
     conversationId
   )
+}
+
+// What the conversation list says about the latest message, from the viewer's side.
+function previewOfLast(last: LastMessage | undefined, viewerId: string): string {
+  if (!last || last.deleted_at) return ""
+  if (last.call_status) return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId)
+  return last.body || (last.media_file ? "Sent a photo" : last.post_id ? "Shared a post" : "")
 }
 
 export function conversationSummaries(viewerId: string, status: "accepted" | "requested", limit = 60): ConversationSummary[] {
@@ -1025,7 +1044,7 @@ export function conversationSummaries(viewerId: string, status: "accepted" | "re
       title: row.title,
       others,
       memberCount: members.length,
-      lastBody: last?.deleted_at ? "" : last?.body || (last?.media_file ? "Sent a photo" : last?.post_id ? "Shared a post" : ""),
+      lastBody: previewOfLast(last, viewerId),
       lastAt: last?.created_at ?? row.updated_at,
       lastFromMe: last?.sender_id === viewerId,
       lastDeleted: Boolean(last?.deleted_at),
@@ -1049,6 +1068,25 @@ export function unreadMessageCount(viewerId: string): number {
 
 export function requestCount(viewerId: string): number {
   return get<{ c: number }>("SELECT COUNT(*) AS c FROM conversation_members WHERE user_id = ? AND status = 'requested'", viewerId)?.c ?? 0
+}
+
+// People the viewer chats with one to one, most recent first. The share sheet offers them before a search.
+export function recentChatPartners(viewerId: string, limit = 6): MiniUser[] {
+  return all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number }>(
+    `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified
+     FROM conversations c
+     JOIN conversation_members me ON me.conversation_id = c.id AND me.user_id = ? AND me.status = 'accepted'
+     JOIN conversation_members them ON them.conversation_id = c.id AND them.user_id <> ? AND them.status = 'accepted'
+     JOIN users u ON u.id = them.user_id
+     WHERE c.kind = 'dm' AND u.deactivated_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))
+     ORDER BY c.updated_at DESC LIMIT ?`,
+    viewerId,
+    viewerId,
+    viewerId,
+    viewerId,
+    limit
+  ).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 }))
 }
 
 export type ConversationView = {
@@ -1109,6 +1147,8 @@ export type MessageView = {
   deleted: boolean
   mediaFile: string | null
   post: PostView | null
+  // A call that ended, was missed or declined. Calls sit in the thread like messages.
+  call: { outcome: CallOutcome; seconds: number } | null
   createdAt: number
   seen: boolean
   reactions: { emoji: string; count: number; mine: boolean }[]
@@ -1123,10 +1163,13 @@ export function conversationMessages(conversationId: string, viewerId: string, l
     post_id: string | null
     created_at: number
     deleted_at: number | null
+    call_status: CallOutcome | null
+    call_seconds: number
     sender_name: string
     sender_handle: string
   }>(
-    `SELECT m.id, m.sender_id, m.body, m.media_file, m.post_id, m.created_at, m.deleted_at, u.name AS sender_name, u.handle AS sender_handle
+    `SELECT m.id, m.sender_id, m.body, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds,
+       u.name AS sender_name, u.handle AS sender_handle
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
      WHERE m.conversation_id = ?
      ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
@@ -1167,6 +1210,7 @@ export function conversationMessages(conversationId: string, viewerId: string, l
       deleted: r.deleted_at !== null,
       mediaFile: r.deleted_at ? null : r.media_file,
       post: r.post_id && !r.deleted_at ? posts.get(r.post_id) ?? null : null,
+      call: r.call_status ? { outcome: r.call_status, seconds: r.call_seconds } : null,
       createdAt: r.created_at,
       seen,
       reactions: reactions.get(r.id) ?? [],

@@ -155,6 +155,13 @@ export const RECENT_SEARCH_LIMIT = 15
 export const MAX_SEARCH_LENGTH = 300
 // A profile visit from the same person counts once per window.
 export const PROFILE_VISIT_WINDOW_MS = 6 * 60 * 60 * 1000
+// A call rings this long before it counts as unanswered.
+export const CALL_RING_MS = 35 * 1000
+// Limits on what a call can relay: one session description, one network candidate.
+export const CALL_SDP_MAX = 30_000
+export const CALL_CANDIDATE_MAX = 1_000
+// How much of a message a banner shows.
+export const BANNER_PREVIEW_MAX = 140
 
 export function validatePoll(options: string[], minutes: number): string | null {
   if (options.length < POLL_MIN_OPTIONS || options.length > POLL_MAX_OPTIONS) {

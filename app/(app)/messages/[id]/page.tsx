@@ -63,7 +63,13 @@ async function ConversationBody({ params }: { params: Params }) {
                 }))}
               />
             ) : null}
-            <CallButton name={title} />
+            {!isGroup && others[0] ? (
+              <CallButton
+                conversationId={conversation.id}
+                peer={{ id: others[0].id, name: others[0].name, handle: others[0].handle, avatarFile: others[0].avatarFile }}
+                disabled={requested}
+              />
+            ) : null}
             <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
           </div>
         }

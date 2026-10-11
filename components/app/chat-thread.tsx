@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { SmilePlus, Trash2 } from "lucide-react"
+import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, SmilePlus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { deleteMessage, toggleReaction } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PostBody } from "@/components/app/post-body"
 import { LocalTime } from "@/components/app/time-text"
+import { callSummary } from "@/lib/format"
 import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
@@ -43,7 +44,7 @@ export function ChatThread({ conversationId, messages, showNames }: { conversati
     return <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">No messages yet. Say hello.</p>
   }
 
-  const lastOwn = [...messages].reverse().find((m) => m.mine)
+  const lastOwn = [...messages].reverse().find((m) => m.mine && !m.call)
 
   return (
     <div className="flex flex-col pt-4 pb-12">
@@ -75,7 +76,41 @@ const RUN_MS = 5 * 60 * 1000
 
 function sameRun(a: MessageView | undefined, b: MessageView | undefined): boolean {
   if (!a || !b) return false
-  return a.senderId === b.senderId && !a.deleted && !b.deleted && Math.abs(b.createdAt - a.createdAt) < RUN_MS
+  return a.senderId === b.senderId && !a.deleted && !b.deleted && !a.call && !b.call && Math.abs(b.createdAt - a.createdAt) < RUN_MS
+}
+
+// A call in the thread: a centred line with what happened, from the viewer's side. A missed call stands out.
+function CallEvent({ message }: { message: MessageView }) {
+  const call = message.call
+  if (!call) return null
+  const label = callSummary(call.outcome, call.seconds, message.mine)
+  const missed = call.outcome === "missed" && !message.mine
+  const Icon =
+    call.outcome === "ended"
+      ? message.mine
+        ? PhoneOutgoing
+        : PhoneIncoming
+      : missed
+        ? PhoneMissed
+        : call.outcome === "declined"
+          ? PhoneOff
+          : PhoneOutgoing
+  return (
+    <div className="flex flex-col items-center gap-1.5 px-4 pt-4">
+      <div
+        className={cn(
+          "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] font-medium",
+          missed ? "border-destructive/30 text-destructive" : "border-border text-foreground/80"
+        )}
+      >
+        <Icon className="size-[15px]" strokeWidth={2} aria-hidden="true" />
+        <span>{label}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        <LocalTime at={message.createdAt} variant="clock" />
+      </p>
+    </div>
+  )
 }
 
 function MessageRow({
@@ -102,6 +137,8 @@ function MessageRow({
     })
   }
 
+  if (message.call) return <CallEvent message={message} />
+
   return (
     <div className={cn("group flex flex-col gap-1 px-4", joinsPrev ? "pt-[3px]" : "pt-3", message.mine ? "items-end" : "items-start")}>
       {showName ? <span className="text-xs text-muted-foreground">{message.senderName}</span> : null}
@@ -110,7 +147,8 @@ function MessageRow({
           className={cn(
             "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
             // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
-            message.mine ? "bg-dusk text-background [&_a]:text-background [&_a]:underline" : "bg-muted",
+            // Text links take the bubble's colour. The shared-post card is a link too, but it sits on its own surface, so it is skipped.
+            message.mine ? "bg-dusk text-background [&_a:not([data-embed])]:text-background [&_a:not([data-embed])]:underline" : "bg-muted",
             message.deleted && "italic opacity-70"
           )}
         >
@@ -126,6 +164,7 @@ function MessageRow({
               {message.post ? (
                 <Link
                   href={`/${message.post.author.handle}/status/${message.post.id}`}
+                  data-embed=""
                   className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
                 >
                   <span className="text-sm font-semibold">{message.post.author.name}</span>

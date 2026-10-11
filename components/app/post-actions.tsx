@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { BookmarkIcon, HeartIcon, MessageCircleIcon } from "lucide-animated"
-import { Ban, Code2, Eye, EyeOff, Flag, Link2, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Send, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
+import { Ban, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
 import { toggleBlock, toggleMute } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { Composer } from "@/components/app/composer"
 import { EditPostDialog } from "@/components/app/edit-post-dialog"
-import { ShareDialog } from "@/components/app/share-dialog"
+import { ShareSheet } from "@/components/app/share-sheet"
 import { PostBody } from "@/components/app/post-body"
 import type { AvatarUser } from "@/components/app/avatar"
 import { Button } from "@/components/ui/button"
@@ -22,10 +22,6 @@ import type { MediaItem, MiniUser } from "@/lib/data"
 import { REPORT_REASONS, type ReplySetting, REPLY_SETTING_LABELS } from "@/lib/rules"
 import { formatCount } from "@/lib/format"
 import { cn } from "@/lib/utils"
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
-}
 
 type Props = {
   viewer: AvatarUser
@@ -163,29 +159,6 @@ export function PostActions(props: Props) {
     })
   }
 
-  function copyLink() {
-    const url = `${window.location.origin}${statusHref}`
-    navigator.clipboard?.writeText(url).then(
-      () => toast.success("Link copied."),
-      () => toast.error("Couldn't copy the link.")
-    )
-  }
-
-  // A static quote of the post that anyone can paste into their own page.
-  function copyEmbed() {
-    const url = `${window.location.origin}${statusHref}`
-    const snippet = [
-      `<blockquote class="rhenko-embed">`,
-      `  <p>${escapeHtml(props.body)}</p>`,
-      `  <footer>&mdash; ${escapeHtml(author.name)} (@${escapeHtml(author.handle)}) <a href="${escapeHtml(url)}">Rhenko</a></footer>`,
-      `</blockquote>`,
-    ].join("\n")
-    navigator.clipboard?.writeText(snippet).then(
-      () => toast.success("Embed code copied."),
-      () => toast.error("Couldn't copy the embed code.")
-    )
-  }
-
   function submitReport() {
     startReport(async () => {
       const result = await reportPost(postId, reason)
@@ -319,22 +292,9 @@ export function PostActions(props: Props) {
         <BookmarkIcon size={18} className="transition-none" />
       </button>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger aria-label="Share" className={cn(BUTTON, "relative z-10")}>
-          <Share2 className="size-[18px]" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-48">
-          <DropdownMenuItem onClick={copyLink}>
-            <Link2 className="size-4" /> Copy link
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShareOpen(true)}>
-            <Send className="size-4" /> Send in a message
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={copyEmbed}>
-            <Code2 className="size-4" /> Copy embed code
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" title="Share" className={cn(BUTTON, "relative z-10")}>
+        <Share2 className="size-[18px]" />
+      </button>
 
       {replyItems.length > 0 || ownItems.length > 0 || otherItems.length > 0 ? (
         <DropdownMenu>
@@ -380,7 +340,11 @@ export function PostActions(props: Props) {
 
       {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} media={media} /> : null}
 
-      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} postId={postId} />
+      <ShareSheet
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        post={{ id: postId, body: props.body, author: { name: author.name, handle: author.handle, avatarFile: author.avatarFile } }}
+      />
 
       {isOwn ? (
         <ConfirmDialog

@@ -33,6 +33,26 @@ export function formatCount(value: number): string {
   return new Intl.NumberFormat("en-US", { notation: value >= 10000 ? "compact" : "standard" }).format(value)
 }
 
+// How a call ended: missed or declined before anyone talked, or ended after it connected.
+export type CallOutcome = "missed" | "declined" | "ended"
+
+// The words for a call in the thread and the list, from the viewer's side. Missed means the other person never answered.
+export function callSummary(outcome: CallOutcome, seconds: number, mine: boolean): string {
+  if (outcome === "ended") return `Voice call · ${formatDuration(seconds)}`
+  if (outcome === "declined") return mine ? "Declined" : "You declined"
+  return mine ? "No answer" : "Missed call"
+}
+
+// A call's length as m:ss, or h:mm:ss past an hour.
+export function formatDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = String(seconds % 60).padStart(2, "0")
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
+  return `${minutes}:${rest}`
+}
+
 export function hostOf(url: string): string {
   try {
     return new URL(url).host

@@ -2,11 +2,11 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import type { RealtimeEvent } from "@/lib/bus"
+import { receiveCallSignal } from "@/lib/call-engine"
 
-type RealtimeEvent = { type: "notification" } | { type: "message"; conversationId: string } | { type: "typing"; conversationId: string; name: string }
-
-// Keeps the open page current. Server events refresh the route; typing events
-// go to the open thread through a window event.
+// Keeps the open page current. Messages and notifications refresh the route. Typing and banners go to the page through
+// window events. Call steps go straight to the call engine, which keeps a call going across page changes.
 export function Realtime() {
   const router = useRouter()
   useEffect(() => {
@@ -26,6 +26,14 @@ export function Realtime() {
       }
       if (event.type === "typing") {
         window.dispatchEvent(new CustomEvent("rhenko:typing", { detail: event }))
+        return
+      }
+      if (event.type === "banner") {
+        window.dispatchEvent(new CustomEvent("rhenko:banner", { detail: event }))
+        return
+      }
+      if (event.type === "call") {
+        receiveCallSignal(event.callId, event.signal)
         return
       }
       refresh()

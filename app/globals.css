@@ -248,3 +248,13 @@ textarea:-webkit-autofill {
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }
+
+/* A banner's bar drains across its lifetime, then the banner closes. Hovering pauses it. */
+@keyframes banner-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
