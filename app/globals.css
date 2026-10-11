@@ -182,7 +182,7 @@ textarea:-webkit-autofill {
   background-image: url("/gutter-mark.svg");
   background-repeat: no-repeat;
   background-position: center;
-  background-size: min(120vh, 90vw);
+  background-size: 100vw auto;
   opacity: 0.05;
   filter: grayscale(1);
 }
