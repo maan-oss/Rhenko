@@ -92,7 +92,7 @@ export function ProfileActions({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="More options"
-          className="grid size-8 place-items-center rounded-full border border-border transition-colors hover:bg-muted"
+          className="glass grid size-8 place-items-center rounded-full text-foreground transition-colors hover:bg-foreground/5"
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>

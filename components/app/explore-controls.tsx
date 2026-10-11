@@ -22,7 +22,7 @@ export function RankingButton({ href, sort }: { href: string; sort: "top" | "lat
       scroll={false}
       aria-label={label}
       title={label}
-      className="grid size-12 shrink-0 place-items-center rounded-full bg-muted transition-colors duration-200 hover:bg-foreground/10"
+      className="glass grid size-12 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5"
     >
       <Pending>{top ? <Sparkles className="size-[18px]" aria-hidden="true" /> : <Clock className="size-[18px]" aria-hidden="true" />}</Pending>
     </Link>
@@ -48,7 +48,7 @@ export function MediaSwitch({ href, checked }: { href: string; checked: boolean 
 function Track({ checked }: { checked: boolean }) {
   const { pending } = useLinkStatus()
   return (
-    <span className={cn("flex h-7 w-12 items-center rounded-full p-[3px] transition-colors duration-200", checked ? "bg-foreground" : "bg-muted-foreground/35")}>
+    <span className={cn("flex h-7 w-12 items-center rounded-full p-[3px] transition-colors duration-200", checked ? "metal" : "bg-muted-foreground/35")}>
       <motion.span
         aria-hidden="true"
         className={cn("size-[22px] rounded-full bg-background shadow-sm", pending && "animate-pulse")}

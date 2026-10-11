@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
@@ -295,10 +296,18 @@ export function PostActions(props: Props) {
         <Count value={likeState.count} />
       </button>
 
-      <span className="inline-flex items-center gap-1.5 px-2 py-1.5 text-[13px] tabular-nums" aria-label={`${views} views`} title={`${views} views`}>
-        <Eye className="size-[18px]" />
-        <Count value={views} />
-      </span>
+      {isOwn ? (
+        // The author's view count opens the post's analytics.
+        <Link href={`${statusHref}/analytics`} aria-label={`${views} views, post analytics`} title="Post analytics" className={cn(BUTTON, "relative z-10")}>
+          <Eye className="size-[18px]" />
+          <Count value={views} />
+        </Link>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1.5 text-[13px] tabular-nums" aria-label={`${views} views`} title={`${views} views`}>
+          <Eye className="size-[18px]" />
+          <Count value={views} />
+        </span>
+      )}
 
       <button
         type="button"

@@ -1468,3 +1468,73 @@ export function analyticsFor(userId: string, handle: string, now = Date.now()): 
 export function mentionsVerifiedOnly(userId: string): boolean {
   return get<{ mentions_verified_only: number }>("SELECT mentions_verified_only FROM users WHERE id = ?", userId)?.mentions_verified_only === 1
 }
+
+export type PostAnalyticsView = {
+  id: string
+  handle: string
+  body: string
+  createdAt: number
+  views: number
+  likes: number
+  reposts: number
+  quotes: number
+  replies: number
+  bookmarks: number
+  // Actions on the post per view, as a percentage. Null when nobody has viewed it yet.
+  engagementRate: number | null
+  days: { label: string; views: number }[]
+}
+
+// Analytics for one of the viewer's own posts. Anyone else gets null, so the page looks missing.
+export function postAnalytics(postId: string, viewerId: string, now = Date.now()): PostAnalyticsView | null {
+  const post = get<{ id: string; body: string; created_at: number; handle: string }>(
+    `SELECT p.id, p.body, p.created_at, u.handle FROM posts p
+     JOIN users u ON u.id = p.author_id
+     WHERE p.id = ? AND p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL`,
+    postId,
+    viewerId
+  )
+  if (!post) return null
+
+  const count = (sql: string, ...params: Param[]) => get<{ c: number }>(sql, ...params)?.c ?? 0
+  const views = count("SELECT COUNT(*) AS c FROM post_views WHERE post_id = ? AND viewer_id <> ?", postId, viewerId)
+  const likes = count("SELECT COUNT(*) AS c FROM likes WHERE post_id = ?", postId)
+  const reposts = count("SELECT COUNT(*) AS c FROM reposts WHERE post_id = ?", postId)
+  const quotes = count("SELECT COUNT(*) AS c FROM posts WHERE quote_of_id = ? AND is_draft = 0 AND publish_at IS NULL", postId)
+  const replies = count("SELECT COUNT(*) AS c FROM posts WHERE reply_to_id = ? AND is_draft = 0 AND publish_at IS NULL", postId)
+  const bookmarks = count("SELECT COUNT(*) AS c FROM bookmarks WHERE post_id = ?", postId)
+
+  const today = Math.floor(now / DAY_MS)
+  const viewDays = all<{ day: number; c: number }>(
+    `SELECT CAST(created_at / ? AS INTEGER) AS day, COUNT(*) AS c FROM post_views
+     WHERE post_id = ? AND viewer_id <> ? AND created_at >= ? GROUP BY day`,
+    DAY_MS,
+    postId,
+    viewerId,
+    (today - 13) * DAY_MS
+  )
+  const days: { label: string; views: number }[] = []
+  for (let offset = 13; offset >= 0; offset--) {
+    const day = today - offset
+    days.push({
+      label: new Date(day * DAY_MS).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+      views: viewDays.find((row) => row.day === day)?.c ?? 0,
+    })
+  }
+
+  const actions = likes + reposts + quotes + replies + bookmarks
+  return {
+    id: post.id,
+    handle: post.handle,
+    body: post.body,
+    createdAt: post.created_at,
+    views,
+    likes,
+    reposts,
+    quotes,
+    replies,
+    bookmarks,
+    engagementRate: views > 0 ? Math.round((actions / views) * 1000) / 10 : null,
+    days,
+  }
+}

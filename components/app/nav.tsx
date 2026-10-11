@@ -2,10 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import { motion } from "motion/react"
 import { Bell, Bookmark, House, List, MessageCircle, Search } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
+import { MobileDrawer } from "@/components/app/mobile-drawer"
 import { cn } from "@/lib/utils"
 
 export type NavItemConfig = {
@@ -19,7 +21,7 @@ export type NavItemConfig = {
   mobile: boolean
 }
 
-// The sidebar keeps every section. The bottom bar on phones keeps the five used most.
+// The sidebar keeps every section. The glass dock on phones keeps the ones used most.
 export function buildItems(notifications: number, messages: number): NavItemConfig[] {
   return [
     { href: "/", label: "Home", Icon: House, filled: true, active: (p) => p === "/", mobile: true },
@@ -31,58 +33,113 @@ export function buildItems(notifications: number, messages: number): NavItemConf
   ]
 }
 
+// The glass dock along the bottom of phones. The avatar opens the left panel, which also opens on a swipe from the left edge.
 export function MobileTabBar({
   viewer,
   notifications,
   messages,
 }: {
-  viewer: AvatarUser & { handle: string }
+  viewer: AvatarUser & { handle: string; status?: string | null }
   notifications: number
   messages: number
 }) {
   const path = usePathname()
+  const [open, setOpen] = useState(false)
   const items = buildItems(notifications, messages).filter((item) => item.mobile)
+
+  // Touch events, not pointer events: the browser cancels a pointer once a sideways pan starts,
+  // but the touch moves keep arriving, so the swipe still reads all the way across.
+  useEffect(() => {
+    let startX = 0
+    let startY = 0
+    let tracking = false
+    function down(event: TouchEvent) {
+      const touch = event.touches[0]
+      if (!touch || event.touches.length > 1 || touch.clientX > 24) return
+      startX = touch.clientX
+      startY = touch.clientY
+      tracking = true
+    }
+    function move(event: TouchEvent) {
+      const touch = event.touches[0]
+      if (!tracking || !touch) return
+      if (Math.abs(touch.clientY - startY) > 40) {
+        tracking = false
+        return
+      }
+      if (touch.clientX - startX > 64) {
+        tracking = false
+        setOpen(true)
+      }
+    }
+    function up() {
+      tracking = false
+    }
+    window.addEventListener("touchstart", down, { passive: true })
+    window.addEventListener("touchmove", move, { passive: true })
+    window.addEventListener("touchend", up, { passive: true })
+    window.addEventListener("touchcancel", up, { passive: true })
+    return () => {
+      window.removeEventListener("touchstart", down)
+      window.removeEventListener("touchmove", move)
+      window.removeEventListener("touchend", up)
+      window.removeEventListener("touchcancel", up)
+    }
+  }, [])
+
   return (
-    <nav aria-label="Main" className="fixed inset-x-3 bottom-3 z-30 lg:hidden">
-      <ul className="mx-auto flex max-w-[460px] items-center justify-between gap-1 rounded-full border border-border bg-background/90 p-1.5 shadow-lg backdrop-blur-md">
-        {items.map(({ href, label, Icon, badge, active }) => {
-          const isActive = active(path)
-          return (
-            <li key={href}>
-              <Link
-                href={href}
-                aria-label={label}
-                aria-current={isActive ? "page" : undefined}
-                className="relative grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
-              >
-                {isActive ? (
-                  <motion.span
-                    layoutId="mobile-pill"
-                    className="absolute inset-0 rounded-full bg-foreground"
-                    transition={{ type: "spring", stiffness: 500, damping: 38 }}
-                  />
-                ) : null}
-                <Icon className={cn("relative size-[22px]", isActive ? "text-background" : "text-foreground/80")} strokeWidth={isActive ? 2.25 : 1.75} aria-hidden="true" />
-                {badge && badge > 0 ? (
-                  <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
-                    {badge > 9 ? "9+" : badge}
-                  </span>
-                ) : null}
-                <span className="sr-only">{label}</span>
-              </Link>
-            </li>
-          )
-        })}
-        <li>
-          <Link
-            href="/settings"
-            aria-label="Account and settings"
-            className="grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
-          >
-            <Avatar user={viewer} size={32} />
-          </Link>
-        </li>
-      </ul>
-    </nav>
+    <>
+      <nav aria-label="Main" className="fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 lg:hidden">
+        <ul className="glass mx-auto flex max-w-[440px] items-center justify-between rounded-[30px] p-1.5">
+          {items.map(({ href, label, Icon, badge, active }) => {
+            const isActive = active(path)
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-label={label}
+                  aria-current={isActive ? "page" : undefined}
+                  className="relative grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
+                >
+                  {isActive ? (
+                    <motion.span
+                      layoutId="mobile-dock-pill"
+                      className="metal absolute inset-0 rounded-full"
+                      transition={{ type: "spring", stiffness: 500, damping: 38 }}
+                    />
+                  ) : null}
+                  <Icon className={cn("relative size-[22px]", isActive ? "text-[var(--metal-text)]" : "text-foreground/80")} strokeWidth={isActive ? 2.2 : 1.75} aria-hidden="true" />
+                  {badge && badge > 0 ? (
+                    <span className="metal absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold">
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  ) : null}
+                </Link>
+              </li>
+            )
+          })}
+          <li>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={open}
+              aria-haspopup="dialog"
+              className="grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
+            >
+              <Avatar user={viewer} size={32} />
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <MobileDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        viewer={viewer}
+        path={path}
+        notifications={notifications}
+        messages={messages}
+      />
+    </>
   )
 }

@@ -126,7 +126,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             <>
               <Link
                 href="/analytics"
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-semibold transition-colors hover:bg-muted"
+                className="glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
               >
                 <BarChart3 className="size-4" />
                 Analytics
@@ -149,13 +149,13 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
             @{profile.handle}
             {rel.followsMe && !isSelf ? (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">Follows you</span>
+              <span className="glass rounded-md px-1.5 py-0.5 text-xs font-medium text-foreground">Follows you</span>
             ) : null}
           </p>
         </div>
-        {profile.status ? <p className="w-fit max-w-full truncate rounded-full bg-muted px-3 py-1 text-sm">{profile.status}</p> : null}
+        {profile.status ? <p className="glass w-fit max-w-full truncate rounded-full px-3 py-1 text-sm">{profile.status}</p> : null}
         {rel.blockedByMe && !isSelf ? (
-          <p className="rounded-xl bg-muted px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
+          <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
         ) : null}
         {profile.bio ? <p className="text-[15px] leading-relaxed whitespace-pre-line">{profile.bio}</p> : null}
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">

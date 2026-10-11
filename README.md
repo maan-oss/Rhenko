@@ -1,6 +1,6 @@
 # Rhenko
 
-A public-conversation app in the shape of X, built with its own look. Two themes only: light is Claude's cream, dark is ChatGPT's charcoal. Ink is the only accent. The type is Sora. It runs on Next.js 16 (App Router with Cache Components), React 19, Tailwind v4, and the component set in `components/ui`.
+A public-conversation app in the shape of X, built with its own look. Two themes only: light is Claude's cream, dark is ChatGPT's charcoal. Ink is the only accent. Surfaces are glass (a translucent, blurred panel with a light top edge) and metal (a glossy ink fill on the active and primary controls). The type is Sora. It runs on Next.js 16 (App Router with Cache Components), React 19, Tailwind v4, and the component set in `components/ui`.
 
 ## Run it
 
@@ -51,9 +51,12 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - A one-line status (up to 40 characters) set in Settings. It shows beside your name in the sidebar and as a pill on your profile.
 
 **Home and posts**
-- The top bar has Home, For you and Following, and a plus button for lists and timelines.
+- The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. A row of trending topics sits above the composer and links to `/topics/[tag]`.
 - Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
-- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options. Photos and the poll are icon buttons under the text. That is all it does.
+- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
+- Under the text are icon buttons for photos, poll, emoji and schedule. Below them, a "Who can reply" menu (everyone, accounts you follow, or accounts you mention) and a "Mark media as sensitive" toggle appear when they apply. Replies inherit the post's settings.
+- Schedule picks a date and a quarter-hour time. The server checks the time is far enough ahead and reports a problem as a toast.
+- Save draft keeps a new post on `/drafts` without publishing it. Cmd or Ctrl with Enter posts.
 - Posts with two or more photos or videos show as a carousel. Hover the post for the arrows, use the arrow keys once it has focus, swipe on a phone, or pick a dot.
 - Feeds load older posts as you scroll, with a "Show more" button as a fallback.
 - Reply, quote, repost, like, bookmark, share, pin to your profile, and highlight.
@@ -63,7 +66,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - Community notes: signed-in people can add one note to a post. It is shown once at least two people rate it helpful, and more of them than not.
 - Share → Copy embed code gives a blockquote snippet for other sites.
 - Sensitive-media flag, and report.
-- Post view counts, shown on the Analytics page.
+- Post view counts. The author's view count opens that post's analytics page.
 
 **Profiles and relationships**
 - A banner that fades into the page and a circle avatar. The tabs are icons, and the active one shows its name: Posts, Replies, Media, Reposts and Likes (visible only to the account's owner). Highlights sits inside Posts as a second option. Empty tabs say so in the middle of the page.
@@ -97,6 +100,7 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 **Analytics**
 - Owners get an Analytics page: post views and profile visits over the last 28 days, follower counts, a 14-day chart, and the top posts.
 - A profile visit from the same person counts once every six hours. Visits from the owner don't count.
+- Post analytics: the author sees one post's views, engagement rate (likes, reposts, quotes, replies and bookmarks as a share of views), each action's count, and a 14-day chart. Other people get a 404 for that page. Drafts and scheduled posts have no analytics until they go out.
 
 **Lists**
 - Lists with members, a public or private setting, and a timeline for each list. Private lists can't be followed.
@@ -112,6 +116,9 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 
 **Display and PWA**
 - The sidebar is one full-height surface. Expanded, a close button sits at the top right. Collapsed, the logo becomes the open button on hover, and each icon's label appears beside it. The state is kept in a cookie, so the page never flashes the wrong width.
+- On phones the bottom navigation is a glass dock: Home, Explore, Notifications, Messages and Bookmarks. The active item is a metal pill that slides between them. The avatar at the end opens the left panel.
+- The left panel slides in from the left with rounded edges that overlap the page. It holds your profile, every section, Drafts, Analytics, Settings and the Post button. Swipe right from the left edge to open it; swipe left, press Escape, or tap the dimmed page to close it.
+- The sign-in screens show a faint, drifting ink mass around the Rhenko mark. It follows the pointer with a little lag and stays still under reduced motion.
 - Installable as a PWA with an offline fallback page. The service worker only registers in production.
 
 **Realtime**
@@ -125,8 +132,8 @@ The script reads the same database as the app (`RHENKO_DATA_DIR`, or `./data`), 
 - No rate limiting on sign-in or posting yet.
 - Calls are not built. The call button is a placeholder.
 - Communities were removed from the interface. Their database tables remain in place, unused, so existing data stays intact. Community notes on posts are still available.
-- Drafts and scheduled posts are still stored by the server and their page still exists at `/drafts`, but the composer no longer creates them and the sidebar no longer links there.
+- Drafts and scheduled posts live on `/drafts`. Scheduled posts go out when a feed is next read after their time, so a scheduled post can be late if nobody has opened the app since.
 - Not-found pages for missing accounts, posts, lists and conversations return HTTP 200 with a `noindex` tag and the "This page is not here" view. Cache Components sends a static shell before the page runs, so the status is already fixed. Unknown URLs outside the app routes get a real 404.
 - The likes tab shows only to the account's owner, matching X's default.
-- Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs.
+- Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs. Drafts and scheduled posts are reached from the Drafts icon.
 - Not included: ads and ad billing, premium tiers and payments, tip jar, the AI assistant, Spaces, jobs, articles, live video, shopping, saved searches, and a lists tab in search.

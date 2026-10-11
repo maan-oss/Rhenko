@@ -1,18 +1,23 @@
 import type { ReactNode } from "react"
+import { AuthArt } from "@/components/app/auth-art"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 
-// The sign-in screens: a faint brand mark behind a single card. They don't copy the
-// stacked social buttons of other networks.
+// The sign-in screens. The mark's art sits beside the form on wide screens and above it on phones.
+// The form is one card, the same on every sign-in screen.
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-12">
-      <div aria-hidden="true" className="brand-gutter pointer-events-none absolute inset-0" />
-      <div className="relative z-10 flex w-full max-w-[400px] flex-col gap-7 rounded-[28px] border border-border bg-card/90 p-7 shadow-sm backdrop-blur sm:p-9">
-        <div className="flex items-center gap-2.5">
-          <RhenkoSymbol className="size-7" />
-          <span className="text-[15px] font-semibold tracking-tight">Rhenko</span>
+    <main className="app-canvas relative flex min-h-dvh flex-col overflow-hidden lg:flex-row">
+      <section className="relative h-60 w-full shrink-0 overflow-hidden bg-sidebar sm:h-72 lg:h-auto lg:w-[46%] lg:shrink">
+        <AuthArt />
+      </section>
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-12 sm:px-8 lg:px-12">
+        <div className="flex w-full max-w-[400px] flex-col gap-7 rounded-[28px] border border-border bg-card/90 p-7 shadow-sm backdrop-blur sm:p-9">
+          <div className="flex items-center gap-2.5">
+            <RhenkoSymbol className="size-7" />
+            <span className="text-[15px] font-semibold tracking-tight">Rhenko</span>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
     </main>
   )

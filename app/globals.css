@@ -86,6 +86,17 @@
   --sidebar-accent-foreground: #1f1d1a;
   --sidebar-border: #ddd5c2;
   --sidebar-ring: #8a8373;
+  /* Metallic glass. Glass is a warm tint over the cream, metal is ink with a bright top edge. */
+  --sheen: #fffdf7;
+  --glass: rgb(251 248 242 / 0.7);
+  --glass-edge: rgb(255 255 255 / 0.85);
+  --glass-line: rgb(31 29 26 / 0.1);
+  --glass-shadow: rgb(31 29 26 / 0.22);
+  --metal-top: #4a4742;
+  --metal-mid: #1f1d1a;
+  --metal-bottom: #12110f;
+  --metal-text: #f5f1e8;
+  --chrome-fill: #fbf8f2;
 }
 
 /* Dark: ChatGPT's charcoal. */
@@ -123,6 +134,17 @@
   --sidebar-accent-foreground: #ececec;
   --sidebar-border: #2c2c2c;
   --sidebar-ring: #8e8e8e;
+  /* Metallic glass on charcoal: a lifted tint, a light top edge, and a bright metal button. */
+  --sheen: #2e2e2e;
+  --glass: rgb(43 43 43 / 0.72);
+  --glass-edge: rgb(255 255 255 / 0.12);
+  --glass-line: rgb(255 255 255 / 0.09);
+  --glass-shadow: rgb(0 0 0 / 0.55);
+  --metal-top: #ffffff;
+  --metal-mid: #ececec;
+  --metal-bottom: #bdbdbd;
+  --metal-text: #212121;
+  --chrome-fill: #2b2b2b;
 }
 
 @layer base {
@@ -177,16 +199,40 @@ textarea:-webkit-autofill {
   }
 }
 
-/* A faint brand mark for the empty side areas of wide screens. */
-.brand-gutter {
-  background-image: url("/gutter-mark.svg");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 100vw auto;
-  opacity: 0.05;
-  filter: grayscale(1);
+/* The app's canvas: a soft sheen at the top over the flat background. No logo behind the content. */
+@utility app-canvas {
+  background-image: radial-gradient(900px 480px at 50% -140px, var(--sheen), transparent 72%);
+  background-color: var(--background);
 }
-.dark .brand-gutter {
-  opacity: 0.07;
-  filter: invert(1) grayscale(1);
+
+/* Glass: a translucent surface with a blur, a light top edge and a soft shadow. */
+@utility glass {
+  background-color: var(--glass);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid var(--glass-line);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 18px 40px -20px var(--glass-shadow);
+}
+
+/* Metal: a glossy ink (or bright, on charcoal) fill with a bevel. Used for the active and primary controls. */
+@utility metal {
+  background-image: linear-gradient(180deg, var(--metal-top) 0%, var(--metal-mid) 55%, var(--metal-bottom) 100%);
+  color: var(--metal-text);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    inset 0 -1px 0 rgb(0 0 0 / 0.3),
+    0 10px 22px -12px rgb(0 0 0 / 0.6);
+}
+
+/* Chrome ring: a thin bright metal border around a surface, with light sweeping round it. */
+@utility chrome-ring {
+  border: 1.5px solid transparent;
+  background-image:
+    linear-gradient(var(--chrome-fill), var(--chrome-fill)),
+    conic-gradient(from 200deg, #ffffff, #8c8c93, #f7f7f9, #55555c, #e9e9ee, #7b7b83, #ffffff);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
 }

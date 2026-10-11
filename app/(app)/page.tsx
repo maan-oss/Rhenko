@@ -1,7 +1,8 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Plus, Sparkles, Users } from "lucide-react"
+import { FileText, Plus, Sparkles, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
+import { trendingTags } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
 import { PageHeader } from "@/components/app/page-header"
@@ -27,6 +28,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const spec: FeedSpec = { kind: "home", mode }
   const page = feedFor(spec, viewer.id)
   const following = mode === "following"
+  const tags = trendingTags(8)
   return (
     <>
       <PageHeader
@@ -40,15 +42,37 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
           />
         }
         actions={
-          <Link
-            href="/lists"
-            aria-label="Timelines and lists"
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-foreground/5"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/drafts"
+              aria-label="Drafts and scheduled posts"
+              className="glass grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5"
+            >
+              <FileText className="size-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/lists"
+              aria-label="Timelines and lists"
+              className="glass grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
         }
       />
+      {tags.length > 0 ? (
+        <nav aria-label="Trending topics" className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {tags.map(({ tag }) => (
+            <Link
+              key={tag}
+              href={`/topics/${encodeURIComponent(tag)}`}
+              className="glass inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-[14px] font-semibold text-foreground transition-colors duration-200 hover:bg-foreground/5"
+            >
+              #{tag}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
       <Composer viewer={viewer} placeholder="What's happening?" id="compose" />
       <FeedList
         key={mode}

@@ -12,8 +12,7 @@ export const instant = false
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
-      <div aria-hidden="true" className="brand-gutter pointer-events-none fixed inset-0 -z-10" />
+    <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
       <Sidebar />
       <main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
       <RightRail />

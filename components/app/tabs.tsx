@@ -30,7 +30,7 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
   return (
     <nav
       aria-label={label}
-      className={cn("inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none]", className)}
+      className={cn("glass inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full p-1 [scrollbar-width:none]", className)}
     >
       {items.map((item) => (
         <Link
@@ -42,13 +42,13 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
           aria-current={item.active ? "page" : undefined}
           className={cn(
             "relative flex h-8 shrink-0 items-center justify-center gap-2 rounded-full text-[14px] font-semibold whitespace-nowrap transition-colors duration-200",
-            item.active ? "px-3.5 text-background" : "w-9 text-muted-foreground hover:text-foreground"
+            item.active ? "px-3.5 text-[var(--metal-text)]" : "w-9 text-muted-foreground hover:text-foreground"
           )}
         >
           {item.active ? (
             <motion.span
               layoutId="tab-pill"
-              className="absolute inset-0 rounded-full bg-foreground"
+              className="metal absolute inset-0 rounded-full"
               transition={{ type: "spring", stiffness: 520, damping: 40 }}
             />
           ) : null}

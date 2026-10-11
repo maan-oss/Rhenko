@@ -57,9 +57,28 @@ export function SidebarPanel({ viewer, recent, notifications, messages, initialC
           <SidebarSearch recent={recent} collapsed={collapsed} onExpand={() => save(false)} />
           <SidebarNav path={path} notifications={notifications} messages={messages} collapsed={collapsed} />
         </div>
-        <AccountLink viewer={viewer} collapsed={collapsed} />
+        <div className="flex flex-col gap-3">
+          <ComposeLink collapsed={collapsed} />
+          <AccountLink viewer={viewer} collapsed={collapsed} />
+        </div>
       </div>
     </aside>
+  )
+}
+
+// The Post button is text only. In the collapsed rail it stays a small pill, so it never disappears.
+function ComposeLink({ collapsed }: { collapsed: boolean }) {
+  return (
+    <Link
+      href="/#compose"
+      className={cn(
+        "flex h-11 items-center justify-center overflow-hidden rounded-full bg-foreground font-semibold text-background transition-[width,opacity,scale] duration-300 hover:opacity-85 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        EASE,
+        collapsed ? "w-11 text-[14px]" : "w-full text-[16px]"
+      )}
+    >
+      Post
+    </Link>
   )
 }
 

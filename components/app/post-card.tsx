@@ -153,6 +153,11 @@ export function PostCard({
                   <NumberTicker value={post.likes} className="font-semibold text-foreground" />{" "}
                   <span className="text-muted-foreground">Likes</span>
                 </p>
+                {isOwn ? (
+                  <Link href={`${statusHref}/analytics`} className="relative z-10 font-semibold text-foreground underline underline-offset-4 hover:text-dusk">
+                    Post analytics
+                  </Link>
+                ) : null}
               </div>
             </div>
           ) : null}
