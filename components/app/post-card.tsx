@@ -2,6 +2,7 @@ import Link from "next/link"
 import { CalendarClock, EyeOff, Info, PenLine, Pin, Repeat2, Sparkles } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
+import { ProfileLink } from "@/components/app/profile-hover"
 import { EditHistory } from "@/components/app/edit-history"
 import { MediaGrid } from "@/components/app/media-grid"
 import { PendingActions } from "@/components/app/pending-actions"
@@ -134,19 +135,19 @@ export function PostCard({
         </p>
       ) : null}
       <div className="flex gap-3">
-        <Link href={`/${post.author.handle}`} className="relative z-10 shrink-0" aria-label={`${post.author.name} profile`}>
+        <ProfileLink handle={post.author.handle} className="relative z-10 shrink-0" label={`${post.author.name} profile`}>
           <Avatar user={post.author} size={40} />
-        </Link>
+        </ProfileLink>
         <div className="min-w-0 flex-1">
           <header className="flex flex-wrap items-baseline gap-x-2 leading-tight">
-            <Link
-              href={`/${post.author.handle}`}
+            <ProfileLink
+              handle={post.author.handle}
               className="relative z-10 inline-flex max-w-full items-center font-semibold hover:underline max-sm:after:absolute max-sm:after:-inset-x-1 max-sm:after:-inset-y-2.5"
             >
               <span className="truncate">{post.author.name}</span>
               {post.author.verified ? <VerifiedBadge className="ml-1 shrink-0" /> : null}
               {post.author.paidVerified ? <SubscriberBadge className="ml-1 shrink-0" /> : null}
-            </Link>
+            </ProfileLink>
             <span className="truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
             <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="text-[15px] text-muted-foreground">
               <Link href={statusHref} className="transition-colors after:absolute after:inset-0 hover:text-foreground">

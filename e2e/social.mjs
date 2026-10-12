@@ -20,7 +20,7 @@ import {
   unfollowButton,
   withdrawButton,
 } from "./lib/people.mjs"
-import { attach, cardCount, homeComposer, likeButton, noPost, openHome, openProfile, openSearch, replyButton, typeIn, waitForPost, writePost } from "./lib/posts.mjs"
+import { attach, card, cardCount, homeComposer, likeButton, noPost, openHome, openProfile, openSearch, replyButton, typeIn, waitForPost, writePost } from "./lib/posts.mjs"
 import { acted, alertText, bodyText, gone, go, missingHandle, missingId, notHere, ready, toastText } from "./lib/ui.mjs"
 
 function uniq(label) {
@@ -127,6 +127,26 @@ async function followFlow({ phone }) {
     await remove.waitFor({ state: "detached" })
     await openProfile(fan.page, star.handle)
     await followButton(fan.page, star.handle).waitFor()
+  })
+
+  await check(`${where}: resting on a name shows the person's card, and Follow works from it`, async () => {
+    await openProfile(fan.page, star.handle)
+    const nameLink = card(fan.page, starPost).getByRole("link", { name: star.name, exact: true })
+    const popup = fan.page.locator(`[aria-label="@${star.handle} profile preview"]`)
+    await nameLink.hover()
+    // A phone has no hover, so the name is only a link and no card opens.
+    if (phone) {
+      await sleep(1200)
+      assert.equal(await popup.count(), 0, "a phone showed a hover card")
+      return
+    }
+    await popup.waitFor()
+    await popup.getByText(star.name, { exact: true }).waitFor()
+    await acted(fan.page, () => popup.getByRole("button", { name: `Follow @${star.handle}`, exact: true }).click())
+    await toastText(fan.page, new RegExp(`^You follow @${star.handle}`, "i"))
+    await popup.getByRole("button", { name: `Unfollow @${star.handle}`, exact: true }).waitFor()
+    await fan.page.mouse.move(0, 0)
+    await popup.waitFor({ state: "detached" })
   })
 }
 
