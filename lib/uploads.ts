@@ -99,12 +99,63 @@ export async function saveUpload(
     console.error("[uploads] saving a file failed", error)
     return { ok: false, error: "That file couldn't be saved. Try again." }
   }
+  // A picture gets its feed-sized copy now, so the first person to see it does not wait for the copy to be made.
+  if (format.kind === "image") await variantFile(name, FEED_WIDTH)
   return { ok: true, name, kind: format.kind }
+}
+
+// Smaller copies of a picture. A feed photo, a profile picture or a link preview is sent at the width its place on the page
+// needs, not at the size it was uploaded. A copy is made the first time someone asks for that width and kept beside the
+// original, so the cost is paid once. A copy is always WebP. Animated GIFs, video and voice messages are sent as they are.
+export const VARIANT_WIDTHS = [160, 640, 1280] as const
+export type VariantWidth = (typeof VARIANT_WIDTHS)[number]
+// The width a feed, a link preview or a chat photo asks for: sharp on a phone or a 2x screen.
+export const FEED_WIDTH: VariantWidth = 1280
+
+const VARIANT_EXTS = new Set(["jpg", "png", "webp"])
+
+export function variantWidthOf(value: string | null): VariantWidth | null {
+  const width = Number(value)
+  return (VARIANT_WIDTHS as readonly number[]).includes(width) ? (width as VariantWidth) : null
+}
+
+function variantPath(name: string, width: VariantWidth): string {
+  const base = name.slice(0, name.lastIndexOf("."))
+  return path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, "variants", `${base}.w${width}.webp`)
+}
+
+// The file to send for a picture at this width, made now if it does not exist yet. Null means send the original: the
+// file is not a picture that can be resized, or the copy could not be made.
+export async function variantFile(name: string, width: VariantWidth): Promise<string | null> {
+  if (!UPLOAD_NAME_PATTERN.test(name)) return null
+  if (!VARIANT_EXTS.has(name.slice(name.lastIndexOf(".") + 1))) return null
+  const target = variantPath(name, width)
+  try {
+    await fs.promises.access(target)
+    return target
+  } catch {
+    // Not made yet.
+  }
+  const source = path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, name)
+  // Written under a temporary name and renamed when whole, so a reader never gets half a picture.
+  const temp = `${target}.${randomUUID()}.tmp`
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    const { default: sharp } = await import("sharp")
+    await sharp(source).resize({ width, withoutEnlargement: true }).webp({ quality: 80 }).toFile(temp)
+    await fs.promises.rename(temp, target)
+    return target
+  } catch (error) {
+    await fs.promises.unlink(temp).catch(() => undefined)
+    console.error("[uploads] making a smaller copy failed", error)
+    return null
+  }
 }
 
 export function removeUpload(name: string | null | undefined): void {
   if (!name || !UPLOAD_NAME_PATTERN.test(name)) return
   fs.promises.unlink(path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, name)).catch(() => undefined)
+  for (const width of VARIANT_WIDTHS) fs.promises.unlink(variantPath(name, width)).catch(() => undefined)
 }
 
 export function uploadPath(name: string): string | null {

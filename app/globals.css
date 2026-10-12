@@ -71,7 +71,8 @@
   --border: #ddd5c2;
   --input: #d3caB5;
   --ring: #8a8373;
-  --dusk: #1f1d1a;
+  /* The dusk accent: a twilight indigo for links, on-switches, the verified check and the reader's own messages. */
+  --dusk: #3f4a7a;
   --chart-1: #1f1d1a;
   --chart-2: #6b655a;
   --chart-3: #9a9384;
@@ -126,7 +127,8 @@
   --border: #3d3d3d;
   --input: #4a4a4a;
   --ring: #8e8e8e;
-  --dusk: #ececec;
+  /* The same accent lifted for the dark background. */
+  --dusk: #aeb8f2;
   --chart-1: #ececec;
   --chart-2: #a8a8a8;
   --chart-3: #7a7a7a;

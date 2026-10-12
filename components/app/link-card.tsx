@@ -12,7 +12,7 @@ export function LinkCard({ preview }: { preview: LinkPreview }) {
     >
       {preview.image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/media/${preview.image}`} alt="" loading="lazy" className="aspect-[1.91/1] w-full object-cover" />
+        <img src={`/media/${preview.image}?w=1280`} alt="" loading="lazy" decoding="async" className="aspect-[1.91/1] w-full object-cover" />
       ) : null}
       <span className="block px-4 py-3">
         {preview.site ? <span className="block truncate text-[13px] text-muted-foreground">{preview.site}</span> : null}

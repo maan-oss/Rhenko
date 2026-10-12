@@ -2,7 +2,7 @@ import fs from "node:fs"
 import { Readable } from "node:stream"
 import { getViewer } from "@/lib/auth"
 import { mediaAccess } from "@/lib/data"
-import { contentTypeFor, uploadPath } from "@/lib/uploads"
+import { contentTypeFor, uploadPath, variantFile, variantWidthOf } from "@/lib/uploads"
 
 function notFound(): Response {
   return new Response("Not found", { status: 404, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } })
@@ -11,7 +11,8 @@ function notFound(): Response {
 // Serves uploaded media. Avatars and banners are public and cached for a day. A post's photo or video is served only
 // to someone who may see a post that uses it, and a chat photo only to the members of that conversation, never
 // cached; anything else is a 404, so a private file looks the same as a missing one. Video players seek with Range
-// requests, so this route answers them with 206 partial responses.
+// requests, so this route answers them with 206 partial responses. A picture asked for with ?w= comes as a WebP at that
+// width, under the same rules as the original.
 export async function GET(request: Request, { params }: { params: Promise<{ file: string }> }) {
   const { file } = await params
   const filePath = uploadPath(file)
@@ -20,6 +21,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const viewer = await getViewer()
   const access = mediaAccess(file, viewer?.id ?? null)
   if (access === "none") return notFound()
+
+  const cacheControl = access === "public" ? "public, max-age=86400" : "private, no-store"
+  const width = variantWidthOf(new URL(request.url).searchParams.get("w"))
+  if (width !== null) {
+    const variant = await variantFile(file, width)
+    if (variant) {
+      try {
+        const bytes = await fs.promises.readFile(variant)
+        return new Response(new Uint8Array(bytes), {
+          headers: { "Content-Type": "image/webp", "Content-Length": String(bytes.length), "Cache-Control": cacheControl, "X-Content-Type-Options": "nosniff" },
+        })
+      } catch {
+        return notFound()
+      }
+    }
+  }
 
   let size: number
   try {

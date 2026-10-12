@@ -112,7 +112,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       <div className="relative h-40 overflow-hidden bg-muted md:h-48">
         {profile.bannerFile ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/media/${profile.bannerFile}`} alt="" className="size-full object-cover" />
+          <img src={`/media/${profile.bannerFile}?w=1280`} alt="" decoding="async" className="size-full object-cover" />
         ) : (
           <RhenkoSymbol className="absolute -top-6 -right-10 size-56 text-foreground opacity-[0.07]" />
         )}

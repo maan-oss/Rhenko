@@ -1,7 +1,7 @@
 // Posts end to end: text, image, poll, draft, scheduled, reply, quote, repost, like, bookmark, pin, highlight, edit, delete,
 // undo, and the notifications they cause. Everything runs on a computer and on a phone, except the schedule wait.
 import { area, assert, check, guard, need, note } from "./lib/harness.mjs"
-import { RUN_ID, randomWord, sleep } from "./lib/env.mjs"
+import { BASE, RUN_ID, randomWord, sleep } from "./lib/env.mjs"
 import { closeVisitor, newTab } from "./lib/browser.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { databaseProblem, keepLinkPreview, moveSchedule, postIdByBody, postState } from "./lib/db.mjs"
@@ -179,12 +179,26 @@ async function postFlows({ phone }) {
       { timeout: 20_000 }
     )
     const source = await picture.getAttribute("src")
-    assert.match(source ?? "", /^\/media\/[a-f0-9]{32}\.png$/, "the picture is not kept on this site")
+    // The page asks for a copy at the width its frame needs (?w=), kept on this site. The copy is what the reader gets.
+    assert.match(source ?? "", /^\/media\/[a-f0-9]{32}\.png(\?w=\d+)?$/, "the picture is not kept on this site")
   })
 
   await check(`${where}: the Media tab lists the picture post`, async () => {
     await openProfile(reader.page, author.handle, "media")
     await waitForPost(reader.page, withImage)
+  })
+
+  await check(`${where}: a picture is sent as a WebP at the width its frame needs, and the original stays available`, async () => {
+    const shown = await waitForPost(reader.page, withImage)
+    // The feed's photo frames ask for 1280 pixels. Avatars ask for smaller copies and are not this picture.
+    const src = await shown.locator("img[src$='?w=1280']").first().getAttribute("src")
+    assert.match(src ?? "", /^\/media\/[a-f0-9]{32}\.(jpg|png|webp)\?w=1280$/, `the feed asks for ${src}`)
+    const copy = await reader.page.request.get(`${BASE}${src}`)
+    assert.equal(copy.status(), 200, `the copy answers ${copy.status()}`)
+    assert.match(copy.headers()["content-type"] ?? "", /^image\/webp/, "the copy is not WebP")
+    const original = await reader.page.request.get(`${BASE}${src.split("?")[0]}`)
+    assert.equal(original.status(), 200, `the original answers ${original.status()}`)
+    assert.match(original.headers()["content-type"] ?? "", /^image\/(jpeg|png|webp)/, "the original is not a picture")
   })
 
   await check(`${where}: a file that only pretends to be a picture is refused`, async () => {

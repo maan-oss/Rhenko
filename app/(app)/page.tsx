@@ -13,7 +13,7 @@ import { PeopleList } from "@/components/app/people-list"
 import { TabLinks } from "@/components/app/tabs"
 import { Composer } from "@/components/app/composer"
 import { FeedList } from "@/components/app/feed-list"
-import { Skeleton } from "@/components/ui/skeleton"
+import { FeedSkeleton } from "@/components/app/feed-skeleton"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
@@ -113,19 +113,3 @@ function FollowingEmpty({ viewerId }: { viewerId: string }) {
   )
 }
 
-function FeedSkeleton() {
-  return (
-    <div className="flex flex-col gap-5 px-4 py-6">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="flex gap-3">
-          <Skeleton className="size-10 shrink-0 rounded-full" />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-4 w-1/3" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}

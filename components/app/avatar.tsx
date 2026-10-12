@@ -22,7 +22,7 @@ export function Avatar({ user, size = 40, className }: { user: AvatarUser; size?
     >
       {user.avatarFile ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/media/${user.avatarFile}`} alt="" className="size-full object-cover" draggable={false} />
+        <img src={`/media/${user.avatarFile}?w=${size <= 96 ? 160 : 640}`} alt="" className="size-full object-cover" draggable={false} />
       ) : (
         <span className="grid size-full place-items-center bg-foreground font-semibold tracking-tight text-background" style={{ fontFamily: "var(--font-sora), sans-serif" }}>
           {initialsOf(user.name)}

@@ -261,7 +261,7 @@ function MessageRow({
                 <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
               ) : message.mediaFile ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`/media/${message.mediaFile}`} alt="Shared photo" className="max-h-72 rounded-xl object-cover" />
+                <img src={`/media/${message.mediaFile}?w=1280`} alt="Shared photo" loading="lazy" decoding="async" className="max-h-72 rounded-xl object-cover" />
               ) : null}
               {message.body ? <PostBody text={message.body} className="text-[15px]" /> : null}
               {message.post ? (

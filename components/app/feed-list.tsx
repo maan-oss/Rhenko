@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { BlurFade } from "@/components/ui/blur-fade"
 import { EmptyState } from "@/components/app/empty-state"
 import { MoveBookmark } from "@/components/app/move-bookmark"
@@ -9,6 +9,9 @@ import { isAdItem, type FeedEntry } from "@/lib/ad-rules"
 import { AdCard } from "@/components/app/ad-card"
 import type { FeedSpec } from "@/lib/feeds"
 import type { Viewer } from "@/lib/auth"
+
+// How many items a feed draws without the entrance fade: enough to fill a phone's first screen.
+const FIRST_SCREEN = 3
 
 type Props = {
   items: FeedEntry[]
@@ -85,18 +88,24 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
 
   return (
     <div>
-      {items.map((item, index) =>
-        isAdItem(item) ? (
-          <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
-            <AdCard ad={item.ad} />
-          </BlurFade>
+      {items.map((item, index) => {
+        const body = isAdItem(item) ? (
+          <AdCard ad={item.ad} />
         ) : (
-          <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
+          <>
             <PostCard post={item.post} viewer={viewer} repostedBy={item.repostedBy} />
             {folders ? <MoveBookmark postId={item.post.id} folderId={item.folderId} folders={folders} /> : null}
+          </>
+        )
+        // The first posts are the first screen. They are drawn with the page. A fade on them would start hidden in the
+        // HTML and wait for the script to run, which delays the moment the page has something to show.
+        if (index < FIRST_SCREEN) return <Fragment key={item.key}>{body}</Fragment>
+        return (
+          <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
+            {body}
           </BlurFade>
         )
-      )}
+      })}
       {next ? (
         <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-8">
           <button

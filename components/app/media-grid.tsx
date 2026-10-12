@@ -47,7 +47,7 @@ function Tile({
       className={cn("relative z-10 block overflow-hidden rounded-2xl border border-border bg-muted", className)}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`/media/${item.file}`} alt={item.alt} loading="lazy" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
+      <img src={`/media/${item.file}?w=1280`} alt={item.alt} loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
       <AltBadge alt={item.alt} />
     </button>
   )
