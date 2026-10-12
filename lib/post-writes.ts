@@ -1,4 +1,4 @@
-import { all, get, run, transaction } from "@/lib/db"
+import { all, get, run } from "@/lib/db"
 import { canSeeLivePost } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { asReplySetting, extractMentions, POST_UNAVAILABLE, replyAllowed, replyRefusal, type ReplySetting } from "@/lib/rules"
@@ -100,23 +100,6 @@ export function announcePost(post: Announced): void {
       followers.map((row) => row.follower_id),
       { type: "posts", postId: post.id }
     )
-  }
-}
-
-// Scheduled posts go live when their time passes. This runs before reads that
-// show the public feed, so the post appears and its notifications fire then.
-export function publishDue(now = Date.now()): void {
-  const due = all<Announced & { publish_at: number }>(
-    `SELECT id, author_id, body, reply_to_id, quote_of_id, publish_at FROM posts
-     WHERE is_draft = 0 AND publish_at IS NOT NULL AND publish_at <= ?`,
-    now
-  )
-  for (const post of due) {
-    transaction(() => {
-      run("UPDATE posts SET publish_at = NULL, created_at = ? WHERE id = ?", post.publish_at, post.id)
-      startPollClock(post.id, post.publish_at)
-    })
-    announcePost(post)
   }
 }
 

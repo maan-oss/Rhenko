@@ -33,6 +33,7 @@ import { area, check, fail, guard, summary } from "./lib/harness.mjs"
 import { configureNoise, noiseTally } from "./lib/watch.mjs"
 import * as auth from "./auth.mjs"
 import * as posts from "./posts.mjs"
+import * as ranking from "./ranking.mjs"
 import * as social from "./social.mjs"
 import * as messages from "./messages.mjs"
 import * as calls from "./calls.mjs"
@@ -82,6 +83,7 @@ const IGNORED_NOISE = [
 const AREAS = [
   ["auth", auth],
   ["posts", posts],
+  ["ranking", ranking],
   ["social", social],
   ["messages", messages],
   ["calls", calls],

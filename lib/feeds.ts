@@ -11,7 +11,8 @@ import {
   type Page,
   type ProfileTab,
 } from "@/lib/data"
-import { publishDue, isFollowing } from "@/lib/post-writes"
+import { isFollowing } from "@/lib/post-writes"
+import { publishDue } from "@/lib/screening"
 import { withAds, type FeedEntry } from "@/lib/ads"
 import { normalizeTag } from "@/lib/rules"
 

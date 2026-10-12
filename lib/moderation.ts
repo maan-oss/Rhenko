@@ -66,6 +66,8 @@ export function restorePost(postId: string, now = Date.now()): boolean {
     ...ids
   )
   run("UPDATE moderation_notices SET restored_at = ? WHERE post_id = ? AND restored_at IS NULL", now, postId)
+  // A person has looked at the post and put it back, so the automatic limit or hold no longer applies to it.
+  run(`UPDATE post_risk SET action = 'allow' WHERE post_id IN (${ids.map(() => "?").join(",")})`, ...ids)
   return true
 }
 

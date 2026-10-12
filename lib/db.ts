@@ -779,6 +779,22 @@ CREATE TABLE IF NOT EXISTS ad_reports (
   UNIQUE (campaign_id, reporter_id)
 );
 `,
+  // Spam checks. Each published post keeps a fingerprint of its words (links and punctuation left out), so the same
+  // message from many accounts is found with one lookup. The result of the checks is kept per post: the score, what
+  // was done (allow, limit or hold) and the reasons. A limited post stays out of other people's For you feeds and sends
+  // no notifications; a held post is hidden with a notice to its author.
+  `
+ALTER TABLE posts ADD COLUMN text_hash TEXT;
+CREATE INDEX IF NOT EXISTS posts_text_hash ON posts(text_hash, created_at);
+CREATE TABLE IF NOT EXISTS post_risk (
+  post_id TEXT PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+  score INTEGER NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('allow', 'limit', 'hold')),
+  reasons TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS post_risk_action ON post_risk(action);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

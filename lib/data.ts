@@ -15,6 +15,7 @@ import type { MediaKind } from "@/lib/uploads"
 import { isVoiceFile } from "@/lib/media-names"
 import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib/link-previews"
 import { callSummary, type CallOutcome } from "@/lib/format"
+import { rank, RANK_WINDOW_MS, type Candidate } from "@/lib/ranking"
 
 // Shared read models. Everything a page or API route renders comes from here,
 // so visibility rules (blocks, mutes, protected accounts, muted words) are
@@ -590,7 +591,147 @@ function timelinePage(
 
 const FOLLOWING = "SELECT followee_id FROM follows WHERE follower_id = ?"
 
-// For you: every post and repost. Following: the viewer's own posts, posts and reposts from accounts they follow, and
+// For you is ranked (lib/ranking.ts). The candidates are the live posts of the last three days that the viewer may see,
+// from anyone, plus the posts and reposts of people the viewer follows. A page is cut from one ranking made at a snapshot
+// time, which the cursor carries as "r1:<time>:<offset>", so the pages agree with each other while the reader scrolls.
+// Rankings are kept for a few minutes per viewer in this process. A cursor in the older format (a time and a key) starts
+// again from the top, and the client drops the items it already shows.
+const FOR_YOU_POOL = 300
+const FOR_YOU_FOLLOWED_POOL = 200
+const FOR_YOU_REPOST_POOL = 100
+const FOR_YOU_SIZE = 400
+const RANKED_TTL_MS = 10 * 60 * 1000
+const RANKED_KEEP = 300
+const rankedCache = new Map<string, { made: number; list: Candidate[] }>()
+
+type CandidatePost = {
+  post_id: string
+  body: string
+  author_id: string
+  created_at: number
+  likes: number
+  reposted: number
+  replies: number
+  quotes: number
+  views: number
+}
+
+const CANDIDATE_COLUMNS = `p.id AS post_id, p.body, p.author_id, p.created_at, p.likes_count AS likes,
+  p.reposts_count AS reposted, p.replies_count AS replies, p.quotes_count AS quotes, p.views_count AS views`
+// A post that a check has limited or held stays out of For you. A held post is also hidden, so this covers limited ones.
+const NOT_RESTRICTED = "NOT EXISTS (SELECT 1 FROM post_risk pr WHERE pr.post_id = p.id AND pr.action <> 'allow')"
+
+function rankCandidates(viewerId: string, at: number): Candidate[] {
+  const since = at - RANK_WINDOW_MS
+  const vis = visibilityClause(viewerId)
+  const tags = new Set(followedTopics(viewerId))
+  const followed = new Set(all<{ followee_id: string }>(FOLLOWING, viewerId).map((r) => r.followee_id))
+
+  const recent = all<CandidatePost>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p INDEXED BY posts_created JOIN users au ON au.id = p.author_id
+     WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+     ORDER BY p.created_at DESC LIMIT ?`,
+    since,
+    at,
+    ...vis.params,
+    FOR_YOU_POOL
+  )
+  // Posts from people the viewer follows are always candidates, even when the recent pool above is full of strangers.
+  const fromFollowed = all<CandidatePost>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
+     WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+       AND p.author_id IN (${FOLLOWING})
+     ORDER BY p.created_at DESC LIMIT ?`,
+    since,
+    at,
+    ...vis.params,
+    viewerId,
+    FOR_YOU_FOLLOWED_POOL
+  )
+  // Reposts by people the viewer follows, with the same blocks and mutes that the Following feed applies to a reposter.
+  const repostRows = all<CandidatePost & { reposter_id: string; reposted_at: number }>(
+    `SELECT ${CANDIDATE_COLUMNS}, r.user_id AS reposter_id, r.created_at AS reposted_at
+     FROM reposts r INDEXED BY reposts_created JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id
+     WHERE r.created_at >= ? AND r.created_at <= ? AND r.user_id IN (${FOLLOWING}) AND ${vis.sql} AND ${NOT_RESTRICTED}
+       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = ?))
+       AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = r.user_id)
+     ORDER BY r.created_at DESC LIMIT ?`,
+    since,
+    at,
+    viewerId,
+    ...vis.params,
+    viewerId,
+    viewerId,
+    viewerId,
+    FOR_YOU_REPOST_POOL
+  )
+
+  const toCandidate = (row: CandidatePost, key: string, itemAt: number, reposterId: string | null, byFollowed: boolean): Candidate => ({
+    key,
+    postId: row.post_id,
+    authorId: row.author_id,
+    at: itemAt,
+    reposterId,
+    followed: byFollowed,
+    topic: extractHashtags(row.body).some((tag) => tags.has(tag)),
+    likes: row.likes,
+    reposted: row.reposted,
+    replies: row.replies,
+    quotes: row.quotes,
+    views: row.views,
+  })
+  const picked = new Map<string, Candidate>()
+  for (const row of [...recent, ...fromFollowed]) {
+    const key = `post:${row.post_id}`
+    if (!picked.has(key)) picked.set(key, toCandidate(row, key, row.created_at, null, followed.has(row.author_id)))
+  }
+  for (const row of repostRows) {
+    const key = `repost:${row.post_id}:${row.reposter_id}`
+    if (!picked.has(key)) picked.set(key, toCandidate(row, key, row.reposted_at, row.reposter_id, true))
+  }
+  return rank([...picked.values()], at, FOR_YOU_SIZE)
+}
+
+function rankedFor(viewerId: string, at: number): Candidate[] {
+  const cacheKey = `${viewerId}|${at}`
+  const hit = rankedCache.get(cacheKey)
+  if (hit && Date.now() - hit.made < RANKED_TTL_MS) return hit.list
+  const list = rankCandidates(viewerId, at)
+  rankedCache.set(cacheKey, { made: Date.now(), list })
+  if (rankedCache.size > RANKED_KEEP) {
+    const oldest = rankedCache.keys().next().value
+    if (oldest !== undefined) rankedCache.delete(oldest)
+  }
+  return list
+}
+
+function parseRankedCursor(cursor: string | undefined): { at: number; offset: number } | null {
+  if (!cursor?.startsWith("r1:")) return null
+  const [, atText = "", offsetText = ""] = cursor.split(":")
+  const at = Number(atText)
+  const offset = Number(offsetText)
+  if (!Number.isFinite(at) || !Number.isInteger(offset) || offset < 0) return null
+  return { at, offset }
+}
+
+function forYouPage(viewerId: string, cursor: string | undefined, limit: number): Page<FeedItem> {
+  const resume = parseRankedCursor(cursor)
+  const at = resume?.at ?? Date.now()
+  const offset = resume?.offset ?? 0
+  const ranked = rankedFor(viewerId, at)
+  const slice = ranked.slice(offset, offset + limit)
+  const rows: FeedRow[] = slice.map((c) => ({
+    key: c.key,
+    post_id: c.postId,
+    sort_at: c.at,
+    reposter_id: c.reposterId,
+    folder_id: null,
+  }))
+  const end = offset + slice.length
+  return { items: pageOf(rows, limit, viewerId).items, next: end < ranked.length ? `r1:${at}:${end}` : null }
+}
+
+// Following: the viewer's own posts, posts and reposts from accounts they follow, and
 // posts that use a hashtag they follow. Every row still passes the feed's visibility rules.
 export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
   const vis = visibilityClause(viewerId)
@@ -617,9 +758,7 @@ export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor
     reposter: "r.user_id",
   })
 
-  if (mode === "for-you") {
-    return timelinePage([postArm(AUTHORED, []), repostArm("1 = 1", [])], cursor, limit, viewerId)
-  }
+  if (mode === "for-you") return forYouPage(viewerId, cursor, limit)
 
   const tags = new Set(followedTopics(viewerId))
   const arms: Arm[] = [

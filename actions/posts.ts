@@ -6,7 +6,8 @@ import { all, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost, canSeePost, editHistoryFor, visiblePostIds, type EditVersion } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { hidePost } from "@/lib/moderation"
-import { announcePost, mediaFilesFor, removeFiles, replyPermission, startPollClock, thread } from "@/lib/post-writes"
+import { mediaFilesFor, removeFiles, replyPermission, startPollClock, thread } from "@/lib/post-writes"
+import { goLive, screenPost } from "@/lib/screening"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import {
   asReplySetting,
@@ -195,9 +196,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
     return { ok: false, error: "Your post couldn't be saved. Try again." }
   }
 
-  if (status === "published") {
-    announcePost({ id, author_id: viewer.id, body, reply_to_id: replyTo, quote_of_id: quoteOf })
-  }
+  if (status === "published") goLive(id)
   refresh()
   return { ok: true, id, status }
 }
@@ -252,6 +251,9 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
       }
     }
   })
+  // The new text is checked again, so an edit cannot turn a cleared post into spam. The check keeps its own transaction,
+  // so it runs once the save above is done.
+  if (body !== post.body) screenPost(postId)
   refresh()
   return { ok: true }
 }
@@ -332,7 +334,7 @@ export async function publishNow(postId: string): Promise<VoidResult> {
     run("UPDATE posts SET is_draft = 0, publish_at = NULL, created_at = ? WHERE id = ?", now, postId)
     startPollClock(postId, now)
   })
-  announcePost({ id: postId, author_id: viewer.id, body: post.body, reply_to_id: post.reply_to_id, quote_of_id: post.quote_of_id })
+  goLive(postId, now)
   refresh()
   return { ok: true }
 }
