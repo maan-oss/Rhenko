@@ -308,6 +308,28 @@ async function postFlows({ phone }) {
     await waitForPost(reader.page, replyText)
   })
 
+  const noteText = uniq("Context a reader adds")
+  await check(`${where}: a post with no community notes is one line, and a note is written from it`, async () => {
+    await openProfile(reader.page, author.handle)
+    const target = await waitForPost(reader.page, plain)
+    const id = await cardPostId(target)
+    await go(reader.page, `/${author.handle}/status/${id}`, reader.page.locator("#notes"))
+    const notes = reader.page.locator("#notes")
+    await notes.getByText("No community notes on this post yet.", { exact: true }).waitFor()
+    const box = await notes.boundingBox()
+    assert.ok(box && box.height < 110, `the empty notes take ${Math.round(box?.height ?? 0)}px, more than one line`)
+    // The replies come right after the line, so the reply box is directly below it.
+    const composer = await reader.page.locator("form#reply").boundingBox()
+    assert.ok(composer && composer.y - (box.y + box.height) < 40, "the reply box is not directly under the empty notes")
+    assert.equal(await reader.page.locator("#community-note").count(), 0, "the note form is open before it is asked for")
+    await notes.getByRole("button", { name: "Write a note", exact: true }).click()
+    await reader.page.locator("#community-note").fill(noteText)
+    await acted(reader.page, () => reader.page.getByRole("button", { name: "Add note", exact: true }).click())
+    await toastText(reader.page, /^Note added\./)
+    await reader.page.locator("#notes").getByText(noteText).waitFor()
+    await reader.page.locator("#notes").getByText("Needs more ratings", { exact: true }).waitFor()
+  })
+
   await check(`${where}: the Replies tab lists the reply with who it answers`, async () => {
     await openProfile(reader.page, reader.handle, "replies")
     const row = await waitForPost(reader.page, replyText)

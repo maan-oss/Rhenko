@@ -15,7 +15,26 @@ import { cn } from "@/lib/utils"
 // Community notes under a post. Anyone can add one. A note is shown to everyone once
 // enough readers rate it helpful; until then it waits for ratings.
 export function CommunityNotes({ postId, notes, signedIn }: { postId: string; notes: NoteView[]; signedIn: boolean }) {
+  const [writing, setWriting] = useState(false)
   const mine = notes.some((note) => note.mine)
+
+  // No notes yet: one line, so the replies are the next thing on the page. The form opens only when asked for.
+  if (notes.length === 0) {
+    return (
+      <section id="notes" aria-label="Community notes" className="flex flex-col gap-3 border-b border-border px-4 py-3 scroll-mt-16">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">No community notes on this post yet.</p>
+          {signedIn && !writing ? (
+            <Button type="button" variant="outline" onClick={() => setWriting(true)} className="h-9 shrink-0 rounded-full px-4 font-semibold">
+              Write a note
+            </Button>
+          ) : null}
+        </div>
+        {signedIn && writing ? <AddNote postId={postId} /> : null}
+      </section>
+    )
+  }
+
   return (
     <section id="notes" aria-labelledby="notes-heading" className="flex flex-col gap-3 border-b border-border px-4 py-4 scroll-mt-16">
       <div className="flex flex-col gap-1">
@@ -27,15 +46,11 @@ export function CommunityNotes({ postId, notes, signedIn }: { postId: string; no
         </p>
       </div>
 
-      {notes.length === 0 ? <p className="text-sm text-muted-foreground">No notes on this post yet.</p> : null}
-
-      {notes.length > 0 ? (
-        <ul className="flex flex-col">
-          {notes.map((note) => (
-            <NoteItem key={note.id} note={note} signedIn={signedIn} />
-          ))}
-        </ul>
-      ) : null}
+      <ul className="flex flex-col">
+        {notes.map((note) => (
+          <NoteItem key={note.id} note={note} signedIn={signedIn} />
+        ))}
+      </ul>
 
       {signedIn && !mine ? <AddNote postId={postId} /> : null}
       {mine ? <p className="text-sm text-muted-foreground">You added a note to this post.</p> : null}
