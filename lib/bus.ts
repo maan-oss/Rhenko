@@ -97,6 +97,8 @@ export type RealtimeEvent =
     }
   // A call step. With a device, only that tab acts on it.
   | { type: "call"; callId: string; signal: CallSignal; device?: string }
+  // A post from someone the person follows. The Following feed shows a pill for it. Nothing reloads.
+  | { type: "posts"; postId: string }
 
 export function publish(userIds: string[], event: RealtimeEvent): void {
   for (const id of new Set(userIds)) bus.emit(`user:${id}`, event)

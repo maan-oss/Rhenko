@@ -2,6 +2,7 @@ import { all, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { asReplySetting, extractMentions, POST_UNAVAILABLE, replyAllowed, replyRefusal, type ReplySetting } from "@/lib/rules"
+import { publish } from "@/lib/bus"
 import { removeUpload } from "@/lib/uploads"
 
 export function isFollowing(followerId: string, followeeId: string): boolean {
@@ -81,6 +82,24 @@ export function announcePost(post: Announced): void {
       notify(user_id, post.author_id, "post", post.id)
       notified.add(user_id)
     }
+  }
+  // Followers get a "new posts" pill on Following. It counts the posts that feed shows: top-level posts and the next
+  // posts of a thread, not plain replies. A blocked or muted pair hears nothing.
+  const onFeed = post.reply_to_id === null || (get<{ thread_id: string | null }>("SELECT thread_id FROM posts WHERE id = ?", post.id)?.thread_id ?? null) !== null
+  if (onFeed) {
+    const followers = all<{ follower_id: string }>(
+      `SELECT f.follower_id FROM follows f
+       JOIN users u ON u.id = f.follower_id
+       WHERE f.followee_id = ? AND f.follower_id <> ? AND u.deactivated_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = f.follower_id AND b.blocked_id = f.followee_id) OR (b.blocker_id = f.followee_id AND b.blocked_id = f.follower_id))
+         AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = f.follower_id AND m.muted_id = f.followee_id)`,
+      post.author_id,
+      post.author_id
+    )
+    publish(
+      followers.map((row) => row.follower_id),
+      { type: "posts", postId: post.id }
+    )
   }
 }
 

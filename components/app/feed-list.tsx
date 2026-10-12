@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import { BlurFade } from "@/components/ui/blur-fade"
 import { EmptyState } from "@/components/app/empty-state"
 import { MoveBookmark } from "@/components/app/move-bookmark"
@@ -12,6 +13,27 @@ import type { Viewer } from "@/lib/auth"
 
 // How many items a feed draws without the entrance fade: enough to fill a phone's first screen.
 const FIRST_SCREEN = 3
+
+// The post a feed entry shows, or null for an ad.
+function postIdOf(item: FeedEntry): string | null {
+  return isAdItem(item) ? null : item.post.id
+}
+
+// A server refresh brings a new first page. The pages a reader already loaded below it stay, so a refresh does not send
+// them back to the top. The new page is kept whole, and the loaded items after the last one the two share follow it.
+function mergeFirstPage(
+  loaded: FeedEntry[],
+  loadedNext: string | null,
+  page: FeedEntry[],
+  pageNext: string | null
+): { items: FeedEntry[]; next: string | null } {
+  const position = new Map(loaded.map((item, index) => [item.key, index]))
+  let meet = -1
+  for (const item of page) meet = Math.max(meet, position.get(item.key) ?? -1)
+  // No shared item means the loaded pages are no longer next to the new page, so the new page stands alone.
+  if (meet < 0 || meet === loaded.length - 1) return { items: page, next: pageNext }
+  return { items: [...page, ...loaded.slice(meet + 1)], next: loadedNext }
+}
 
 type Props = {
   items: FeedEntry[]
@@ -27,20 +49,56 @@ type Props = {
 
 // Renders a feed and loads older pages as the reader reaches the end.
 export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders }: Props) {
+  const router = useRouter()
   const [items, setItems] = useState(initialItems)
   const [next, setNext] = useState<string | null>(initialNext)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
+  // Posts from people the reader follows that arrived since the page was drawn. Only the Following tab counts them.
+  const [fresh, setFresh] = useState<string[]>([])
   const sentinel = useRef<HTMLDivElement>(null)
   const busy = useRef(false)
+  const following = spec?.kind === "home" && spec.mode === "following"
 
-  // A server refresh (new posts, a like, a realtime update) replaces the first page.
+  // A server refresh (a new post, a notification, a like) brings a new first page. The pages already loaded stay.
   const [seed, setSeed] = useState(initialItems)
   if (seed !== initialItems) {
     setSeed(initialItems)
-    setItems(initialItems)
-    setNext(initialNext)
+    const merged = mergeFirstPage(items, next, initialItems, initialNext)
+    setItems(merged.items)
+    setNext(merged.next)
+    const shown = new Set(initialItems.map(postIdOf))
+    setFresh((current) => current.filter((id) => !shown.has(id)))
   }
+
+  useEffect(() => {
+    if (!following) return
+    const onPost = (event: Event) => {
+      const { postId } = (event as CustomEvent<{ postId: string }>).detail
+      setFresh((current) => (current.includes(postId) ? current : [...current, postId]))
+    }
+    window.addEventListener("rhenko:posts", onPost)
+    return () => window.removeEventListener("rhenko:posts", onPost)
+  }, [following])
+
+  // Loads the first page again. The new posts come in above what the reader has, and the pill clears once they do.
+  const showFresh = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" })
+    router.refresh()
+  }
+
+  const pill =
+    fresh.length > 0 ? (
+      <div className="sticky top-14 z-10 flex justify-center py-2">
+        <button
+          type="button"
+          onClick={showFresh}
+          className="metal h-9 rounded-full px-4 text-sm font-semibold transition-opacity hover:opacity-90"
+        >
+          {fresh.length === 1 ? "1 new post" : `${fresh.length} new posts`}
+        </button>
+      </div>
+    ) : null
 
   const loadMore = useCallback(async () => {
     if (!next || !spec || busy.current) return
@@ -80,14 +138,18 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
 
   if (items.length === 0 && !next) {
     return (
-      <EmptyState title={emptyTitle} body={emptyBody}>
-        {emptyAction}
-      </EmptyState>
+      <>
+        {pill}
+        <EmptyState title={emptyTitle} body={emptyBody}>
+          {emptyAction}
+        </EmptyState>
+      </>
     )
   }
 
   return (
     <div>
+      {pill}
       {items.map((item, index) => {
         const body = isAdItem(item) ? (
           <AdCard ad={item.ad} />

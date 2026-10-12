@@ -1,7 +1,7 @@
 // People and discovery: follow, protected accounts and follow requests, mute, block, muted words, lists, search with
 // operators, Explore and topics. The flows that differ by screen run on a computer and on a phone.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, randomWord } from "./lib/env.mjs"
+import { RUN_ID, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { makePng } from "./lib/files.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
@@ -78,6 +78,20 @@ async function followFlow({ phone }) {
     await waitForPost(fan.page, starPost)
   })
 
+  await check(`${where}: a new post from someone you follow shows a pill on Following, and the pill loads it`, async () => {
+    await openHome(fan.page, "following")
+    const freshPost = uniq("A new post from the followed account")
+    await writePost(star.page, freshPost)
+    const pill = fan.page.getByRole("button", { name: "1 new post", exact: true })
+    await pill.waitFor()
+    // The pill is a notice: the new post is not in the list until the reader asks for it.
+    assert.equal(await noPost(fan.page, freshPost, 0), true, "the new post was in the list before the pill was pressed")
+    await pill.click()
+    await waitForPost(fan.page, freshPost)
+    await pill.waitFor({ state: "detached" })
+    await waitForPost(fan.page, starPost)
+  })
+
   await check(`${where}: the notifications page lists the new follower`, async () => {
     await openNotifications(star.page)
     await noticeRow(star.page, { name: fan.name, text: "followed you" }).waitFor()
@@ -95,6 +109,13 @@ async function followFlow({ phone }) {
     await followButton(fan.page, star.handle).waitFor()
     await openHome(fan.page, "following")
     assert.equal(await noPost(fan.page, starPost), true, "the post of an unfollowed account is still in the Following feed")
+  })
+
+  await check(`${where}: a post from an account you do not follow shows no pill`, async () => {
+    await openHome(fan.page, "following")
+    await writePost(star.page, uniq("A post after the unfollow"))
+    await sleep(2500)
+    assert.equal(await fan.page.getByRole("button", { name: /new posts?$/ }).count(), 0, "a pill showed for an account that is not followed")
   })
 
   await check(`${where}: Remove on your own Followers page ends that follow`, async () => {
