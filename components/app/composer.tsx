@@ -294,6 +294,8 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
   const [schedule, setSchedule] = useState<Schedule>({ date: "", time: "09:00", min: "", max: "" })
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [active, setActive] = useState(0)
+  // Thread parts after the first. Each one posts as a reply to the part before it.
+  const [extra, setExtra] = useState<string[]>([])
   const [intent, setIntent] = useState<"post" | "draft">("post")
   const [emojiBelow, setEmojiBelow] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -309,8 +311,11 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
   const isReply = Boolean(replyToId)
   const scheduledAt = scheduling ? scheduledMs(schedule.date, schedule.time) : null
   const mediaBlocksPoll = poll && media.length > 0
-  const canPost = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && (!scheduling || scheduledAt !== null)
-  const canDraft = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && !isReply
+  // A thread is a row of posts sent one after another. Parts after the first are text only, none left empty.
+  const threading = extra.length > 0
+  const threadReady = extra.every((part) => part.trim().length > 0 && countChars(part) <= MAX_POST)
+  const canPost = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && (!scheduling || scheduledAt !== null) && threadReady
+  const canDraft = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && !isReply && !threading
 
   const sending = pending && intent === "post"
   const label = sending
@@ -323,7 +328,9 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
         ? "Quote"
         : scheduling
           ? "Schedule"
-          : "Post"
+          : threading
+            ? "Post all"
+            : "Post"
 
   useEffect(() => {
     if (autoFocus || (id && window.location.hash === `#${id}`)) textareaRef.current?.focus()
@@ -514,11 +521,55 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
     setSensitive(false)
     setReplySetting("everyone")
     setScheduling(false)
+    setExtra([])
+  }
+
+  // Adds a part to the thread. Scheduling and drafts are for single posts, so they step aside.
+  function addThreadPart() {
+    setScheduling(false)
+    setExtra((current) => [...current, ""])
+  }
+
+  // A thread posts its parts in order. Each part answers the one before it, and all of them sit under the first. If a
+  // part is refused, the parts that did not post stay in the composer, so nothing is typed twice.
+  function sendThread() {
+    setIntent("post")
+    const parts = [text, ...extra].map((part) => part.trim())
+    const head = buildForm(false, null)
+    startTransition(async () => {
+      const first = await createPost(head)
+      if (!first.ok) {
+        toast.error(first.error)
+        return
+      }
+      resetComposer()
+      let previous = first.id
+      for (let index = 1; index < parts.length; index++) {
+        const part = new FormData()
+        part.set("body", parts[index])
+        part.set("replyTo", previous)
+        part.set("threadOf", first.id)
+        const next = await createPost(part)
+        if (!next.ok) {
+          toast.error(`Posted ${index} of ${parts.length} parts. ${next.error}`)
+          setText(parts[index])
+          setExtra(parts.slice(index + 1))
+          return
+        }
+        previous = next.id
+      }
+      toast.success("Thread posted.")
+      onPosted?.()
+    })
   }
 
   // Post or schedule (draft = false) or save a draft (draft = true).
   function send(draft: boolean) {
     if (draft ? !canDraft : !canPost) return
+    if (threading) {
+      sendThread()
+      return
+    }
     const at = draft ? null : scheduledAt
     // A time the server would refuse is reported now, before any file is sent. The server checks it again.
     if (at !== null) {
@@ -756,6 +807,41 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           </div>
         ) : null}
 
+        {threading ? (
+          <div className="flex flex-col gap-3 border-l-2 border-border pl-4">
+            {extra.map((part, index) => {
+              const remaining = MAX_POST - countChars(part)
+              return (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <textarea
+                      value={part}
+                      onChange={(event) => setExtra((current) => current.map((p, i) => (i === index ? event.target.value : p)))}
+                      placeholder="Continue the thread"
+                      aria-label={`Thread part ${index + 2} of ${extra.length + 1}`}
+                      readOnly={pending}
+                      rows={2}
+                      className="field-sizing-content min-h-[30px] w-full resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground"
+                    />
+                    <span className={cn("self-end text-xs tabular-nums", remaining < 0 ? "text-destructive" : "text-muted-foreground")}>
+                      {index + 2} of {extra.length + 1}
+                      {remaining <= 20 ? ` · ${remaining}` : ""}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove part ${index + 2}`}
+                    onClick={() => setExtra((current) => current.filter((_, i) => i !== index))}
+                    className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
         <div ref={toolbarRef} className="relative flex flex-wrap items-center gap-x-0.5 gap-y-1 pt-1">
           <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
             <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
@@ -769,10 +855,15 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           >
             <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
           </ToolButton>
+          {!isReply ? (
+            <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling} onClick={addThreadPart}>
+              <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+            </ToolButton>
+          ) : null}
           <span className="contents" onClickCapture={placeEmojiList}>
             <EmojiPicker onPick={insertEmoji} className={cn(EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
           </span>
-          {!isReply ? (
+          {!isReply && !threading ? (
             <ToolButton label="Schedule this post" pressed={scheduling} onClick={toggleScheduling}>
               <CalendarClock className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>
@@ -791,7 +882,7 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
-            {!isReply ? (
+            {!isReply && !threading ? (
               <button
                 type="button"
                 onClick={() => send(true)}

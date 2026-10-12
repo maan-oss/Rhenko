@@ -9,6 +9,9 @@ import {
   anyCards,
   audioState,
   callButton,
+  pictureReady,
+  videoCallButton,
+  videoCard,
   control,
   dmCard,
   dmCards,
@@ -40,6 +43,8 @@ export async function run() {
   area("calls")
   await guard("voice calls on a computer", () => dmFlow({ phone: false }))
   await guard("voice calls on a phone", () => dmFlow({ phone: true }))
+  await guard("video calls on a computer", () => videoFlow({ phone: false }))
+  await guard("video calls on a phone", () => videoFlow({ phone: true }))
   await guard("group calls on a computer", () => groupFlow({ phone: false }))
   await guard("group calls on a phone", () => groupFlow({ phone: true }))
 }
@@ -83,6 +88,37 @@ function sending(flags, wanted = true) {
 
 async function bothGone(...pages) {
   for (const page of pages) assert.equal(await anyCards(page).count(), 0, "a call card is still on the page after the call ended")
+}
+
+// A video call: the caller starts it from the chat header, the other person answers, and each side sees the other's
+// camera. Camera off on one side hides that side's picture, and the call goes on for both.
+async function videoFlow({ phone }) {
+  const where = phone ? "phone" : "computer"
+  const caller = await createUser({ tag: phone ? "clvp" : "clvd", phone, mic: true })
+  const callee = await createUser({ tag: phone ? "cevp" : "cevd", phone, mic: true })
+  await acceptedChat(caller, callee)
+
+  await check(`${where}: a video call rings as a video call, shows both cameras once answered, and ends for both`, async () => {
+    await idleOnSettings(callee.page)
+    await videoCallButton(caller.page, callee.name).click()
+    const incoming = videoCard(callee.page, caller.name)
+    await incoming.getByText("Incoming video call").waitFor()
+    await control(incoming, "Accept").click()
+    const outgoing = videoCard(caller.page, callee.name)
+    await timerRunning(outgoing)
+    await timerRunning(incoming)
+    await pictureReady(caller.page)
+    await pictureReady(callee.page)
+    await control(outgoing, "Camera off").click()
+    await control(outgoing, "Camera on").waitFor()
+    await timerRunning(incoming)
+    await control(outgoing, "Camera on").click()
+    await control(outgoing, "Camera off").waitFor()
+    await control(outgoing, "End").click()
+    await outgoing.waitFor({ state: "detached" })
+    await incoming.waitFor({ state: "detached" })
+    await bothGone(caller.page, callee.page)
+  })
 }
 
 async function dmFlow({ phone }) {

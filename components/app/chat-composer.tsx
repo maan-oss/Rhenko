@@ -3,9 +3,9 @@
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useFormStatus } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, ImagePlus, Mic } from "lucide-react"
+import { ArrowUp, AudioLines, ImagePlus, Mic } from "lucide-react"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
-import { MAX_DM } from "@/lib/rules"
+import { MAX_DM, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
@@ -32,6 +32,19 @@ function speechConstructor(): RecognitionConstructor | null {
 }
 
 const noopSubscribe = () => () => {}
+
+// Voice messages are recorded with the browser's recorder, in the first format it can write.
+function recordingSupported(): boolean {
+  return typeof MediaRecorder !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia)
+}
+
+function recordingType(): string | undefined {
+  return ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type))
+}
+
+function clock(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+}
 
 // Adds what was said to what was already typed, with a space between the two.
 function joinSpoken(base: string, spoken: string): string {
@@ -84,7 +97,18 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   const recognitionRef = useRef<Recognition | null>(null)
   const baseRef = useRef("")
   const dictation = useSyncExternalStore(noopSubscribe, () => speechConstructor() !== null, () => false)
-  const canSend = text.trim().length > 0 || fileName !== null
+  // A voice message is recorded here, kept as a preview, and sent with the form like any other file.
+  const [voice, setVoice] = useState<{ file: File; url: string; seconds: number } | null>(null)
+  const [recording, setRecording] = useState<number | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const [voiceProblem, setVoiceProblem] = useState<string | null>(null)
+  const voiceInputRef = useRef<HTMLInputElement>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const startedRef = useRef(0)
+  const discardRef = useRef(false)
+  const canRecord = useSyncExternalStore(noopSubscribe, recordingSupported, () => false)
+  const canSend = recording === null && (text.trim().length > 0 || fileName !== null || voice !== null)
 
   // A confirmed send clears the composer. Adjusted during render, so the text clears on the same frame.
   const [seenState, setSeenState] = useState(state)
@@ -93,16 +117,44 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
     if (state.sent) {
       setText("")
       setFileName(null)
+      setVoice(null)
     }
   }
   useEffect(() => {
     if (state.sent) formRef.current?.reset()
   }, [state])
 
-  // Stop listening when the composer goes away.
+  // Stop listening and recording when the composer goes away. A recording that is still running is thrown away.
   useEffect(() => {
-    return () => recognitionRef.current?.abort()
+    return () => {
+      recognitionRef.current?.abort()
+      discardRef.current = true
+      recorderRef.current?.stop()
+    }
   }, [])
+
+  // The preview's address is released when the preview changes or the composer goes away.
+  useEffect(() => {
+    if (!voice) return
+    const url = voice.url
+    return () => URL.revokeObjectURL(url)
+  }, [voice])
+
+  // The attached recording goes into the form's voice field, where the server reads it like any other file.
+  useEffect(() => {
+    const input = voiceInputRef.current
+    if (!input) return
+    const transfer = new DataTransfer()
+    if (voice) transfer.items.add(voice.file)
+    input.files = transfer.files
+  }, [voice])
+
+  // The elapsed time shown while recording.
+  useEffect(() => {
+    if (recording === null) return
+    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - recording) / 1000)), 250)
+    return () => window.clearInterval(timer)
+  }, [recording])
 
   function onInput() {
     const now = Date.now()
@@ -116,6 +168,49 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
       event.preventDefault()
       if (canSend) formRef.current?.requestSubmit()
     }
+  }
+
+  async function startRecording() {
+    setVoiceProblem(null)
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setVoiceProblem("Allow the microphone to record a voice message.")
+      return
+    }
+    const mimeType = recordingType()
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+    chunksRef.current = []
+    discardRef.current = false
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunksRef.current.push(event.data)
+    }
+    recorder.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop())
+      recorderRef.current = null
+      setRecording(null)
+      if (discardRef.current || chunksRef.current.length === 0) return
+      const type = (recorder.mimeType || "audio/webm").split(";")[0]
+      const blob = new Blob(chunksRef.current, { type })
+      const file = new File([blob], "voice-message", { type })
+      const seconds = Math.round((Date.now() - startedRef.current) / 1000)
+      setVoice({ file, url: URL.createObjectURL(blob), seconds })
+    }
+    recorderRef.current = recorder
+    startedRef.current = Date.now()
+    setElapsed(0)
+    setRecording(startedRef.current)
+    recorder.start()
+    // A voice message stops by itself at the limit.
+    window.setTimeout(() => {
+      if (recorderRef.current === recorder && recorder.state !== "inactive") recorder.stop()
+    }, MAX_VOICE_SECONDS * 1000)
+  }
+
+  function finishRecording(discard: boolean) {
+    discardRef.current = discard
+    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop()
   }
 
   function startDictation() {
@@ -155,12 +250,34 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
 
   return (
     <div className="sticky bottom-0 z-10 border-t border-border bg-background/95 backdrop-blur">
-      {state.error ? (
+      {state.error || voiceProblem ? (
         <p role="alert" className="px-4 pt-2 text-sm text-destructive">
-          {state.error}
+          {state.error || voiceProblem}
         </p>
       ) : null}
       {fileName ? <p className="truncate px-[72px] pt-2 text-xs text-muted-foreground lg:px-4">Photo: {fileName}</p> : null}
+      {recording !== null ? (
+        <div role="status" className="flex items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
+          <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-destructive" />
+          <span className="tabular-nums">{clock(elapsed)}</span>
+          <span className="text-muted-foreground">Recording a voice message</span>
+          <button type="button" onClick={() => finishRecording(true)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+            Discard
+          </button>
+          <button type="button" onClick={() => finishRecording(false)} className="rounded-full bg-dusk px-3 py-1 font-semibold text-background">
+            Stop
+          </button>
+        </div>
+      ) : null}
+      {voice ? (
+        <div className="flex flex-wrap items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
+          <audio controls preload="metadata" src={voice.url} aria-label="Voice message preview" className="h-9 max-w-[260px]" />
+          <span className="text-muted-foreground">Voice message · {clock(voice.seconds)}</span>
+          <button type="button" onClick={() => setVoice(null)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+            Remove
+          </button>
+        </div>
+      ) : null}
       <form
         ref={formRef}
         action={action}
@@ -169,6 +286,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         className="flex items-center gap-2 pt-3 pr-3 pb-6 pl-[72px] lg:pt-2.5 lg:pb-3 lg:pl-3"
       >
         <input type="hidden" name="conversationId" value={conversationId} />
+        <input ref={voiceInputRef} type="file" name="voice" accept="audio/webm,audio/mp4,audio/ogg" className="sr-only" tabIndex={-1} aria-hidden="true" />
         <label
           className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-dusk transition-colors hover:bg-muted"
           title={fileName ? `Photo: ${fileName}` : "Add a photo"}
@@ -212,6 +330,17 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               </motion.div>
             ) : null}
           </AnimatePresence>
+          {canRecord && voice === null && recording === null ? (
+            <button
+              type="button"
+              onClick={() => void startRecording()}
+              aria-label="Record a voice message"
+              title="Record a voice message"
+              className="relative mr-1 grid size-9 shrink-0 place-items-center rounded-full text-dusk transition-colors hover:bg-muted"
+            >
+              <AudioLines className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+            </button>
+          ) : null}
           {dictation ? (
             <button
               type="button"

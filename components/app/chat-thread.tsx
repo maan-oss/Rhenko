@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PostBody } from "@/components/app/post-body"
 import { LocalTime } from "@/components/app/time-text"
 import { callSummary } from "@/lib/format"
+import { isVoiceFile } from "@/lib/media-names"
 import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
@@ -256,7 +257,9 @@ function MessageRow({
             <span>This message was deleted.</span>
           ) : (
             <>
-              {message.mediaFile ? (
+              {message.mediaFile && isVoiceFile(message.mediaFile) ? (
+                <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
+              ) : message.mediaFile ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={`/media/${message.mediaFile}`} alt="Shared photo" className="max-h-72 rounded-xl object-cover" />
               ) : null}

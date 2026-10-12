@@ -1,4 +1,4 @@
-import { all, run } from "@/lib/db"
+import { all, optimizeDatabase, run } from "@/lib/db"
 import { notify } from "@/lib/notify"
 import { publishDue } from "@/lib/post-writes"
 import { expireStaleCalls } from "@/lib/call-state"
@@ -50,6 +50,8 @@ const DAY = 24 * HOUR
 let lastRetentionPass = 0
 
 function keepWithinRetention(now: number): void {
+  // Refreshes the planner's statistics as the tables grow. Cheap, and keeps the feed queries on their indexes.
+  optimizeDatabase()
   run("DELETE FROM post_views WHERE created_at < ?", now - RETENTION.viewsDays * DAY)
   run("DELETE FROM profile_visits WHERE created_at < ?", now - RETENTION.visitsDays * DAY)
   run("DELETE FROM notifications WHERE read = 1 AND created_at < ?", now - RETENTION.readNotificationsDays * DAY)

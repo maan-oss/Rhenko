@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Mic, MicOff, Phone, PhoneOff, Users } from "lucide-react"
+import { Mic, MicOff, Phone, PhoneOff, Users, Video, VideoOff } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { GroupCallTiles } from "@/components/app/group-call-tiles"
-import { acceptCall, declineCall, getCallState, getServerCallState, hangUp, subscribeCall, toggleMute, type CallState } from "@/lib/call-engine"
+import { acceptCall, declineCall, getCallState, getServerCallState, hangUp, subscribeCall, toggleCamera, toggleMute, type CallState } from "@/lib/call-engine"
 import type { EventPerson } from "@/lib/bus"
 import { formatDuration } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -39,7 +39,12 @@ function headingOf(call: CallState): string {
 
 function labelOf(call: CallState): string {
   if (call.kind === "group") return call.title ? `Group call in ${call.title}` : "Group call"
-  return `Voice call with ${call.peer?.name ?? ""}`
+  return `${call.video ? "Video" : "Voice"} call with ${call.peer?.name ?? ""}`
+}
+
+// The pictures of a video call are shown once the call has an answer, and until it ends.
+function showsPicture(call: CallState): boolean {
+  return call.video && call.kind === "dm" && (call.status === "connecting" || call.status === "active" || call.status === "reconnecting" || call.status === "outgoing")
 }
 
 // A ringing group call shows who is calling. Once in the call, the group itself.
@@ -80,6 +85,11 @@ function CallCard({ call, self }: { call: CallState; self: EventPerson }) {
           <GroupCallTiles self={self} tiles={call.tiles} muted={call.muted} size="card" />
         </div>
       ) : null}
+      {showsPicture(call) ? (
+        <div className="px-5 pb-4">
+          <Picture call={call} className="aspect-video w-full" />
+        </div>
+      ) : null}
       <Controls call={call} size="card" />
     </motion.section>
   )
@@ -106,7 +116,7 @@ function CallScreen({ call, self }: { call: CallState; self: EventPerson }) {
         className="flex w-full flex-col items-center text-center"
       >
         <Pulse active={isRinging(call)}>
-          <Lead call={call} size={tiles ? 56 : 132} />
+          <Lead call={call} size={tiles || showsPicture(call) ? 56 : 132} />
         </Pulse>
         <p className={cn("max-w-full truncate font-semibold tracking-tight", tiles ? "mt-3 text-[22px]" : "mt-8 text-[30px]")}>{headingOf(call)}</p>
         <Status call={call} className={cn("block max-w-full text-muted-foreground", tiles ? "mt-0.5 text-[15px]" : "mt-2 text-[17px]")} />
@@ -116,8 +126,57 @@ function CallScreen({ call, self }: { call: CallState; self: EventPerson }) {
           <GroupCallTiles self={self} tiles={call.tiles} muted={call.muted} size="screen" />
         </div>
       ) : null}
+      {showsPicture(call) ? (
+        <div className="mt-4 mb-5 flex min-h-0 w-full max-w-[520px] flex-1">
+          <Picture call={call} className="size-full" />
+        </div>
+      ) : null}
       <Controls call={call} size="screen" />
     </motion.section>
+  )
+}
+
+// The two pictures of a video call: the other person's, filling the frame, and this person's own in the corner. A
+// camera that is off shows as a plain frame, so the call stays readable.
+function Picture({ call, className }: { call: CallState; className?: string }) {
+  const name = call.peer?.name ?? "the other person"
+  return (
+    <div className={cn("relative overflow-hidden rounded-[22px] bg-muted", className)}>
+      {call.remoteVideo ? (
+        <VideoFeed stream={call.remoteVideo} label={`Video of ${name}`} />
+      ) : (
+        <p className="grid size-full place-items-center px-6 text-center text-[14px] text-muted-foreground">Waiting for their video…</p>
+      )}
+      {call.localVideo ? (
+        <div className="absolute right-3 bottom-3 aspect-[4/3] w-[30%] max-w-[132px] overflow-hidden rounded-xl border border-border bg-background">
+          <VideoFeed stream={call.localVideo} label="Your camera" mirror muted hidden={call.cameraOff} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// Plays a camera stream in a picture. The local picture is muted and mirrored, the way a mirror would show it.
+function VideoFeed({ stream, label, mirror = false, muted = true, hidden = false }: { stream: MediaStream; label: string; mirror?: boolean; muted?: boolean; hidden?: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    element.srcObject = stream
+    void element.play().catch(() => {})
+    return () => {
+      element.srcObject = null
+    }
+  }, [stream])
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted={muted}
+      aria-label={label}
+      className={cn("size-full object-cover", mirror && "-scale-x-100", hidden && "invisible")}
+    />
   )
 }
 
@@ -151,7 +210,7 @@ function Status({ call, className }: { call: CallState; className?: string }) {
       break
     case "incoming":
       // A microphone problem while answering shows here, and the ring keeps going.
-      text = call.note ?? (group ? `Group call from ${call.peer?.name ?? "someone"}` : "Incoming voice call")
+      text = call.note ?? (group ? `Group call from ${call.peer?.name ?? "someone"}` : call.video ? "Incoming video call" : "Incoming voice call")
       break
     case "connecting":
       text = "Connecting…"
@@ -210,6 +269,17 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
       <Control label={call.muted ? "Unmute" : "Mute"} onClick={toggleMute} tone={call.muted ? "muted" : "plain"} big={big} pressed={call.muted}>
         {call.muted ? <MicOff className={icon} strokeWidth={2} aria-hidden="true" /> : <Mic className={icon} strokeWidth={2} aria-hidden="true" />}
       </Control>
+      {call.video && call.kind === "dm" ? (
+        <Control
+          label={call.cameraOff ? "Camera on" : "Camera off"}
+          onClick={toggleCamera}
+          tone={call.cameraOff ? "muted" : "plain"}
+          big={big}
+          pressed={call.cameraOff}
+        >
+          {call.cameraOff ? <VideoOff className={icon} strokeWidth={2} aria-hidden="true" /> : <Video className={icon} strokeWidth={2} aria-hidden="true" />}
+        </Control>
+      ) : null}
       <Control label={endLabel} onClick={hangUp} tone="end" big={big}>
         <PhoneOff className={icon} strokeWidth={2} aria-hidden="true" />
       </Control>

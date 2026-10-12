@@ -80,6 +80,14 @@ async function ConversationBody({ params }: { params: Params }) {
                 disabled={requested || closed}
               />
             ) : null}
+            {!isGroup && others[0] ? (
+              <CallButton
+                conversationId={conversation.id}
+                peer={{ id: others[0].id, name: others[0].name, handle: others[0].handle, avatarFile: others[0].avatarFile }}
+                disabled={requested || closed}
+                video
+              />
+            ) : null}
             <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
           </div>
         }

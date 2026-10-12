@@ -41,6 +41,11 @@ export type CallState = {
   accepting: boolean
   // When the audio first connected. Null until then, so an unanswered call has no timer.
   connectedAt: number | null
+  // A video call: this person's picture and the other person's. Camera off keeps the call and sends no picture.
+  video: boolean
+  localVideo: MediaStream | null
+  remoteVideo: MediaStream | null
+  cameraOff: boolean
   // How the call ended, or why answering did not work, shown for a moment.
   note: string | null
   live: LiveGroupCall[]
@@ -89,9 +94,10 @@ type Session = {
   beat: number | null
   boot: string | null
   reported: boolean
+  video: boolean
 }
 
-type RingInfo = { kind: "dm" | "group"; conversationId: string; from: EventPerson; title: string | null; iceServers: IceServerConfig[] }
+type RingInfo = { kind: "dm" | "group"; conversationId: string; from: EventPerson; title: string | null; iceServers: IceServerConfig[]; video: boolean }
 type Ring = { callId: string; info: RingInfo | null; claims: Map<string, number>; elsewhere: string | null; timer: number | null; at: number }
 type GroupInfo = { callId: string; conversationId: string; title: string; members: GroupMember[]; quiet: boolean }
 
@@ -121,6 +127,8 @@ const OFFLINE = "Couldn't reach the server. Check your connection and try again.
 const DROPPED = "The connection dropped, so the call ended."
 const NO_CONNECT = "Couldn't connect."
 const GONE = "That call has ended."
+// The camera asked for on a video call: a sensible picture size, facing the person.
+const CAMERA: MediaTrackConstraints = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }
 
 const IDLE: CallState = {
   status: "idle",
@@ -135,6 +143,10 @@ const IDLE: CallState = {
   connectedAt: null,
   note: null,
   live: [],
+  video: false,
+  localVideo: null,
+  remoteVideo: null,
+  cameraOff: false,
 }
 
 let state: CallState = IDLE
@@ -199,6 +211,10 @@ function idle(): Partial<CallState> {
     accepting: false,
     connectedAt: null,
     note: null,
+    video: false,
+    localVideo: null,
+    remoteVideo: null,
+    cameraOff: false,
   }
 }
 
@@ -213,7 +229,8 @@ function settle(note: string | null, extra: Partial<CallState> = {}): void {
   if (!note) {
     update(idle())
   } else {
-    update({ ...extra, status: "ended", callId: null, tiles: [], muted: false, accepting: false, connectedAt: null, note })
+    // The ended note keeps the kind of call, so its card still reads "Video call with" for as long as it is shown.
+    update({ ...extra, status: "ended", callId: null, tiles: [], muted: false, accepting: false, connectedAt: null, note, localVideo: null, remoteVideo: null, cameraOff: false })
     noteTimer = window.setTimeout(() => {
       noteTimer = null
       if (state.status === "ended") update(idle())
@@ -223,16 +240,30 @@ function settle(note: string | null, extra: Partial<CallState> = {}): void {
 }
 
 // Asks for the microphone. Resolves to the stream, or to a sentence the person can act on.
-async function microphone(purpose: "call" | "answer"): Promise<MediaStream | string> {
+// Asks for the microphone, and for the camera on a video call. A camera that is missing or refused does not stop the
+// call: it carries on with the microphone alone. Resolves to the stream, or to a sentence the person can act on.
+async function microphone(purpose: "call" | "answer", video = false): Promise<MediaStream | string> {
   if (typeof window === "undefined" || !window.isSecureContext || !navigator.mediaDevices?.getUserMedia) return INSECURE
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+    return await navigator.mediaDevices.getUserMedia({ audio, video: video ? CAMERA : false })
   } catch (error) {
+    if (video) return microphone(purpose, false)
     const name = error instanceof DOMException ? error.name : ""
     if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone was found. Connect one and try again."
     if (name === "NotReadableError") return "Your microphone is busy in another app. Close it there and try again."
     return purpose === "answer" ? "Allow microphone access to answer." : "Allow microphone access to make calls."
   }
+}
+
+function hasVideo(stream: MediaStream | null): boolean {
+  return (stream?.getVideoTracks().length ?? 0) > 0
+}
+
+// The picture of a stream, as a stream of its own, for the preview.
+function videoOf(stream: MediaStream | null): MediaStream | null {
+  const tracks = stream?.getVideoTracks() ?? []
+  return tracks.length > 0 ? new MediaStream(tracks) : null
 }
 
 function stopStream(stream: MediaStream | null): void {
@@ -318,6 +349,7 @@ function ringHere(ring: Ring): void {
     seq: 0,
     hadPeers: false,
     other: info.kind === "dm" ? info.from : null,
+    video: info.kind === "dm" && info.video,
     answered: false,
     connectedAt: null,
     connectTimer: null,
@@ -329,6 +361,10 @@ function ringHere(ring: Ring): void {
   update({
     status: "incoming",
     kind: info.kind,
+    video: info.kind === "dm" && info.video,
+    localVideo: null,
+    remoteVideo: null,
+    cameraOff: false,
     callId: ring.callId,
     conversationId: info.conversationId,
     peer: info.from,
@@ -616,6 +652,11 @@ function createPeer(current: Session, key: string, ref: CallPeerRef | null, pers
   }
   pc.ontrack = (event) => {
     if (peer.closed) return
+    // A one-to-one call shows the other person's camera. A group call is voice only.
+    if (event.track.kind === "video") {
+      if (current.kind === "dm") update({ remoteVideo: event.streams[0] ?? new MediaStream([event.track]) })
+      return
+    }
     audio.srcObject = event.streams[0] ?? new MediaStream([event.track])
     void audio.play().catch(() => {})
   }
@@ -652,6 +693,7 @@ function closePeer(peer: Peer): void {
   }
   peer.audio.pause()
   peer.audio.srcObject = null
+  if (state.remoteVideo) update({ remoteVideo: null })
 }
 
 // Waits for the browser to gather its routes, at most ICE_GATHER_MS, so they go out in one description.
@@ -986,7 +1028,14 @@ function endNote(current: Session, reason: CallEndReason, seconds: number): stri
 function hearRing(callId: string, signal: Extract<CallSignal, { kind: "ring" }>): void {
   const ring = ringEntry(callId)
   if (ring.info) return
-  ring.info = { kind: signal.call, conversationId: signal.conversationId, from: signal.from, title: signal.title, iceServers: signal.iceServers }
+  ring.info = {
+    kind: signal.call,
+    conversationId: signal.conversationId,
+    from: signal.from,
+    title: signal.title,
+    iceServers: signal.iceServers,
+    video: signal.video === true,
+  }
   // Already on a call here: this tab stays quiet and another can ring.
   elect(ring)
 }
@@ -1080,7 +1129,7 @@ export function receiveHello(next: string): void {
 // ── What the call controls do ───────────────────────────────────────────────────────────────────────────────────
 
 // Rings the other person in a one-to-one chat. If they are ringing you already, this answers them.
-export async function placeCall(conversationId: string, peer: EventPerson): Promise<Placed> {
+export async function placeCall(conversationId: string, peer: EventPerson, video = false): Promise<Placed> {
   const ringing = session
   if (ringing && state.status === "incoming" && ringing.kind === "dm" && ringing.conversationId === conversationId) {
     await acceptCall()
@@ -1092,10 +1141,10 @@ export async function placeCall(conversationId: string, peer: EventPerson): Prom
   let mic: MediaStream | null = null
   let kept = false
   try {
-    const got = await microphone("call")
+    const got = await microphone("call", video)
     if (typeof got === "string") return { ok: false, error: got }
     mic = got
-    const started = await startCall(conversationId, device())
+    const started = await startCall(conversationId, device(), video)
     if (!started.ok) {
       if (started.unavailable) {
         settle(started.error, { kind: "dm", conversationId, peer, title: null })
@@ -1115,6 +1164,7 @@ export async function placeCall(conversationId: string, peer: EventPerson): Prom
       seq: 0,
       hadPeers: false,
       other: answered ? started.peer : peer,
+      video: hasVideo(mic),
       answered,
       connectedAt: null,
       connectTimer: null,
@@ -1129,6 +1179,10 @@ export async function placeCall(conversationId: string, peer: EventPerson): Prom
     update({
       status: answered ? "connecting" : "outgoing",
       kind: "dm",
+      video: hasVideo(mic),
+      localVideo: videoOf(mic),
+      remoteVideo: null,
+      cameraOff: false,
       callId: started.callId,
       conversationId,
       peer: current.other,
@@ -1208,6 +1262,7 @@ async function enterGroup(run: () => Promise<JoinedCall>): Promise<Placed> {
       beat: null,
       boot: result.bootId,
       reported: false,
+      video: false,
     }
     kept = true
     clearNote()
@@ -1260,7 +1315,7 @@ export async function acceptCall(): Promise<void> {
   let mic: MediaStream | null = null
   let kept = false
   try {
-    const got = await microphone("answer")
+    const got = await microphone("answer", current.video)
     if (session !== current) return
     if (typeof got === "string") {
       // The ring keeps going, so the person can allow the microphone and answer, or decline.
@@ -1270,10 +1325,11 @@ export async function acceptCall(): Promise<void> {
     mic = got
     if (current.kind === "dm") {
       current.local = mic
+      current.video = hasVideo(mic)
       kept = true
       current.answered = true
       stopRingtone()
-      update({ status: "connecting", accepting: false })
+      update({ status: "connecting", accepting: false, video: current.video, localVideo: videoOf(mic) })
       armConnect(current)
       const result = await sendCallSignal(current.callId, device(), { kind: "accept" })
       if (session !== current) return
@@ -1340,6 +1396,14 @@ export function hangUp(): void {
 }
 
 // Mutes this side only: the microphone track stops sending, in every connection of the call.
+// Turns this person's camera picture off for the other person, and back on. The call itself is not affected.
+export function toggleCamera(): void {
+  const track = session?.local?.getVideoTracks()[0]
+  if (!track) return
+  track.enabled = !track.enabled
+  update({ cameraOff: !track.enabled })
+}
+
 export function toggleMute(): void {
   const current = session
   if (!current?.local) return

@@ -93,7 +93,10 @@ The scripts read the same database as the app, and the server can keep running w
 **Home and posts**
 - The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. A row of trending topics sits above the composer and links to `/topics/[tag]`.
 - Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
-- The composer posts text, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
+- The composer posts text up to 25,000 characters, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
+- Long posts fold after their opening lines, with Show more and Show less. Posts can use **bold**, *italic* and ~~strike~~. A mark must touch its text, so "2 * 3 * 4" stays as written.
+- Threads: Add to thread adds another part under the first post. The parts post in order, each answering the one before, and a later part links back with Show this thread. Threads post right away, so they can't be drafted or scheduled.
+- The first link in a post shows a card with the page's title and description. The server reads each page once, refuses private and local addresses, and connects only to the address it checked.
 - Under the text are icon buttons for photos, poll, emoji and schedule. A "Who can reply" pill sits at the top right of the composer. It shows the current choice (everyone, accounts you follow, or accounts you mention), and opens an animated card with the three choices and a Done button. A "Mark media as sensitive" toggle appears when it applies. Replies inherit the post's settings.
 - Schedule picks a date and a quarter-hour time. The server checks the time is far enough ahead and reports a problem as a toast. Scheduled posts go live within 15 seconds of their time.
 - Save draft keeps a new post on `/drafts` without publishing it. Cmd or Ctrl with Enter posts.
@@ -101,7 +104,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Feeds load older posts as you scroll, with a "Show more" button as a fallback.
 - Reply, quote, repost, like, bookmark, share, pin to your profile, and highlight.
 - Undo: a new post can be taken back for 10 seconds, from the toast that confirms it.
-- Edit a post for 30 minutes after it's published. The "Edited" mark opens the post's edit history.
+- Edit a post for 60 minutes after it's published. The "Edited" mark opens the post's edit history.
 - Hide a reply to your own post. Hidden replies disappear for everyone except the reply's writer and the post's author.
 - Community notes: signed-in people can add one note to a post. It is shown once at least two people rate it helpful, and more of them than not.
 - Share → Copy embed code gives a blockquote snippet for other sites.
@@ -134,8 +137,10 @@ The scripts read the same database as the app, and the server can keep running w
 - Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave. Anyone who doesn't follow the creator gets an invite and joins once they accept.
 - Message requests: someone you don't follow lands in Requests until you accept. Declining removes the conversation.
 - Emoji reactions, deleting your own message for everyone, photos, shared posts, dictation where the browser supports it, typing indicators, and read receipts ("Seen").
+- Voice messages. The microphone button records up to two minutes. The recording is previewed, and can be discarded, before it is sent. Both people can play it.
 - Mute a conversation from its header. A muted conversation doesn't count toward the unread total and doesn't send banners.
 - Voice calls. Start a call from a conversation's header, one to one or with a group. The others get a ring, and a Join banner reaches anyone who opens the app during the call. Anyone can mute their own microphone, leave, or come back. A call with no one left ends, and the conversation keeps a record of it. A group call holds up to six people. Members who muted the conversation are not rung. Calls need the microphone, and a secure page.
+- Video calls, one to one. The video button sits beside the call button. The person called sees "Incoming video call" and answers with their camera, or without one if the camera is refused. Camera off hides this side's picture and keeps the call going. Group calls are voice only.
 - Group info shows the members. Any member can rename the group. Only the person who made it can remove someone, and every member can leave.
 
 **Analytics**
@@ -177,7 +182,8 @@ The scripts read the same database as the app, and the server can keep running w
 - Messages are stored as readable text on the server. They are not end-to-end encrypted.
 - The agreement to the Terms is enforced on every page. A request sent straight to a server action by an account that has not agreed is not refused yet: the actions check that someone is signed in, not that they agreed. Adding that check to each action is the next step.
 - Videos keep their metadata. Only photos are cleaned on upload.
-- Voice calls use Google's public STUN server unless `RHENKO_ICE_SERVERS` or the TURN settings are set. Some networks only connect through TURN. Calls are voice only, and a group call holds up to six people.
+- Voice calls use Google's public STUN server unless `RHENKO_ICE_SERVERS` or the TURN settings are set. Some networks only connect through TURN. Video calls are one to one, and a group call is voice only and holds up to six people.
+- Link previews show the page's title and description only. Images from the page are not copied to the server.
 - Email codes need SMTP. Without it, in production, the email features say they are not set up.
 - Scheduled posts are published by the 15-second tick, so a post can be up to 15 seconds late.
 - The likes tab shows only to the account's owner, matching X's default.

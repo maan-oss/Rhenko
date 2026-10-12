@@ -1,7 +1,7 @@
 // Direct messages and group chats: requests, accepting and declining, sending text and photos, reactions, sharing a post,
 // deleting a message, muting a conversation, creating a group, renaming it, adding and removing people, and leaving.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, escapeRegExp, randomWord } from "./lib/env.mjs"
+import { RUN_ID, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import {
   chatBox,
@@ -79,7 +79,7 @@ async function directFlow({ phone }) {
     await receiver.page.getByText("Accept the request to reply.").waitFor()
     await threadText(receiver.page, first).waitFor()
     assert.equal(await chatBox(receiver.page).count(), 0, "a message box is offered before the request is accepted")
-    assert.equal(await receiver.page.getByRole("button", { name: `Call ${sender.name}` }).isDisabled(), true, "the call button works before the request is accepted")
+    assert.equal(await receiver.page.getByRole("button", { name: `Call ${sender.name}`, exact: true }).isDisabled(), true, "the call button works before the request is accepted")
     await openChat(sender.page, convId)
     assert.equal(await sender.page.getByText(/^Seen/).count(), 0, "the sender is told the message was seen before the request was accepted")
   })
@@ -114,6 +114,28 @@ async function directFlow({ phone }) {
         return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0
       })
     }
+  })
+
+  await check(`${where}: a voice message is recorded, sent, and can be played by both people`, async () => {
+    await sender.page.getByRole("button", { name: "Record a voice message", exact: true }).click()
+    await sender.page.getByText("Recording a voice message").waitFor()
+    await sleep(1500)
+    await sender.page.getByRole("button", { name: "Stop", exact: true }).click()
+    await sender.page.getByText(/^Voice message · \d+:\d\d$/).waitFor()
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    for (const person of [sender, receiver]) {
+      await person.page.locator('main audio[aria-label="Voice message"]').first().waitFor()
+      await person.page.waitForFunction(
+        () => {
+          const audio = document.querySelector('main audio[aria-label="Voice message"]')
+          return audio instanceof HTMLAudioElement && audio.readyState >= 1 && audio.src.includes("/media/")
+        },
+        null,
+        { timeout: 20_000 }
+      )
+    }
+    // The preview in the composer is gone once the voice message has gone out.
+    await sender.page.getByText(/^Voice message · /).waitFor({ state: "detached" })
   })
 
   await check(`${where}: sharing a post from its card puts it in the chat as a card the other person can open`, async () => {

@@ -72,6 +72,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const scheduleAt = scheduleRaw && !draft ? Number(scheduleRaw) : null
   const replyTo = text(formData.get("replyTo"))
   const quoteOf = text(formData.get("quoteOf"))
+  // A thread continues the author's own post: threadOf is the first post of the thread, and replyTo the post before this one.
+  const threadOf = text(formData.get("threadOf"))
 
   const videos = picked.filter((m) => m.file.type.startsWith("video/")).length
   const images = picked.length - videos
@@ -100,6 +102,25 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
     replySetting = permission.setting
   }
   if (quoteOf !== null && (!isId(quoteOf) || !canSeeLivePost(quoteOf, viewer.id))) return { ok: false, error: POST_UNAVAILABLE }
+
+  // A thread continuation must answer the viewer's own post, and that post must be the thread's first post or part of it.
+  let threadId: string | null = null
+  if (threadOf !== null) {
+    const first = isId(threadOf)
+      ? get<{ author_id: string; reply_to_id: string | null; thread_id: string | null }>(
+          "SELECT author_id, reply_to_id, thread_id FROM posts WHERE id = ? AND is_draft = 0 AND publish_at IS NULL AND removed_at IS NULL",
+          threadOf
+        )
+      : undefined
+    const before = replyTo !== null && isId(replyTo)
+      ? get<{ author_id: string; thread_id: string | null }>("SELECT author_id, thread_id FROM posts WHERE id = ?", replyTo)
+      : undefined
+    const inThread = before !== undefined && (replyTo === threadOf || before.thread_id === threadOf)
+    if (!first || first.author_id !== viewer.id || first.reply_to_id !== null || first.thread_id !== null || !inThread || before?.author_id !== viewer.id) {
+      return { ok: false, error: POST_UNAVAILABLE }
+    }
+    threadId = threadOf
+  }
 
   for (let i = 0; i < picked.length; i++) {
     const room = consume(`upload:${viewer.id}`, UPLOAD_LIMIT, UPLOAD_WINDOW_MS)
@@ -134,8 +155,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   try {
     transaction(() => {
       run(
-        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
         id,
         viewer.id,
         body,
@@ -145,7 +166,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         replySetting,
         sensitive ? 1 : 0,
         publishAt,
-        draft ? 1 : 0
+        draft ? 1 : 0,
+        threadId
       )
       saved.forEach((media, position) => {
         run(
@@ -198,7 +220,9 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
   if (post.removed_at !== null) return { ok: false, error: POST_UNAVAILABLE }
   if (post.author_id !== viewer.id) return { ok: false, error: "You can only edit your own posts." }
   if (post.is_draft === 1 || post.publish_at !== null) return { ok: false, error: "Publish this post before editing it." }
-  if (Date.now() - post.created_at > EDIT_WINDOW_MS) return { ok: false, error: "Posts can be edited for 30 minutes after they're posted." }
+  if (Date.now() - post.created_at > EDIT_WINDOW_MS) {
+    return { ok: false, error: `Posts can be edited for ${Math.round(EDIT_WINDOW_MS / 60_000)} minutes after they're posted.` }
+  }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
   const media = all<{ id: string }>("SELECT id FROM post_media WHERE post_id = ?", postId)

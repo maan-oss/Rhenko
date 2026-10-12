@@ -29,6 +29,8 @@ type DmCall = {
   kind: "dm"
   id: string
   conversationId: string
+  // A video call. The ring says so, and the person who answers sends a picture if they have a camera.
+  video: boolean
   caller: Device
   calleeId: string
   // The tab that answered. Until then every tab of the person called rings.
@@ -324,7 +326,7 @@ function ringTimedOut(callId: string): void {
 
 // Rings the other person in a one-to-one chat. Pressing call while they are already calling you answers them.
 // Someone with nothing open cannot ring: the caller hears so at once and they get a missed call.
-export function startDmCall(conversationId: string, caller: Device, callee: EventPerson, from: EventPerson): StartResult {
+export function startDmCall(conversationId: string, caller: Device, callee: EventPerson, from: EventPerson, video: boolean): StartResult {
   for (const call of store.calls.values()) {
     if (
       call.kind === "dm" &&
@@ -347,6 +349,7 @@ export function startDmCall(conversationId: string, caller: Device, callee: Even
     kind: "dm",
     id: randomUUID(),
     conversationId,
+    video,
     caller,
     calleeId: callee.id,
     callee: null,
@@ -363,7 +366,7 @@ export function startDmCall(conversationId: string, caller: Device, callee: Even
   }
   store.calls.set(call.id, call)
   call.timer = setTimeout(() => ringTimedOut(call.id), CALL_RING_MS)
-  relay(callee.id, call.id, { kind: "ring", call: "dm", conversationId, from, title: null, iceServers: iceServersFor(callee.id) })
+  relay(callee.id, call.id, { kind: "ring", call: "dm", conversationId, from, title: null, iceServers: iceServersFor(callee.id), video })
   return { ok: true, mode: "ringing", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: store.bootId }
 }
 
@@ -828,7 +831,7 @@ export function openingEvents(userId: string): RealtimeEvent[] {
       events.push({
         type: "call",
         callId: call.id,
-        signal: { kind: "ring", call: "dm", conversationId: call.conversationId, from, title: null, iceServers: iceServersFor(userId) },
+        signal: { kind: "ring", call: "dm", conversationId: call.conversationId, from, title: null, iceServers: iceServersFor(userId), video: call.video },
       })
       continue
     }

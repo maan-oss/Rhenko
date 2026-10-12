@@ -8,6 +8,7 @@ import { PendingActions } from "@/components/app/pending-actions"
 import { PollView } from "@/components/app/poll-view"
 import { PostActions } from "@/components/app/post-actions"
 import { PostBody } from "@/components/app/post-body"
+import { LinkCard } from "@/components/app/link-card"
 import { LocalTime, RelativeTime } from "@/components/app/time-text"
 import { ViewBeacon } from "@/components/app/view-beacon"
 import { NumberTicker } from "@/components/ui/number-ticker"
@@ -30,7 +31,7 @@ function QuotedPost({ post }: { post: PostCore }) {
           · <RelativeTime at={post.createdAt} />
         </span>
       </p>
-      {post.body ? <PostBody text={post.body} className="mt-1 line-clamp-6 text-[15px]" /> : null}
+      {post.body ? <PostBody text={post.body} className="mt-1 line-clamp-6 text-[15px]" fold={false} /> : null}
       {post.media.length > 0 ? (
         <p className="mt-1 text-[13px] text-muted-foreground">
           {post.media.length} {post.media[0].kind === "video" ? "video" : "photo"}
@@ -161,6 +162,12 @@ export function PostCard({
           ) : null}
           {post.body ? (
             <PostBody text={post.body} className={cn("leading-relaxed", detail ? "mt-2 text-xl" : "mt-0.5 text-[15px]")} />
+          ) : null}
+          {post.preview && post.media.length === 0 && !post.quotedUnavailable && !post.quoted ? <LinkCard preview={post.preview} /> : null}
+          {post.threadId && !detail ? (
+            <Link href={`/${post.author.handle}/status/${post.threadId}`} className="relative z-10 mt-1 inline-block text-[13px] text-dusk hover:underline">
+              Show this thread
+            </Link>
           ) : null}
           {post.media.length > 0 ? <MediaGrid media={post.media} sensitive={post.sensitive && !isOwn} /> : null}
           {post.poll ? pending ? <PendingPoll options={post.poll.options} /> : <PollView postId={post.id} poll={post.poll} /> : null}

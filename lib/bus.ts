@@ -56,7 +56,8 @@ export type CallEndReason =
 // Steps of a call relayed between people. The server adds the ring, the group's state and how a call ended.
 export type CallSignal =
   // A ring. The servers in it are for the person rung alone. A group ring carries the group's name.
-  | { kind: "ring"; call: "dm" | "group"; conversationId: string; from: EventPerson; title: string | null; iceServers: IceServerConfig[] }
+  // A video call rings with video set. Group calls are voice only.
+  | { kind: "ring"; call: "dm" | "group"; conversationId: string; from: EventPerson; title: string | null; iceServers: IceServerConfig[]; video?: boolean }
   | { kind: "accept" }
   // Sent to all of a person's tabs when one of them answers or joins. The others stop ringing.
   | { kind: "claimed"; device: string }

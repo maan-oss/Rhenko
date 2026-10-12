@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from "@/lib/rules"
+import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VOICE_BYTES } from "@/lib/rules"
 import { UPLOAD_DIR } from "@/lib/db"
 import { stripImageMetadata } from "@/lib/image-metadata"
 
-export type MediaKind = "image" | "video"
+export type MediaKind = "image" | "video" | "audio"
 
 type Format = { ext: string; kind: MediaKind; mime: string }
 
@@ -17,11 +17,15 @@ const FORMATS: Record<string, Format> = {
   "video/mp4": { ext: "mp4", kind: "video", mime: "video/mp4" },
   "video/webm": { ext: "webm", kind: "video", mime: "video/webm" },
   "video/quicktime": { ext: "mov", kind: "video", mime: "video/quicktime" },
+  // Voice messages. The browser records WebM/Opus or MP4/AAC, and Ogg where it is the only option.
+  "audio/webm": { ext: "weba", kind: "audio", mime: "audio/webm" },
+  "audio/mp4": { ext: "m4a", kind: "audio", mime: "audio/mp4" },
+  "audio/ogg": { ext: "oga", kind: "audio", mime: "audio/ogg" },
 }
 
 const BY_EXT: Record<string, Format> = Object.fromEntries(Object.values(FORMATS).map((f) => [f.ext, f]))
 
-export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov)$/
+export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga)$/
 
 export function mediaKindOf(name: string): MediaKind {
   const ext = name.slice(name.lastIndexOf(".") + 1)
@@ -38,25 +42,35 @@ function matchesSignature(buf: Buffer, mime: string): boolean {
   if (mime === "video/mp4" || mime === "video/quicktime") {
     return buf.subarray(4, 8).toString("ascii") === "ftyp"
   }
-  if (mime === "video/webm") return buf.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+  if (mime === "video/webm" || mime === "audio/webm") return buf.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+  if (mime === "audio/mp4") return buf.subarray(4, 8).toString("ascii") === "ftyp"
+  if (mime === "audio/ogg") return buf.subarray(0, 4).toString("ascii") === "OggS"
   return false
 }
 
 export type SaveResult = { ok: true; name: string; kind: MediaKind } | { ok: false; error: string }
 
 // Returns null when no file was chosen. Names are random, so a name never
-// points at two different files. `accept` restricts what a field may hold.
+// points at two different files. `accept` restricts what a field may hold: "any" is a post's photos and video,
+// "audio" is a voice message, and "image" is an avatar or a chat photo.
 export async function saveUpload(
   value: FormDataEntryValue | null,
-  accept: "image" | "any" = "any"
+  accept: "image" | "audio" | "any" = "any"
 ): Promise<SaveResult | null> {
   if (!(value instanceof File) || value.size === 0) return null
-  const format = FORMATS[value.type]
+  // A recorder can label its type with codecs ("audio/webm;codecs=opus"). The codecs are not part of the format.
+  const type = value.type.split(";")[0].trim()
+  const format = FORMATS[type]
   if (!format) return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, or an MP4, WebM or MOV video." }
   if (accept === "image" && format.kind !== "image") return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image." }
-  const limit = format.kind === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
+  if (accept === "audio" && format.kind !== "audio") return { ok: false, error: "Send a voice recording." }
+  if (accept === "any" && format.kind === "audio") return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, or an MP4, WebM or MOV video." }
+  const limit = format.kind === "video" ? MAX_VIDEO_BYTES : format.kind === "audio" ? MAX_VOICE_BYTES : MAX_IMAGE_BYTES
   if (value.size > limit) {
-    return { ok: false, error: format.kind === "video" ? "Videos can be up to 25 MB." : "Images can be up to 4 MB." }
+    return {
+      ok: false,
+      error: format.kind === "video" ? "Videos can be up to 25 MB." : format.kind === "audio" ? "Voice messages are too long." : "Images can be up to 4 MB.",
+    }
   }
   let buf: Buffer
   try {
@@ -64,12 +78,13 @@ export async function saveUpload(
   } catch {
     return { ok: false, error: "That file didn't finish uploading. Try again." }
   }
-  if (!matchesSignature(buf, value.type)) {
-    return { ok: false, error: format.kind === "video" ? "That file is not a valid video." : "That file is not a valid image." }
+  if (!matchesSignature(buf, type)) {
+    const problem = format.kind === "video" ? "That file is not a valid video." : format.kind === "audio" ? "That file is not a valid recording." : "That file is not a valid image."
+    return { ok: false, error: problem }
   }
   // A photo keeps its picture only. Location, camera and time details are removed before anything is stored.
   if (format.kind === "image") {
-    const clean = stripImageMetadata(buf, value.type)
+    const clean = stripImageMetadata(buf, type)
     if (!clean) return { ok: false, error: "That file is not a valid image." }
     buf = clean
   }

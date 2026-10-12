@@ -9,6 +9,11 @@ export function dmCards(page, name) {
   return page.locator(`section[aria-label=${JSON.stringify(`Voice call with ${name}`)}]`)
 }
 
+// A video call is named the same way, with "Video" in place of "Voice".
+export function videoCard(page, name) {
+  return page.locator(`section[aria-label=${JSON.stringify(`Video call with ${name}`)}]`).first()
+}
+
 export function groupCards(page, title) {
   return page.locator(`section[aria-label=${JSON.stringify(`Group call in ${title}`)}]`)
 }
@@ -23,7 +28,7 @@ export function groupCard(page, title) {
 
 // Every call card on the page, whichever kind.
 export function anyCards(page) {
-  return page.locator('section[aria-label^="Voice call with"], section[aria-label^="Group call"]')
+  return page.locator('section[aria-label^="Voice call with"], section[aria-label^="Video call with"], section[aria-label^="Group call"]')
 }
 
 // The round buttons of a card: Accept, Decline, Mute, Unmute, Cancel, End, Leave.
@@ -32,6 +37,23 @@ export function control(card, label) {
 }
 
 // The call button in a conversation's header. It reads "Answer ..." while that person is ringing.
+// The video call button in a conversation's header.
+export function videoCallButton(page, name) {
+  return page.getByRole("button", { name: `Video call ${name}`, exact: true })
+}
+
+// Waits until the other person's picture is playing on this page: the video element has a frame to show.
+export async function pictureReady(page, timeout = 25_000) {
+  await page.waitForFunction(
+    () => {
+      const remote = document.querySelector('video[aria-label^="Video of"]')
+      return Boolean(remote && remote.videoWidth > 0 && remote.readyState >= 2)
+    },
+    null,
+    { timeout }
+  )
+}
+
 export function callButton(page, name) {
   return page.getByRole("button", { name: `Call ${name}`, exact: true })
 }

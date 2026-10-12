@@ -1,6 +1,7 @@
 // Shared rules. Pure functions only, so client components can import them.
 
-export const MAX_POST = 280
+// Long posts are free here: X keeps 25,000 characters for paying accounts.
+export const MAX_POST = 25000
 export const MAX_BIO = 160
 export const MAX_NAME = 50
 export const MAX_LOCATION = 30
@@ -116,12 +117,15 @@ export const MAX_VIDEOS = 1
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 export const MAX_VIDEO_BYTES = 25 * 1024 * 1024
 export const MAX_ALT = 1000
+// A voice message is recorded for up to two minutes. Opus at a voice bitrate keeps that far under the size limit.
+export const MAX_VOICE_SECONDS = 120
+export const MAX_VOICE_BYTES = 10 * 1024 * 1024
 export const POLL_MIN_OPTIONS = 2
 export const POLL_MAX_OPTIONS = 4
 export const MAX_POLL_OPTION = 25
 // Poll lengths in minutes: 5 minutes, 30 minutes, 1, 6, 24, 72 hours, 7 days.
 export const POLL_DURATIONS = [5, 30, 60, 360, 1440, 4320, 10080] as const
-export const EDIT_WINDOW_MS = 30 * 60 * 1000
+export const EDIT_WINDOW_MS = 60 * 60 * 1000
 export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000
 export const SCHEDULE_MAX_AHEAD_MS = 75 * 24 * 60 * 60 * 1000
 

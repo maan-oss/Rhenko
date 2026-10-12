@@ -12,6 +12,8 @@ import {
   type ReplySetting,
 } from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
+import { isVoiceFile } from "@/lib/media-names"
+import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib/link-previews"
 import { callSummary, type CallOutcome } from "@/lib/format"
 
 // Shared read models. Everything a page or API route renders comes from here,
@@ -48,7 +50,10 @@ export type PostCore = {
   sensitive: boolean
   replyToId: string | null
   replyToHandle: string | null
+  threadId: string | null
   quoteOfId: string | null
+  // The first link in the post, with what its page says, once it has been read.
+  preview: LinkPreview | null
   replySetting: ReplySetting
   canReply: boolean
   poll: PollView | null
@@ -95,6 +100,7 @@ type PostRow = {
   is_draft: number
   sensitive: number
   reply_to_id: string | null
+  thread_id: string | null
   quote_of_id: string | null
   reply_setting: string
   reply_to_handle: string | null
@@ -145,6 +151,18 @@ export function parseCursor(cursor: string | undefined): [number, string] {
 
 function likePattern(term: string): string {
   return `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+}
+
+// A word the post must contain, as a substring and ignoring case, like the LIKE it replaces. Terms of three or more
+// characters use the trigram index; a shorter term has no trigram, so it keeps the scan.
+function termClause(term: string): { sql: string; param: Param } {
+  if ([...term].length >= 3) {
+    return {
+      sql: "p.search_id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH ?)",
+      param: `"${term.replace(/"/g, '""')}"`,
+    }
+  }
+  return { sql: "p.body LIKE ? ESCAPE '\\'", param: likePattern(term) }
 }
 
 // A post hidden by moderation (removed_at) is gone for everyone, its author included, until it is restored.
@@ -269,20 +287,23 @@ function viewerHandle(viewerId: string): string {
   return get<{ handle: string }>("SELECT handle FROM users WHERE id = ?", viewerId)?.handle ?? ""
 }
 
+// A post in a feed: an original post, or a continuation of the author's own thread.
+const AUTHORED = "(p.reply_to_id IS NULL OR p.thread_id IS NOT NULL)"
+
 function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   const result = new Map<string, PostCore>()
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
   const rows = all<PostRow>(
     `SELECT p.id, p.body, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
-       p.reply_setting,
+       p.reply_setting, p.thread_id,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
-       (SELECT COUNT(*) FROM posts r WHERE r.reply_to_id = p.id AND r.is_draft = 0 AND r.publish_at IS NULL) AS replies,
-       (SELECT COUNT(*) FROM reposts rp WHERE rp.post_id = p.id) AS reposts,
-       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes,
-       (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id = p.id AND q.is_draft = 0 AND q.publish_at IS NULL) AS quotes,
-       (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id) AS views,
+       p.replies_count AS replies,
+       p.reposts_count AS reposts,
+       p.likes_count AS likes,
+       p.quotes_count AS quotes,
+       p.views_count AS views,
        EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) AS liked,
        EXISTS(SELECT 1 FROM reposts rp WHERE rp.post_id = p.id AND rp.user_id = ?) AS reposted,
        EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked,
@@ -313,6 +334,15 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
     ...ids
   )
   const handle = viewerHandle(viewerId).toLowerCase()
+  // A post's first link shows a card. A link not read yet is read in the background, and shows on a later view.
+  const linkOf = new Map<string, string>()
+  for (const r of rows) {
+    const link = firstLink(r.body)
+    if (link) linkOf.set(r.id, link)
+  }
+  const links = [...new Set(linkOf.values())]
+  const previews = previewsFor(links)
+  requestPreviews(links)
   const polls = pollsFor(ids, viewerId)
   const media = mediaFor(ids)
   for (const r of rows) {
@@ -337,7 +367,9 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       media: media.get(r.id) ?? [],
       sensitive: r.sensitive === 1,
       replyToId: r.reply_to_id,
-      replyToHandle: r.reply_to_handle,
+      replyToHandle: r.thread_id === null ? r.reply_to_handle : null,
+      threadId: r.thread_id,
+      preview: linkOf.has(r.id) ? (previews.get(linkOf.get(r.id) ?? "") ?? null) : null,
       quoteOfId: r.quote_of_id,
       replySetting,
       canReply,
@@ -470,6 +502,17 @@ function feedPage(
     cursorKey,
     limit + 1
   )
+  return pageOf(rows, limit, viewerId, postFilter)
+}
+
+// Turns the rows of one page into feed items. `rows` holds up to limit + 1 rows in feed order: the extra row only
+// says whether a next page exists.
+function pageOf(
+  rows: FeedRow[],
+  limit: number,
+  viewerId: string,
+  postFilter?: (post: PostView, row: FeedRow) => boolean
+): Page<FeedItem> {
   const hasMore = rows.length > limit
   const page = rows.slice(0, limit)
   const posts = loadPosts(
@@ -496,40 +539,91 @@ function feedPage(
   return { items, next }
 }
 
+// One source of a timeline. Its WHERE clause already applies the visibility rules, so its LIMIT counts only posts the
+// viewer may see. A timeline is several arms joined with UNION ALL. Each arm reads its own index in order and stops
+// after one page, so the timeline never sorts every matching row. `from` names the posts as p and their authors as au.
+type Arm = {
+  from: string
+  where: string
+  params: Param[]
+  key: string
+  postId: string
+  sortAt: string
+  reposter: string
+}
+
+function timelinePage(
+  arms: Arm[],
+  cursor: string | undefined,
+  limit: number,
+  viewerId: string,
+  postFilter?: (post: PostView, row: FeedRow) => boolean
+): Page<FeedItem> {
+  const [cursorAt, cursorKey] = parseCursor(cursor)
+  const parts = arms.map(
+    (arm) => `SELECT * FROM (
+      SELECT ${arm.key} AS key, ${arm.postId} AS post_id, ${arm.sortAt} AS sort_at, ${arm.reposter} AS reposter_id, NULL AS folder_id
+      FROM ${arm.from}
+      WHERE ${arm.where} AND ${arm.sortAt} <= ? AND (${arm.sortAt} < ? OR (${arm.sortAt} = ? AND ${arm.key} < ?))
+      ORDER BY sort_at DESC, key DESC
+      LIMIT ?)`
+  )
+  const params = arms.flatMap((arm) => [...arm.params, cursorAt, cursorAt, cursorAt, cursorKey, limit + 1])
+  const rows = all<FeedRow>(`${parts.join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`, ...params, limit + 1)
+  return pageOf(rows, limit, viewerId, postFilter)
+}
+
 const FOLLOWING = "SELECT followee_id FROM follows WHERE follower_id = ?"
 
 // For you: every post and repost. Following: the viewer's own posts, posts and reposts from accounts they follow, and
 // posts that use a hashtag they follow. Every row still passes the feed's visibility rules.
 export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
+  const vis = visibilityClause(viewerId)
+  // A post arm: `where` is the arm's own condition, placed before the visibility rules.
+  const postArm = (where: string, params: Param[]): Arm => ({
+    from: "posts p INDEXED BY posts_created JOIN users au ON au.id = p.author_id",
+    where: `${where} AND ${vis.sql}`,
+    params: [...params, ...vis.params],
+    key: "'post:' || p.id",
+    postId: "p.id",
+    sortAt: "p.created_at",
+    reposter: "NULL",
+  })
+  // A repost arm: a repost by someone the viewer has not blocked or muted, of a post the viewer may see.
+  const repostArm = (where: string, params: Param[]): Arm => ({
+    from: "reposts r INDEXED BY reposts_created JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id",
+    where: `${where} AND ${vis.sql}
+      AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = ?))
+      AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = r.user_id)`,
+    params: [...params, ...vis.params, viewerId, viewerId, viewerId],
+    key: "'repost:' || r.post_id || ':' || r.user_id",
+    postId: "r.post_id",
+    sortAt: "r.created_at",
+    reposter: "r.user_id",
+  })
+
   if (mode === "for-you") {
-    const source = `
-      SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-      FROM posts p WHERE p.reply_to_id IS NULL
-      UNION ALL
-      SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
-      FROM reposts r`
-    return feedPage(source, [], cursor, limit, viewerId)
+    return timelinePage([postArm(AUTHORED, []), repostArm("1 = 1", [])], cursor, limit, viewerId)
   }
+
   const tags = new Set(followedTopics(viewerId))
-  // SQL finds posts whose text contains a followed #tag. A tag that only starts the same way (#art in #artist) is
-  // dropped afterwards by reading the post's hashtags exactly.
-  const topicMatch =
-    tags.size > 0
-      ? `OR EXISTS (SELECT 1 FROM topic_follows tf WHERE tf.user_id = ? AND instr(lower(p.body), '#' || tf.tag) > 0)`
-      : ""
-  const source = `
-    SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-    FROM posts p
-    WHERE p.reply_to_id IS NULL
-      AND (p.author_id = ? OR p.author_id IN (${FOLLOWING}) ${topicMatch})
-    UNION ALL
-    SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
-    FROM reposts r
-    WHERE r.user_id = ? OR r.user_id IN (${FOLLOWING})`
-  const params: Param[] = tags.size > 0 ? [viewerId, viewerId, viewerId, viewerId, viewerId] : [viewerId, viewerId, viewerId, viewerId]
-  if (tags.size === 0) return feedPage(source, params, cursor, limit, viewerId)
+  const arms: Arm[] = [
+    postArm(`${AUTHORED} AND (p.author_id = ? OR p.author_id IN (${FOLLOWING}))`, [viewerId, viewerId]),
+    repostArm(`(r.user_id = ? OR r.user_id IN (${FOLLOWING}))`, [viewerId, viewerId]),
+  ]
+  if (tags.size === 0) return timelinePage(arms, cursor, limit, viewerId)
+
+  // Posts that use a followed #tag, from accounts the viewer does not follow. SQL finds a substring; a tag that only
+  // starts the same way (#art in #artist) is dropped afterwards by reading the post's hashtags exactly.
+  arms.push(
+    postArm(
+      `${AUTHORED} AND p.author_id <> ? AND p.author_id NOT IN (${FOLLOWING})
+       AND EXISTS (SELECT 1 FROM topic_follows tf WHERE tf.user_id = ? AND instr(lower(p.body), '#' || tf.tag) > 0)`,
+      [viewerId, viewerId, viewerId]
+    )
+  )
   const followed = new Set(all<{ followee_id: string }>(FOLLOWING, viewerId).map((r) => r.followee_id))
-  return feedPage(source, params, cursor, limit, viewerId, (post, row) =>
+  return timelinePage(arms, cursor, limit, viewerId, (post, row) =>
     row.reposter_id !== null ||
     post.author.id === viewerId ||
     followed.has(post.author.id) ||
@@ -540,44 +634,80 @@ export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor
 // "highlights" is a feed of its own, shown inside the Posts section of a profile.
 export type ProfileTab = "posts" | "highlights" | "replies" | "media" | "reposts" | "likes"
 
+// Each tab is one arm of the timeline, reading the index of its own table in time order.
 export function profileFeed(tab: ProfileTab, userId: string, viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
-  if (tab === "replies") {
-    const source = `
-      SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-      FROM posts p WHERE p.author_id = ? AND p.reply_to_id IS NOT NULL`
-    return feedPage(source, [userId], cursor, limit, viewerId)
+  const vis = visibilityClause(viewerId)
+  const byAuthor = "posts p INDEXED BY posts_author JOIN users au ON au.id = p.author_id"
+  let arm: Arm
+  switch (tab) {
+    case "replies":
+      arm = {
+        from: byAuthor,
+        where: `p.author_id = ? AND p.reply_to_id IS NOT NULL AND p.thread_id IS NULL AND ${vis.sql}`,
+        params: [userId, ...vis.params],
+        key: "'post:' || p.id",
+        postId: "p.id",
+        sortAt: "p.created_at",
+        reposter: "NULL",
+      }
+      break
+    case "media":
+      arm = {
+        from: byAuthor,
+        where: `p.author_id = ? AND EXISTS (SELECT 1 FROM post_media m WHERE m.post_id = p.id) AND ${vis.sql}`,
+        params: [userId, ...vis.params],
+        key: "'post:' || p.id",
+        postId: "p.id",
+        sortAt: "p.created_at",
+        reposter: "NULL",
+      }
+      break
+    case "likes":
+      arm = {
+        from: "likes l INDEXED BY likes_user JOIN posts p ON p.id = l.post_id JOIN users au ON au.id = p.author_id",
+        where: `l.user_id = ? AND ${vis.sql}`,
+        params: [userId, ...vis.params],
+        key: "'like:' || l.post_id || ':' || l.user_id",
+        postId: "l.post_id",
+        sortAt: "l.created_at",
+        reposter: "NULL",
+      }
+      break
+    case "highlights":
+      arm = {
+        from: "highlights h JOIN posts p ON p.id = h.post_id JOIN users au ON au.id = p.author_id",
+        where: `h.user_id = ? AND ${vis.sql}`,
+        params: [userId, ...vis.params],
+        key: "'highlight:' || h.post_id",
+        postId: "h.post_id",
+        sortAt: "h.created_at",
+        reposter: "NULL",
+      }
+      break
+    case "reposts":
+      arm = {
+        from: "reposts r INDEXED BY reposts_user JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id",
+        where: `r.user_id = ? AND ${vis.sql}`,
+        params: [userId, ...vis.params],
+        key: "'repost:' || r.post_id || ':' || r.user_id",
+        postId: "r.post_id",
+        sortAt: "r.created_at",
+        reposter: "r.user_id",
+      }
+      break
+    default:
+      // Original posts only: reposts have their own tab, and the pinned post is shown above the list.
+      arm = {
+        from: byAuthor,
+        where: `p.author_id = ? AND ${AUTHORED} AND p.id IS NOT (SELECT pinned_post_id FROM users WHERE id = ?) AND ${vis.sql}`,
+        params: [userId, userId, ...vis.params],
+        key: "'post:' || p.id",
+        postId: "p.id",
+        sortAt: "p.created_at",
+        reposter: "NULL",
+      }
   }
-  if (tab === "media") {
-    const source = `
-      SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-      FROM posts p WHERE p.author_id = ? AND EXISTS (SELECT 1 FROM post_media m WHERE m.post_id = p.id)`
-    return feedPage(source, [userId], cursor, limit, viewerId)
-  }
-  if (tab === "likes") {
-    const source = `
-      SELECT 'like:' || l.post_id || ':' || l.user_id AS key, l.post_id AS post_id, l.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-      FROM likes l WHERE l.user_id = ?`
-    return feedPage(source, [userId], cursor, limit, viewerId)
-  }
-  if (tab === "highlights") {
-    const source = `
-      SELECT 'highlight:' || h.post_id AS key, h.post_id AS post_id, h.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-      FROM highlights h WHERE h.user_id = ?`
-    return feedPage(source, [userId], cursor, limit, viewerId)
-  }
-  if (tab === "reposts") {
-    const source = `
-      SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
-      FROM reposts r WHERE r.user_id = ?`
-    return feedPage(source, [userId], cursor, limit, viewerId)
-  }
-  // Original posts only: reposts have their own tab, and the pinned post is shown above the list.
-  const source = `
-    SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-    FROM posts p
-    WHERE p.author_id = ? AND p.reply_to_id IS NULL
-      AND p.id IS NOT (SELECT pinned_post_id FROM users WHERE id = ?)`
-  return feedPage(source, [userId, userId], cursor, limit, viewerId)
+  return timelinePage([arm], cursor, limit, viewerId)
 }
 
 // folder: undefined = every bookmark, "none" = not in a folder, otherwise a folder id.
@@ -594,7 +724,7 @@ export function listFeed(listId: string, viewerId: string, cursor?: string, limi
   const members = "SELECT user_id FROM list_members WHERE list_id = ?"
   const source = `
     SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-    FROM posts p WHERE p.reply_to_id IS NULL AND p.author_id IN (${members})
+    FROM posts p WHERE ${AUTHORED} AND p.author_id IN (${members})
     UNION ALL
     SELECT 'repost:' || r.post_id || ':' || r.user_id AS key, r.post_id AS post_id, r.created_at AS sort_at, r.user_id AS reposter_id, NULL AS folder_id
     FROM reposts r WHERE r.user_id IN (${members})`
@@ -605,7 +735,7 @@ export function topicFeed(tag: string, viewerId: string, cursor?: string, limit 
   const normalized = normalizeTag(tag)
   const source = `
     SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
-    FROM posts p WHERE lower(p.body) LIKE ? ESCAPE '\\' AND p.reply_to_id IS NULL`
+    FROM posts p WHERE lower(p.body) LIKE ? ESCAPE '\\' AND ${AUTHORED}`
   return feedPage(source, [likePattern(`#${normalized}`)], cursor, limit, viewerId, (post) =>
     extractHashtags(post.body).includes(normalized)
   )
@@ -701,11 +831,12 @@ export function searchPostFeed(
   const clauses: string[] = [LIVE]
   const params: Param[] = []
   for (const term of query.terms) {
-    clauses.push("p.body LIKE ? ESCAPE '\\'")
-    params.push(likePattern(term))
+    const match = termClause(term)
+    clauses.push(match.sql)
+    params.push(match.param)
   }
   if (query.from) {
-    clauses.push("u.handle = ? COLLATE NOCASE")
+    clauses.push("au.handle = ? COLLATE NOCASE")
     params.push(query.from)
   }
   if (query.since !== null) {
@@ -727,27 +858,32 @@ export function searchPostFeed(
     params.push(likePattern(word))
   }
   if (query.minLikes !== null) {
-    clauses.push("(SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) >= ?")
+    clauses.push("p.likes_count >= ?")
     params.push(query.minLikes)
   }
   if (query.minReposts !== null) {
-    clauses.push("(SELECT COUNT(*) FROM reposts rp WHERE rp.post_id = p.id) >= ?")
+    clauses.push("p.reposts_count >= ?")
     params.push(query.minReposts)
   }
-  if (query.filter === "replies") clauses.push("p.reply_to_id IS NOT NULL")
-  if (query.filter === "links") clauses.push("p.body LIKE '%http%'")
+  if (query.filter === "replies") clauses.push("p.reply_to_id IS NOT NULL AND p.thread_id IS NULL")
+  if (query.filter === "links") clauses.push(`p.search_id IN (SELECT rowid FROM posts_fts WHERE posts_fts MATCH '"http"')`)
   if (query.filter === "media") clauses.push("EXISTS (SELECT 1 FROM post_media m WHERE m.post_id = p.id)")
   if (query.filter === "images") clauses.push("EXISTS (SELECT 1 FROM post_media m WHERE m.post_id = p.id AND m.kind = 'image')")
   if (query.filter === "videos") clauses.push("EXISTS (SELECT 1 FROM post_media m WHERE m.post_id = p.id AND m.kind = 'video')")
-  const sortAt =
-    sort === "top"
-      ? `((SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) + 2 * (SELECT COUNT(*) FROM reposts rp WHERE rp.post_id = p.id) + (SELECT COUNT(*) FROM posts c WHERE c.reply_to_id = p.id))`
-      : "p.created_at"
-  const source = `
-    SELECT 'post:' || p.id AS key, p.id AS post_id, ${sortAt} AS sort_at, NULL AS reposter_id, NULL AS folder_id
-    FROM posts p JOIN users u ON u.id = p.author_id
-    WHERE ${clauses.join(" AND ")}`
-  return feedPage(source, params, cursor, limit, viewerId)
+  // Top is engagement: likes, plus twice the reposts, plus replies. It is kept on the post, so sorting reads a column.
+  // Each sort reads its own index in order, so a page stops after its rows instead of sorting every match.
+  const vis = visibilityClause(viewerId)
+  const top = sort === "top"
+  const arm: Arm = {
+    from: `posts p INDEXED BY ${top ? "posts_engagement" : "posts_created"} JOIN users au ON au.id = p.author_id`,
+    where: `${clauses.join(" AND ")} AND ${vis.sql}`,
+    params: [...params, ...vis.params],
+    key: "'post:' || p.id",
+    postId: "p.id",
+    sortAt: top ? "p.engagement" : "p.created_at",
+    reposter: "NULL",
+  }
+  return timelinePage([arm], cursor, limit, viewerId)
 }
 
 // Drafts and scheduled posts belong to their author, so they skip the public visibility rules.
@@ -874,9 +1010,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
   }>(
     `SELECT u.id, u.handle, u.name, u.bio, u.location, u.website, u.avatar_file, u.banner_file, u.status, u.created_at,
        u.verified, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
-       (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) AS followers,
-       (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
-       (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id AND p.reply_to_id IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL) AS posts
+       u.followers_count AS followers, u.following_count AS following, u.posts_count AS posts
      FROM users u WHERE u.handle = ? COLLATE NOCASE`,
     handle
   )
@@ -967,7 +1101,7 @@ export function searchUsers(query: string, viewerId: string, limit = 20): UserCa
   return all<CardRow>(
     `${CARD_SQL}
      WHERE (u.handle LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\') AND u.id <> ? AND ${NOT_HIDDEN}
-     ORDER BY (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) DESC, u.created_at DESC
+     ORDER BY u.followers_count DESC, u.created_at DESC
      LIMIT ?`,
     viewerId,
     viewerId,
@@ -986,7 +1120,7 @@ export function whoToFollow(viewerId: string, limit = 3): UserCard[] {
      WHERE u.id <> ? AND u.protected = 0 AND ${NOT_HIDDEN}
        AND u.id NOT IN (SELECT followee_id FROM follows WHERE follower_id = ?)
        AND u.id NOT IN (SELECT muted_id FROM mutes WHERE muter_id = ?)
-     ORDER BY (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) DESC, u.created_at DESC
+     ORDER BY u.followers_count DESC, u.created_at DESC
      LIMIT ?`,
     viewerId,
     viewerId,
@@ -1067,25 +1201,35 @@ export function followRequestsFor(viewerId: string): (MiniUser & { createdAt: nu
   ).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1, createdAt: r.created_at }))
 }
 
-// Hashtags used most in the last week, counted from live posts by active accounts.
+// Hashtags used most in the last week, counted from live posts by active accounts. Every page shows them, so the
+// count is kept until a new post arrives or a minute passes. A post shows up at once: the newest post's id changes.
+let trending: { generation: number; at: number; tags: { tag: string; count: number }[] } | null = null
+const TRENDING_TTL_MS = 60 * 1000
+
 export function trendingTags(limit = 6): { tag: string; count: number }[] {
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-  const rows = all<{ body: string }>(
-    `SELECT p.body FROM posts p JOIN users u ON u.id = p.author_id
-     WHERE p.created_at > ? AND ${LIVE} AND u.deactivated_at IS NULL
-     ORDER BY p.created_at DESC LIMIT 2000`,
-    weekAgo
-  )
-  const counts = new Map<string, number>()
-  for (const row of rows) {
-    for (const tag of extractHashtags(row.body)) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1)
+  const now = Date.now()
+  const generation = get<{ generation: number | null }>("SELECT MAX(search_id) AS generation FROM posts")?.generation ?? 0
+  if (!trending || trending.generation !== generation || now - trending.at > TRENDING_TTL_MS) {
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000
+    const rows = all<{ body: string }>(
+      `SELECT p.body FROM posts p JOIN users u ON u.id = p.author_id
+       WHERE p.created_at > ? AND ${LIVE} AND u.deactivated_at IS NULL
+       ORDER BY p.created_at DESC LIMIT 2000`,
+      weekAgo
+    )
+    const counts = new Map<string, number>()
+    for (const row of rows) {
+      for (const tag of extractHashtags(row.body)) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1)
+      }
     }
+    const tags = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 20)
+      .map(([tag, count]) => ({ tag, count }))
+    trending = { generation, at: now, tags }
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([tag, count]) => ({ tag, count }))
+  return trending.tags.slice(0, limit)
 }
 
 export type NotificationKind = "like" | "repost" | "reply" | "quote" | "follow" | "mention" | "follow_request" | "poll" | "post"
@@ -1211,7 +1355,8 @@ function previewOfLast(last: LastMessage | undefined, viewerId: string): string 
   if (last.call_status) {
     return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId, last.call_kind, last.call_people)
   }
-  return last.body || (last.media_file ? "Sent a photo" : last.post_id ? "Shared a post" : "")
+  if (last.media_file) return isVoiceFile(last.media_file) ? "Sent a voice message" : "Sent a photo"
+  return last.body || (last.post_id ? "Shared a post" : "")
 }
 
 // A one-to-one conversation (alias c) where the viewer and the other person have blocked each other, in either
@@ -1639,7 +1784,7 @@ export function suggestHandles(prefix: string, viewerId: string, limit = 6): Min
   return all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number }>(
     `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified FROM users u
      WHERE u.handle LIKE ? ESCAPE '\\' AND ${NOT_HIDDEN}
-     ORDER BY (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) DESC, u.handle COLLATE NOCASE LIMIT ?`,
+     ORDER BY u.followers_count DESC, u.handle COLLATE NOCASE LIMIT ?`,
     `${prefix.replace(/[\\%_]/g, (m) => `\\${m}`)}%`,
     viewerId,
     viewerId,

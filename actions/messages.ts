@@ -7,6 +7,7 @@ import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
 import { canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
 import { blockedEitherWay } from "@/lib/notify"
+import { isVoiceFile } from "@/lib/media-names"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
 import { removeUpload, saveUpload } from "@/lib/uploads"
@@ -130,10 +131,10 @@ export async function startConversation(handle: string): Promise<IdResult> {
 }
 
 // What a banner or the conversation list shows for a message: its text, or what it carries.
-function previewOf(body: string, hasPhoto: boolean, hasPost: boolean): string {
+function previewOf(body: string, media: string | null, hasPost: boolean): string {
   const chars = [...body]
   if (chars.length > 0) return chars.length > BANNER_PREVIEW_MAX ? `${chars.slice(0, BANNER_PREVIEW_MAX - 1).join("")}…` : body
-  if (hasPhoto) return "Sent a photo"
+  if (media) return isVoiceFile(media) ? "Sent a voice message" : "Sent a photo"
   if (hasPost) return "Shared a post"
   return ""
 }
@@ -435,7 +436,10 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   const image = formData.get("image")
   const postId = String(formData.get("postId") ?? "") || null
   const hasImage = image instanceof File && image.size > 0
-  if (!body && !hasImage && !postId) return { error: "Write a message or add a photo." }
+  const voice = formData.get("voice")
+  const hasVoice = voice instanceof File && voice.size > 0
+  if (!body && !hasImage && !hasVoice && !postId) return { error: "Write a message, or add a photo or voice message." }
+  if (hasImage && hasVoice) return { error: "Send a photo or a voice message, not both." }
   if ([...body].length > MAX_DM) return { error: `Messages can have up to ${MAX_DM} characters.` }
 
   const others = memberIds(conversationId).filter((id) => id !== viewer.id)
@@ -446,10 +450,10 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
 
   const slowDown =
     tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.") ??
-    (hasImage ? tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of photos.") : null)
+    (hasImage || hasVoice ? tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of photos.") : null)
   if (slowDown) return { error: slowDown }
 
-  const upload = hasImage ? await saveUpload(image, "image") : null
+  const upload = hasImage ? await saveUpload(image, "image") : hasVoice ? await saveUpload(voice, "audio") : null
   if (upload && !upload.ok) return { error: upload.error }
 
   const mediaFile = upload?.ok ? upload.name : null
@@ -459,7 +463,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
     removeUpload(mediaFile)
     throw error
   }
-  announceMessage(conversationId, viewer.id, previewOf(body, mediaFile !== null, postId !== null))
+  announceMessage(conversationId, viewer.id, previewOf(body, mediaFile, postId !== null))
   refresh()
   return { sent: true }
 }
@@ -505,7 +509,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
       continue
     }
     insertMessage(opened.id, viewer.id, clean, null, id)
-    announceMessage(opened.id, viewer.id, previewOf(clean, false, true))
+    announceMessage(opened.id, viewer.id, previewOf(clean, null, true))
     sent.push({ handle: target.handle, conversationId: opened.id })
   }
   refresh()

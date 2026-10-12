@@ -58,16 +58,53 @@ async function postFlows({ phone }) {
     await waitForPost(reader.page, plain)
   })
 
-  await check(`${where}: a post over 280 characters cannot be sent`, async () => {
+  await check(`${where}: a post over 25,000 characters cannot be sent`, async () => {
     await openHome(author.page)
     const form = homeComposer(author.page)
-    await typeIn(form, "x".repeat(281))
+    await typeIn(form, "x".repeat(25001))
     const send = form.getByRole("button", { name: "Post", exact: true })
-    assert.equal(await send.isDisabled(), true, "the Post button is enabled with 281 characters")
+    assert.equal(await send.isDisabled(), true, "the Post button is enabled with 25,001 characters")
     await form.getByText("-1", { exact: true }).first().waitFor()
-    await typeIn(form, "x".repeat(280))
-    assert.equal(await send.isDisabled(), false, "the Post button is disabled with exactly 280 characters")
+    await typeIn(form, "x".repeat(25000))
+    assert.equal(await send.isDisabled(), false, "the Post button is disabled with exactly 25,000 characters")
     await typeIn(form, "")
+  })
+
+  // A long post folds after its first lines. Show more opens the rest, and Show less folds it again.
+  const longHead = uniq("Long post opening")
+  const longTail = `LONG-END-${RUN_ID}${randomWord(4)}`
+  await check(`${where}: a long post folds, and Show more and Show less open and close the rest`, async () => {
+    await openHome(author.page)
+    const form = homeComposer(author.page)
+    await typeIn(form, `${longHead}\n\n${"A longer paragraph of plain text to fill the post. ".repeat(14)}${longTail}`)
+    await acted(author.page, () => form.getByRole("button", { name: "Post", exact: true }).click())
+    await toastText(author.page, /Posted/)
+    await openProfile(author.page, author.handle)
+    const post = await waitForPost(author.page, longHead)
+    await post.getByRole("button", { name: "Show more", exact: true }).click()
+    await post.getByRole("button", { name: "Show less", exact: true }).waitFor()
+    await post.getByRole("button", { name: "Show less", exact: true }).click()
+    await post.getByRole("button", { name: "Show more", exact: true }).waitFor()
+  })
+
+  // A thread posts its parts in order. The later part sits in the feed with a link back to the thread's start.
+  const threadHead = uniq("Thread opener")
+  const threadTail = uniq("Thread closer")
+  await check(`${where}: a thread posts in order, and its later part links to the thread`, async () => {
+    await openHome(author.page)
+    const form = homeComposer(author.page)
+    await typeIn(form, threadHead)
+    await form.getByRole("button", { name: "Add to thread", exact: true }).click()
+    await author.page.getByRole("textbox", { name: "Thread part 2 of 2" }).fill(threadTail)
+    await acted(author.page, () => form.getByRole("button", { name: "Post all", exact: true }).click())
+    await toastText(author.page, /Thread posted/)
+    await openProfile(author.page, author.handle)
+    const tail = await waitForPost(author.page, threadTail)
+    await tail.getByRole("link", { name: "Show this thread", exact: true }).click()
+    await author.page.waitForURL(/\/status\//)
+    await waitForPost(author.page, threadHead)
+    await openProfile(reader.page, author.handle)
+    await waitForPost(reader.page, threadTail)
   })
 
   // -------------------------------------------------------------------------------------------------- image
@@ -265,16 +302,22 @@ async function postFlows({ phone }) {
   await check(`${where}: a repost shows on the reposter's Reposts tab and can be undone`, async () => {
     await openProfile(reader.page, author.handle)
     const target = await waitForPost(reader.page, withImage)
+    const repostedId = await cardPostId(target)
+    // Wait for the repost itself to answer, not just any action: the menu click is the one that changes the list.
+    const reposted = reader.page.waitForResponse((r) => r.request().method() === "POST" && (r.request().postData() ?? "").includes(repostedId))
     await repostTrigger(target).click()
-    await acted(reader.page, () => reader.page.getByRole("menuitem", { name: "Repost", exact: true }).click())
+    await reader.page.getByRole("menuitem", { name: "Repost", exact: true }).click()
+    await reposted
     await target.getByRole("button", { name: /^Repost, 1 repost$/ }).waitFor()
     await openProfile(reader.page, reader.handle, "reposts")
     const listed = await waitForPost(reader.page, withImage)
     await listed.getByText("You reposted").waitFor()
     await openProfile(reader.page, author.handle)
     const again = await waitForPost(reader.page, withImage)
+    const undone = reader.page.waitForResponse((r) => r.request().method() === "POST" && (r.request().postData() ?? "").includes(repostedId))
     await repostTrigger(again).click()
-    await acted(reader.page, () => reader.page.getByRole("menuitem", { name: "Undo repost" }).click())
+    await reader.page.getByRole("menuitem", { name: "Undo repost" }).click()
+    await undone
     await openProfile(reader.page, reader.handle, "reposts")
     assert.equal(await noPost(reader.page, withImage), true, "the repost is still listed after it was undone")
   })

@@ -104,7 +104,7 @@ function actionOf(value: unknown): CallAction | null {
 }
 
 // Rings the other person in a one-to-one chat. Both must have accepted the conversation and neither can be on a call.
-export async function startCall(conversationId: string, deviceId: string): Promise<StartedCall> {
+export async function startCall(conversationId: string, deviceId: string, video = false): Promise<StartedCall> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
@@ -127,7 +127,7 @@ export async function startCall(conversationId: string, deviceId: string): Promi
   const limited = startLimited(viewer.id)
   if (limited) return { ok: false, error: limited }
   const caller: Device = { userId: viewer.id, deviceId: device, session: await currentSessionHash() }
-  return startDmCall(id, caller, callee, from)
+  return startDmCall(id, caller, callee, from, video === true)
 }
 
 // Starts a voice call in a group, or joins the one already going there.

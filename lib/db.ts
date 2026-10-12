@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite"
+import { DatabaseSync, type StatementSync } from "node:sqlite"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -505,6 +505,155 @@ CREATE TABLE IF NOT EXISTS saved_searches (
   PRIMARY KEY (user_id, query)
 );
 `,
+
+  // 11. Speed. Engagement counts are kept on the post by triggers, so a feed reads a number instead of counting rows
+  // for every post on every page. Search uses a trigram index over the body (substring matches, like the LIKE it
+  // replaces). Scheduled posts have an index, so the publish check stops scanning every post.
+  //
+  // The search index is keyed on search_id, not on rowid: VACUUM INTO (used by the backup script) renumbers rowids
+  // but keeps explicit columns, so a backup restored with its index still matches.
+  `
+ALTER TABLE posts ADD COLUMN likes_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE posts ADD COLUMN reposts_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE posts ADD COLUMN replies_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE posts ADD COLUMN quotes_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE posts ADD COLUMN views_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE posts ADD COLUMN engagement INTEGER GENERATED ALWAYS AS (likes_count + 2 * reposts_count + replies_count) VIRTUAL;
+ALTER TABLE posts ADD COLUMN search_id INTEGER;
+UPDATE posts SET
+  likes_count = (SELECT COUNT(*) FROM likes l WHERE l.post_id = posts.id),
+  reposts_count = (SELECT COUNT(*) FROM reposts r WHERE r.post_id = posts.id),
+  replies_count = (SELECT COUNT(*) FROM posts c WHERE c.reply_to_id = posts.id AND c.is_draft = 0 AND c.publish_at IS NULL),
+  quotes_count = (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id = posts.id AND q.is_draft = 0 AND q.publish_at IS NULL),
+  views_count = (SELECT COUNT(*) FROM post_views v WHERE v.post_id = posts.id AND v.viewer_id <> posts.author_id),
+  search_id = rowid;
+CREATE UNIQUE INDEX IF NOT EXISTS posts_search_id ON posts(search_id);
+CREATE INDEX IF NOT EXISTS posts_engagement ON posts(engagement DESC, id DESC);
+CREATE INDEX IF NOT EXISTS posts_scheduled ON posts(publish_at) WHERE publish_at IS NOT NULL;
+CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(body, tokenize = 'trigram');
+INSERT INTO posts_fts (rowid, body) SELECT search_id, body FROM posts;
+
+CREATE TRIGGER likes_count_insert AFTER INSERT ON likes BEGIN
+  UPDATE posts SET likes_count = likes_count + 1 WHERE id = NEW.post_id;
+END;
+CREATE TRIGGER likes_count_delete AFTER DELETE ON likes BEGIN
+  UPDATE posts SET likes_count = likes_count - 1 WHERE id = OLD.post_id;
+END;
+CREATE TRIGGER reposts_count_insert AFTER INSERT ON reposts BEGIN
+  UPDATE posts SET reposts_count = reposts_count + 1 WHERE id = NEW.post_id;
+END;
+CREATE TRIGGER reposts_count_delete AFTER DELETE ON reposts BEGIN
+  UPDATE posts SET reposts_count = reposts_count - 1 WHERE id = OLD.post_id;
+END;
+CREATE TRIGGER views_count_insert AFTER INSERT ON post_views BEGIN
+  UPDATE posts SET views_count = views_count + 1 WHERE id = NEW.post_id AND author_id <> NEW.viewer_id;
+END;
+CREATE TRIGGER views_count_delete AFTER DELETE ON post_views BEGIN
+  UPDATE posts SET views_count = views_count - 1 WHERE id = OLD.post_id AND author_id <> OLD.viewer_id;
+END;
+-- Replies and quotes count once they are live: not drafts, not scheduled.
+CREATE TRIGGER posts_replies_insert AFTER INSERT ON posts WHEN NEW.is_draft = 0 AND NEW.publish_at IS NULL BEGIN
+  UPDATE posts SET replies_count = replies_count + 1 WHERE id = NEW.reply_to_id;
+  UPDATE posts SET quotes_count = quotes_count + 1 WHERE id = NEW.quote_of_id;
+END;
+CREATE TRIGGER posts_replies_delete AFTER DELETE ON posts WHEN OLD.is_draft = 0 AND OLD.publish_at IS NULL BEGIN
+  UPDATE posts SET replies_count = replies_count - 1 WHERE id = OLD.reply_to_id;
+  UPDATE posts SET quotes_count = quotes_count - 1 WHERE id = OLD.quote_of_id;
+END;
+CREATE TRIGGER posts_replies_live AFTER UPDATE OF is_draft, publish_at ON posts
+WHEN (OLD.is_draft = 0 AND OLD.publish_at IS NULL) <> (NEW.is_draft = 0 AND NEW.publish_at IS NULL) BEGIN
+  UPDATE posts SET replies_count = replies_count + (CASE WHEN NEW.is_draft = 0 AND NEW.publish_at IS NULL THEN 1 ELSE -1 END) WHERE id = NEW.reply_to_id;
+  UPDATE posts SET quotes_count = quotes_count + (CASE WHEN NEW.is_draft = 0 AND NEW.publish_at IS NULL THEN 1 ELSE -1 END) WHERE id = NEW.quote_of_id;
+END;
+CREATE TRIGGER posts_search_insert AFTER INSERT ON posts BEGIN
+  UPDATE posts SET search_id = (SELECT COALESCE(MAX(search_id), 0) + 1 FROM posts) WHERE rowid = NEW.rowid AND search_id IS NULL;
+  INSERT INTO posts_fts (rowid, body) SELECT search_id, body FROM posts WHERE rowid = NEW.rowid;
+END;
+CREATE TRIGGER posts_search_body AFTER UPDATE OF body ON posts BEGIN
+  UPDATE posts_fts SET body = NEW.body WHERE rowid = NEW.search_id;
+END;
+CREATE TRIGGER posts_search_delete AFTER DELETE ON posts BEGIN
+  DELETE FROM posts_fts WHERE rowid = OLD.search_id;
+END;
+`,
+
+  // 12. The reposts timeline reads reposts in time order. Without this index it had to sort every repost.
+  `
+CREATE INDEX IF NOT EXISTS reposts_created ON reposts(created_at);
+`,
+
+  // 13. Account counts (followers, following, posts) are kept on the user, by triggers, so a profile, a suggestion and
+  // the people lists read a number instead of counting rows. Unread notifications and ending polls have partial indexes:
+  // they only hold the rows that are still open.
+  `
+ALTER TABLE users ADD COLUMN followers_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN following_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN posts_count INTEGER NOT NULL DEFAULT 0;
+UPDATE users SET
+  followers_count = (SELECT COUNT(*) FROM follows f WHERE f.followee_id = users.id),
+  following_count = (SELECT COUNT(*) FROM follows f WHERE f.follower_id = users.id),
+  posts_count = (SELECT COUNT(*) FROM posts p WHERE p.author_id = users.id AND p.reply_to_id IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL);
+CREATE INDEX IF NOT EXISTS users_followers ON users(followers_count DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS notifications_unread ON notifications(recipient_id) WHERE read = 0;
+CREATE INDEX IF NOT EXISTS polls_ending ON polls(ends_at) WHERE notified_at IS NULL;
+
+CREATE TRIGGER follows_counts_insert AFTER INSERT ON follows BEGIN
+  UPDATE users SET followers_count = followers_count + 1 WHERE id = NEW.followee_id;
+  UPDATE users SET following_count = following_count + 1 WHERE id = NEW.follower_id;
+END;
+CREATE TRIGGER follows_counts_delete AFTER DELETE ON follows BEGIN
+  UPDATE users SET followers_count = followers_count - 1 WHERE id = OLD.followee_id;
+  UPDATE users SET following_count = following_count - 1 WHERE id = OLD.follower_id;
+END;
+CREATE TRIGGER posts_authored_insert AFTER INSERT ON posts
+WHEN NEW.reply_to_id IS NULL AND NEW.is_draft = 0 AND NEW.publish_at IS NULL AND NEW.removed_at IS NULL BEGIN
+  UPDATE users SET posts_count = posts_count + 1 WHERE id = NEW.author_id;
+END;
+CREATE TRIGGER posts_authored_delete AFTER DELETE ON posts
+WHEN OLD.reply_to_id IS NULL AND OLD.is_draft = 0 AND OLD.publish_at IS NULL AND OLD.removed_at IS NULL BEGIN
+  UPDATE users SET posts_count = posts_count - 1 WHERE id = OLD.author_id;
+END;
+CREATE TRIGGER posts_authored_state AFTER UPDATE OF is_draft, publish_at, removed_at, reply_to_id ON posts
+WHEN (OLD.reply_to_id IS NULL AND OLD.is_draft = 0 AND OLD.publish_at IS NULL AND OLD.removed_at IS NULL)
+  <> (NEW.reply_to_id IS NULL AND NEW.is_draft = 0 AND NEW.publish_at IS NULL AND NEW.removed_at IS NULL) BEGIN
+  UPDATE users SET posts_count = posts_count + (CASE WHEN NEW.reply_to_id IS NULL AND NEW.is_draft = 0 AND NEW.publish_at IS NULL AND NEW.removed_at IS NULL THEN 1 ELSE -1 END)
+    WHERE id = NEW.author_id;
+END;
+`,
+  // Threads: a post that continues the author's own thread is part of the feed and the post count, the same as a
+  // post that starts one. It carries the id of the thread's first post, so the feed and profile read it directly.
+  `
+ALTER TABLE posts ADD COLUMN thread_id TEXT REFERENCES posts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS posts_thread ON posts(thread_id) WHERE thread_id IS NOT NULL;
+DROP TRIGGER posts_authored_insert;
+CREATE TRIGGER posts_authored_insert AFTER INSERT ON posts
+WHEN (NEW.reply_to_id IS NULL OR NEW.thread_id IS NOT NULL) AND NEW.is_draft = 0 AND NEW.publish_at IS NULL AND NEW.removed_at IS NULL BEGIN
+  UPDATE users SET posts_count = posts_count + 1 WHERE id = NEW.author_id;
+END;
+DROP TRIGGER posts_authored_delete;
+CREATE TRIGGER posts_authored_delete AFTER DELETE ON posts
+WHEN (OLD.reply_to_id IS NULL OR OLD.thread_id IS NOT NULL) AND OLD.is_draft = 0 AND OLD.publish_at IS NULL AND OLD.removed_at IS NULL BEGIN
+  UPDATE users SET posts_count = posts_count - 1 WHERE id = OLD.author_id;
+END;
+DROP TRIGGER posts_authored_state;
+CREATE TRIGGER posts_authored_state AFTER UPDATE OF is_draft, publish_at, removed_at, reply_to_id, thread_id ON posts
+WHEN ((OLD.reply_to_id IS NULL OR OLD.thread_id IS NOT NULL) AND OLD.is_draft = 0 AND OLD.publish_at IS NULL AND OLD.removed_at IS NULL)
+  <> ((NEW.reply_to_id IS NULL OR NEW.thread_id IS NOT NULL) AND NEW.is_draft = 0 AND NEW.publish_at IS NULL AND NEW.removed_at IS NULL) BEGIN
+  UPDATE users SET posts_count = posts_count + (CASE WHEN (NEW.reply_to_id IS NULL OR NEW.thread_id IS NOT NULL) AND NEW.is_draft = 0 AND NEW.publish_at IS NULL AND NEW.removed_at IS NULL THEN 1 ELSE -1 END)
+    WHERE id = NEW.author_id;
+END;
+`,
+  // Link previews: the title and description of a link in a post, read from its page once and kept. A page that could
+  // not be read keeps a row with no title, so it is not fetched again on every view until the row is stale.
+  `
+CREATE TABLE IF NOT EXISTS link_previews (
+  url TEXT PRIMARY KEY,
+  title TEXT,
+  description TEXT,
+  site TEXT,
+  fetched_at INTEGER NOT NULL
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }
@@ -529,11 +678,38 @@ export function db(): DatabaseSync {
   if (!globals.__rhenkoDb) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true })
     const instance = new DatabaseSync(path.join(DATA_DIR, "rhenko.sqlite"))
-    instance.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
+    // WAL lets readers run beside the writer. synchronous NORMAL is safe with WAL: a power cut can lose the last
+    // commits, never corrupt the file. The cache and mmap keep hot pages in memory.
+    instance.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;
+      PRAGMA busy_timeout = 5000; PRAGMA cache_size = -65536; PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;`)
     migrate(instance)
     globals.__rhenkoDb = instance
   }
   return globals.__rhenkoDb
+}
+
+// Refreshes the statistics the query planner uses. Runs now and then from maintenance, which is cheap and keeps
+// the plans right as the data grows.
+export function optimizeDatabase(): void {
+  db().exec("PRAGMA optimize")
+}
+
+// Compiled statements are kept, so a query that runs on every request is compiled once rather than on every call.
+// Least recently used statements go first when the cache is full.
+const STATEMENT_CACHE_SIZE = 300
+const statements = new Map<string, StatementSync>()
+
+function statement(sql: string): StatementSync {
+  const cached = statements.get(sql)
+  if (cached) {
+    statements.delete(sql)
+    statements.set(sql, cached)
+    return cached
+  }
+  const prepared = db().prepare(sql)
+  statements.set(sql, prepared)
+  if (statements.size > STATEMENT_CACHE_SIZE) statements.delete(statements.keys().next().value as string)
+  return prepared
 }
 
 export type Param = string | number | null
@@ -541,19 +717,18 @@ export type Param = string | number | null
 // node:sqlite rows have a null prototype, and React refuses to pass those from a server
 // component to a client component. Each row is copied into a plain object here.
 export function all<T>(sql: string, ...params: Param[]): T[] {
-  return db()
-    .prepare(sql)
+  return statement(sql)
     .all(...params)
     .map((row) => ({ ...row })) as unknown as T[]
 }
 
 export function get<T>(sql: string, ...params: Param[]): T | undefined {
-  const row = db().prepare(sql).get(...params)
+  const row = statement(sql).get(...params)
   return row === undefined ? undefined : ({ ...row } as unknown as T)
 }
 
 export function run(sql: string, ...params: Param[]): void {
-  db().prepare(sql).run(...params)
+  statement(sql).run(...params)
 }
 
 // Runs a function inside a transaction. Rolls back when it throws.
