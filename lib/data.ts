@@ -15,7 +15,8 @@ import type { MediaKind } from "@/lib/uploads"
 import { isVoiceFile } from "@/lib/media-names"
 import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib/link-previews"
 import { callSummary, type CallOutcome } from "@/lib/format"
-import { rank, RANK_WINDOW_MS, type Candidate } from "@/lib/ranking"
+import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
+import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
 
 // Shared read models. Everything a page or API route renders comes from here,
 // so visibility rules (blocks, mutes, protected accounts, muted words) are
@@ -591,15 +592,25 @@ function timelinePage(
 
 const FOLLOWING = "SELECT followee_id FROM follows WHERE follower_id = ?"
 
-// For you is ranked (lib/ranking.ts). The candidates are the live posts of the last three days that the viewer may see,
-// from anyone, plus the posts and reposts of people the viewer follows. A page is cut from one ranking made at a snapshot
-// time, which the cursor carries as "r1:<time>:<offset>", so the pages agree with each other while the reader scrolls.
-// Rankings are kept for a few minutes per viewer in this process. A cursor in the older format (a time and a key) starts
-// again from the top, and the client drops the items it already shows.
-const FOR_YOU_POOL = 300
-const FOR_YOU_FOLLOWED_POOL = 200
-const FOR_YOU_REPOST_POOL = 100
+// For you is ranked (lib/ranking.ts). The candidates come from eight pools, each read from its own index:
+//   follow    the newest posts of people the viewer follows
+//   repost    reposts by people the viewer follows
+//   social    posts that people the viewer follows liked in the last three days
+//   affinity  the recent posts of authors the viewer has liked, reposted or bookmarked lately
+//   topic     recent posts that use a hashtag the viewer follows
+//   popular   the most engaged posts of the last three days
+//   explore   posts from the last day by authors with few followers, so new people get seen too
+//   fresh     the newest posts from anyone
+// A post that several pools found is kept once, under the first pool that found it. The ranking is made at a snapshot time,
+// which the cursor carries as "r1:<time>:<offset>", so the pages agree with each other while the reader scrolls. A ranking is
+// kept for ten minutes per viewer in this process. Each page leaves out the posts the viewer marked "Not interested", and
+// records what it showed (lib/feed-learning.ts), which is what the models learn from.
+const POOL_SIZE = { follow: 200, repost: 100, social: 150, affinity: 150, topic: 100, popular: 100, explore: 60, fresh: 300 }
 const FOR_YOU_SIZE = 400
+const AFFINITY_AUTHORS = 30
+const AFFINITY_MS = 30 * 24 * 60 * 60 * 1000
+const TOPIC_TAGS = 40
+const EXPLORE_MS = 24 * 60 * 60 * 1000
 const RANKED_TTL_MS = 10 * 60 * 1000
 const RANKED_KEEP = 300
 const rankedCache = new Map<string, { made: number; list: Candidate[] }>()
@@ -614,30 +625,84 @@ type CandidatePost = {
   replies: number
   quotes: number
   views: number
+  author_followers: number
 }
 
 const CANDIDATE_COLUMNS = `p.id AS post_id, p.body, p.author_id, p.created_at, p.likes_count AS likes,
-  p.reposts_count AS reposted, p.replies_count AS replies, p.quotes_count AS quotes, p.views_count AS views`
+  p.reposts_count AS reposted, p.replies_count AS replies, p.quotes_count AS quotes, p.views_count AS views,
+  au.followers_count AS author_followers`
 // A post that a check has limited or held stays out of For you. A held post is also hidden, so this covers limited ones.
 const NOT_RESTRICTED = "NOT EXISTS (SELECT 1 FROM post_risk pr WHERE pr.post_id = p.id AND pr.action <> 'allow')"
+
+// Of these posts, the ones this viewer has liked, reposted or bookmarked.
+function engagedWith(viewerId: string, postIds: string[]): Set<string> {
+  const found = new Set<string>()
+  for (let i = 0; i < postIds.length; i += 500) {
+    const chunk = postIds.slice(i, i + 500)
+    const marks = chunk.map(() => "?").join(", ")
+    const rows = all<{ post_id: string }>(
+      `SELECT post_id FROM likes WHERE user_id = ? AND post_id IN (${marks})
+       UNION SELECT post_id FROM reposts WHERE user_id = ? AND post_id IN (${marks})
+       UNION SELECT post_id FROM bookmarks WHERE user_id = ? AND post_id IN (${marks})`,
+      viewerId,
+      ...chunk,
+      viewerId,
+      ...chunk,
+      viewerId,
+      ...chunk
+    )
+    for (const row of rows) found.add(row.post_id)
+  }
+  return found
+}
+
+type Pooled = { row: CandidatePost; key: string; at: number; reposterId: string | null; source: Source; followed: boolean }
 
 function rankCandidates(viewerId: string, at: number): Candidate[] {
   const since = at - RANK_WINDOW_MS
   const vis = visibilityClause(viewerId)
-  const tags = new Set(followedTopics(viewerId))
+  const tags = followedTopics(viewerId).slice(0, TOPIC_TAGS)
+  const tagSet = new Set(tags)
   const followed = new Set(all<{ followee_id: string }>(FOLLOWING, viewerId).map((r) => r.followee_id))
 
-  const recent = all<CandidatePost>(
-    `SELECT ${CANDIDATE_COLUMNS} FROM posts p INDEXED BY posts_created JOIN users au ON au.id = p.author_id
-     WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
-     ORDER BY p.created_at DESC LIMIT ?`,
+  // The authors this viewer has engaged with lately, most engaged first. It feeds the affinity pool and a feature.
+  const affinityRows = all<{ author_id: string; n: number }>(
+    `SELECT p.author_id, COUNT(*) AS n FROM (
+       SELECT post_id FROM likes WHERE user_id = ? AND created_at >= ?
+       UNION ALL SELECT post_id FROM reposts WHERE user_id = ? AND created_at >= ?
+       UNION ALL SELECT post_id FROM bookmarks WHERE user_id = ? AND created_at >= ?
+     ) e JOIN posts p ON p.id = e.post_id
+     WHERE p.author_id <> ?
+     GROUP BY p.author_id ORDER BY n DESC LIMIT ?`,
+    viewerId,
+    at - AFFINITY_MS,
+    viewerId,
+    at - AFFINITY_MS,
+    viewerId,
+    at - AFFINITY_MS,
+    viewerId,
+    AFFINITY_AUTHORS
+  )
+  const affinity = new Map(affinityRows.map((r) => [r.author_id, r.n] as const))
+
+  // Posts that people the viewer follows liked, and how many of them liked each one.
+  const socialRows = all<CandidatePost & { social_count: number }>(
+    `SELECT ${CANDIDATE_COLUMNS}, COUNT(DISTINCT l.user_id) AS social_count
+     FROM likes l JOIN posts p ON p.id = l.post_id JOIN users au ON au.id = p.author_id
+     WHERE l.user_id IN (${FOLLOWING}) AND l.created_at >= ? AND l.created_at <= ?
+       AND p.author_id <> ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+     GROUP BY p.id ORDER BY social_count DESC, MAX(l.created_at) DESC LIMIT ?`,
+    viewerId,
     since,
     at,
+    viewerId,
     ...vis.params,
-    FOR_YOU_POOL
+    POOL_SIZE.social
   )
-  // Posts from people the viewer follows are always candidates, even when the recent pool above is full of strangers.
-  const fromFollowed = all<CandidatePost>(
+  const socialCount = new Map(socialRows.map((r) => [r.post_id, r.social_count] as const))
+
+  // Posts from people the viewer follows are always candidates, even when the newest pool is full of strangers.
+  const followRows = all<CandidatePost>(
     `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
      WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
        AND p.author_id IN (${FOLLOWING})
@@ -646,7 +711,7 @@ function rankCandidates(viewerId: string, at: number): Candidate[] {
     at,
     ...vis.params,
     viewerId,
-    FOR_YOU_FOLLOWED_POOL
+    POOL_SIZE.follow
   )
   // Reposts by people the viewer follows, with the same blocks and mutes that the Following feed applies to a reposter.
   const repostRows = all<CandidatePost & { reposter_id: string; reposted_at: number }>(
@@ -663,33 +728,121 @@ function rankCandidates(viewerId: string, at: number): Candidate[] {
     viewerId,
     viewerId,
     viewerId,
-    FOR_YOU_REPOST_POOL
+    POOL_SIZE.repost
+  )
+  const affinityAuthors = affinityRows.map((r) => r.author_id)
+  const affinityPosts =
+    affinityAuthors.length === 0
+      ? []
+      : all<CandidatePost>(
+          `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
+           WHERE p.author_id IN (${affinityAuthors.map(() => "?").join(", ")}) AND p.created_at >= ? AND p.created_at <= ?
+             AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+           ORDER BY p.created_at DESC LIMIT ?`,
+          ...affinityAuthors,
+          since,
+          at,
+          ...vis.params,
+          POOL_SIZE.affinity
+        )
+  // The instr test is a cheap first cut. The exact hashtag check (extractHashtags) runs on the rows it returns.
+  const topicPosts =
+    tags.length === 0
+      ? []
+      : all<CandidatePost>(
+          `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
+           WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+             AND (${tags.map(() => "instr(lower(p.body), ?) > 0").join(" OR ")})
+           ORDER BY p.created_at DESC LIMIT ?`,
+          since,
+          at,
+          ...vis.params,
+          ...tags.map((tag) => `#${tag}`.toLowerCase()),
+          POOL_SIZE.topic
+        )
+  const popularPosts = all<CandidatePost>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
+     WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+     ORDER BY (p.likes_count + 2 * p.reposts_count + 2 * p.quotes_count + 1.5 * p.replies_count) DESC, p.created_at DESC
+     LIMIT ?`,
+    since,
+    at,
+    ...vis.params,
+    POOL_SIZE.popular
+  )
+  const explorePosts = all<CandidatePost>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
+     WHERE p.created_at >= ? AND p.created_at <= ? AND au.followers_count < ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+     ORDER BY p.created_at DESC LIMIT ?`,
+    at - EXPLORE_MS,
+    at,
+    SMALL_AUTHOR,
+    ...vis.params,
+    POOL_SIZE.explore
+  )
+  const freshPosts = all<CandidatePost>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p INDEXED BY posts_created JOIN users au ON au.id = p.author_id
+     WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+     ORDER BY p.created_at DESC LIMIT ?`,
+    since,
+    at,
+    ...vis.params,
+    POOL_SIZE.fresh
   )
 
-  const toCandidate = (row: CandidatePost, key: string, itemAt: number, reposterId: string | null, byFollowed: boolean): Candidate => ({
-    key,
-    postId: row.post_id,
-    authorId: row.author_id,
-    at: itemAt,
-    reposterId,
-    followed: byFollowed,
-    topic: extractHashtags(row.body).some((tag) => tags.has(tag)),
-    likes: row.likes,
-    reposted: row.reposted,
-    replies: row.replies,
-    quotes: row.quotes,
-    views: row.views,
-  })
-  const picked = new Map<string, Candidate>()
-  for (const row of [...recent, ...fromFollowed]) {
-    const key = `post:${row.post_id}`
-    if (!picked.has(key)) picked.set(key, toCandidate(row, key, row.created_at, null, followed.has(row.author_id)))
+  // Pools in priority order. A key found earlier keeps its source.
+  const pooled = new Map<string, Pooled>()
+  const addPosts = (rows: CandidatePost[], source: Source) => {
+    for (const row of rows) {
+      const key = `post:${row.post_id}`
+      if (!pooled.has(key)) pooled.set(key, { row, key, at: row.created_at, reposterId: null, source, followed: followed.has(row.author_id) })
+    }
   }
+  addPosts(followRows, "follow")
   for (const row of repostRows) {
     const key = `repost:${row.post_id}:${row.reposter_id}`
-    if (!picked.has(key)) picked.set(key, toCandidate(row, key, row.reposted_at, row.reposter_id, true))
+    if (!pooled.has(key)) pooled.set(key, { row, key, at: row.reposted_at, reposterId: row.reposter_id, source: "repost", followed: true })
   }
-  return rank([...picked.values()], at, FOR_YOU_SIZE)
+  addPosts(socialRows, "social")
+  addPosts(affinityPosts, "affinity")
+  addPosts(
+    topicPosts.filter((row) => extractHashtags(row.body).some((tag) => tagSet.has(tag))),
+    "topic"
+  )
+  addPosts(popularPosts, "popular")
+  addPosts(explorePosts, "explore")
+  addPosts(freshPosts, "fresh")
+
+  const postIds = [...new Set([...pooled.values()].map((p) => p.row.post_id))]
+  const engaged = engagedWith(viewerId, postIds)
+  const served = recentlyServed(viewerId, since)
+  const dwell = dwellSince(viewerId, since)
+  const candidates = [...pooled.values()].map(
+    ({ row, key, at: itemAt, reposterId, source, followed: byFollowed }): Candidate => ({
+      key,
+      postId: row.post_id,
+      authorId: row.author_id,
+      at: itemAt,
+      reposterId,
+      source,
+      followed: byFollowed,
+      topic: extractHashtags(row.body).some((tag) => tagSet.has(tag)),
+      likes: row.likes,
+      reposted: row.reposted,
+      replies: row.replies,
+      quotes: row.quotes,
+      views: row.views,
+      socialCount: socialCount.get(row.post_id) ?? 0,
+      affinity: affinity.get(row.author_id) ?? 0,
+      authorFollowers: row.author_followers,
+      links: /https?:\/\//i.test(row.body),
+      length: row.body.length,
+      seen: served.has(row.post_id),
+      dwelledMs: dwell.get(row.post_id) ?? 0,
+      engagedByViewer: engaged.has(row.post_id),
+    })
+  )
+  return rank(candidates, at, FOR_YOU_SIZE, modelWeights())
 }
 
 function rankedFor(viewerId: string, at: number): Candidate[] {
@@ -718,8 +871,14 @@ function forYouPage(viewerId: string, cursor: string | undefined, limit: number)
   const resume = parseRankedCursor(cursor)
   const at = resume?.at ?? Date.now()
   const offset = resume?.offset ?? 0
-  const ranked = rankedFor(viewerId, at)
+  const hidden = hiddenPosts(viewerId)
+  const ranked = rankedFor(viewerId, at).filter((c) => !hidden.has(c.postId))
   const slice = ranked.slice(offset, offset + limit)
+  recordImpressions(
+    viewerId,
+    slice.map((c) => ({ postId: c.postId, source: c.source, features: featuresOf(c, at) })),
+    Date.now()
+  )
   const rows: FeedRow[] = slice.map((c) => ({
     key: c.key,
     post_id: c.postId,

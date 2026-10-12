@@ -5,6 +5,7 @@ import { expireStaleCalls } from "@/lib/call-state"
 import { sweepLimits } from "@/lib/rate-limit"
 import { RETENTION } from "@/lib/legal"
 import { purgeHidden } from "@/lib/moderation"
+import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 
 // Background work that does not wait for anyone to open a page: scheduled posts go live on time, polls announce
 // their results, calls that have stopped answering end, and expired sessions and codes are removed.
@@ -39,6 +40,17 @@ export function runMaintenance(now = Date.now()): void {
     lastRetentionPass = now
     keepWithinRetention(now)
   }
+  // The For you models are refit once an hour from what people did after each post was shown. A failed fit leaves the
+  // feed on the weights it has, so it is logged and the rest of the pass goes on.
+  if (now - lastLearningPass >= HOUR) {
+    lastLearningPass = now
+    try {
+      trainFeedModel(now)
+    } catch (error) {
+      console.error("[maintenance] feed model training failed", error)
+    }
+    purgeFeedSignals(now)
+  }
   sweepLimits(now)
 }
 
@@ -48,6 +60,7 @@ export function runMaintenance(now = Date.now()): void {
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 let lastRetentionPass = 0
+let lastLearningPass = 0
 
 function keepWithinRetention(now: number): void {
   // Refreshes the planner's statistics as the tables grow. Cheap, and keeps the feed queries on their indexes.

@@ -196,7 +196,13 @@ const SECTIONS: LegalSection[] = [
     body: (
       <List>
         <li>
-          <B>For you</B> shows every post and repost you are allowed to see, newest first.
+          <B>For you</B> ranks the posts and reposts you are allowed to see by how likely you are to like, repost, bookmark or read
+          them. Who you follow and what they like, your hashtags, how recent and how engaged a post is, and what you have already
+          seen or read all count. Posts you mark Not interested leave your feed.
+        </li>
+        <li>
+          The weights behind For you are learned from what people did after they were shown posts, refreshed about once an hour, and
+          used only when they predict better than the defaults. The same weights apply to every account.
         </li>
         <li>
           <B>Following</B> shows posts and reposts from the people and topics you follow, newest first.
@@ -204,7 +210,7 @@ const SECTIONS: LegalSection[] = [
         <li>
           <B>Explore</B> is sorted by top or by latest. Top adds up likes, reposts (counted twice) and replies.
         </li>
-        <li>No score predicts what you will like, and no feed is ranked by who has paid.</li>
+        <li>No feed is ranked by who has paid.</li>
         <li>
           Ads are placed after every eight posts in the home feeds. Each one is labelled Ad. They are not shown to people under 18 or to
           people who pay for Rhenko Plus.

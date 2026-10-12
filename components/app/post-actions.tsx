@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { BookmarkIcon, HeartIcon, MessageCircleIcon } from "lucide-animated"
-import { Ban, Coins, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
+import { Ban, Coins, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
+import { markNotInterested } from "@/actions/feed"
 import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
 import { toggleBlock, toggleMute } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -251,6 +252,17 @@ export function PostActions(props: Props) {
               </DropdownMenuItem>,
             ]
           : []),
+        <DropdownMenuItem
+          key="not-interested"
+          className={MENU_ITEM_PHONE}
+          onClick={() =>
+            run(() => markNotInterested(postId), "We'll show you less like this.", () =>
+              window.dispatchEvent(new CustomEvent("rhenko:hidden", { detail: { postId } }))
+            )
+          }
+        >
+          <ThumbsDown className="size-4" /> Not interested
+        </DropdownMenuItem>,
         <DropdownMenuItem key="mute" className={MENU_ITEM_PHONE} onClick={onMute}>
           <VolumeX className="size-4" /> Mute @{author.handle}
         </DropdownMenuItem>,

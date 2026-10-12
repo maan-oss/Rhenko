@@ -21,6 +21,8 @@ export const APPEAL_MS = APPEAL_DAYS * DAY
 export const RETENTION = {
   viewsDays: 90,
   visitsDays: 90,
+  // Which posts were put in someone's For you, how long they were on screen, and the training they feed.
+  feedSignalsDays: 30,
   readNotificationsDays: 180,
   legalNoticesDays: 365 * 3,
 }

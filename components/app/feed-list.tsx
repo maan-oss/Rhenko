@@ -71,6 +71,18 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
     setFresh((current) => current.filter((id) => !shown.has(id)))
   }
 
+  // A post the reader marked "Not interested" leaves the For you feed at once. The server keeps it out from then on.
+  const forYou = spec?.kind === "home" && spec.mode === "for-you"
+  useEffect(() => {
+    if (!forYou) return
+    const onHidden = (event: Event) => {
+      const { postId } = (event as CustomEvent<{ postId: string }>).detail
+      setItems((current) => current.filter((item) => postIdOf(item) !== postId))
+    }
+    window.addEventListener("rhenko:hidden", onHidden)
+    return () => window.removeEventListener("rhenko:hidden", onHidden)
+  }, [forYou])
+
   useEffect(() => {
     if (!following) return
     const onPost = (event: Event) => {

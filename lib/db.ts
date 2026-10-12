@@ -795,6 +795,45 @@ CREATE TABLE IF NOT EXISTS post_risk (
 );
 CREATE INDEX IF NOT EXISTS post_risk_action ON post_risk(action);
 `,
+  // What the For you feed learns from (lib/feed-learning.ts). An impression is a post put in someone's For you, with where it
+  // came from and the features the model saw; one row per viewer and post, so a post shown again only moves its time. Dwell is
+  // the milliseconds someone has had a post on screen. A hide is a post marked "Not interested". feed_model keeps the fitted
+  // weights; `accepted` says whether they replace the hand-set ones.
+  `
+CREATE TABLE IF NOT EXISTS feed_impressions (
+  viewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  features TEXT NOT NULL,
+  served_at INTEGER NOT NULL,
+  PRIMARY KEY (viewer_id, post_id)
+);
+CREATE INDEX IF NOT EXISTS feed_impressions_served ON feed_impressions(served_at);
+CREATE TABLE IF NOT EXISTS post_dwell (
+  viewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  dwell_ms INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (viewer_id, post_id)
+);
+CREATE INDEX IF NOT EXISTS post_dwell_updated ON post_dwell(updated_at);
+CREATE TABLE IF NOT EXISTS feed_hides (
+  viewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (viewer_id, post_id)
+);
+CREATE TABLE IF NOT EXISTS feed_model (
+  name TEXT PRIMARY KEY,
+  weights TEXT NOT NULL,
+  accepted INTEGER NOT NULL DEFAULT 0,
+  samples INTEGER NOT NULL DEFAULT 0,
+  positives INTEGER NOT NULL DEFAULT 0,
+  prior_loss REAL,
+  holdout_loss REAL,
+  trained_at INTEGER NOT NULL
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

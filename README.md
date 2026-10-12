@@ -45,7 +45,7 @@ Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls nee
 - Photos lose their location, camera and time details when they are uploaded. That covers EXIF, XMP, IPTC, text chunks and comments in JPEG, PNG, WebP and GIF. The picture itself is unchanged. Videos keep their metadata.
 - `npm run backup` writes a folder into `backups/` with a consistent copy of the database, the server key and the uploads. It keeps the newest 14. Copy the backup folder off the machine as well. The script's header has the restore steps.
 - A background tick runs every 15 seconds. It publishes scheduled posts on time, announces poll results, ends calls that have stopped answering, and removes expired sessions and codes.
-- Retention is enforced by the background tick: views and profile visits after 90 days, read notifications after 180 days, and notices and moderation records after three years. Hidden posts are deleted when their appeal window closes or an appeal fails.
+- Retention is enforced by the background tick: views and profile visits after 90 days, For you impressions and time on screen after 30 days, read notifications after 180 days, and notices and moderation records after three years. Hidden posts are deleted when their appeal window closes or an appeal fails.
 - Delete the data directory to reset the app to empty.
 
 ## Operations

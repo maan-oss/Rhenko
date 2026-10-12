@@ -111,8 +111,9 @@ and the answer in the operator's own records, because the app does not keep a re
 - the Data Protection Board of India and the affected people without delay, as the DPDP Act requires.
 Tell affected people in plain words what happened, what data, and what they can do. Record every step.
 
-**Retention.** The tick removes views and profile visits after 90 days, read notifications after 180 days, and notices and
-moderation records after three years. Check the backups too: they keep what was deleted until they are replaced.
+**Retention.** The tick removes views and profile visits after 90 days, For you impressions and time on screen after 30 days, read
+notifications after 180 days, and notices and moderation records after three years. The For you ranking is refit from those
+impressions once an hour (`trainFeedModel` in `lib/feed-learning.ts`); its weights hold no record of any one person. Check the backups too: they keep what was deleted until they are replaced.
 
 ## 5. Reviewing the figures
 

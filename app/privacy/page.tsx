@@ -158,6 +158,11 @@ const SECTIONS: LegalSection[] = [
             profile are not counted.
           </li>
           <li>
+            <B>Your For you feed.</B> Rhenko records which posts were put in your For you feed, how long each one was on your screen
+            (added up), and the posts you marked Not interested. These are used to rank your For you feed and to train the ranking
+            described under How posts are ordered. Nobody else is shown them.
+          </li>
+          <li>
             <B>Network address.</B> Sign-up, sign-in and password-reset attempts are counted in the server&apos;s memory, by network
             address and by the handle or email address typed, to slow down guessing. Those counts last an hour at most, are never
             written to the database, and are lost when the server restarts. Rhenko writes no request log, although a proxy or host
@@ -309,11 +314,33 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          Rhenko does not build a profile of you to decide what you see. Nothing is ranked by what it predicts you will like.
+          The For you feed is ranked to show you posts you are likely to like, repost, bookmark or read. It uses these signals, and
+          it does not use your age, your location, or the posts you write:
+        </P>
+        <List>
+          <li>Whether you follow the author, and whether you have liked, reposted or bookmarked that author&apos;s posts lately.</li>
+          <li>What the people you follow have liked, and how many of them liked the post.</li>
+          <li>The hashtags you follow.</li>
+          <li>How recent a post is, and its likes, reposts, quotes, replies and views.</li>
+          <li>
+            Whether you have already been shown the post, whether you kept it on screen for three seconds or more, and whether you
+            have already liked, reposted or bookmarked it.
+          </li>
+          <li>Whether the post has a web link, how long it is, and how many followers its author has.</li>
+        </List>
+        <P>
+          Two rules keep the feed varied: no author fills more than two of the top places, and posts from the same kind of source
+          (for example, people you follow) do not fill more than three places in a row. A post you mark Not interested leaves your
+          For you and stays out of it.
+        </P>
+        <P>
+          The weights for these signals are learned from what people did after they were shown posts, and they are refreshed about
+          once an hour. A new set of weights is used only when it predicts that later behaviour better than the default weights. The
+          learned weights are the same for every account and hold no record of any one person.
         </P>
         <List>
           <li>
-            <B>For you</B> shows the posts you are allowed to see, newest first.
+            <B>For you</B> shows the posts you are allowed to see, ranked as described above.
           </li>
           <li>
             <B>Following</B> shows posts from the accounts and topics you follow, newest first.
@@ -473,6 +500,10 @@ const SECTIONS: LegalSection[] = [
         </li>
         <li>
           Views and profile visits are kept for {RETENTION.viewsDays} days, and the counts shown to you cover that period.
+        </li>
+        <li>
+          What was put in your For you feed and how long you had each post on screen are kept for {RETENTION.feedSignalsDays} days.
+          Posts you marked Not interested stay hidden from your For you until the post is deleted or your account is closed.
         </li>
         <li>Read notifications are deleted after {RETENTION.readNotificationsDays} days. Unread ones are kept until you read them.</li>
         <li>
