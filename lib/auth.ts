@@ -39,6 +39,8 @@ export type UserRow = {
   password_hash: string
   created_at: number
   verified: number
+  paid_verified: number
+  plus_active?: number
   protected: number
   totp_enabled: number
   totp_secret: string | null
@@ -67,6 +69,13 @@ export type Viewer = {
   status: string
   // The Terms version this account accepted last. The app asks again when the current version differs.
   termsVersion: string | null
+  // The address on the account, and whether it has been confirmed. Paid verification needs a confirmed address.
+  email: string | null
+  emailVerified: boolean
+  // Plus: an active paid subscription. It removes ads and extends the edit window. Nothing else about reach changes.
+  plus: boolean
+  // A paid subscriber badge. It is shown to others, and says nothing about who the person is.
+  paidVerified: boolean
 }
 
 export function toViewer(row: UserRow): Viewer {
@@ -85,6 +94,10 @@ export function toViewer(row: UserRow): Viewer {
     totpEnabled: row.totp_enabled === 1,
     status: row.status,
     termsVersion: row.terms_version,
+    email: row.email,
+    emailVerified: row.email_verified_at !== null,
+    plus: row.plus_active === 1,
+    paidVerified: row.paid_verified === 1,
   }
 }
 
@@ -551,7 +564,9 @@ export async function getViewer(): Promise<Viewer | null> {
   const hash = hashToken(token)
   const now = Date.now()
   const row = get<UserRow & { last_seen: number }>(
-    `SELECT u.*, s.last_seen FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.*, s.last_seen,
+       EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.user_id = u.id AND sub.kind = 'plus' AND sub.status IN ('active', 'trialing')) AS plus_active
+     FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND u.deactivated_at IS NULL`,
     hash,
     now

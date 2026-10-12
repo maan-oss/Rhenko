@@ -10,7 +10,7 @@ import { announcePost, mediaFilesFor, removeFiles, replyPermission, startPollClo
 import { consume, waitLabel } from "@/lib/rate-limit"
 import {
   asReplySetting,
-  EDIT_WINDOW_MS,
+  editWindowMs,
   MAX_ALT,
   MAX_HIGHLIGHTS,
   MAX_IMAGES,
@@ -220,8 +220,9 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
   if (post.removed_at !== null) return { ok: false, error: POST_UNAVAILABLE }
   if (post.author_id !== viewer.id) return { ok: false, error: "You can only edit your own posts." }
   if (post.is_draft === 1 || post.publish_at !== null) return { ok: false, error: "Publish this post before editing it." }
-  if (Date.now() - post.created_at > EDIT_WINDOW_MS) {
-    return { ok: false, error: `Posts can be edited for ${Math.round(EDIT_WINDOW_MS / 60_000)} minutes after they're posted.` }
+  const window = editWindowMs(viewer.plus)
+  if (Date.now() - post.created_at > window) {
+    return { ok: false, error: `Posts can be edited for ${Math.round(window / 60_000)} minutes after they're posted.` }
   }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()

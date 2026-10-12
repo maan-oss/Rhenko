@@ -8,6 +8,10 @@ import { RhenkoSymbol } from "@/components/brand/symbol"
 
 export type LegalSection = { id: string; title: string; body: ReactNode }
 
+// The operator sets RHENKO_LEGAL_REVIEWED=1 when the text has been reviewed for every country served, and rebuilds. Until then
+// every legal page says it is a draft.
+const LEGAL_DRAFT = process.env.RHENKO_LEGAL_REVIEWED !== "1"
+
 const LINK = "font-semibold text-dusk underline underline-offset-4"
 const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
@@ -82,6 +86,12 @@ export function LegalPage({
               <p className="text-sm text-muted-foreground">Last updated {updated}</p>
             </div>
             <p className="text-[15px] leading-[1.7]">{intro}</p>
+            {LEGAL_DRAFT ? (
+              <p role="note" className="rounded-xl border border-dashed border-border px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                Draft. This text has not yet been reviewed by a qualified lawyer for each country this service is offered in, and it may
+                change before launch.
+              </p>
+            ) : null}
           </header>
           {summary}
           <nav aria-label="Sections" className="flex flex-wrap gap-2">

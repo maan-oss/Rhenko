@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { Mic, MicOff, Phone, PhoneOff, Users, Video, VideoOff } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { GroupCallTiles } from "@/components/app/group-call-tiles"
-import { acceptCall, declineCall, getCallState, getServerCallState, hangUp, subscribeCall, toggleCamera, toggleMute, type CallState } from "@/lib/call-engine"
+import { acceptCall, declineCall, getCallState, getServerCallState, hangUp, startCamera, subscribeCall, toggleCamera, toggleMute, type CallState } from "@/lib/call-engine"
 import type { EventPerson } from "@/lib/bus"
 import { formatDuration } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -269,7 +269,7 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
       <Control label={call.muted ? "Unmute" : "Mute"} onClick={toggleMute} tone={call.muted ? "muted" : "plain"} big={big} pressed={call.muted}>
         {call.muted ? <MicOff className={icon} strokeWidth={2} aria-hidden="true" /> : <Mic className={icon} strokeWidth={2} aria-hidden="true" />}
       </Control>
-      {call.video && call.kind === "dm" ? (
+      {call.kind === "dm" && call.localVideo ? (
         <Control
           label={call.cameraOff ? "Camera on" : "Camera off"}
           onClick={toggleCamera}
@@ -278,6 +278,11 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
           pressed={call.cameraOff}
         >
           {call.cameraOff ? <VideoOff className={icon} strokeWidth={2} aria-hidden="true" /> : <Video className={icon} strokeWidth={2} aria-hidden="true" />}
+        </Control>
+      ) : null}
+      {call.kind === "dm" && !call.localVideo && (call.status === "active" || call.status === "connecting" || call.status === "reconnecting") ? (
+        <Control label="Start camera" onClick={() => void startCamera()} tone="plain" big={big} disabled={call.cameraStarting} busy={call.cameraStarting}>
+          <Video className={icon} strokeWidth={2} aria-hidden="true" />
         </Control>
       ) : null}
       <Control label={endLabel} onClick={hangUp} tone="end" big={big}>

@@ -265,6 +265,16 @@ export async function loadMorePeople(handle: string, kind: "followers" | "follow
 
 // Protecting an account means new followers need approval. Making it public again clears the requests still waiting, since
 // there is nothing left for them to decide; the result says how many.
+// Hides or shows the counts on the viewer's own posts, for everyone except the viewer.
+export async function setHideCounts(hide: boolean): Promise<VoidResult> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  if (typeof hide !== "boolean") return { ok: false, error: "Choose whether counts are hidden." }
+  run("UPDATE users SET hide_counts = ? WHERE id = ?", hide ? 1 : 0, viewer.id)
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
 export async function setProtected(protectedAccount: boolean): Promise<VoidResult & { cleared?: number }> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }

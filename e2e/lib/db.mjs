@@ -2,6 +2,7 @@
 // post's time to 30 seconds from now, because the product refuses a schedule less than five minutes ahead. The legal
 // checks read notices, appeals and posts, and set up one account whose agreement is out of date. Every other check
 // goes through the pages.
+import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 import { DATA_DIR } from "./env.mjs"
@@ -79,4 +80,26 @@ export async function moveSchedule(id, at) {
   } finally {
     db.close()
   }
+}
+
+// Keeps a link's preview as the server would after reading its page: the title, a line, the site and a picture stored
+// in the uploads folder under the name the server gives it. The server reads a fresh row and does not fetch the page.
+export async function keepLinkPreview({ link, title, description, site, picture }) {
+  const name = crypto.createHash("sha256").update(link).digest("hex").slice(0, 32) + ".png"
+  fs.mkdirSync(path.join(DATA_DIR, "uploads"), { recursive: true })
+  fs.copyFileSync(picture, path.join(DATA_DIR, "uploads", name))
+  const db = await open(false)
+  try {
+    db.prepare("INSERT OR REPLACE INTO link_previews (url, title, description, site, image_file, fetched_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+      link,
+      title,
+      description,
+      site,
+      name,
+      Date.now()
+    )
+  } finally {
+    db.close()
+  }
+  return name
 }

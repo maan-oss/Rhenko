@@ -41,8 +41,12 @@ const CHALLENGE_MINUTES = 5
 const SUMMARY = (
   <Note title="The short version">
     <List>
-      <li>There is no advertising, and nothing is sent to analytics or tracking services.</li>
-      <li>Rhenko does not sell your data, and does not share it for advertising.</li>
+      <li>
+        Some home feeds show ads. Ads are chosen from your age, whether you pay for Rhenko Plus and the topics you follow. Advertisers see
+        only totals. Nothing is sent to analytics or tracking services.
+      </li>
+      <li>Rhenko does not sell your data, and does not share personal information with advertisers.</li>
+      <li>Payments are taken by Stripe. Rhenko never sees your card number or bank details.</li>
       <li>The operator can reach everything stored on this server, including messages, which are not end-to-end encrypted.</li>
       <li>
         Your email address, if you add one, is used only to send you codes. Date of birth is used only to check you are {MINIMUM_AGE} or
@@ -108,7 +112,23 @@ const SECTIONS: LegalSection[] = [
             notified about, and your muted words.
           </li>
           <li>
-            <B>Settings.</B> Whether your posts are protected, and which notifications you want.
+            <B>Settings.</B> Whether your posts are protected, whether the counts on your posts are hidden, and which notifications you
+            want.
+          </li>
+          <li>
+            <B>Payments.</B> For the paid features: whether you have Rhenko Plus or the paid subscriber ring, when it renews or ends, the
+            identifiers Stripe gives the customer and the subscription, the tips you sent and received (the amount, Rhenko&apos;s share, the
+            post and the payment identifier), and whether your payouts are set up. Stripe keeps card and bank details. Rhenko does not.
+          </li>
+          <li>
+            <B>Advertising.</B> If you run ads: the business name, country, contact email, the time you accepted the advertising policy,
+            and your campaigns and their results. If you report an ad, the report and the reason you gave. The operator can see who sent
+            each report. The advertiser cannot.
+          </li>
+          <li>
+            <B>Ad impressions.</B> When an ad is shown to you, the campaign is recorded with a one-way code made from your account and the
+            day. The code stops a second view that day from being charged. It does not contain your account identifier, and advertisers
+            never see it.
           </li>
           <li>
             <B>Notifications.</B> A record of what other people did that involves you, such as likes, replies and follows, so
@@ -155,8 +175,13 @@ const SECTIONS: LegalSection[] = [
         <P>Each use needs a reason in law. These are the reasons Rhenko relies on.</P>
         <List>
           <li>
-            <B>To run your account and the service you ask for</B>, including posts, messages, calls and notifications. This is
-            the contract between you and the operator.
+            <B>To run your account and the service you ask for</B>, including posts, messages, calls, notifications, subscriptions and
+            tips. This is the contract between you and the operator.
+          </li>
+          <li>
+            <B>To show ads</B>, using only your age, whether you pay for Plus and the topics you follow, as described under Advertising
+            in the Terms. This is the operator&apos;s legitimate interest in paying for the service, weighed against your rights. You can
+            remove ads by subscribing to Plus.
           </li>
           <li>
             <B>To keep the service safe and fair</B>: sign-in protection, moderation, reports and the record of decisions. This is
@@ -170,7 +195,10 @@ const SECTIONS: LegalSection[] = [
             <B>With your consent</B>, only where you choose a feature that asks for it. You can withdraw that consent at any time.
           </li>
         </List>
-        <P>Rhenko does not use your data for advertising, for profiling that decides things about you, or for training AI models.</P>
+        <P>
+          Rhenko does not use your posts, messages, likes, contacts or location to choose ads. It does not profile you to decide what
+          you see, and it does not use your data to train AI models.
+        </P>
       </>
     ),
   },
@@ -265,6 +293,10 @@ const SECTIONS: LegalSection[] = [
         </li>
         <li>The earlier versions of an edited post can be seen by anyone who can see the post.</li>
         <li>
+          Advertisers see only totals for their own campaigns: how many times each ad was shown and clicked. They never see who saw or
+          clicked an ad.
+        </li>
+        <li>
           A post hidden under the Community Rules is not visible to anyone, its author included. The author sees the notice and
           can appeal it.
         </li>
@@ -291,6 +323,10 @@ const SECTIONS: LegalSection[] = [
             those counts and nothing else about you.
           </li>
         </List>
+        <P>
+          Ads are shown in the For you and Following feeds, after every eight posts, and each one is labelled Ad. Rhenko Plus removes
+          them. Ads are not ranked by what they predict you will do.
+        </P>
         <P>
           The main settings that shape what you see are your follows, blocks, mutes, muted words, and whether a post is hidden or
           protected. You can change each one in Settings, under Privacy and safety.
@@ -375,6 +411,10 @@ const SECTIONS: LegalSection[] = [
         </P>
         <P>In production, the sign-in cookies are marked Secure, so browsers send them only over HTTPS.</P>
         <P>
+          When you pay, Stripe&apos;s checkout and billing pages set their own cookies on Stripe&apos;s site, under Stripe&apos;s policy. Rhenko
+          does not set or read them.
+        </P>
+        <P>
           Because Rhenko sets no cookies for advertising or analytics, there is nothing for a cookie banner to switch off. The
           cookies above are needed for the service you ask for.
         </P>
@@ -387,11 +427,15 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          Rhenko does not sell personal information and does not share it for cross-context behavioural advertising. Advertisers,
-          data brokers and analytics services receive nothing from Rhenko. The app&apos;s fonts, scripts and images load from this
-          server, not from other sites.
+          Rhenko does not sell personal information and does not share it for cross-context behavioural advertising. Advertisers
+          receive only totals for their own campaigns. Data brokers and analytics services receive nothing from Rhenko. The
+          app&apos;s fonts, scripts and images load from this server, not from other sites.
         </P>
         <List>
+          <li>
+            Stripe receives what it needs to take a payment, to manage a subscription, to refund a payment and to pay out tips. It keeps
+            that under its own privacy policy. Rhenko does not receive card numbers or bank details.
+          </li>
           <li>The operator&apos;s mail service receives the address and the text of each verification, reset or notice email.</li>
           <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
           <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
@@ -431,6 +475,11 @@ const SECTIONS: LegalSection[] = [
           Views and profile visits are kept for {RETENTION.viewsDays} days, and the counts shown to you cover that period.
         </li>
         <li>Read notifications are deleted after {RETENTION.readNotificationsDays} days. Unread ones are kept until you read them.</li>
+        <li>
+          Payment and accounting records (subscriptions, tips, advertising payments and the advertising ledger) are kept for as long as
+          the accounting and tax law where the operator is based requires. The operator deletes them when that period ends. The one-way
+          codes in the advertising ledger are kept with those entries. Stripe keeps its own records under its own policy.
+        </li>
         <li>
           Notices about content, their decisions and the appeals are kept for {RETENTION.legalNoticesDays / 365} years, then
           deleted.

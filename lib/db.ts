@@ -654,6 +654,131 @@ CREATE TABLE IF NOT EXISTS link_previews (
   fetched_at INTEGER NOT NULL
 );
 `,
+  // The picture of a link preview, kept on this site. Its name is also how the media route knows it is public.
+  `
+ALTER TABLE link_previews ADD COLUMN image_file TEXT;
+CREATE INDEX IF NOT EXISTS link_previews_image ON link_previews(image_file);
+`,
+  // Payments through Stripe. A subscription (Plus removes ads and extends the edit window; paid verification shows a
+  // subscriber badge that makes no identity claim), a tip to a creator, and a creator's payout account. Money is kept
+  // in the minor units Stripe uses. Every webhook event is recorded once, so a repeated delivery changes nothing.
+  `
+ALTER TABLE users ADD COLUMN paid_verified INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS stripe_customers (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('plus', 'verified')),
+  status TEXT NOT NULL,
+  cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+  current_period_end INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS subscriptions_user ON subscriptions(user_id, kind);
+CREATE TABLE IF NOT EXISTS connect_accounts (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  account_id TEXT NOT NULL UNIQUE,
+  charges_enabled INTEGER NOT NULL DEFAULT 0,
+  payouts_enabled INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tips (
+  id TEXT PRIMARY KEY,
+  post_id TEXT REFERENCES posts(id) ON DELETE SET NULL,
+  from_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount INTEGER NOT NULL,
+  fee INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  payment_intent TEXT,
+  status TEXT NOT NULL CHECK (status IN ('paid', 'refunded')),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tips_to ON tips(to_user_id, status);
+CREATE INDEX IF NOT EXISTS tips_intent ON tips(payment_intent);
+CREATE TABLE IF NOT EXISTS stripe_events (
+  id TEXT PRIMARY KEY,
+  received_at INTEGER NOT NULL
+);
+`,
+  // Self-serve advertising. An advertiser has an account with a prepaid balance (added through Stripe). A campaign is
+  // one sponsored post, reviewed by a person before it can run. Every charge is a ledger row, unique per reference, so
+  // a repeat cannot charge twice. Money is in micro-units (one cent is 10,000) so a fraction of a cent is never lost.
+  `
+CREATE TABLE IF NOT EXISTS ad_accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  business_name TEXT NOT NULL,
+  country TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  balance_micro INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+  policy_accepted_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ad_campaigns (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES ad_accounts(id) ON DELETE CASCADE,
+  headline TEXT NOT NULL,
+  body TEXT NOT NULL,
+  cta TEXT NOT NULL,
+  link_url TEXT NOT NULL,
+  picture_file TEXT,
+  topic TEXT,
+  budget_micro INTEGER NOT NULL,
+  spent_micro INTEGER NOT NULL DEFAULT 0,
+  impressions INTEGER NOT NULL DEFAULT 0,
+  clicks INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('in_review', 'rejected', 'active', 'paused', 'ended')),
+  review_note TEXT,
+  reviewed_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ad_campaigns_account ON ad_campaigns(account_id, created_at);
+CREATE INDEX IF NOT EXISTS ad_campaigns_status ON ad_campaigns(status);
+CREATE TABLE IF NOT EXISTS ad_ledger (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES ad_accounts(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('credit', 'spend')),
+  amount_micro INTEGER NOT NULL,
+  reference TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ad_ledger_reference ON ad_ledger(kind, reference);
+`,
+  // Every decision about an advertising campaign or account, written by scripts/ads.mjs, with the time it was made.
+  `
+CREATE TABLE IF NOT EXISTS ad_decisions (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  target TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ad_decisions_target ON ad_decisions(target, created_at);
+`,
+  // An author can hide the counts on their own posts (likes, reposts, replies, quotes, views). They still see them.
+  `
+ALTER TABLE users ADD COLUMN hide_counts INTEGER NOT NULL DEFAULT 0;
+`,
+  // A person's report of an ad. One report per person per campaign. Reviewed with scripts/ads.mjs.
+  `
+CREATE TABLE IF NOT EXISTS ad_reports (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL REFERENCES ad_campaigns(id) ON DELETE CASCADE,
+  reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL CHECK (reason IN ('misleading', 'prohibited', 'political', 'other')),
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE (campaign_id, reporter_id)
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

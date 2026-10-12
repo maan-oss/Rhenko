@@ -4,7 +4,7 @@ import { area, assert, check, guard, need, note } from "./lib/harness.mjs"
 import { RUN_ID, randomWord, sleep } from "./lib/env.mjs"
 import { closeVisitor, newTab } from "./lib/browser.mjs"
 import { createUser } from "./lib/accounts.mjs"
-import { databaseProblem, moveSchedule, postIdByBody, postState } from "./lib/db.mjs"
+import { databaseProblem, keepLinkPreview, moveSchedule, postIdByBody, postState } from "./lib/db.mjs"
 import { makeExifJpeg, makeFakePng, makePng } from "./lib/files.mjs"
 import {
   COMPOSER_TEXT,
@@ -155,6 +155,31 @@ async function postFlows({ phone }) {
       },
       altText
     )
+  })
+
+  await check(`${where}: a link shows its page title and a picture kept on this site`, async () => {
+    const link = `https://example.com/story-${RUN_ID}-${where}`
+    const title = uniq("Preview headline")
+    await keepLinkPreview({ link, title, description: "A short line about the page.", site: "example.com", picture: makePng(`preview-${where}.png`, { seed: shot + 5 }) })
+    const body = uniq("Read this") + " " + link
+    await writePost(author.page, body)
+    await openProfile(reader.page, author.handle)
+    const shown = await waitForPost(reader.page, body)
+    const preview = shown.locator(`a[href="${link}"]`)
+    await preview.getByText(title).waitFor()
+    const picture = preview.locator("img")
+    await picture.scrollIntoViewIfNeeded()
+    await picture.waitFor()
+    await reader.page.waitForFunction(
+      () => {
+        const image = document.querySelector("article a[href^=\"https://example.com/story-\"] img")
+        return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0
+      },
+      null,
+      { timeout: 20_000 }
+    )
+    const source = await picture.getAttribute("src")
+    assert.match(source ?? "", /^\/media\/[a-f0-9]{32}\.png$/, "the picture is not kept on this site")
   })
 
   await check(`${where}: the Media tab lists the picture post`, async () => {

@@ -14,7 +14,8 @@ const DOCUMENTS = [
   { href: "/rules", title: "Community Rules", text: "What is not allowed on Rhenko, and how to report it." },
   { href: "/copyright", title: "Copyright", text: "How to tell us about a copy of your work, and how to answer a notice." },
   { href: "/safety", title: "Safety", text: "How to report, how to protect yourself, and who to contact in an emergency." },
-  { href: "/transparency", title: "Transparency", text: "How many reports, notices and decisions there have been on this server." },
+  { href: "/transparency", title: "Transparency", text: "How many reports, notices and decisions there have been on this server, and how the feeds are ordered." },
+  { href: "/transparency/ads", title: "Advertising", text: "What advertisers may run, who sees an ad and why, what it costs, and every campaign that has run." },
   { href: "/notice", title: "Send a notice", text: "A formal notice about content: copyright, intimate images, child abuse, impersonation, privacy or other illegal content." },
 ]
 

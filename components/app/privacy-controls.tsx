@@ -3,13 +3,46 @@
 import { useActionState, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { setProtected, toggleBlock, toggleMute } from "@/actions/social"
+import { setHideCounts, setProtected, toggleBlock, toggleMute } from "@/actions/social"
 import { addMutedWord, removeMutedWord } from "@/actions/posts"
 import { ErrorLine, Field, FIELD_INPUT } from "@/components/app/form-bits"
 import { Button } from "@/components/ui/button"
 import { pluralize } from "@/lib/format"
 import { MAX_MUTED_WORD } from "@/lib/rules"
 import { cn } from "@/lib/utils"
+
+// Hides or shows the counts on the viewer's own posts. The switch is a button with the switch role, so a screen reader says on or off.
+export function HideCountsSwitch({ initial }: { initial: boolean }) {
+  const router = useRouter()
+  const [on, setOn] = useState(initial)
+  const [pending, startTransition] = useTransition()
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={pending}
+      onClick={() => {
+        const next = !on
+        setOn(next)
+        startTransition(async () => {
+          const result = await setHideCounts(next)
+          if (!result.ok) {
+            setOn(!next)
+            toast.error(result.error)
+          } else {
+            toast.success(next ? "Counts on your posts are hidden from everyone else." : "Counts on your posts are visible again.")
+            router.refresh()
+          }
+        })
+      }}
+      className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-border transition-colors duration-200 disabled:opacity-60 aria-checked:bg-foreground"
+    >
+      <span className={cn("absolute left-0.5 size-6 rounded-full bg-background transition-transform duration-200", on ? "translate-x-5" : "translate-x-0")} aria-hidden="true" />
+      <span className="sr-only">Hide counts on my posts</span>
+    </button>
+  )
+}
 
 export function ProtectedSwitch({ initial }: { initial: boolean }) {
   const router = useRouter()

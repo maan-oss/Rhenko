@@ -8,11 +8,11 @@ import {
   profileFeed,
   searchPostFeed,
   topicFeed,
-  type FeedItem,
   type Page,
   type ProfileTab,
 } from "@/lib/data"
 import { publishDue, isFollowing } from "@/lib/post-writes"
+import { withAds, type FeedEntry } from "@/lib/ads"
 import { normalizeTag } from "@/lib/rules"
 
 // A feed is described by plain data so the same spec can render on the server
@@ -56,15 +56,15 @@ export function parseSpec(input: unknown): FeedSpec | null {
   }
 }
 
-export type FeedResult = Page<FeedItem> & { locked?: boolean }
+export type FeedResult = Page<FeedEntry> & { locked?: boolean }
 
-const EMPTY: Page<FeedItem> = { items: [], next: null }
+const EMPTY: Page<FeedEntry> = { items: [], next: null }
 
 export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): FeedResult {
   publishDue()
   switch (spec.kind) {
     case "home":
-      return homeFeed(spec.mode, viewerId, cursor)
+      return withAds(homeFeed(spec.mode, viewerId, cursor), viewerId)
     case "profile": {
       const user = get<{ id: string; protected: number; deactivated_at: number | null }>(
         "SELECT id, protected, deactivated_at FROM users WHERE handle = ? COLLATE NOCASE",

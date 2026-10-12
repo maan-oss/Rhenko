@@ -46,6 +46,8 @@ export type CallState = {
   localVideo: MediaStream | null
   remoteVideo: MediaStream | null
   cameraOff: boolean
+  // True while this person's camera is being started mid-call, so a second tap does nothing.
+  cameraStarting: boolean
   // How the call ended, or why answering did not work, shown for a moment.
   note: string | null
   live: LiveGroupCall[]
@@ -147,6 +149,7 @@ const IDLE: CallState = {
   localVideo: null,
   remoteVideo: null,
   cameraOff: false,
+  cameraStarting: false,
 }
 
 let state: CallState = IDLE
@@ -215,6 +218,7 @@ function idle(): Partial<CallState> {
     localVideo: null,
     remoteVideo: null,
     cameraOff: false,
+    cameraStarting: false,
   }
 }
 
@@ -230,7 +234,7 @@ function settle(note: string | null, extra: Partial<CallState> = {}): void {
     update(idle())
   } else {
     // The ended note keeps the kind of call, so its card still reads "Video call with" for as long as it is shown.
-    update({ ...extra, status: "ended", callId: null, tiles: [], muted: false, accepting: false, connectedAt: null, note, localVideo: null, remoteVideo: null, cameraOff: false })
+    update({ ...extra, status: "ended", callId: null, tiles: [], muted: false, accepting: false, connectedAt: null, note, localVideo: null, remoteVideo: null, cameraOff: false, cameraStarting: false })
     noteTimer = window.setTimeout(() => {
       noteTimer = null
       if (state.status === "ended") update(idle())
@@ -365,6 +369,7 @@ function ringHere(ring: Ring): void {
     localVideo: null,
     remoteVideo: null,
     cameraOff: false,
+    cameraStarting: false,
     callId: ring.callId,
     conversationId: info.conversationId,
     peer: info.from,
@@ -654,7 +659,7 @@ function createPeer(current: Session, key: string, ref: CallPeerRef | null, pers
     if (peer.closed) return
     // A one-to-one call shows the other person's camera. A group call is voice only.
     if (event.track.kind === "video") {
-      if (current.kind === "dm") update({ remoteVideo: event.streams[0] ?? new MediaStream([event.track]) })
+      if (current.kind === "dm") update({ remoteVideo: event.streams[0] ?? new MediaStream([event.track]), video: true })
       return
     }
     audio.srcObject = event.streams[0] ?? new MediaStream([event.track])
@@ -742,7 +747,7 @@ function makeOffer(current: Session, peer: Peer, restart: boolean): void {
 }
 
 function onOffer(current: Session, signal: OfferSignal): void {
-  if (current.kind === "dm" && (current.role !== "callee" || !current.answered || !current.local)) return
+  if (current.kind === "dm" && !current.local) return
   const key = current.kind === "dm" ? DM_PEER : `${signal.from.userId}:${signal.from.deviceId}`
   let peer = current.peers.get(key)
   if (peer?.closed) {
@@ -750,22 +755,29 @@ function onOffer(current: Session, signal: OfferSignal): void {
     current.peers.delete(key)
     peer = undefined
   }
+  // In a one-to-one call, an offer on a connection that is already set up is a renegotiation, such as a camera started
+  // mid-call. Only the person called makes the first offer's answer, so that case is checked on its own.
+  const renegotiating = current.kind === "dm" && peer !== undefined && peer.remoteSet
+  if (current.kind === "dm" && !renegotiating && (current.role !== "callee" || !current.answered)) return
   if (!peer) {
     const person = current.kind === "dm" ? current.other : signal.person
     if (!person) return
     peer = createPeer(current, key, current.kind === "dm" ? null : signal.from, person, false)
     refresh(current)
   }
-  if (peer.offerer) return
+  if (peer.offerer && !renegotiating) return
   if (signal.restart) {
     peer.restarted = true
     armReconnect(current, peer)
   }
   const target = peer
-  target.remoteSet = false
+  // When both sides offer at once, the caller keeps its own offer and the person called yields, so one answer settles it.
+  const polite = current.kind === "dm" && current.role === "callee"
+  if (!renegotiating) target.remoteSet = false
   target.chain = target.chain
     .then(async () => {
       if (target.closed || session !== current) return
+      if (renegotiating && !polite && target.pc.signalingState !== "stable") return
       await target.pc.setRemoteDescription({ type: "offer", sdp: signal.sdp })
       target.remoteSet = true
       flushIce(target)
@@ -784,7 +796,8 @@ function onOffer(current: Session, signal: OfferSignal): void {
 
 function onAnswer(current: Session, signal: AnswerSignal): void {
   const peer = current.peers.get(current.kind === "dm" ? DM_PEER : `${signal.from.userId}:${signal.from.deviceId}`)
-  if (!peer || !peer.offerer || peer.closed) return
+  // A one-to-one call answers an offer from either side, since a camera can be started by the person called too.
+  if (!peer || peer.closed || (current.kind === "group" && !peer.offerer)) return
   peer.chain = peer.chain
     .then(async () => {
       // A second answer, or one for an offer already replaced, is ignored.
@@ -1183,6 +1196,7 @@ export async function placeCall(conversationId: string, peer: EventPerson, video
       localVideo: videoOf(mic),
       remoteVideo: null,
       cameraOff: false,
+      cameraStarting: false,
       callId: started.callId,
       conversationId,
       peer: current.other,
@@ -1396,6 +1410,44 @@ export function hangUp(): void {
 }
 
 // Mutes this side only: the microphone track stops sending, in every connection of the call.
+// Turns this person's camera on in a one-to-one call that started as voice only. The camera joins the connection that is
+// already up, and the other person gets a new offer, so their picture appears. The call itself carries on for both.
+export async function startCamera(): Promise<Placed> {
+  const current = session
+  if (!current || current.kind !== "dm" || !current.local) return { ok: false, error: "The camera can start during a one-to-one call." }
+  if (state.status !== "active" && state.status !== "connecting" && state.status !== "reconnecting") {
+    return { ok: false, error: "The camera can start once the call is connected." }
+  }
+  if (state.localVideo || state.cameraStarting) return { ok: true }
+  update({ cameraStarting: true })
+  let track: MediaStreamTrack | null = null
+  try {
+    track = (await navigator.mediaDevices.getUserMedia({ video: CAMERA })).getVideoTracks()[0] ?? null
+  } catch {
+    track = null
+  }
+  if (session !== current) {
+    track?.stop()
+    return { ok: false, error: GONE }
+  }
+  if (!track) {
+    update({ cameraStarting: false })
+    return { ok: false, error: "Couldn't start your camera. Check that the browser is allowed to use it." }
+  }
+  current.local.addTrack(track)
+  for (const peer of current.peers.values()) {
+    if (peer.closed) continue
+    try {
+      peer.pc.addTrack(track, current.local)
+    } catch {
+      continue
+    }
+    makeOffer(current, peer, false)
+  }
+  update({ cameraStarting: false, video: true, localVideo: videoOf(current.local), cameraOff: false })
+  return { ok: true }
+}
+
 // Turns this person's camera picture off for the other person, and back on. The call itself is not affected.
 export function toggleCamera(): void {
   const track = session?.local?.getVideoTracks()[0]

@@ -2,7 +2,8 @@ import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { blockedUsers, mutedUsers, mutedWords } from "@/lib/data"
 import { Avatar } from "@/components/app/avatar"
-import { MutedWordsPanel, ProtectedSwitch, ReleaseButton } from "@/components/app/privacy-controls"
+import { HideCountsSwitch, MutedWordsPanel, ProtectedSwitch, ReleaseButton } from "@/components/app/privacy-controls"
+import { get } from "@/lib/db"
 import { PageHeader } from "@/components/app/page-header"
 import Link from "next/link"
 
@@ -30,6 +31,16 @@ async function PrivacyBody() {
           </p>
         </div>
         <ProtectedSwitch initial={viewer.protected} />
+      </section>
+      <section className="flex items-start justify-between gap-4 border-b border-border px-4 py-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold">Hide counts on my posts</h2>
+          <p className="text-[15px] text-muted-foreground">
+            Likes, reposts, replies, quotes and views on your posts are hidden from everyone else. You still see them. Hiding them does not change
+            who sees your posts or how they are ordered.
+          </p>
+        </div>
+        <HideCountsSwitch initial={get<{ hide: number }>("SELECT hide_counts AS hide FROM users WHERE id = ?", viewer.id)?.hide === 1} />
       </section>
       <Section title="Blocked accounts" empty="Blocked people can't follow you, see your posts, or message you.">
         {blocked.map((user) => (

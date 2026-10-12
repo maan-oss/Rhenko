@@ -36,6 +36,9 @@ import * as posts from "./posts.mjs"
 import * as social from "./social.mjs"
 import * as messages from "./messages.mjs"
 import * as calls from "./calls.mjs"
+import * as billing from "./billing.mjs"
+import * as ads from "./ads.mjs"
+import * as rules from "./rules.mjs"
 import * as settings from "./settings.mjs"
 import * as visibility from "./visibility.mjs"
 import * as account from "./account.mjs"
@@ -82,6 +85,9 @@ const AREAS = [
   ["social", social],
   ["messages", messages],
   ["calls", calls],
+  ["billing", billing],
+  ["ads", ads],
+  ["rules", rules],
   ["settings", settings],
   ["visibility", visibility],
   ["account", account],

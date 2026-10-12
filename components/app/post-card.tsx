@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { CalendarClock, EyeOff, Info, PenLine, Pin, Repeat2, Sparkles } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
-import { VerifiedBadge } from "@/components/app/badges"
+import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { EditHistory } from "@/components/app/edit-history"
 import { MediaGrid } from "@/components/app/media-grid"
 import { PendingActions } from "@/components/app/pending-actions"
@@ -15,7 +15,7 @@ import { NumberTicker } from "@/components/ui/number-ticker"
 import type { MiniUser, PollOption, PostCore, PostView } from "@/lib/data"
 import type { Viewer } from "@/lib/auth"
 import { fullTimestamp, pluralize } from "@/lib/format"
-import { EDIT_WINDOW_MS } from "@/lib/rules"
+import { editWindowMs } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 function QuotedPost({ post }: { post: PostCore }) {
@@ -26,7 +26,8 @@ function QuotedPost({ post }: { post: PostCore }) {
     >
       <p className="text-sm">
         <span className="font-semibold">{post.author.name}</span>
-        {post.author.verified ? <VerifiedBadge className="ml-1 inline-block align-[-2px]" /> : null}{" "}
+        {post.author.verified ? <VerifiedBadge className="ml-1 inline-block align-[-2px]" /> : null}
+        {post.author.paidVerified ? <SubscriberBadge className="ml-1 inline-block align-[-2px]" /> : null}{" "}
         <span className="text-muted-foreground">
           · <RelativeTime at={post.createdAt} />
         </span>
@@ -88,8 +89,9 @@ export function PostCard({
   const pending = draft || post.isDraft || post.publishAt !== null
   // Drafts and scheduled posts can't be edited, only published or deleted. A live post can be edited for a short while.
   // The window is checked again on the server when the post is saved.
+  const editWindow = editWindowMs(viewer.plus)
   // eslint-disable-next-line react-hooks/purity
-  const editable = isOwn && !pending && Date.now() - post.createdAt < EDIT_WINDOW_MS
+  const editable = isOwn && !pending && Date.now() - post.createdAt < editWindow
   return (
     <article className={cn("relative border-b border-border px-4 pt-3 pb-2 transition-colors", !detail && "hover:bg-secondary/60")}>
       {pending || isOwn ? null : <ViewBeacon postId={post.id} />}
@@ -143,6 +145,7 @@ export function PostCard({
             >
               <span className="truncate">{post.author.name}</span>
               {post.author.verified ? <VerifiedBadge className="ml-1 shrink-0" /> : null}
+              {post.author.paidVerified ? <SubscriberBadge className="ml-1 shrink-0" /> : null}
             </Link>
             <span className="truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
             <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="text-[15px] text-muted-foreground">
@@ -249,6 +252,8 @@ export function PostCard({
               pinned={post.pinned}
               highlighted={post.highlighted}
               editable={editable}
+              editWindowMs={editWindow}
+              tippable={post.tippable}
               canReply={post.canReply}
               replySetting={post.replySetting}
               media={post.media}

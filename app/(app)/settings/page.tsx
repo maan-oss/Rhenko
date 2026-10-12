@@ -12,6 +12,8 @@ const SECTIONS = [
   { href: "/notices", title: "Notices and appeals" },
   { href: "/legal", title: "Legal" },
   { href: "/settings/notifications", title: "Notifications" },
+  { href: "/settings/billing", title: "Subscriptions and tips" },
+  { href: "/advertise", title: "Advertising" },
   { href: "/settings/shortcuts", title: "Keyboard shortcuts" },
 ]
 

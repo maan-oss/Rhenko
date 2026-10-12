@@ -13,7 +13,7 @@ export const MAX_PASSWORD = 200
 // Profiles live at /<handle>, so a handle must never take the name of a top-level route. These lists follow the route
 // tree: each folder directly under app/(app), app/(auth), app/api and app/media, the app's own top-level routes, and
 // the pages the app links to. A new top-level route folder goes into its list here in the same change.
-const ROUTES_APP = ["analytics", "bookmarks", "drafts", "explore", "lists", "messages", "notices", "notifications", "search", "settings", "topics"]
+const ROUTES_APP = ["advertise", "analytics", "bookmarks", "drafts", "explore", "lists", "messages", "notices", "notifications", "search", "settings", "topics"]
 const ROUTES_AUTH = ["login", "signup", "forgot-password", "reset-password"]
 const ROUTES_API = ["api", "account-data", "calls", "events", "feed", "health", "suggest"]
 const ROUTES_ROOT = [
@@ -125,7 +125,12 @@ export const POLL_MAX_OPTIONS = 4
 export const MAX_POLL_OPTION = 25
 // Poll lengths in minutes: 5 minutes, 30 minutes, 1, 6, 24, 72 hours, 7 days.
 export const POLL_DURATIONS = [5, 30, 60, 360, 1440, 4320, 10080] as const
+// Posts can be edited for an hour. Plus extends that to a day. Only the edit window differs, never reach or ranking.
 export const EDIT_WINDOW_MS = 60 * 60 * 1000
+export const PLUS_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000
+export function editWindowMs(plus: boolean): number {
+  return plus ? PLUS_EDIT_WINDOW_MS : EDIT_WINDOW_MS
+}
 export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000
 export const SCHEDULE_MAX_AHEAD_MS = 75 * 24 * 60 * 60 * 1000
 

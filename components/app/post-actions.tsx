@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { BookmarkIcon, HeartIcon, MessageCircleIcon } from "lucide-animated"
-import { Ban, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
+import { Ban, Coins, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
 import { toggleBlock, toggleMute } from "@/actions/social"
@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { Composer } from "@/components/app/composer"
 import { EditPostDialog } from "@/components/app/edit-post-dialog"
 import { ShareSheet } from "@/components/app/share-sheet"
+import { TipDialog } from "@/components/app/tip-dialog"
 import { PostBody } from "@/components/app/post-body"
 import { DIALOG_CLOSE_PHONE, DIALOG_FIT, MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
 import type { AvatarUser } from "@/components/app/avatar"
@@ -42,6 +43,8 @@ type Props = {
   pinned: boolean
   highlighted: boolean
   editable: boolean
+  editWindowMs: number
+  tippable: boolean
   canReply: boolean
   replySetting: ReplySetting
   media: MediaItem[]
@@ -100,6 +103,8 @@ export function PostActions(props: Props) {
     pinned,
     highlighted,
     editable,
+    editWindowMs,
+    tippable,
     canReply,
     replySetting,
     media,
@@ -116,6 +121,7 @@ export function PostActions(props: Props) {
   const [replyOpen, setReplyOpen] = useState(false)
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [tipOpen, setTipOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -238,6 +244,13 @@ export function PostActions(props: Props) {
 
   const otherItems = !isOwn
     ? [
+        ...(tippable
+          ? [
+              <DropdownMenuItem key="tip" className={MENU_ITEM_PHONE} onClick={() => setTipOpen(true)}>
+                <Coins className="size-4" /> Tip @{author.handle}
+              </DropdownMenuItem>,
+            ]
+          : []),
         <DropdownMenuItem key="mute" className={MENU_ITEM_PHONE} onClick={onMute}>
           <VolumeX className="size-4" /> Mute @{author.handle}
         </DropdownMenuItem>,
@@ -369,7 +382,8 @@ export function PostActions(props: Props) {
         </DialogContent>
       </Dialog>
 
-      {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} media={media} /> : null}
+      {!isOwn && tippable ? <TipDialog open={tipOpen} onOpenChange={setTipOpen} postId={postId} handle={author.handle} /> : null}
+      {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} media={media} windowMs={editWindowMs} /> : null}
 
       <ShareSheet
         open={shareOpen}

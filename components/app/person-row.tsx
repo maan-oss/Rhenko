@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Avatar } from "@/components/app/avatar"
-import { VerifiedBadge } from "@/components/app/badges"
+import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { FollowButton } from "@/components/app/follow-button"
 import { RemoveFollowerButton } from "@/components/app/remove-follower-button"
 import type { PersonEntry } from "@/lib/social-rules"
@@ -28,6 +28,7 @@ export function PersonRow({
           <span className="flex items-center gap-1 font-semibold">
             <span className="truncate">{user.name}</span>
             {user.verified ? <VerifiedBadge /> : null}
+            {user.paidVerified ? <SubscriberBadge /> : null}
           </span>
           <span className="block truncate text-sm text-muted-foreground">@{user.handle}</span>
         </Link>

@@ -39,8 +39,8 @@ const SECTIONS: LegalSection[] = [
           to look like someone is nude or sexual, and threats to share them.
         </P>
         <P>
-          A report of this kind hides the post at once. Where the law sets a deadline, the operator keeps to it: in India that is two
-          hours from a valid complaint for this kind of content.
+          A report of this kind hides the post at once. Where the law sets a deadline for removing this kind of content, the operator
+          keeps to it.
         </P>
       </>
     ),
@@ -80,12 +80,27 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "impersonation",
-    title: "Impersonation",
+    title: "Impersonation and badges",
     body: (
-      <P>
-        Do not pretend to be another person, a brand, a public body or a business. Parody and commentary are allowed when they are
-        clearly marked and cannot be mistaken for the real thing.
-      </P>
+      <>
+        <P>
+          Do not pretend to be another person, a brand, a public body or a business. Parody and commentary are allowed when they are
+          clearly marked and cannot be mistaken for the real thing. Do not show a badge you do not have.
+        </P>
+        <List>
+          <li>
+            <B>Verified</B> (a dusk check) is given by the operator to accounts it has confirmed. Paying does not give it, and it cannot be
+            bought.
+          </li>
+          <li>
+            <B>Paid subscriber</B> (a ring) shows that a person pays for a subscription. It says nothing about who they are, and Rhenko has
+            not checked it.
+          </li>
+          <li>
+            <B>Protected</B> (a lock) means that only followers can see the account&apos;s posts.
+          </li>
+        </List>
+      </>
     ),
   },
   {
@@ -96,7 +111,23 @@ const SECTIONS: LegalSection[] = [
         <li>No spam: mass unsolicited posts, replies or messages, or repeated links that exist only to earn clicks.</li>
         <li>No scams, phishing or fraud, including fake giveaways, fake investment offers and fake support pages.</li>
         <li>No fake engagement: buying or swapping likes, reposts or followers, or running networks of accounts to push a message.</li>
+        <li>
+          No misleading ads. Advertising is governed by the <TextLink href="/transparency/ads">advertising policy</TextLink>, and every
+          ad is labelled.
+        </li>
       </List>
+    ),
+  },
+  {
+    id: "paid",
+    title: "Paid features do not buy reach",
+    body: (
+      <P>
+        Nobody can pay to have a post ranked higher, shown to more people, or pushed into a feed. Paid features change what you can do
+        and see, not how far a post goes. The home feeds are ordered by time, as the{" "}
+        <TextLink href="/transparency">transparency page</TextLink> explains. Authors can hide the like, repost, quote, reply and view
+        counts on their own posts, and then no one else sees them.
+      </P>
     ),
   },
   {
@@ -138,6 +169,10 @@ const SECTIONS: LegalSection[] = [
         <P>
           Use Report post in the menu of any post. You choose one reason: {REPORT_REASONS.join(", ").replace(/, ([^,]+)$/, ", or $1")}. A report is
           read by a person who runs the server. Choosing Intimate image without consent hides the post at once.
+        </P>
+        <P>
+          An ad can be reported from the ad itself, with the reason. Reports about ads are read by the people who review advertising. The
+          advertiser is not told who reported it.
         </P>
         <P>
           When a post breaks these rules, we hide it and tell the author why. The author can appeal. The full process is in the{" "}

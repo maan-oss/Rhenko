@@ -26,6 +26,8 @@ export type MiniUser = {
   name: string
   avatarFile: string | null
   verified: boolean
+  // An active paid verification subscription. It makes no identity claim, so it is shown apart from `verified`.
+  paidVerified?: boolean
 }
 
 export type MediaItem = { id: string; file: string; kind: MediaKind; alt: string }
@@ -74,6 +76,8 @@ export type PostCore = {
   canHideReply: boolean
   // At least one community note on this post has earned a public display.
   hasNote: boolean
+  // The viewer can tip this post: it is not theirs and its author has finished setting up payouts.
+  tippable: boolean
 }
 
 // `quoted` is null when the post quotes nothing, and also when the quoted post is hidden from the viewer (a block, a
@@ -109,6 +113,9 @@ type PostRow = {
   author_name: string
   author_avatar: string | null
   author_verified: number
+  author_paid_verified: number
+  author_hide_counts: number
+  tippable: number
   replies: number
   reposts: number
   likes: number
@@ -291,6 +298,7 @@ function viewerHandle(viewerId: string): string {
 const AUTHORED = "(p.reply_to_id IS NULL OR p.thread_id IS NOT NULL)"
 
 function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
+  const hideFor = (r: PostRow) => r.author_hide_counts === 1 && r.author_id !== viewerId
   const result = new Map<string, PostCore>()
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
@@ -299,6 +307,9 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
        p.reply_setting, p.thread_id,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
+       u.paid_verified AS author_paid_verified,
+       u.hide_counts AS author_hide_counts,
+       (u.id <> ? AND EXISTS(SELECT 1 FROM connect_accounts ca WHERE ca.user_id = u.id AND ca.charges_enabled = 1)) AS tippable,
        p.replies_count AS replies,
        p.reposts_count AS reposts,
        p.likes_count AS likes,
@@ -323,6 +334,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
      FROM posts p
      JOIN users u ON u.id = p.author_id
      WHERE p.id IN (${marks})`,
+    viewerId, // tippable: the viewer is not the author
     viewerId, // liked
     viewerId, // reposted
     viewerId, // bookmarked
@@ -380,12 +392,14 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
         name: r.author_name,
         avatarFile: r.author_avatar,
         verified: r.author_verified === 1,
+        paidVerified: r.author_paid_verified === 1,
       },
-      replies: r.replies,
-      reposts: r.reposts,
-      likes: r.likes,
-      quotes: r.quotes,
-      views: r.views,
+      // Counts an author has hidden are zero for everyone else. Ranking is not affected by this: it only changes what is shown.
+      replies: hideFor(r) ? 0 : r.replies,
+      reposts: hideFor(r) ? 0 : r.reposts,
+      likes: hideFor(r) ? 0 : r.likes,
+      quotes: hideFor(r) ? 0 : r.quotes,
+      views: hideFor(r) ? 0 : r.views,
       liked: r.liked === 1,
       reposted: r.reposted === 1,
       bookmarked: r.bookmarked === 1,
@@ -394,6 +408,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       hiddenByParent: r.hidden_by_parent === 1,
       canHideReply: r.parent_is_mine === 1,
       hasNote: r.has_note === 1,
+      tippable: r.tippable === 1,
     })
   }
   return result
@@ -978,6 +993,8 @@ export type ProfileView = {
   following: number
   posts: number
   verified: boolean
+  // An active paid verification subscription. It makes no identity claim.
+  paidVerified: boolean
   protected: boolean
   deactivated: boolean
   pinnedPostId: string | null
@@ -1000,6 +1017,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     status: string
     created_at: number
     verified: number
+    paid_verified: number
     protected: number
     deactivated_at: number | null
     pinned_post_id: string | null
@@ -1009,7 +1027,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     posts: number
   }>(
     `SELECT u.id, u.handle, u.name, u.bio, u.location, u.website, u.avatar_file, u.banner_file, u.status, u.created_at,
-       u.verified, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
+       u.verified, u.paid_verified, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
        u.followers_count AS followers, u.following_count AS following, u.posts_count AS posts
      FROM users u WHERE u.handle = ? COLLATE NOCASE`,
     handle
@@ -1032,6 +1050,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     following: row.following,
     posts: row.posts,
     verified: row.verified === 1,
+    paidVerified: row.paid_verified === 1,
     protected: row.protected === 1,
     deactivated: row.deactivated_at !== null,
     pinnedPostId: row.pinned_post_id,
@@ -2053,6 +2072,8 @@ export function postAnalytics(postId: string, viewerId: string, now = Date.now()
 // everything else, including files nothing uses any more.
 export function mediaAccess(file: string, viewerId: string | null): "public" | "private" | "none" {
   if (get("SELECT 1 AS found FROM users WHERE avatar_file = ? OR banner_file = ? LIMIT 1", file, file)) return "public"
+  // A link preview's picture is shown to anyone who can see the post, and holds nothing about a viewer.
+  if (get("SELECT 1 AS found FROM link_previews WHERE image_file = ? LIMIT 1", file)) return "public"
   if (!viewerId) return "none"
   const posts = all<{ post_id: string }>(
     "SELECT post_id FROM post_media WHERE file = ? UNION SELECT id AS post_id FROM posts WHERE media_file = ?",

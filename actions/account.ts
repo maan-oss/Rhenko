@@ -32,6 +32,7 @@ import {
   statusProblem,
 } from "@/lib/account-rules"
 import { hangUpFor } from "@/lib/call-state"
+import { endSubscriptionsAtPeriodEnd } from "@/lib/payments"
 import { all, get, run, transaction } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
 import { mediaFilesFor, removeFiles, treeOfAuthor } from "@/lib/post-writes"
@@ -354,6 +355,14 @@ export async function deactivateAccount(_prev: AccountState, formData: FormData)
   const denied = await confirmIdentity(viewer.id, formData)
   if (denied) return { error: denied }
   hangUpFor(viewer.id, "deactivated")
+  // Paid subscriptions end when the period already paid for ends. Nothing is charged for an account that is hidden. If Stripe
+  // cannot be asked, the account stays as it is, so the subscription is not left renewing unseen.
+  try {
+    await endSubscriptionsAtPeriodEnd(viewer.id)
+  } catch (error) {
+    console.error("could not end subscriptions before deactivating an account", error)
+    return { error: "Your subscription could not be ended right now, so the account was not deactivated. Try again in a moment." }
+  }
   transaction(() => {
     run("UPDATE users SET deactivated_at = ? WHERE id = ?", Date.now(), viewer.id)
     run("DELETE FROM sessions WHERE user_id = ?", viewer.id)
@@ -371,6 +380,14 @@ export async function deleteAccount(_prev: AccountState, formData: FormData): Pr
   if (typed.toLowerCase() !== viewer.handle.toLowerCase()) return { error: `Type @${viewer.handle} in the box to confirm.` }
   const denied = await confirmIdentity(viewer.id, formData)
   if (denied) return { error: denied }
+  // A paid subscription must stop renewing before the account and its billing record are removed. If Stripe cannot be asked,
+  // the account is kept, so nobody is charged for an account that no longer exists.
+  try {
+    await endSubscriptionsAtPeriodEnd(viewer.id)
+  } catch (error) {
+    console.error("could not end subscriptions before deleting an account", error)
+    return { error: "Your subscription could not be ended right now, so the account was not deleted. Try again in a moment." }
+  }
   eraseAccount(viewer.id)
   await destroySession()
   if (await adoptRemainingAccount()) redirect("/")

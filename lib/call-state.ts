@@ -417,19 +417,20 @@ function dmSignal(call: DmCall, from: Device, action: CallAction): SignalResult 
       if (!answered) return { ok: false, error: GONE }
       call.connectedAt ??= Date.now()
       return OK
-    case "offer":
-      if (!isCaller || !answered || !call.callee) return { ok: false, error: GONE }
-      relay(
-        call.callee.userId,
-        call.id,
-        { kind: "offer", sdp: action.sdp, restart: action.restart, from: { userId: from.userId, deviceId: from.deviceId }, person: null },
-        call.callee.deviceId
-      )
+    // Either side can offer or answer once the call is answered: the first offer comes from the caller, and a camera
+    // started mid-call is a new offer from whichever side turned it on.
+    case "offer": {
+      if (!answered || !call.callee) return { ok: false, error: GONE }
+      const to = isCaller ? call.callee : call.caller
+      relay(to.userId, call.id, { kind: "offer", sdp: action.sdp, restart: action.restart, from: { userId: from.userId, deviceId: from.deviceId }, person: null }, to.deviceId)
       return OK
-    case "answer":
-      if (!isCallee || !answered) return { ok: false, error: GONE }
-      relay(call.caller.userId, call.id, { kind: "answer", sdp: action.sdp, from: { userId: from.userId, deviceId: from.deviceId } }, call.caller.deviceId)
+    }
+    case "answer": {
+      if (!answered || !call.callee) return { ok: false, error: GONE }
+      const to = isCaller ? call.callee : call.caller
+      relay(to.userId, call.id, { kind: "answer", sdp: action.sdp, from: { userId: from.userId, deviceId: from.deviceId } }, to.deviceId)
       return OK
+    }
     case "ice": {
       if (!answered || !call.callee) return { ok: false, error: GONE }
       const to = isCaller ? call.callee : call.caller

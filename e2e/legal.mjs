@@ -116,10 +116,12 @@ async function publicPages() {
       await visitor.page.getByRole("heading", { level: 1, name: "Terms of Service" }).waitFor()
       assert.match(await bodyText(visitor.page), /Last updated/)
     })
-    await check("the community rules list the intimate image rule with the two hour deadline for India", async () => {
+    await check("the community rules say an intimate image report hides the post at once, and that legal deadlines are kept", async () => {
       await visitor.page.goto(`${BASE}/rules`, { waitUntil: "domcontentloaded" })
       await visitor.page.getByRole("heading", { level: 1, name: "Community Rules" }).waitFor()
-      assert.match(await bodyText(visitor.page), /two hours/)
+      const rules = await bodyText(visitor.page)
+      assert.match(rules, /hides the post at once/)
+      assert.match(rules, /keeps to it/)
     })
   } finally {
     await closeVisitor(visitor)

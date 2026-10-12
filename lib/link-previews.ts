@@ -1,17 +1,25 @@
+import { createHash } from "node:crypto"
 import dns from "node:dns/promises"
+import fs from "node:fs"
 import http from "node:http"
 import https from "node:https"
 import net from "node:net"
 import { all, run } from "@/lib/db"
+import { removeUpload, uploadPath } from "@/lib/uploads"
 
-// Link previews: the title and description of the first link in a post, read from the page once and kept.
+// Link previews: the title, description and picture of the first link in a post, read from the page once and kept.
 // The server fetches a page on a viewer's behalf, so it refuses anything that is not a public web address, and
 // connects to the address it checked (never a second lookup), so a name cannot be turned toward the server's own network.
+// The picture is stored on this site, checked by its first bytes, so a viewer's browser never contacts the other site.
 
-export type LinkPreview = { url: string; title: string; description: string; site: string }
+export type LinkPreview = { url: string; title: string; description: string; site: string; image: string | null }
+
+// What a page's head says, before its picture has been fetched.
+type ParsedPreview = { url: string; title: string; description: string; site: string; imageUrl: string | null }
 
 const TIMEOUT_MS = 5_000
-const MAX_BYTES = 512 * 1024
+const PAGE_BYTES = 512 * 1024
+const IMAGE_BYTES = 2 * 1024 * 1024
 const MAX_REDIRECTS = 3
 const FRESH_MS = 7 * 24 * 60 * 60 * 1000
 const MAX_QUEUE = 200
@@ -74,8 +82,9 @@ function attributesOf(tag: string): Record<string, string> {
   return attributes
 }
 
-// Reads the title, description and site name from a page's head. Open Graph and Twitter tags win over the plain ones.
-export function parsePreview(html: string, url: string): LinkPreview | null {
+// Reads the title, description, site name and picture address from a page's head. Open Graph and Twitter tags win
+// over the plain ones.
+export function parsePreview(html: string, url: string): ParsedPreview | null {
   const head = html.slice(0, 200_000)
   const meta = new Map<string, string>()
   for (const tag of head.matchAll(/<meta\b[^>]*>/gi)) {
@@ -94,13 +103,28 @@ export function parsePreview(html: string, url: string): LinkPreview | null {
     host = ""
   }
   const site = (meta.get("og:site_name") || host).slice(0, 80)
-  return { url, title, description, site }
+  const rawImage = meta.get("og:image") || meta.get("og:image:url") || meta.get("twitter:image") || meta.get("twitter:image:src") || ""
+  return { url, title, description, site, imageUrl: pictureAddress(rawImage, url) }
 }
 
-type Reply = { status: number; location: string | null; type: string; body: string }
+// The picture's full address, when it is a web address of reasonable length.
+function pictureAddress(raw: string, pageUrl: string): string | null {
+  if (!raw) return null
+  try {
+    const resolved = new URL(raw, pageUrl)
+    if (resolved.protocol !== "https:" && resolved.protocol !== "http:") return null
+    const text = resolved.toString()
+    return text.length <= 2000 ? text : null
+  } catch {
+    return null
+  }
+}
 
-// One request to a page, connected to the address that was checked. The body is read up to a fixed size.
-function request(url: URL, address: string, family: number): Promise<Reply> {
+type Reply = { status: number; location: string | null; type: string; body: Buffer; truncated: boolean }
+
+// One request to a page, connected to the address that was checked. The body is read up to a fixed size, and says
+// when it was cut short.
+function request(url: URL, address: string, family: number, maxBytes: number, accept: string): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const client = url.protocol === "https:" ? https : http
     const lookup = (_host: string, options: { all?: boolean }, callback: (...args: unknown[]) => void) => {
@@ -111,7 +135,7 @@ function request(url: URL, address: string, family: number): Promise<Reply> {
       url,
       {
         method: "GET",
-        headers: { "User-Agent": "RhenkoLinkPreview/1.0", Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1" },
+        headers: { "User-Agent": "RhenkoLinkPreview/1.0", Accept: accept },
         timeout: TIMEOUT_MS,
         lookup: lookup as never,
       },
@@ -121,21 +145,27 @@ function request(url: URL, address: string, family: number): Promise<Reply> {
         const type = String(res.headers["content-type"] ?? "")
         if (status >= 300 && status < 400) {
           res.resume()
-          resolve({ status, location, type, body: "" })
+          resolve({ status, location, type, body: Buffer.alloc(0), truncated: false })
           return
         }
         const chunks: Buffer[] = []
         let size = 0
+        let finished = false
+        const finish = (truncated: boolean) => {
+          if (finished) return
+          finished = true
+          resolve({ status, location, type, body: Buffer.concat(chunks).subarray(0, maxBytes), truncated })
+        }
         res.on("data", (chunk: Buffer) => {
           size += chunk.length
           chunks.push(chunk)
-          if (size >= MAX_BYTES) {
+          if (size > maxBytes) {
             res.destroy()
-            resolve({ status, location, type, body: Buffer.concat(chunks).toString("utf8") })
+            finish(true)
           }
         })
-        res.on("end", () => resolve({ status, location, type, body: Buffer.concat(chunks).toString("utf8") }))
-        res.on("error", () => resolve({ status, location, type, body: Buffer.concat(chunks).toString("utf8") }))
+        res.on("end", () => finish(false))
+        res.on("error", () => finish(true))
       }
     )
     req.on("timeout", () => req.destroy(new Error("timeout")))
@@ -151,8 +181,14 @@ async function publicAddress(url: URL): Promise<{ address: string; family: numbe
   return { address: found[0].address, family: found[0].family }
 }
 
-// Fetches a page's preview, following a few redirects, each one checked the same way.
-export async function fetchPreview(link: string): Promise<LinkPreview | null> {
+// Fetches one address, following a few redirects, each one checked the same way. Returns the final reply when it is a
+// success that the accepted kind of content describes, and null for anything else.
+async function fetchAccepted(
+  link: string,
+  maxBytes: number,
+  accept: string,
+  kindOk: (type: string) => boolean
+): Promise<Reply | null> {
   let current: URL
   try {
     current = new URL(link)
@@ -164,7 +200,7 @@ export async function fetchPreview(link: string): Promise<LinkPreview | null> {
     if (current.username || current.password) return null
     const target = await publicAddress(current).catch(() => null)
     if (!target) return null
-    const reply = await request(current, target.address, target.family).catch(() => null)
+    const reply = await request(current, target.address, target.family, maxBytes, accept).catch(() => null)
     if (!reply) return null
     if (reply.status >= 300 && reply.status < 400 && reply.location) {
       try {
@@ -174,10 +210,44 @@ export async function fetchPreview(link: string): Promise<LinkPreview | null> {
       }
       continue
     }
-    if (reply.status !== 200 || !/^text\/html|^application\/xhtml\+xml/i.test(reply.type)) return null
-    return parsePreview(reply.body, link)
+    if (reply.status !== 200 || !kindOk(reply.type)) return null
+    return reply
   }
   return null
+}
+
+const isHtml = (type: string) => /^text\/html|^application\/xhtml\+xml/i.test(type)
+const isImage = (type: string) => /^image\/(jpeg|png|gif|webp)\b/i.test(type)
+
+// Fetches a page's preview, following a few redirects, each one checked the same way.
+export async function fetchPreview(link: string): Promise<ParsedPreview | null> {
+  const reply = await fetchAccepted(link, PAGE_BYTES, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1", isHtml)
+  return reply ? parsePreview(reply.body.toString("utf8"), link) : null
+}
+
+// The file type of a picture by its first bytes, so a file that says it is a picture but is not one is refused.
+export function pictureExtension(body: Buffer): "jpg" | "png" | "gif" | "webp" | null {
+  if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return "jpg"
+  if (body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png"
+  if (body.length >= 6 && (body.subarray(0, 6).toString("ascii") === "GIF87a" || body.subarray(0, 6).toString("ascii") === "GIF89a")) return "gif"
+  if (body.length >= 12 && body.subarray(0, 4).toString("ascii") === "RIFF" && body.subarray(8, 12).toString("ascii") === "WEBP") return "webp"
+  return null
+}
+
+// Keeps a link's picture on this site. The name comes from the link, so a new fetch replaces the old picture.
+async function storePicture(link: string, imageUrl: string, previous: string | null): Promise<string | null> {
+  const reply = await fetchAccepted(imageUrl, IMAGE_BYTES, "image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1", isImage)
+  if (!reply || reply.truncated) return null
+  const extension = pictureExtension(reply.body)
+  if (!extension) return null
+  const name = `${createHash("sha256").update(link).digest("hex").slice(0, 32)}.${extension}`
+  const target = uploadPath(name)
+  if (!target) return null
+  const temporary = `${target}.${process.pid}.tmp`
+  await fs.promises.writeFile(temporary, reply.body)
+  await fs.promises.rename(temporary, target)
+  if (previous && previous !== name) removeUpload(previous)
+  return name
 }
 
 // Previews already read, by link. A link whose page had no title is kept as a row with no title, so it is not fetched
@@ -186,12 +256,18 @@ export function previewsFor(links: string[]): Map<string, LinkPreview> {
   const found = new Map<string, LinkPreview>()
   if (links.length === 0) return found
   const marks = links.map(() => "?").join(",")
-  const rows = all<{ url: string; title: string | null; description: string | null; site: string | null }>(
-    `SELECT url, title, description, site FROM link_previews WHERE url IN (${marks}) AND title IS NOT NULL`,
+  const rows = all<{ url: string; title: string | null; description: string | null; site: string | null; image_file: string | null }>(
+    `SELECT url, title, description, site, image_file FROM link_previews WHERE url IN (${marks}) AND title IS NOT NULL`,
     ...links
   )
   for (const row of rows) {
-    found.set(row.url, { url: row.url, title: row.title ?? "", description: row.description ?? "", site: row.site ?? "" })
+    found.set(row.url, {
+      url: row.url,
+      title: row.title ?? "",
+      description: row.description ?? "",
+      site: row.site ?? "",
+      image: row.image_file,
+    })
   }
   return found
 }
@@ -228,21 +304,26 @@ function pump(): void {
     void load(link)
       .catch(() => undefined)
       .finally(() => {
-      working--
-      pending.delete(link)
-      pump()
-    })
+        working--
+        pending.delete(link)
+        pump()
+      })
   }
 }
 
 async function load(link: string): Promise<void> {
+  const previous = all<{ image_file: string | null }>("SELECT image_file FROM link_previews WHERE url = ?", link)[0]?.image_file ?? null
   const preview = await fetchPreview(link).catch(() => null)
+  const image = preview?.imageUrl ? await storePicture(link, preview.imageUrl, previous).catch(() => null) : null
   run(
-    "INSERT OR REPLACE INTO link_previews (url, title, description, site, fetched_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO link_previews (url, title, description, site, image_file, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
     link,
     preview?.title ?? null,
     preview?.description ?? null,
     preview?.site ?? null,
+    image,
     Date.now()
   )
+  // A refreshed preview with no picture leaves the old one behind, so its file is removed.
+  if (image === null && previous) removeUpload(previous)
 }

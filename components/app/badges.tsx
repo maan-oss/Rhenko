@@ -13,6 +13,17 @@ export function VerifiedBadge({ className }: { className?: string }) {
   )
 }
 
+// A paid subscriber. It is a ring with a dot, not a check, so it cannot be mistaken for the verified badge. It says the person
+// pays for a subscription. It makes no claim about who they are.
+export function SubscriberBadge({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-label="Paid subscriber. Rhenko has not checked this person's identity." className={cn("size-[1em] shrink-0 text-dusk", className)}>
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="2.2" />
+      <circle cx="12" cy="12" r="3.2" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function EditedMark({ className }: { className?: string }) {
   return <span className={cn("text-[13px] text-muted-foreground", className)}>· Edited</span>
 }

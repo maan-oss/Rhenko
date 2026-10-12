@@ -8,10 +8,8 @@ import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
-import { EDIT_WINDOW_MS, MAX_ALT, MAX_POST, countChars } from "@/lib/rules"
+import { MAX_ALT, MAX_POST, countChars } from "@/lib/rules"
 import { cn } from "@/lib/utils"
-
-const WINDOW_MINUTES = Math.round(EDIT_WINDOW_MS / 60_000)
 
 // Editing a post that is live: its text, and the description of each picture or video. The form is built each time the dialog
 // opens, so it always starts from the post as it is now and a cancelled edit leaves nothing behind.
@@ -21,19 +19,21 @@ export function EditPostDialog({
   postId,
   body,
   media,
+  windowMs,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   postId: string
   body: string
   media: MediaItem[]
+  windowMs: number
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-lg", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
         <DialogTitle className="text-lg font-semibold">Edit post</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          You can edit a post for {WINDOW_MINUTES} minutes after it&apos;s posted.
+          You can edit a post for {Math.round(windowMs / 60_000)} minutes after it&apos;s posted.
         </DialogDescription>
         <EditForm postId={postId} body={body} media={media} onDone={() => onOpenChange(false)} />
       </DialogContent>

@@ -5,12 +5,13 @@ import { BlurFade } from "@/components/ui/blur-fade"
 import { EmptyState } from "@/components/app/empty-state"
 import { MoveBookmark } from "@/components/app/move-bookmark"
 import { PostCard } from "@/components/app/post-card"
-import type { FeedItem } from "@/lib/data"
+import { isAdItem, type FeedEntry } from "@/lib/ad-rules"
+import { AdCard } from "@/components/app/ad-card"
 import type { FeedSpec } from "@/lib/feeds"
 import type { Viewer } from "@/lib/auth"
 
 type Props = {
-  items: FeedItem[]
+  items: FeedEntry[]
   next?: string | null
   spec?: FeedSpec
   viewer: Viewer
@@ -47,7 +48,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
       const url = `/api/feed?spec=${encodeURIComponent(JSON.stringify(spec))}&cursor=${encodeURIComponent(next)}`
       const response = await fetch(url, { headers: { Accept: "application/json" } })
       if (!response.ok) throw new Error("Could not load")
-      const page = (await response.json()) as { items: FeedItem[]; next: string | null }
+      const page = (await response.json()) as { items: FeedEntry[]; next: string | null }
       setItems((current) => {
         const seen = new Set(current.map((item) => item.key))
         return [...current, ...page.items.filter((item) => !seen.has(item.key))]
@@ -84,12 +85,18 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
 
   return (
     <div>
-      {items.map((item, index) => (
-        <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
-          <PostCard post={item.post} viewer={viewer} repostedBy={item.repostedBy} />
-          {folders ? <MoveBookmark postId={item.post.id} folderId={item.folderId} folders={folders} /> : null}
-        </BlurFade>
-      ))}
+      {items.map((item, index) =>
+        isAdItem(item) ? (
+          <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
+            <AdCard ad={item.ad} />
+          </BlurFade>
+        ) : (
+          <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
+            <PostCard post={item.post} viewer={viewer} repostedBy={item.repostedBy} />
+            {folders ? <MoveBookmark postId={item.post.id} folderId={item.folderId} folders={folders} /> : null}
+          </BlurFade>
+        )
+      )}
       {next ? (
         <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-8">
           <button

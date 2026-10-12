@@ -3,7 +3,7 @@ import { Suspense } from "react"
 import { connection } from "next/server"
 import { Skeleton } from "@/components/ui/skeleton"
 import { all, get, type Param } from "@/lib/db"
-import { LegalPage, List, P, type LegalSection } from "@/app/_legal/shell"
+import { B, LegalPage, List, P, type LegalSection } from "@/app/_legal/shell"
 import { NOTICE_KINDS } from "@/lib/legal"
 
 export const metadata: Metadata = {
@@ -104,6 +104,24 @@ async function Requests() {
   )
 }
 
+async function Advertising() {
+  await connection()
+  const campaigns = count("SELECT COUNT(*) AS n FROM ad_campaigns")
+  const waiting = count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE status = 'in_review'")
+  const approved = count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE reviewed_at IS NOT NULL AND status <> 'rejected'")
+  const rejected = count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE status = 'rejected'")
+  const reports = count("SELECT COUNT(*) AS n FROM ad_reports")
+  return (
+    <div className="flex flex-col">
+      <Figure label="Campaigns sent for review" value={campaigns} />
+      <Figure label="Waiting for review" value={waiting} />
+      <Figure label="Approved to run" value={approved} />
+      <Figure label="Rejected" value={rejected} />
+      <Figure label="Reports about ads" value={reports} />
+    </div>
+  )
+}
+
 function Waiting() {
   return <Skeleton className="h-40 w-full" />
 }
@@ -158,6 +176,58 @@ const SECTIONS: LegalSection[] = [
           <Requests />
         </Suspense>
       </>
+    ),
+  },
+  {
+    id: "advertising",
+    title: "Advertising",
+    body: (
+      <>
+        <P>Campaigns sent by advertisers, and the reports people have made about ads. The ad library lists every campaign that has run.</P>
+        <Suspense fallback={<Waiting />}>
+          <Advertising />
+        </Suspense>
+      </>
+    ),
+  },
+  {
+    id: "feeds",
+    title: "How the feeds are ordered",
+    body: (
+      <List>
+        <li>
+          <B>For you</B> shows every post and repost you are allowed to see, newest first.
+        </li>
+        <li>
+          <B>Following</B> shows posts and reposts from the people and topics you follow, newest first.
+        </li>
+        <li>
+          <B>Explore</B> is sorted by top or by latest. Top adds up likes, reposts (counted twice) and replies.
+        </li>
+        <li>No score predicts what you will like, and no feed is ranked by who has paid.</li>
+        <li>
+          Ads are placed after every eight posts in the home feeds. Each one is labelled Ad. They are not shown to people under 18 or to
+          people who pay for Rhenko Plus.
+        </li>
+      </List>
+    ),
+  },
+  {
+    id: "paid",
+    title: "What paid features change",
+    body: (
+      <List>
+        <li>
+          <B>Rhenko Plus</B> removes ads from the home feeds, and gives 24 hours to edit a post instead of one hour.
+        </li>
+        <li>
+          <B>The paid subscriber ring</B> shows beside a name that the person pays. It changes nothing else.
+        </li>
+        <li>
+          <B>Tips</B> are paid from one person to another. They do not change who sees a post.
+        </li>
+        <li>No paid feature changes how a post is ranked, how far it reaches, or who can see it.</li>
+      </List>
     ),
   },
   {

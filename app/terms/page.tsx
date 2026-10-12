@@ -28,6 +28,11 @@ const SUMMARY = (
         If a post is hidden, we tell you why. You can appeal within {APPEAL_DAYS} days, from Notices.
       </li>
       <li>You can delete your account whenever you like.</li>
+      <li>
+        Rhenko Plus, the paid subscriber ring and tips are optional. You can cancel a subscription at any time, and withdraw from one
+        within 14 days of starting it. Paying does not change who sees your posts.
+      </li>
+      <li>Some home feeds show labelled ads. Rhenko Plus removes them.</li>
     </List>
   </Note>
 )
@@ -104,6 +109,96 @@ const SECTIONS: LegalSection[] = [
           Who can see what you post depends on your settings and on the post itself. <TextLink href="/privacy#visibility">The
           Privacy Policy explains it</TextLink>.
         </P>
+      </>
+    ),
+  },
+  {
+    id: "paid",
+    title: "Paid features and subscriptions",
+    body: (
+      <>
+        <P>
+          Some features cost money. Each one is optional, and its price is shown before you pay. Payments are taken by Stripe, which
+          may ask you for more details, under Stripe&apos;s own terms. Rhenko does not see or store your card number.
+        </P>
+        <List>
+          <li>
+            <B>Rhenko Plus</B> removes ads from your feeds and gives you 24 hours to edit a post, instead of one hour. It renews
+            automatically at the price shown until you cancel.
+          </li>
+          <li>
+            <B>The paid subscriber ring</B> is a separate subscription. It shows that you pay. It is not an identity check, and it does
+            not mean Rhenko has verified you. A confirmed email address is needed to take it.
+          </li>
+          <li>
+            <B>Cancelling</B> is done in Settings, under Subscriptions and tips. The subscription then ends at the end of the period you
+            have paid for. Cancelling does not refund that period, except under the withdrawal right below or where the law requires a
+            refund.
+          </li>
+          <li>
+            <B>Withdrawing.</B> If you change your mind, you can withdraw within 14 days of starting a subscription. It ends at once, and
+            the first payment is refunded to the card it was paid with. Where a law gives you a longer right to cancel, that right still
+            applies.
+          </li>
+          <li>
+            <B>Price changes.</B> If the price of a subscription changes, we tell you before the new price applies, and you can cancel before it does.
+          </li>
+          <li>
+            <B>Reach.</B> Paying changes what you can do, not who sees your posts. No paid feature changes how a post is ranked or how many
+            people it reaches.
+          </li>
+          <li>
+            <B>Tax.</B> Prices may not include sales tax, VAT, GST or a similar tax. Where one is charged, it is shown at checkout before you
+            pay.
+          </li>
+        </List>
+      </>
+    ),
+  },
+  {
+    id: "tips",
+    title: "Tips",
+    body: (
+      <>
+        <P>
+          A tip is a one-off payment from one person to another, for a post. The amounts are the ones shown on the tip screen, and the
+          share Rhenko keeps is shown there before you pay.
+        </P>
+        <List>
+          <li>
+            Rhenko keeps the percentage shown. The rest goes to the person who receives the tip, through Stripe Connect.
+          </li>
+          <li>
+            To receive tips, a person sets up payouts with Stripe. Stripe checks their identity and any tax details. Rhenko does not see
+            their bank details.
+          </li>
+          <li>
+            A tip cannot be cancelled once it is paid. If you were charged by mistake, or more than once for one tip, tell the operator,
+            and it refunds the payment where it can, and where the law requires.
+          </li>
+          <li>
+            The person who receives a tip is responsible for any tax on that income, under the law where they live.
+          </li>
+        </List>
+      </>
+    ),
+  },
+  {
+    id: "advertising",
+    title: "Advertising",
+    body: (
+      <>
+        <P>
+          Some home feeds show ads. Each one is labelled Ad and names the advertiser. The{" "}
+          <TextLink href="/transparency/ads">advertising policy</TextLink> sets out what may be advertised, who sees an ad and why, and
+          what it costs.
+        </P>
+        <List>
+          <li>Ads are shown only to adults, 18 and over, and never to people who pay for Rhenko Plus.</li>
+          <li>An ad aimed at a topic is shown only to people who follow that topic. Nothing else about you is used to choose an ad.</li>
+          <li>Advertisers do not learn who saw or clicked their ad. They see how many times it was shown and clicked.</li>
+          <li>A person reviews every campaign before it runs. The operator can refuse or stop an ad at any time.</li>
+        </List>
       </>
     ),
   },
@@ -253,7 +348,12 @@ const SECTIONS: LegalSection[] = [
       <>
         <P>
           You can deactivate or delete your account in Settings, under Account. Deleting an account deletes your posts, messages,
-          photos and videos. Some records are kept as the Privacy Policy describes, for example notices about content.
+          photos and videos. Some records are kept as the Privacy Policy describes, for example notices about content and the
+          payment records the law requires us to keep.
+        </P>
+        <P>
+          Deactivating or deleting an account ends any paid subscription at the end of the period already paid for. If that cannot be
+          arranged, the account is not deactivated or deleted, so that nobody is charged for an account that has gone.
         </P>
         <P>
           The operator can suspend or close an account that breaks these terms, and will tell the account holder why, unless the

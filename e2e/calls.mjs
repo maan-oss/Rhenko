@@ -45,6 +45,8 @@ export async function run() {
   await guard("voice calls on a phone", () => dmFlow({ phone: true }))
   await guard("video calls on a computer", () => videoFlow({ phone: false }))
   await guard("video calls on a phone", () => videoFlow({ phone: true }))
+  await guard("a camera started mid-call on a computer", () => cameraMidCallFlow({ phone: false }))
+  await guard("a camera started mid-call on a phone", () => cameraMidCallFlow({ phone: true }))
   await guard("group calls on a computer", () => groupFlow({ phone: false }))
   await guard("group calls on a phone", () => groupFlow({ phone: true }))
 }
@@ -117,6 +119,32 @@ async function videoFlow({ phone }) {
     await control(outgoing, "End").click()
     await outgoing.waitFor({ state: "detached" })
     await incoming.waitFor({ state: "detached" })
+    await bothGone(caller.page, callee.page)
+  })
+}
+
+// A voice call that gets a camera in the middle. Either person can start theirs: the other sees it straight away, and
+// the call carries on for both. Once a camera is on, the card is named a video call on both sides.
+async function cameraMidCallFlow({ phone }) {
+  const where = phone ? "phone" : "computer"
+  const caller = await createUser({ tag: phone ? "clmp" : "clmd", phone, mic: true })
+  const callee = await createUser({ tag: phone ? "cemp" : "cemd", phone, mic: true })
+  await acceptedChat(caller, callee)
+
+  await check(`${where}: a voice call starts a camera in the middle, the other person sees it, and the other side can start one too`, async () => {
+    await idleOnSettings(callee.page)
+    await connect(caller, callee)
+    await control(dmCard(caller.page, callee.name), "Start camera").click()
+    await videoCard(caller.page, callee.name).getByText(/^\d+:\d\d$/).waitFor()
+    await control(videoCard(caller.page, callee.name), "Camera off").waitFor()
+    await pictureReady(callee.page)
+    await control(videoCard(callee.page, caller.name), "Start camera").click()
+    await pictureReady(caller.page)
+    await control(videoCard(callee.page, caller.name), "Camera off").waitFor()
+    await timerRunning(videoCard(caller.page, callee.name))
+    await control(videoCard(caller.page, callee.name), "End").click()
+    await videoCard(caller.page, callee.name).waitFor({ state: "detached" })
+    await videoCard(callee.page, caller.name).waitFor({ state: "detached" })
     await bothGone(caller.page, callee.page)
   })
 }
