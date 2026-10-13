@@ -37,9 +37,7 @@ function WhereSection({ initial }: { initial: WhereValue }) {
       <h2 id="where-heading" className="text-lg font-semibold">
         Where you are
       </h2>
-      <p className="text-[14px] leading-relaxed text-muted-foreground">
-        Only you see your city or town. It is never shown on your profile or to anyone else, and it is never a street address.
-      </p>
+      <p className="text-[14px] leading-relaxed text-muted-foreground">Used to suggest people nearby.</p>
       <WhereFields value={value} onChange={setValue} />
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -73,8 +71,7 @@ function LanguageSection({ initial }: { initial: LanguageValue }) {
         Languages
       </h2>
       <p className="text-[14px] leading-relaxed text-muted-foreground">
-        The languages you speak are shown on your profile, so people can see them. Languages you are learning are only used to find
-        partners.
+        Languages you speak show on your profile. Languages you are learning are only used to find partners.
       </p>
       <LanguageFields value={value} onChange={setValue} />
       {error ? (
@@ -91,9 +88,11 @@ function LanguageSection({ initial }: { initial: LanguageValue }) {
   )
 }
 
+// Shown only when someone has been set aside with "Not now". Showing them again brings them back at once.
 function DismissedSection({ count }: { count: number }) {
   const [shown, setShown] = useState(count)
   const [pending, startTransition] = useTransition()
+  if (shown === 0) return null
   return (
     <section aria-labelledby="dismissed-heading" className="flex items-start justify-between gap-4 px-4 py-6">
       <div className="flex flex-col gap-1">
@@ -101,30 +100,26 @@ function DismissedSection({ count }: { count: number }) {
           Not now
         </h2>
         <p className="text-[15px] text-muted-foreground">
-          {shown === 0
-            ? "You have not dismissed anyone."
-            : `You have said not now to ${shown} ${shown === 1 ? "person" : "people"}. They stay out of your suggestions until you show them again.`}
+          {`You have said not now to ${shown} ${shown === 1 ? "person" : "people"}.`}
         </p>
       </div>
-      {shown > 0 ? (
-        <Button
-          type="button"
-          variant="outline"
-          disabled={pending}
-          className="h-9 shrink-0 rounded-lg px-4"
-          onClick={() =>
-            startTransition(async () => {
-              const result = await resetDismissed()
-              if (result.ok) {
-                setShown(0)
-                toast.success("They can be suggested again.")
-              }
-            })
-          }
-        >
-          Show them again
-        </Button>
-      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        disabled={pending}
+        className="h-9 shrink-0 rounded-lg px-4"
+        onClick={() =>
+          startTransition(async () => {
+            const result = await resetDismissed()
+            if (result.ok) {
+              setShown(0)
+              toast.success("They can be suggested again.")
+            }
+          })
+        }
+      >
+        Show them again
+      </Button>
     </section>
   )
 }

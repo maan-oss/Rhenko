@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { X } from "lucide-react"
-import { LANGUAGES, SPEAK_LEVELS, type SpeakLevel } from "@/lib/languages"
+import { COMMON_LANGUAGE_CODES, LANGUAGES, SPEAK_LEVELS, type SpeakLevel } from "@/lib/languages"
 import { AREA_MAX, COUNTRIES } from "@/lib/places"
 import { cn } from "@/lib/utils"
 
@@ -77,7 +77,7 @@ export function WhereFields({ value, onChange }: { value: WhereValue; onChange: 
         </select>
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="where-area" hint="A city or town is enough. We never ask for a street address, a house number or a postcode.">
+        <Label htmlFor="where-area" hint="A city or town only. Never a street address or postcode.">
           City or town
         </Label>
         <input
@@ -95,7 +95,7 @@ export function WhereFields({ value, onChange }: { value: WhereValue; onChange: 
         checked={value.suggestNearby}
         onChange={(checked) => onChange({ ...value, suggestNearby: checked })}
         title="Suggest me to people nearby"
-        hint="People in the same city or town see you as a suggestion, and you see them, when they have this on too. Your city is never shown on your profile."
+        hint="Only shown to people nearby who turn this on too. Your town is never on your profile."
       />
     </div>
   )
@@ -115,9 +115,10 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
   const [query, setQuery] = useState("")
   const spoken = useMemo(() => new Set(value.speak.map((item) => item.code)), [value.speak])
   const learning = useMemo(() => new Set(value.learn), [value.learn])
+  // With nothing typed, the most spoken languages. Typing searches every language.
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return LANGUAGES
+    if (!needle) return COMMON_LANGUAGE_CODES.flatMap((code) => LANGUAGES.filter((language) => language.code === code))
     return LANGUAGES.filter((language) => language.name.toLowerCase().includes(needle) || language.native.toLowerCase().includes(needle))
   }, [query])
 
@@ -155,6 +156,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
           onChange={(event) => setQuery(event.target.value)}
           className={SMALL_FIELD}
         />
+        {query.trim() === "" ? <p className="text-[13px] text-muted-foreground">The most spoken. Search for any other.</p> : null}
         <ul aria-label="Languages" className="flex max-h-72 flex-col overflow-y-auto rounded-2xl border border-border">
           {shown.map((language) => {
             const isSpoken = spoken.has(language.code)
@@ -163,7 +165,9 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
               <li key={language.code} className="flex items-center gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-medium">{language.name}</span>
-                  <span className="block truncate text-[13px] text-muted-foreground">{language.native}</span>
+                  {language.native.toLowerCase() !== language.name.toLowerCase() ? (
+                    <span className="block truncate text-[13px] text-muted-foreground">{language.native}</span>
+                  ) : null}
                 </span>
                 <button
                   type="button"
@@ -224,12 +228,33 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
         </div>
       ) : null}
 
+      {value.learn.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold">Learning</p>
+          <ul className="flex flex-wrap gap-2">
+            {value.learn.map((code) => (
+              <li key={code} className="inline-flex h-9 items-center gap-1 rounded-full border border-border pr-1 pl-3.5 text-[14px] font-medium">
+                {nameOf(code)}
+                <button
+                  type="button"
+                  onClick={() => toggleLearn(code)}
+                  aria-label={`Stop learning ${nameOf(code)}`}
+                  className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <SwitchRow
         id="language-partners"
         checked={value.suggestLanguage}
         onChange={(checked) => onChange({ ...value, suggestLanguage: checked })}
         title="Suggest me as a language partner"
-        hint="People who speak a language you are learning, or are learning one you speak, can see you as a suggestion, when they have this on too."
+        hint="Shown to people you could practise with, when they turn this on too."
       />
     </div>
   )

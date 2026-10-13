@@ -23,23 +23,13 @@ const TOPICS = [
 type Initial = { where: WhereValue; languages: LanguageValue; topics: string[] }
 
 const HEADINGS = [
-  {
-    title: "Where are you based?",
-    lead: "This helps us find people near you. Only you see it, and you can change it at any time.",
-  },
-  {
-    title: "What languages do you speak?",
-    lead: "Add the ones you can talk in, and any you are learning. We use them to find people to practise with.",
-  },
-  {
-    title: "What are you into?",
-    lead: "Follow a few topics. Posts on them fill your feed, and you will meet people who write about them.",
-  },
-  {
-    title: "Meet people",
-    lead: "These people match what you shared. Follow the ones you want. Each card says why they are here.",
-  },
+  { title: "Where are you based?", lead: "Used to suggest people nearby. Your town is never shown on your profile." },
+  { title: "What languages do you speak?", lead: "Used to find people to practise with." },
+  { title: "What are you into?", lead: "Posts on these fill your feed." },
+  { title: "Meet people", lead: "These people match what you shared. Each card says why they are here." },
 ] as const
+
+const STARTING_LEAD = "Nothing matches what you shared yet. Follow a few to fill your feed."
 
 const PRIMARY =
   "flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-40"
@@ -119,6 +109,9 @@ export function SetupFlow({ initial }: { initial: Initial }) {
   }
 
   const heading = HEADINGS[step]
+  // Only the people to start with are on screen: say so, rather than say they match.
+  const startingOnly = people.length > 0 && people.every((person) => person.group === "starting")
+  const lead = step === STEP_COUNT - 1 && startingOnly ? STARTING_LEAD : heading.lead
 
   return (
     <div className="flex flex-col gap-7">
@@ -152,7 +145,7 @@ export function SetupFlow({ initial }: { initial: Initial }) {
 
       <div className="flex flex-col gap-2">
         <h1 className="text-[28px] font-semibold tracking-tight">{heading.title}</h1>
-        <p className="text-[15px] leading-relaxed text-muted-foreground">{heading.lead}</p>
+        <p className="text-[15px] leading-relaxed text-muted-foreground">{lead}</p>
       </div>
 
       {step === 0 ? <WhereFields value={where} onChange={setWhere} /> : null}
@@ -225,10 +218,8 @@ function PeopleStep({ people }: { people: SuggestedPerson[] }) {
   if (people.length === 0) {
     return (
       <div className="flex flex-col gap-2 rounded-2xl border border-border px-5 py-6">
-        <p className="text-[15px] font-semibold">Nobody matches yet</p>
-        <p className="text-[14px] leading-relaxed text-muted-foreground">
-          People show up here as they join, and as they post about the topics you follow. You can look again in Connect at any time.
-        </p>
+        <p className="text-[15px] font-semibold">Nobody to show yet</p>
+        <p className="text-[14px] leading-relaxed text-muted-foreground">People appear here as they join. You can look again in Connect.</p>
       </div>
     )
   }

@@ -182,7 +182,58 @@ type CandidateRow = {
   active_at: number | null
 }
 
+// The suggestions for a viewer. When nothing matches yet, the last group holds people to start with: the accounts most
+// people follow. They are never matched to anyone, and their card says so, so a new account always has people to look at.
 export function suggestionsFor(viewerId: string, now: number, perGroup = 6): Suggestions {
+  const matched = matchedFor(viewerId, now, perGroup)
+  if (matched.groups.some((group) => group.group !== "starting" && group.people.length > 0)) return matched
+  const starting = startingPeople(viewerId, perGroup)
+  return {
+    ...matched,
+    groups: matched.groups.map((group) => (group.group === "starting" ? { ...group, people: starting } : group)),
+  }
+}
+
+// One empty group for each kind of match, then the group for people to start with.
+function emptyGroups(): SuggestionGroup[] {
+  return [...GROUP_ORDER, "starting" as const].map((group) => ({ group, ...GROUP_TEXT[group], people: [] }))
+}
+
+type StartingRow = {
+  id: string
+  handle: string
+  name: string
+  avatar_file: string | null
+  verified: number
+  bio: string
+  followers_count: number
+}
+
+// The accounts most people follow, for a viewer with no matches. The same rules as every suggestion apply.
+function startingPeople(viewerId: string, count: number): SuggestedPerson[] {
+  return all<StartingRow>(
+    `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.bio, u.followers_count
+     FROM users u
+     WHERE ${EXCLUDED}
+     ORDER BY u.followers_count DESC, u.created_at DESC
+     LIMIT ?`,
+    ...excludedParams(viewerId),
+    count
+  ).map(
+    (row): SuggestedPerson => ({
+      id: row.id,
+      handle: row.handle,
+      name: row.name,
+      avatarFile: row.avatar_file,
+      verified: row.verified === 1,
+      bio: row.bio,
+      group: "starting",
+      reasons: [row.followers_count > 0 ? `Followed by ${row.followers_count} ${row.followers_count === 1 ? "person" : "people"}` : "New to Rhenko"],
+    })
+  )
+}
+
+function matchedFor(viewerId: string, now: number, perGroup: number): Suggestions {
   const viewer = get<{ country: string; area: string; area_key: string; suggest_nearby: number; suggest_language: number }>(
     "SELECT country, area, area_key, suggest_nearby, suggest_language FROM users WHERE id = ?",
     viewerId
@@ -190,7 +241,7 @@ export function suggestionsFor(viewerId: string, now: number, perGroup = 6): Sug
   const empty: Suggestions = {
     hasArea: false,
     hasLanguages: false,
-    groups: GROUP_ORDER.map((group) => ({ group, ...GROUP_TEXT[group], people: [] })),
+    groups: emptyGroups(),
   }
   if (!viewer) return empty
 
@@ -346,7 +397,7 @@ export function suggestionsFor(viewerId: string, now: number, perGroup = 6): Sug
     return { group, ...GROUP_TEXT[group], people: shown }
   })
 
-  return { hasArea, hasLanguages: languageRows.length > 0, groups }
+  return { hasArea, hasLanguages: languageRows.length > 0, groups: [...groups, { group: "starting", ...GROUP_TEXT.starting, people: [] }] }
 }
 
 // The names of up to three people the viewer follows who also follow this person, most followed first.

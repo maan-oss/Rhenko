@@ -8,6 +8,10 @@
 export type Language = { code: string; name: string; native: string }
 
 // ISO 639-1 codes. Names are in English, with the language's own name beside them.
+// The twelve most spoken languages. They are shown first, so the list is short for most people; every other language is
+// one search away.
+export const COMMON_LANGUAGE_CODES = ["en", "zh", "hi", "es", "fr", "ar", "bn", "pt", "ru", "ur", "id", "de"] as const
+
 export const LANGUAGES: readonly Language[] = [
   { code: "en", name: "English", native: "English" },
   { code: "es", name: "Spanish", native: "Español" },

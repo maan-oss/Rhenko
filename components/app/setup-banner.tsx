@@ -9,7 +9,7 @@ export function SetupBanner() {
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="text-[15px] font-semibold">Find people who are a good fit</p>
         <p className="text-[14px] leading-relaxed text-muted-foreground">
-          Add your city and the languages you speak. It takes about a minute, and every step can be skipped.
+          Add your city and languages. About a minute, and every step can be skipped.
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">

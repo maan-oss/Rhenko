@@ -167,7 +167,7 @@ async function connectionsFlow() {
   await check("with language suggestions off, Connect says so and offers no language swaps", async () => {
     await go(ana.page, "/connect", ana.page.getByRole("link", { name: "Where you are and your languages", exact: true }))
     assert.equal(await gone(ana.page.getByRole("region", { name: SWAPS })), 0, "a language swap is still suggested")
-    await ana.page.getByText("Language suggestions are off, so nobody is suggested as a language partner.").waitFor()
+    await ana.page.getByText("Language suggestions are off.", { exact: true }).waitFor()
   })
 
   await check("the data export lists the connection choices", async () => {
@@ -195,8 +195,10 @@ async function promptFlow() {
     await acted(dave.page, () => dave.page.getByRole("region", { name: SETUP_BANNER }).getByRole("button", { name: "Not now", exact: true }).click())
     await go(dave.page, "/", homeComposer(dave.page))
     assert.equal(await gone(dave.page.getByRole("region", { name: SETUP_BANNER })), 0, "the prompt is back after Not now")
-    await go(dave.page, "/connect", dave.page.getByText("Start with where you are", { exact: true }))
-    await dave.page.getByRole("link", { name: "Set up step by step", exact: true }).waitFor()
+    // Nothing matches Dave yet, so Connect shows people to start with, and says what is missing.
+    await go(dave.page, "/connect", dave.page.getByRole("region", { name: "People to start with" }))
+    await dave.page.getByRole("region", { name: "People to start with" }).locator("li").first().waitFor()
+    await dave.page.getByText("Add your city or town to see people nearby.", { exact: true }).waitFor()
   })
 }
 

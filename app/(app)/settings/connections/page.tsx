@@ -21,8 +21,7 @@ async function ConnectionsBody() {
       <PageHeader title="Connections and languages" backHref="/settings" />
       <div className="border-b border-border px-4 py-5">
         <p className="text-[15px] leading-relaxed text-muted-foreground">
-          What you set here decides who can be suggested to you, and who you are suggested to. Nothing is shown to anyone else
-          unless it is already public on your profile.{" "}
+          Change any of this at any time. Your town is never shown on your profile.{" "}
           <Link href="/transparency#connections" className="font-semibold text-foreground underline underline-offset-4">
             How suggestions work
           </Link>

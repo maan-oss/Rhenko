@@ -29,21 +29,18 @@ async function ConnectBody() {
   const settings = settingsFor(viewer.id)
   const groups = suggestions.groups.filter((group) => group.people.length > 0)
 
-  // Says what is missing, so an empty group is never a mystery.
+  // Says what is missing, in one short line each.
   const missing: string[] = []
   if (settings.country === "" || settings.area === "") missing.push("Add your city or town to see people nearby.")
-  else if (!settings.suggestNearby) missing.push("Nearby suggestions are off, so nobody is suggested for where they are.")
-  if (settings.speak.length === 0 && settings.learn.length === 0) missing.push("Add the languages you speak or are learning to find language partners.")
-  else if (!settings.suggestLanguage) missing.push("Language suggestions are off, so nobody is suggested as a language partner.")
+  else if (!settings.suggestNearby) missing.push("Nearby suggestions are off.")
+  if (settings.speak.length === 0 && settings.learn.length === 0) missing.push("Add a language to find language partners.")
+  else if (!settings.suggestLanguage) missing.push("Language suggestions are off.")
 
   return (
     <>
       <PageHeader title="Connect" />
       <div className="flex flex-col gap-4 border-b border-border px-4 py-5">
-        <p className="text-[15px] leading-relaxed">
-          People near you, people who speak your languages or are learning them, and people who write about what you follow. Each
-          card says why it is here.
-        </p>
+        <p className="text-[15px] leading-relaxed text-muted-foreground">Each card says why that person is here.</p>
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
           <Link href="/settings/connections" className="underline-offset-4 hover:underline">
             Where you are and your languages
@@ -55,19 +52,10 @@ async function ConnectBody() {
       </div>
 
       {groups.length === 0 ? (
-        <EmptyState
-          title={suggestions.hasArea || suggestions.hasLanguages ? "Nobody matches yet" : "Start with where you are"}
-          body={
-            suggestions.hasArea || suggestions.hasLanguages
-              ? "People show up here as they join, and as they post about the topics you follow."
-              : "Add your city or town and the languages you speak. Then people near you and language partners can appear here."
-          }
-        >
-          {suggestions.hasArea && suggestions.hasLanguages ? null : (
-            <Link href="/welcome" className={emptyActionClass("primary")}>
-              Set up step by step
-            </Link>
-          )}
+        <EmptyState title="Nobody to show yet" body="People appear here as they join. Add your city and languages to find people near you.">
+          <Link href="/welcome" className={emptyActionClass("primary")}>
+            Set up step by step
+          </Link>
         </EmptyState>
       ) : null}
 

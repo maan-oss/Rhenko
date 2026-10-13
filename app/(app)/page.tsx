@@ -1,10 +1,13 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { Sparkles, Users } from "lucide-react"
+import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
+import { suggestionsFor, topPeople } from "@/lib/connections"
 import { trendingTags, whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
+import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
 import { emptyActionClass } from "@/components/app/empty-state"
 import { MenuButton } from "@/components/app/menu-button"
@@ -14,6 +17,7 @@ import { TabLinks } from "@/components/app/tabs"
 import { Composer } from "@/components/app/composer"
 import { FeedList } from "@/components/app/feed-list"
 import { FeedSkeleton } from "@/components/app/feed-skeleton"
+import { FollowButton } from "@/components/app/follow-button"
 import { SetupBanner } from "@/components/app/setup-banner"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
@@ -79,16 +83,42 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
             ? "When people you follow post, their posts show up here."
             : "Write a post, or follow people and their posts will fill this page."
         }
-        emptyAction={empty ? following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty /> : undefined}
+        emptyAction={empty ? following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty viewerId={viewer.id} /> : undefined}
       />
     </>
   )
 }
 
-// An empty For you feed: write the first post, or go and find people.
-function ForYouEmpty() {
+// The time the page is read. Read after connection(), so the page is never built with a fixed clock.
+async function clock(): Promise<number> {
+  await connection()
+  return Date.now()
+}
+
+// An empty For you feed: a few people to start with, then write the first post or go and find people.
+async function ForYouEmpty({ viewerId }: { viewerId: string }) {
+  const people = topPeople(suggestionsFor(viewerId, await clock(), 4), 4)
   return (
     <>
+      {people.length > 0 ? (
+        <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border text-left">
+          <p className="px-4 pt-3 pb-1 text-sm font-semibold">Follow a few people to start</p>
+          <ul>
+            {people.map((person) => (
+              <li key={person.id} className="flex items-center gap-3 border-t border-border px-4 py-3">
+                <Link href={`/${person.handle}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={40} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{person.name}</span>
+                    <span className="block truncate text-[13px] text-muted-foreground">{person.reasons[0] ?? `@${person.handle}`}</span>
+                  </span>
+                </Link>
+                <FollowButton handle={person.handle} state="none" />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <ComposeAction>Write a post</ComposeAction>
       <Link href="/explore" className={emptyActionClass("secondary")}>
         Explore

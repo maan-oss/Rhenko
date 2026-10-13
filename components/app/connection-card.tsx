@@ -20,10 +20,25 @@ export function ConnectionCard({ person }: { person: SuggestedPerson }) {
         <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={48} />
       </Link>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Link href={`/${person.handle}`} className="min-w-0">
-          <span className="block truncate text-[15px] font-semibold">{person.name}</span>
-          <span className="block truncate text-[14px] text-muted-foreground">@{person.handle}</span>
-        </Link>
+        <div className="flex items-start justify-between gap-2">
+          <Link href={`/${person.handle}`} className="min-w-0">
+            <span className="block truncate text-[15px] font-semibold">{person.name}</span>
+            <span className="block truncate text-[14px] text-muted-foreground">@{person.handle}</span>
+          </Link>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await dismissSuggestion(person.id)
+                if (result.ok) setHidden(true)
+              })
+            }
+            className="-mt-1 -mr-2 inline-flex h-8 shrink-0 items-center rounded-full px-2.5 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
+          >
+            Not now
+          </button>
+        </div>
         {person.bio ? <p className="line-clamp-2 text-[14px] leading-relaxed">{person.bio}</p> : null}
         {first ? <p className="text-[13px] leading-relaxed text-foreground/80">{first}</p> : null}
         {second ? <p className="text-[13px] leading-relaxed text-muted-foreground">{second}</p> : null}
@@ -35,19 +50,6 @@ export function ConnectionCard({ person }: { person: SuggestedPerson }) {
           >
             Message
           </Link>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await dismissSuggestion(person.id)
-                if (result.ok) setHidden(true)
-              })
-            }
-            className="inline-flex h-8 items-center rounded-full px-3 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
-          >
-            Not now
-          </button>
         </div>
       </div>
     </li>

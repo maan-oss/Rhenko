@@ -2,7 +2,8 @@
 // database, and this file decides the group, the order and the reasons. Every reason shown to someone is one of the
 // facts below, so the transparency page can describe them exactly, and nothing else is used.
 
-export type Group = "exchange" | "nearby" | "mutual" | "language" | "interest"
+// "starting" is not a match: it holds people to start with when nothing matches yet, so a new account never sees an empty page.
+export type Group = "exchange" | "nearby" | "mutual" | "language" | "interest" | "starting"
 
 // The order the groups are shown in. A person is listed once, under the first group they qualify for.
 export const GROUP_ORDER: readonly Group[] = ["exchange", "nearby", "mutual", "language", "interest"]
@@ -13,6 +14,7 @@ export const GROUP_TEXT: Readonly<Record<Group, { title: string; description: st
   mutual: { title: "Followed by people you follow", description: "People you follow also follow them." },
   language: { title: "Speaks your languages", description: "Speaks a language you speak, or are learning." },
   interest: { title: "Writes about your topics", description: "Has posted lately about a topic you follow." },
+  starting: { title: "People to start with", description: "Not matched to you yet. Follow a few to fill your feed." },
 }
 
 const DAY = 24 * 60 * 60 * 1000
