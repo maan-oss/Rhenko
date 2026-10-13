@@ -871,27 +871,54 @@ function parseRankedCursor(cursor: string | undefined): { at: number; offset: nu
   return { at, offset }
 }
 
+// The viewer's own posts from the last hour lead the first page of For you, newest first, as on X, so a new post is
+// seen straight away. Ranking decides the rest of the feed, and these posts are kept out of it so none repeats.
+const OWN_POST_MS = 60 * 60 * 1000
+const OWN_POST_LIMIT = 3
+
+function ownRecentPosts(viewerId: string, now: number): CandidatePost[] {
+  const vis = visibilityClause(viewerId)
+  return all<CandidatePost>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
+     WHERE p.author_id = ? AND p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
+     ORDER BY p.created_at DESC LIMIT ?`,
+    viewerId,
+    now - OWN_POST_MS,
+    now,
+    ...vis.params,
+    OWN_POST_LIMIT
+  )
+}
+
 function forYouPage(viewerId: string, cursor: string | undefined, limit: number): Page<FeedItem> {
   const resume = parseRankedCursor(cursor)
   const at = resume?.at ?? Date.now()
   const offset = resume?.offset ?? 0
   const hidden = hiddenPosts(viewerId)
-  const ranked = rankedFor(viewerId, at).filter((c) => !hidden.has(c.postId))
+  const own = ownRecentPosts(viewerId, at).filter((post) => !hidden.has(post.post_id))
+  const ownIds = new Set(own.map((post) => post.post_id))
+  const ranked = rankedFor(viewerId, at).filter((c) => !hidden.has(c.postId) && !ownIds.has(c.postId))
   const slice = ranked.slice(offset, offset + limit)
   recordImpressions(
     viewerId,
     slice.map((c) => ({ postId: c.postId, source: c.source, features: featuresOf(c, at) })),
     Date.now()
   )
-  const rows: FeedRow[] = slice.map((c) => ({
-    key: c.key,
-    post_id: c.postId,
-    sort_at: c.at,
-    reposter_id: c.reposterId,
-    folder_id: null,
-  }))
+  const lead: FeedRow[] = offset === 0
+    ? own.map((post) => ({ key: `post:${post.post_id}`, post_id: post.post_id, sort_at: post.created_at, reposter_id: null, folder_id: null }))
+    : []
+  const rows: FeedRow[] = [
+    ...lead,
+    ...slice.map((c) => ({
+      key: c.key,
+      post_id: c.postId,
+      sort_at: c.at,
+      reposter_id: c.reposterId,
+      folder_id: null,
+    })),
+  ]
   const end = offset + slice.length
-  return { items: pageOf(rows, limit, viewerId).items, next: end < ranked.length ? `r1:${at}:${end}` : null }
+  return { items: pageOf(rows, rows.length, viewerId).items, next: end < ranked.length ? `r1:${at}:${end}` : null }
 }
 
 // Following: the viewer's own posts, posts and reposts from accounts they follow, and

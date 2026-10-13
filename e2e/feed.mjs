@@ -30,6 +30,21 @@ export async function run() {
   await guard("a post kept on screen counts as read", dwellCounts)
   await guard("a post a followed person liked reaches For you through them", socialPick)
   await guard("For you draws on every kind of history, and finds a topic post", everyPool)
+  await guard("a post the reader has just written leads For you, once", ownPostLeads)
+}
+
+// As on X, a post the reader has just written is the first thing on For you, and it is not repeated further down.
+async function ownPostLeads() {
+  const viewer = await createUser({ tag: "rfo" })
+  const text = unique("The reader's own new post")
+  await writePost(viewer.page, text)
+  await openHome(viewer.page)
+  await waitForPost(viewer.page, text, { reload: true })
+  await check("a post the reader has just written is first on For you, and appears once", async () => {
+    const texts = await viewer.page.locator("article").allInnerTexts()
+    assert.ok(texts[0]?.includes(text), "the reader's new post is not the first post on For you")
+    assert.equal(texts.filter((body) => body.includes(text)).length, 1, "the new post appears more than once on For you")
+  })
 }
 
 async function notInterested() {
