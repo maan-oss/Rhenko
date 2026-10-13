@@ -84,6 +84,7 @@ async function paymentFlows(mock) {
     await payer.page.getByText(/The badge renews/).waitFor({ timeout: TIMEOUT })
     const text = `Badge post ${RUN_ID}${randomWord(4)}`
     await writePost(payer.page, text)
+    await openProfile(payer.page, payer.handle)
     await waitForPost(payer.page, text)
     await openProfile(creator.page, payer.handle)
     await waitForPost(creator.page, text)
@@ -114,6 +115,7 @@ async function paymentFlows(mock) {
   const tipText = `Tip post ${RUN_ID}${randomWord(4)}`
   await check("a tip goes through Stripe, with Rhenko's share kept, and the creator sees it", async () => {
     await writePost(creator.page, tipText)
+    await openProfile(creator.page, creator.handle)
     await waitForPost(creator.page, tipText)
     await openProfile(tipper.page, creator.handle)
     await waitForPost(tipper.page, tipText)

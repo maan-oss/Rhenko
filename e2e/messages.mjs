@@ -265,7 +265,7 @@ async function groupFlow({ phone }) {
   await check(`${where}: Create group opens the conversation with its name, and the members see it in their list`, async () => {
     groupId = await createGroupChat(creator.page, { title: name, handles: [one.handle, two.handle] })
     await creator.page.getByRole("heading", { name, exact: true }).waitFor()
-    await creator.page.getByText("3 people").waitFor()
+    await creator.page.getByText("3 people", { exact: true }).waitFor()
     await openMessages(one.page)
     await one.page.locator("main").getByRole("link").filter({ hasText: name }).first().waitFor()
   })

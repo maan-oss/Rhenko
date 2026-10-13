@@ -562,12 +562,12 @@ async function topicsFlow({ phone }) {
     await notHere(reader.page, "/topics/not%20a%20topic")
   })
 
-  await check(`${where}: the trending topics on Home open a topic page`, async () => {
-    await openHome(reader.page)
-    const trending = reader.page.getByRole("navigation", { name: "Trending topics" })
+  await check(`${where}: the trending topics on Explore open a topic page`, async () => {
+    await go(reader.page, "/explore?tab=trending", reader.page.getByRole("heading", { name: "Trending topics", exact: true }))
+    const trending = reader.page.locator("section[aria-labelledby='trending-heading']")
     await trending.waitFor()
     const link = trending.getByRole("link").first()
-    const label = (await link.innerText()).trim()
+    const label = (await link.getByText(/^#/).first().innerText()).trim()
     assert.match(label, /^#\w+/, "the first trending topic is not a hashtag")
     await link.click()
     await reader.page.waitForURL((url) => url.pathname.startsWith("/topics/"))

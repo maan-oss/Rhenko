@@ -59,7 +59,7 @@ async function requestReset(page, account) {
   const form = formWithButton(page, "Send code")
   await fillField(form, "account", account)
   await acted(page, () => form.getByRole("button", { name: "Send code", exact: true }).click())
-  await page.getByText("If that account has a verified email, a code is on its way.").waitFor()
+  await page.getByText("If the account has a verified email, a code is on its way.").waitFor()
 }
 
 // The reset-password page: the email (when it is not filled in already), the mailed code and the new password.
