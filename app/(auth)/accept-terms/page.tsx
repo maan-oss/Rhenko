@@ -27,22 +27,25 @@ async function AcceptTermsBody() {
   if (viewer.termsVersion === TERMS_VERSION) redirect("/")
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[28px] font-semibold tracking-tight">Review the updated terms</h1>
+      <div className="settle mb-8 flex flex-col gap-2">
+        <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Updated terms</h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground">
-          We updated the Terms of Service and the Privacy Policy on {LEGAL_UPDATED}. Read them, then agree to keep using Rhenko.
+          Changed on {LEGAL_UPDATED}. Read them, then agree to keep using Rhenko.
         </p>
-        <p className="text-[15px] leading-relaxed text-muted-foreground">
-          The{" "}
-          <Link href="/terms" className="font-semibold text-foreground underline underline-offset-4">
-            Terms of Service
-          </Link>{" "}
-          say what you can post and what happens when a rule is broken. The{" "}
-          <Link href="/privacy" className="font-semibold text-foreground underline underline-offset-4">
-            Privacy Policy
-          </Link>{" "}
-          says what we keep, why, and for how long.
-        </p>
+      </div>
+      <div className="settle mb-8 grid grid-cols-2 gap-3" style={{ animationDelay: "60ms" }}>
+        <Link
+          href="/terms"
+          className="flex h-12 items-center justify-center rounded-xl border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
+        >
+          Terms
+        </Link>
+        <Link
+          href="/privacy"
+          className="flex h-12 items-center justify-center rounded-xl border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
+        >
+          Privacy Policy
+        </Link>
       </div>
       <AcceptTermsForm logoutButton={<LogOutForm />} />
     </>

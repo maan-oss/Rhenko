@@ -21,24 +21,22 @@ async function VerifyBody() {
   if (!user || !state?.enabled) redirect("/login")
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[28px] font-semibold tracking-tight">Enter your code</h1>
-        <p className="text-[15px] text-muted-foreground">
-          Two-factor sign-in is on for @{user.handle}. Enter a code to finish logging in.
-        </p>
+      <div className="settle mb-8 flex flex-col gap-2">
+        <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Enter your code</h1>
+        <p className="text-[15px] leading-relaxed text-muted-foreground">Two-factor is on for @{user.handle}.</p>
       </div>
       {state.usable ? null : (
-        <AuthNotice tone="warning">
+        <div className="mb-6"><AuthNotice tone="warning">
           This server can&apos;t check codes from your authenticator app right now, so two-factor sign-in with the app is
           unavailable for this account. Enter one of your recovery codes instead.
           {state.recoveryLeft === 0
             ? " You have none left, so ask the person who runs this server to turn two-factor sign-in off for you."
             : ` You have ${state.recoveryLeft} left.`}
-        </AuthNotice>
+        </AuthNotice></div>
       )}
       <VerifyCodeForm usable={state.usable} />
-      <p className="text-center text-sm text-muted-foreground">
-        <Link href="/login" className="font-semibold text-foreground underline underline-offset-4">
+      <p className="mt-8 text-center text-sm text-muted-foreground">
+        <Link href="/login" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
           Use a different account
         </Link>
       </p>

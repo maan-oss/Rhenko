@@ -29,43 +29,40 @@ async function ConnectBody() {
   const settings = settingsFor(viewer.id)
   const groups = suggestions.groups.filter((group) => group.people.length > 0)
 
-  // Says what is missing, in one short line each.
-  const missing: string[] = []
-  if (settings.country === "" || settings.area === "") missing.push("Add your city or town to see people nearby.")
-  else if (!settings.suggestNearby) missing.push("Nearby suggestions are off.")
-  if (settings.speak.length === 0 && settings.learn.length === 0) missing.push("Add a language to find language partners.")
-  else if (!settings.suggestLanguage) missing.push("Language suggestions are off.")
+  // What is missing, each with the one thing that fixes it. Settings is where both are changed.
+  const missing: { text: string; action: string }[] = []
+  if (settings.country === "" || settings.area === "") missing.push({ text: "Add your city or town to see people nearby.", action: "Add" })
+  else if (!settings.suggestNearby) missing.push({ text: "Nearby suggestions are off.", action: "Turn on" })
+  if (settings.speak.length === 0 && settings.learn.length === 0) missing.push({ text: "Add a language to find partners.", action: "Add" })
+  else if (!settings.suggestLanguage) missing.push({ text: "Language suggestions are off.", action: "Turn on" })
 
   return (
     <>
       <PageHeader title="Connect" />
-      <div className="flex flex-col gap-4 border-b border-border px-4 py-5">
-        <p className="text-[15px] leading-relaxed text-muted-foreground">Each card says why that person is here.</p>
-        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
-          <Link href="/settings/connections" className="underline-offset-4 hover:underline">
-            Where you are and your languages
-          </Link>
-          <Link href="/transparency#connections" className="underline-offset-4 hover:underline">
-            How suggestions work
-          </Link>
-        </div>
-      </div>
+      <nav aria-label="Connections" className="flex flex-wrap gap-2 border-b border-border px-4 py-4">
+        <Link href="/settings/connections" className={PILL}>
+          Where and languages
+        </Link>
+        <Link href="/transparency#connections" className={PILL}>
+          How it works
+        </Link>
+      </nav>
 
       {groups.length === 0 ? (
-        <EmptyState title="Nobody to show yet" body="People appear here as they join. Add your city and languages to find people near you.">
+        <EmptyState title="Nobody to show yet" body="Add where you are and your languages to find people.">
           <Link href="/welcome" className={emptyActionClass("primary")}>
-            Set up step by step
+            Set up
           </Link>
         </EmptyState>
       ) : null}
 
       {groups.map((group) => (
         <section key={group.group} aria-labelledby={`group-${group.group}`} className="border-b border-border">
-          <div className="px-4 pt-5 pb-3">
-            <h2 id={`group-${group.group}`} className="text-[18px] font-semibold tracking-tight">
+          <div className="px-4 pt-6 pb-2">
+            <h2 id={`group-${group.group}`} className="text-[17px] font-semibold tracking-tight">
               {group.title}
             </h2>
-            <p className="text-sm text-muted-foreground">{group.description}</p>
+            <p className="text-[14px] text-muted-foreground">{group.description}</p>
           </div>
           <ul className="divide-y divide-border">
             {group.people.map((person) => (
@@ -76,12 +73,22 @@ async function ConnectBody() {
       ))}
 
       {missing.length > 0 ? (
-        <section aria-label="What is missing" className="flex flex-col gap-2 px-4 py-6 text-[14px] leading-relaxed text-muted-foreground">
-          {missing.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
+        <section aria-label="To finish" className="px-4 pt-6 pb-10">
+          <ul className="divide-y divide-border rounded-2xl border border-border">
+            {missing.map((item) => (
+              <li key={item.text} className="flex items-center justify-between gap-4 px-4 py-3.5">
+                <span className="text-[14px] leading-snug">{item.text}</span>
+                <Link href="/settings/connections" className="shrink-0 text-[14px] font-semibold underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
+                  {item.action}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
     </>
   )
 }
+
+const PILL =
+  "inline-flex h-9 items-center rounded-full border border-border px-4 text-[14px] font-semibold transition-colors duration-200 hover:border-foreground/30 hover:bg-foreground/5"

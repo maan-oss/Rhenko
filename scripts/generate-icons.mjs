@@ -27,7 +27,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const source = path.join(root, "public", "icon.svg")
 const outDir = path.join(root, "public", "icons")
 
-const INK = "#1f1d1a"
+const INK = "#0a0a0a"
 // The part of a maskable icon that every platform mask keeps: a circle of 80% of the width.
 const SAFE_RADIUS = 0.4
 // The mark is lighter than every part of the tile, so a mid grey cleanly separates them.

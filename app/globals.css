@@ -50,115 +50,116 @@
   --color-destructive-foreground: var(--destructive-foreground);
 }
 
-/* Light: Claude's cream. Ink is a warm near-black, never a hue. */
+/* Light: black and white. Ink is pure black, the page is a near-white, and nothing is tinted. Dusk is the one colour. */
 :root {
-  --background: #f5f1e8;
-  --foreground: #1f1d1a;
-  --card: #fbf8f2;
-  --card-foreground: #1f1d1a;
-  --popover: #fbf8f2;
-  --popover-foreground: #1f1d1a;
-  --primary: #1f1d1a;
-  --primary-foreground: #f5f1e8;
-  --secondary: #ece6d8;
-  --secondary-foreground: #1f1d1a;
-  --muted: #ebe5d6;
-  --muted-foreground: #6b655a;
-  --accent: #ebe5d6;
-  --accent-foreground: #1f1d1a;
+  --background: #fafafa;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #fafafa;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f0f0f0;
+  --muted-foreground: #5f5f5f;
+  --accent: #f0f0f0;
+  --accent-foreground: #0a0a0a;
   --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: #ddd5c2;
-  --input: #d3caB5;
-  --ring: #8a8373;
-  /* The dusk accent: a twilight indigo for links, on-switches, the verified check and the reader's own messages. */
+  --border: #e5e5e5;
+  --input: #d4d4d4;
+  /* Focus rings and checked controls take the dusk accent, so the one colour shows where the eye should go. */
+  --ring: #3f4a7a;
+  /* The dusk accent: a twilight indigo for focus, links, on-switches, the verified check and the reader's own messages. */
   --dusk: #3f4a7a;
-  --chart-1: #1f1d1a;
-  --chart-2: #6b655a;
-  --chart-3: #9a9384;
-  --chart-4: #c4bcaa;
-  --chart-5: #e4dccb;
+  --chart-1: #0a0a0a;
+  --chart-2: #5f5f5f;
+  --chart-3: #8a8a8a;
+  --chart-4: #b8b8b8;
+  --chart-5: #e0e0e0;
   --radius: 0.75rem;
-  --sidebar: #efe9dc;
-  --sidebar-foreground: #1f1d1a;
-  --sidebar-primary: #1f1d1a;
-  --sidebar-primary-foreground: #f5f1e8;
-  --sidebar-accent: #e4ddcc;
-  --sidebar-accent-foreground: #1f1d1a;
-  --sidebar-border: #ddd5c2;
-  --sidebar-ring: #8a8373;
-  /* Metallic glass. Glass is a warm tint over the cream, metal is ink with a bright top edge. */
-  --sheen: #fffdf7;
-  --glass: rgb(251 248 242 / 0.7);
-  --glass-edge: rgb(255 255 255 / 0.85);
-  --glass-line: rgb(31 29 26 / 0.1);
-  --glass-shadow: rgb(31 29 26 / 0.22);
-  --metal-top: #4a4742;
-  --metal-mid: #1f1d1a;
-  --metal-bottom: #12110f;
-  --metal-text: #f5f1e8;
-  --chrome-fill: #fbf8f2;
+  --sidebar: #f3f3f3;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #0a0a0a;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #e8e8e8;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #3f4a7a;
+  /* Glass is white over the page, and metal is black with a bright top edge. */
+  --sheen: #ffffff;
+  --glass: rgb(255 255 255 / 0.72);
+  --glass-edge: rgb(255 255 255 / 0.9);
+  --glass-line: rgb(10 10 10 / 0.08);
+  --glass-shadow: rgb(10 10 10 / 0.16);
+  --metal-top: #2a2a2a;
+  --metal-mid: #0a0a0a;
+  --metal-bottom: #000000;
+  --metal-text: #fafafa;
+  --chrome-fill: #ffffff;
   /* Chrome for the sign-in art: a sky, a bright horizon line, a dark ground. Light theme is dark chrome. */
-  --art-top: #9c978e;
-  --art-mid: #f7f4ee;
+  --art-top: #a3a3a3;
+  --art-mid: #f5f5f5;
   --art-line: #ffffff;
-  --art-low: #1b1916;
-  --art-base: #4d4941;
+  --art-low: #151515;
+  --art-base: #4a4a4a;
 }
 
-/* Dark: ChatGPT's charcoal. */
+/* Dark: black and white inverted. The page is near-black, ink is near-white, and the dusk accent is lifted. */
 .dark {
-  --background: #212121;
-  --foreground: #ececec;
-  --card: #2b2b2b;
-  --card-foreground: #ececec;
-  --popover: #2b2b2b;
-  --popover-foreground: #ececec;
-  --primary: #ececec;
-  --primary-foreground: #212121;
-  --secondary: #2b2b2b;
-  --secondary-foreground: #ececec;
-  --muted: #2f2f2f;
-  --muted-foreground: #a8a8a8;
-  --accent: #2f2f2f;
-  --accent-foreground: #ececec;
+  --background: #0b0b0b;
+  --foreground: #f2f2f2;
+  --card: #141414;
+  --card-foreground: #f2f2f2;
+  --popover: #141414;
+  --popover-foreground: #f2f2f2;
+  --primary: #f2f2f2;
+  --primary-foreground: #0b0b0b;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #f2f2f2;
+  --muted: #1a1a1a;
+  --muted-foreground: #a0a0a0;
+  --accent: #1a1a1a;
+  --accent-foreground: #f2f2f2;
   --destructive: #ff8a80;
-  --destructive-foreground: #212121;
-  --border: #3d3d3d;
-  --input: #4a4a4a;
-  --ring: #8e8e8e;
+  --destructive-foreground: #0b0b0b;
+  --border: #262626;
+  --input: #3a3a3a;
+  --ring: #aeb8f2;
   /* The same accent lifted for the dark background. */
   --dusk: #aeb8f2;
-  --chart-1: #ececec;
-  --chart-2: #a8a8a8;
-  --chart-3: #7a7a7a;
-  --chart-4: #4d4d4d;
-  --chart-5: #353535;
-  --sidebar: #171717;
-  --sidebar-foreground: #ececec;
-  --sidebar-primary: #ececec;
-  --sidebar-primary-foreground: #212121;
-  --sidebar-accent: #2a2a2a;
-  --sidebar-accent-foreground: #ececec;
-  --sidebar-border: #2c2c2c;
-  --sidebar-ring: #8e8e8e;
-  /* Metallic glass on charcoal: a lifted tint, a light top edge, and a bright metal button. */
-  --sheen: #2e2e2e;
-  --glass: rgb(43 43 43 / 0.72);
-  --glass-edge: rgb(255 255 255 / 0.12);
-  --glass-line: rgb(255 255 255 / 0.09);
-  --glass-shadow: rgb(0 0 0 / 0.55);
+  --chart-1: #f2f2f2;
+  --chart-2: #a0a0a0;
+  --chart-3: #6e6e6e;
+  --chart-4: #3a3a3a;
+  --chart-5: #262626;
+  --sidebar: #0f0f0f;
+  --sidebar-foreground: #f2f2f2;
+  --sidebar-primary: #f2f2f2;
+  --sidebar-primary-foreground: #0b0b0b;
+  --sidebar-accent: #1c1c1c;
+  --sidebar-accent-foreground: #f2f2f2;
+  --sidebar-border: #1f1f1f;
+  --sidebar-ring: #aeb8f2;
+  /* Metallic glass on black: a lifted tint, a light top edge, and a bright metal button. */
+  --sheen: #161616;
+  --glass: rgb(20 20 20 / 0.72);
+  --glass-edge: rgb(255 255 255 / 0.1);
+  --glass-line: rgb(255 255 255 / 0.08);
+  --glass-shadow: rgb(0 0 0 / 0.6);
   --metal-top: #ffffff;
-  --metal-mid: #ececec;
-  --metal-bottom: #bdbdbd;
-  --metal-text: #212121;
-  --chrome-fill: #2b2b2b;
+  --metal-mid: #f2f2f2;
+  --metal-bottom: #c8c8c8;
+  --metal-text: #0b0b0b;
+  --chrome-fill: #141414;
   /* Dark theme is bright chrome: a white sky over a dark horizon and a light ground. */
-  --art-top: #f7f7f7;
-  --art-mid: #1c1c1c;
+  --art-top: #f5f5f5;
+  --art-mid: #141414;
   --art-line: #ffffff;
-  --art-low: #a3a3a3;
-  --art-base: #e6e6e6;
+  --art-low: #9a9a9a;
+  --art-base: #e8e8e8;
 }
 
 @layer base {
@@ -179,6 +180,24 @@
   h2,
   h3 {
     text-wrap: pretty;
+  }
+  /* Every button answers the pointer: it eases while hovered or pressed, and a press shrinks it a little. Utilities
+     with their own transition still win over these defaults. */
+  button:not(:disabled),
+  [role="button"],
+  a[href] {
+    transition-property: scale, background-color, border-color, color, opacity, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  button:not(:disabled):active,
+  [role="button"]:active {
+    scale: 0.97;
+  }
+  /* Keyboard focus is the dusk ring. Fields keep their border instead (see below). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
@@ -259,4 +278,30 @@ textarea:-webkit-autofill {
   to {
     transform: scaleX(0);
   }
+}
+
+/* Checkboxes and radios are not fields, so they keep a focus ring. */
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* A screen settles in: it rises a few pixels out of a soft blur. Used on sign-in and setup pages, and on any
+   content that appears after a choice. The reduced-motion rule above makes it instant for people who ask. */
+@keyframes settle {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    filter: blur(0);
+  }
+}
+
+@utility settle {
+  animation: settle 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }

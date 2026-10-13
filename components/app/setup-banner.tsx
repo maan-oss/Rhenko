@@ -18,7 +18,7 @@ export function SetupBanner() {
             Not now
           </button>
         </form>
-        <Link href="/welcome" className="inline-flex h-9 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-opacity hover:opacity-85">
+        <Link href="/welcome" className="inline-flex h-9 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-opacity hover:opacity-90">
           Set up
         </Link>
       </div>

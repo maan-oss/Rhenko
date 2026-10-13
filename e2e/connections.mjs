@@ -15,6 +15,9 @@ import { card, homeComposer, openProfile, writePost } from "./lib/posts.mjs"
 
 const TRANSLATE_ON = process.env.E2E_TRANSLATE === "1"
 const FRENCH_POST = "Je suis très content de la nouvelle application, et je pense que les gens sont vraiment gentils avec nous."
+// A town unique to this run, so accounts left by earlier runs in the same database are not the nearest people. Towns
+// take letters only.
+const TOWN = `Town ${RUN_ID.replace(/\d/g, "")}`
 const SWAPS = "Language swaps"
 const NEAR = "Near you"
 const SETUP_BANNER = "Set up your connections"
@@ -28,18 +31,18 @@ async function newAccount(tag, { phone = false, stay = false } = {}) {
   return { ...visitor, tag, handle, name }
 }
 
-// Picks a language by its name: search for it, then press its button ("I speak" or "Learning") on its row.
-async function pickLanguage(page, name, button) {
+// Picks a language by its name: open the list ("I speak" or "I'm learning"), search for it, then press its chip.
+async function pickLanguage(page, name, tab) {
+  await page.getByRole("tab", { name: new RegExp(`^${tab}`) }).click()
   const search = page.locator("#language-search")
   await search.fill(name)
-  const row = page.getByRole("list", { name: "Languages" }).getByRole("listitem").filter({ hasText: name }).first()
-  await row.getByRole("button", { name: button, exact: true }).click()
+  await page.getByRole("list", { name: "Languages" }).getByRole("button").filter({ hasText: name }).first().click()
   await search.fill("")
 }
 
 // Walks the four setup steps and finishes on Home. A step given no values is skipped, so a check can cover skipping too.
 async function setUp(page, { city, country = "AU", speak = [], learn = [], topics = [] }) {
-  await page.getByRole("heading", { name: "Where are you based?" }).waitFor()
+  await page.getByRole("heading", { name: "Where are you?" }).waitFor()
   if (city) {
     await ready(page.locator("#where-country"))
     await page.locator("#where-country").selectOption(country)
@@ -49,11 +52,11 @@ async function setUp(page, { city, country = "AU", speak = [], learn = [], topic
     await page.getByRole("button", { name: "Skip for now", exact: true }).click()
   }
 
-  await page.getByRole("heading", { name: "What languages do you speak?" }).waitFor()
+  await page.getByRole("heading", { name: "What do you speak?" }).waitFor()
   if (speak.length > 0 || learn.length > 0) {
     await ready(page.locator("#language-search"))
     for (const name of speak) await pickLanguage(page, name, "I speak")
-    for (const name of learn) await pickLanguage(page, name, "Learning")
+    for (const name of learn) await pickLanguage(page, name, "I'm learning")
     await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
   } else {
     await page.getByRole("button", { name: "Skip for now", exact: true }).click()
@@ -64,7 +67,7 @@ async function setUp(page, { city, country = "AU", speak = [], learn = [], topic
   await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
 
   await page.getByRole("heading", { name: "Meet people" }).waitFor()
-  await acted(page, () => page.getByRole("button", { name: "Finish", exact: true }).click())
+  await acted(page, () => page.getByRole("button", { name: "Open Rhenko", exact: true }).click())
   await page.waitForURL((url) => url.pathname === "/", { timeout: TIMEOUT })
   await homeComposer(page).waitFor()
 }
@@ -86,24 +89,24 @@ async function connectionsFlow() {
   const ana = await newAccount("ana", { stay: true })
   await check("sign-up opens the setup steps", async () => {
     assert.equal(new URL(ana.page.url()).pathname, "/welcome", "sign-up did not open the setup steps")
-    await ana.page.getByText("Step 1 of 4").waitFor()
+    await ana.page.locator('[role="progressbar"][aria-valuenow="1"]').waitFor()
   })
-  await check("the setup steps save where you are and your languages, and Finish opens Home", async () => {
-    await setUp(ana.page, { city: "Brisbane", speak: ["English"], learn: ["French"] })
+  await check("the setup steps save where you are and your languages, and Open Rhenko opens Home", async () => {
+    await setUp(ana.page, { city: TOWN, speak: ["English"], learn: ["French"] })
     assert.equal(await gone(ana.page.getByRole("region", { name: SETUP_BANNER })), 0, "the setup prompt is still on Home after setup")
   })
 
   // Two more people. Ben speaks French and learns English, so he is a language swap for Ana. Cal speaks Spanish and lives
   // in the same town, so he is a person nearby.
   const ben = await newAccount("ben", { stay: true })
-  await setUp(ben.page, { city: "Brisbane", speak: ["French"], learn: ["English"], topics: ["music"] })
+  await setUp(ben.page, { city: TOWN, speak: ["French"], learn: ["English"], topics: ["music"] })
   const cal = await newAccount("cal", { stay: true })
-  await setUp(cal.page, { city: "Brisbane", speak: ["Spanish"], topics: ["music"] })
+  await setUp(cal.page, { city: TOWN, speak: ["Spanish"], topics: ["music"] })
 
   await check("Connect groups people by why they match, and each card gives the reason", async () => {
     await go(ana.page, "/connect", ana.page.getByRole("region", { name: SWAPS }))
     assert.match(await cardIn(ana.page, SWAPS, ben.handle).innerText(), /Language swap: French for English/)
-    assert.match(await cardIn(ana.page, NEAR, cal.handle).innerText(), /In Brisbane, like you/)
+    assert.match(await cardIn(ana.page, NEAR, cal.handle).innerText(), new RegExp(`In ${TOWN}, like you`))
   })
 
   await check("Not now takes a suggestion away, and Settings brings it back", async () => {
@@ -131,7 +134,7 @@ async function connectionsFlow() {
     await openProfile(cal.page, ana.handle)
     const main = cal.page.locator("main")
     await main.getByText(/Speaks English \(fluent\)\. Learning French\./).waitFor()
-    assert.equal((await main.innerText()).includes("Brisbane"), false, "the profile shows the town")
+    assert.equal((await main.innerText()).includes(TOWN), false, "the profile shows the town")
   })
 
   await check(
@@ -154,9 +157,11 @@ async function connectionsFlow() {
 
   await check("Settings keep where you are and your languages after a reload", async () => {
     await go(ana.page, "/settings/connections", ana.page.locator("#where-area"))
-    assert.equal(await ana.page.locator("#where-area").inputValue(), "Brisbane", "the town was not kept")
+    assert.equal(await ana.page.locator("#where-area").inputValue(), TOWN, "the town was not kept")
     await ready(ana.page.locator("#language-partners"))
-    await ana.page.locator("#language-partners").uncheck()
+    // The switch is a visually hidden checkbox inside its row, so the row is pressed, the way a person presses it.
+    await ana.page.locator('label[for="language-partners"]').click()
+    assert.equal(await ana.page.locator("#language-partners").isChecked(), false, "the switch did not turn off")
     await acted(ana.page, () => ana.page.getByRole("button", { name: "Save languages", exact: true }).click())
     await toastText(ana.page, /^Saved your languages/)
 
@@ -165,7 +170,7 @@ async function connectionsFlow() {
   })
 
   await check("with language suggestions off, Connect says so and offers no language swaps", async () => {
-    await go(ana.page, "/connect", ana.page.getByRole("link", { name: "Where you are and your languages", exact: true }))
+    await go(ana.page, "/connect", ana.page.getByRole("link", { name: "Where and languages", exact: true }))
     assert.equal(await gone(ana.page.getByRole("region", { name: SWAPS })), 0, "a language swap is still suggested")
     await ana.page.getByText("Language suggestions are off.", { exact: true }).waitFor()
   })
@@ -175,7 +180,7 @@ async function connectionsFlow() {
     assert.equal(response.status(), 200, "the export did not download")
     const data = JSON.parse(readZip(await response.body()).get("data.json").toString("utf8"))
     const connections = data.connections
-    assert.equal(connections.where.cityOrTown, "Brisbane")
+    assert.equal(connections.where.cityOrTown, TOWN)
     assert.equal(connections.where.countryName, "Australia")
     assert.equal(connections.suggestLanguagePartners, false)
     assert.equal(connections.setup, "done")

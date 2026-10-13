@@ -21,15 +21,11 @@ async function SignupBody({ searchParams }: { searchParams: SearchParams }) {
   if (await getViewer()) redirect("/")
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[28px] font-semibold tracking-tight">Create your account</h1>
-        <p className="text-[15px] text-muted-foreground">It takes a minute. You can change your name later.</p>
-      </div>
-      {deleted ? <AuthNotice>Your account is deleted, along with its posts, messages and media.</AuthNotice> : null}
+      {deleted ? <div className="mb-8"><AuthNotice>Your account is deleted, along with its posts, messages and media.</AuthNotice></div> : null}
       <AuthForm mode="signup" />
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="mt-8 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-foreground underline underline-offset-4">
+        <Link href="/login" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
           Log in
         </Link>
       </p>

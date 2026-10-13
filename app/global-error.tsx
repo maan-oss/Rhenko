@@ -7,11 +7,11 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
     <html lang="en">
       <head>
         <style>{`
-          body { margin: 0; min-height: 100dvh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; background: #f5f1e8; color: #1f1d1a; }
+          body { margin: 0; min-height: 100dvh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; background: #fafafa; color: #0a0a0a; }
           main { max-width: 420px; padding: 24px; }
           h1 { font-size: 22px; margin: 0 0 8px; }
-          p { margin: 0 0 16px; color: #6b655a; }
-          button { height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: #1f1d1a; color: #f5f1e8; font-weight: 600; cursor: pointer; }
+          p { margin: 0 0 16px; color: #5f5f5f; }
+          button { height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: #0a0a0a; color: #fafafa; font-weight: 600; cursor: pointer; }
           .ref { margin: 16px 0 0; font-size: 13px; }
           @media (prefers-color-scheme: dark) {
             body { background: #171717; color: #ececec; }

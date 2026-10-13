@@ -42,12 +42,14 @@ export function DateField({
   defaultValue = "",
   placeholder = "Pick a date",
   max,
+  onChange,
 }: {
   id: string
   name: string
   defaultValue?: string
   placeholder?: string
   max?: string
+  onChange?: (value: string) => void
 }) {
   const panelId = useId()
   const today = new Date()
@@ -93,6 +95,7 @@ export function DateField({
   function choose(day: number) {
     const parts = { year: view.year, month: view.month, day }
     setSelected(parts)
+    onChange?.(format(parts))
     setOpen(false)
     setYearList(false)
   }
@@ -113,9 +116,9 @@ export function DateField({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
-        className="group flex h-12 w-full items-center gap-3 rounded-2xl border border-border bg-background px-4 text-left text-[15px] transition-colors hover:border-muted-foreground/60 focus-visible:border-foreground focus-visible:outline-none aria-expanded:border-foreground"
+        className="group flex h-12 w-full items-center gap-3 rounded-xl border border-border bg-card px-4 text-left text-base outline-none transition-[border-color,box-shadow] duration-200 hover:border-foreground/30 focus-visible:border-foreground focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)] aria-expanded:border-foreground aria-expanded:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
       >
-        <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
+        <CalendarDays className="size-[18px] text-muted-foreground" aria-hidden="true" />
         <span className={cn("flex-1", selected ? "text-foreground" : "text-muted-foreground")}>
           {selected ? readable(selected) : placeholder}
         </span>

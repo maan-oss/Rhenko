@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { X } from "lucide-react"
+import { motion } from "motion/react"
+import { Check } from "lucide-react"
 import { COMMON_LANGUAGE_CODES, LANGUAGES, SPEAK_LEVELS, type SpeakLevel } from "@/lib/languages"
 import { AREA_MAX, COUNTRIES } from "@/lib/places"
 import { cn } from "@/lib/utils"
@@ -9,22 +10,23 @@ import { cn } from "@/lib/utils"
 // The fields for where someone is and what they speak. Used by sign-up setup and by Settings, so both read the same.
 
 export const FIELD =
-  "h-12 w-full min-w-0 rounded-2xl border border-border bg-background px-4 text-[15px] outline-none transition-colors placeholder:text-muted-foreground hover:border-muted-foreground/60 focus:border-foreground"
+  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
 
 export const SMALL_FIELD =
-  "h-11 w-full min-w-0 rounded-xl border border-border bg-background px-3 text-[15px] outline-none transition-colors placeholder:text-muted-foreground hover:border-muted-foreground/60 focus:border-foreground"
+  "h-11 w-full min-w-0 rounded-xl border border-border bg-card px-3.5 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
 
-export function Label({ htmlFor, children, hint }: { htmlFor?: string; children: React.ReactNode; hint?: React.ReactNode }) {
+export function Label({ htmlFor, children, aside }: { htmlFor?: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-h-5 items-baseline justify-between gap-3">
       <label htmlFor={htmlFor} className="text-sm font-semibold">
         {children}
       </label>
-      {hint ? <p className="text-[13px] leading-relaxed text-muted-foreground">{hint}</p> : null}
+      {aside}
     </div>
   )
 }
 
+// A switch that is the whole row, so a tap anywhere on it turns it on or off.
 export function SwitchRow({
   id,
   checked,
@@ -39,17 +41,30 @@ export function SwitchRow({
   hint: string
 }) {
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border px-4 py-3.5">
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-[3px] size-4 shrink-0 cursor-pointer accent-foreground"
-      />
-      <span className="flex flex-col gap-0.5">
+    <label
+      htmlFor={id}
+      className="group flex cursor-pointer items-center gap-4 rounded-xl border border-border bg-card px-4 py-3.5 transition-colors duration-200 hover:border-foreground/30"
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-[15px] font-semibold">{title}</span>
-        <span className="text-[13px] leading-relaxed text-muted-foreground">{hint}</span>
+        <span className="text-[13px] leading-snug text-muted-foreground">{hint}</span>
+      </span>
+      <span className="relative inline-flex h-6 w-10 shrink-0">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="peer sr-only"
+        />
+        <span aria-hidden="true" className="absolute inset-0 rounded-full bg-border transition-colors duration-200 peer-checked:bg-dusk peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring" />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute top-[3px] left-[3px] size-[18px] rounded-full bg-background shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]",
+            checked && "translate-x-4"
+          )}
+        />
       </span>
     </label>
   )
@@ -59,25 +74,33 @@ export type WhereValue = { country: string; area: string; suggestNearby: boolean
 
 export function WhereFields({ value, onChange }: { value: WhereValue; onChange: (next: WhereValue) => void }) {
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <Label htmlFor="where-country">Country</Label>
-        <select
-          id="where-country"
-          value={value.country}
-          onChange={(event) => onChange({ ...value, country: event.target.value })}
-          className={cn(FIELD, "appearance-auto pr-3")}
-        >
-          <option value="">Choose a country</option>
-          {COUNTRIES.map((country) => (
-            <option key={country.code} value={country.code}>
-              {country.name}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            id="where-country"
+            value={value.country}
+            onChange={(event) => onChange({ ...value, country: event.target.value })}
+            className={cn(FIELD, "appearance-none pr-10")}
+          >
+            <option value="">Choose a country</option>
+            {COUNTRIES.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+          <svg aria-hidden="true" viewBox="0 0 12 12" className="pointer-events-none absolute top-1/2 right-4 size-3 -translate-y-1/2 text-muted-foreground">
+            <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="where-area" hint="A city or town only. Never a street address or postcode.">
+        <Label
+          htmlFor="where-area"
+          aside={value.area.length >= AREA_MAX - 6 ? <span className="text-[13px] tabular-nums text-muted-foreground">{value.area.length}/{AREA_MAX}</span> : null}
+        >
           City or town
         </Label>
         <input
@@ -95,7 +118,7 @@ export function WhereFields({ value, onChange }: { value: WhereValue; onChange: 
         checked={value.suggestNearby}
         onChange={(checked) => onChange({ ...value, suggestNearby: checked })}
         title="Suggest me to people nearby"
-        hint="Only shown to people nearby who turn this on too. Your town is never on your profile."
+        hint="Only people nearby who turn this on too."
       />
     </div>
   )
@@ -104,14 +127,12 @@ export function WhereFields({ value, onChange }: { value: WhereValue; onChange: 
 export type SpeakItem = { code: string; level: SpeakLevel }
 export type LanguageValue = { speak: SpeakItem[]; learn: string[]; suggestLanguage: boolean }
 
-const CHIP_BASE =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors duration-200"
-const CHIP_ON = "border-foreground bg-foreground text-background"
-const CHIP_OFF = "border-border hover:bg-foreground/5"
+type Tab = "speak" | "learn"
 
-// Two lists of languages: the ones spoken (each with a level) and the ones being learned. A language is in one list
-// only, so choosing it in one takes it out of the other.
+// Two lists: the languages a person speaks, each with a level, and the ones they are learning. A language is in one
+// list only. The tabs choose which list a tap changes; the chips show what is in each.
 export function LanguageFields({ value, onChange }: { value: LanguageValue; onChange: (next: LanguageValue) => void }) {
+  const [tab, setTab] = useState<Tab>("speak")
   const [query, setQuery] = useState("")
   const spoken = useMemo(() => new Set(value.speak.map((item) => item.code)), [value.speak])
   const learning = useMemo(() => new Set(value.learn), [value.learn])
@@ -122,16 +143,14 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
     return LANGUAGES.filter((language) => language.name.toLowerCase().includes(needle) || language.native.toLowerCase().includes(needle))
   }, [query])
 
-  function toggleSpeak(code: string) {
-    if (spoken.has(code)) {
-      onChange({ ...value, speak: value.speak.filter((item) => item.code !== code) })
-    } else {
-      onChange({ ...value, speak: [...value.speak, { code, level: "fluent" }], learn: value.learn.filter((item) => item !== code) })
-    }
-  }
-
-  function toggleLearn(code: string) {
-    if (learning.has(code)) {
+  function toggle(code: string) {
+    if (tab === "speak") {
+      if (spoken.has(code)) {
+        onChange({ ...value, speak: value.speak.filter((item) => item.code !== code) })
+      } else {
+        onChange({ ...value, speak: [...value.speak, { code, level: "fluent" }], learn: value.learn.filter((item) => item !== code) })
+      }
+    } else if (learning.has(code)) {
       onChange({ ...value, learn: value.learn.filter((item) => item !== code) })
     } else {
       onChange({ ...value, learn: [...value.learn, code], speak: value.speak.filter((item) => item.code !== code) })
@@ -143,61 +162,95 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
   }
 
   const nameOf = (code: string) => LANGUAGES.find((language) => language.code === code)?.name ?? code
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: "speak", label: "I speak", count: value.speak.length },
+    { id: "learn", label: "I'm learning", count: value.learn.length },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
+      <div role="tablist" aria-label="Language lists" className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1">
+        {tabs.map((item) => {
+          const active = tab === item.id
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(item.id)}
+              className={cn(
+                "relative h-10 rounded-full text-[14px] font-semibold transition-colors duration-200",
+                active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {active ? (
+                <motion.span
+                  layoutId="language-tab"
+                  className="absolute inset-0 rounded-full bg-background shadow-sm"
+                  transition={{ type: "spring", stiffness: 520, damping: 42 }}
+                />
+              ) : null}
+              <span className="relative inline-flex items-center gap-1.5">
+                {item.label}
+                {item.count > 0 ? <span className="tabular-nums text-muted-foreground">{item.count}</span> : null}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
       <div className="flex flex-col gap-3">
-        <Label htmlFor="language-search">Find a language</Label>
         <input
           id="language-search"
           type="search"
           value={query}
-          placeholder="Search by name"
+          placeholder="Search languages"
+          aria-label="Search languages"
           onChange={(event) => setQuery(event.target.value)}
           className={SMALL_FIELD}
         />
-        {query.trim() === "" ? <p className="text-[13px] text-muted-foreground">The most spoken. Search for any other.</p> : null}
-        <ul aria-label="Languages" className="flex max-h-72 flex-col overflow-y-auto rounded-2xl border border-border">
+        <ul aria-label="Languages" className="flex flex-wrap gap-2">
           {shown.map((language) => {
-            const isSpoken = spoken.has(language.code)
-            const isLearning = learning.has(language.code)
+            const inTab = tab === "speak" ? spoken.has(language.code) : learning.has(language.code)
+            const inOther = tab === "speak" ? learning.has(language.code) : spoken.has(language.code)
+            const native = language.native.toLowerCase() !== language.name.toLowerCase()
             return (
-              <li key={language.code} className="flex items-center gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-medium">{language.name}</span>
-                  {language.native.toLowerCase() !== language.name.toLowerCase() ? (
-                    <span className="block truncate text-[13px] text-muted-foreground">{language.native}</span>
-                  ) : null}
-                </span>
+              <li key={language.code}>
                 <button
                   type="button"
-                  aria-pressed={isSpoken}
-                  onClick={() => toggleSpeak(language.code)}
-                  className={cn(CHIP_BASE, isSpoken ? CHIP_ON : CHIP_OFF)}
+                  aria-pressed={inTab}
+                  onClick={() => toggle(language.code)}
+                  className={cn(
+                    "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition-[background-color,border-color,color] duration-200",
+                    inTab
+                      ? "border-foreground bg-foreground text-background"
+                      : inOther
+                        ? "border-dusk/60 text-foreground hover:bg-foreground/5"
+                        : "border-border hover:border-foreground/30 hover:bg-foreground/5"
+                  )}
                 >
-                  I speak
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={isLearning}
-                  onClick={() => toggleLearn(language.code)}
-                  className={cn(CHIP_BASE, isLearning ? CHIP_ON : CHIP_OFF)}
-                >
-                  Learning
+                  {inTab ? <Check className="size-3.5" strokeWidth={3} aria-hidden="true" /> : null}
+                  <span>{language.name}</span>
+                  {native ? <span className={cn("text-[13px]", inTab ? "text-background/70" : "text-muted-foreground")}>{language.native}</span> : null}
+                  {inOther ? <span aria-hidden="true" className="size-1.5 rounded-full bg-dusk" /> : null}
                 </button>
               </li>
             )
           })}
-          {shown.length === 0 ? <li className="px-4 py-6 text-center text-[14px] text-muted-foreground">No language matches that search.</li> : null}
         </ul>
+        {shown.length === 0 ? <p className="py-4 text-center text-[14px] text-muted-foreground">No language matches that.</p> : null}
+        {query.trim() === "" ? (
+          <p className="text-[13px] text-muted-foreground">Most spoken. Search for the rest.</p>
+        ) : null}
       </div>
 
       {value.speak.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold">How well you speak</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-semibold">How well</p>
           <ul className="flex flex-col gap-2">
             {value.speak.map((item) => (
-              <li key={item.code} className="flex items-center gap-2 rounded-2xl border border-border py-2 pr-2 pl-4">
+              <li key={item.code} className="flex items-center gap-3 rounded-xl border border-border bg-card py-2 pr-2 pl-4">
                 <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{nameOf(item.code)}</span>
                 <label htmlFor={`level-${item.code}`} className="sr-only">
                   How well you speak {nameOf(item.code)}
@@ -206,7 +259,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
                   id={`level-${item.code}`}
                   value={item.level}
                   onChange={(event) => setLevel(item.code, event.target.value as SpeakLevel)}
-                  className="h-9 rounded-lg border border-border bg-background px-2 text-[14px]"
+                  className="h-9 rounded-lg border border-border bg-background px-2.5 text-[14px] outline-none transition-colors hover:border-foreground/30 focus:border-foreground"
                 >
                   {SPEAK_LEVELS.map((level) => (
                     <option key={level.id} value={level.id}>
@@ -216,32 +269,11 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
                 </select>
                 <button
                   type="button"
-                  onClick={() => toggleSpeak(item.code)}
+                  onClick={() => toggle(item.code)}
                   aria-label={`Remove ${nameOf(item.code)}`}
-                  className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                  className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
                 >
-                  <X className="size-4" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {value.learn.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold">Learning</p>
-          <ul className="flex flex-wrap gap-2">
-            {value.learn.map((code) => (
-              <li key={code} className="inline-flex h-9 items-center gap-1 rounded-full border border-border pr-1 pl-3.5 text-[14px] font-medium">
-                {nameOf(code)}
-                <button
-                  type="button"
-                  onClick={() => toggleLearn(code)}
-                  aria-label={`Stop learning ${nameOf(code)}`}
-                  className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-                >
-                  <X className="size-4" aria-hidden="true" />
+                  <span aria-hidden="true" className="text-lg leading-none">×</span>
                 </button>
               </li>
             ))}
@@ -254,7 +286,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
         checked={value.suggestLanguage}
         onChange={(checked) => onChange({ ...value, suggestLanguage: checked })}
         title="Suggest me as a language partner"
-        hint="Shown to people you could practise with, when they turn this on too."
+        hint="Only people who also turn this on see you."
       />
     </div>
   )

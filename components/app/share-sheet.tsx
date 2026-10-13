@@ -68,10 +68,10 @@ const EMBED_CARD = [
   "padding:16px 18px",
   "max-width:550px",
   "box-sizing:border-box",
-  "border:1px solid #ddd5c2",
+  "border:1px solid #e5e5e5",
   "border-radius:16px",
-  "background:#f5f1e8",
-  "color:#1f1d1a",
+  "background:#fafafa",
+  "color:#0a0a0a",
   "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
   "font-size:16px",
   "font-style:normal",
@@ -81,8 +81,8 @@ const EMBED_CARD = [
   "quotes:none",
 ].join(";")
 const EMBED_TEXT = "margin:0 0 12px;white-space:pre-line;overflow-wrap:anywhere"
-const EMBED_BYLINE = "margin:0;font-size:14px;line-height:1.4;color:#6b655a"
-const EMBED_LINK = "color:#1f1d1a;font-weight:600;text-decoration:underline"
+const EMBED_BYLINE = "margin:0;font-size:14px;line-height:1.4;color:#5f5f5f"
+const EMBED_LINK = "color:#0a0a0a;font-weight:600;text-decoration:underline"
 
 function embedCode(post: SharePost, link: string): string {
   const text = post.body.trim()

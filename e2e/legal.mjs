@@ -143,9 +143,7 @@ async function signUpBox() {
       const valid = await visitor.page.locator("input[name=agree]").evaluate((element) => element.checkValidity())
       assert.equal(valid, false, "the box is not required")
       const text = await bodyText(visitor.page)
-      assert.match(text, /I am 18 or older, and I agree to the/)
-      assert.match(text, /Terms of Service/)
-      assert.match(text, /Privacy Policy/)
+      assert.match(text, /I am 18 or older, and I agree to the Terms and the Privacy Policy/)
     })
   } finally {
     await closeVisitor(visitor)
@@ -159,7 +157,7 @@ async function agreementScreen() {
       await execute("UPDATE users SET terms_version = NULL WHERE handle = ? COLLATE NOCASE", user.handle)
       await user.page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
       await user.page.waitForURL((url) => new URL(url).pathname === "/accept-terms", { timeout: TIMEOUT })
-      await user.page.getByRole("heading", { name: "Review the updated terms" }).waitFor()
+      await user.page.getByRole("heading", { name: "Updated terms" }).waitFor()
       await user.page.getByRole("button", { name: "Log out instead", exact: true }).waitFor()
     })
     await check("the agreement screen keeps the box required, and the app opens once it is ticked", async () => {

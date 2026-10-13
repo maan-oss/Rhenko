@@ -44,16 +44,36 @@ export async function pickBirthday(page, date) {
   await dialog.waitFor({ state: "detached" })
 }
 
-// Fills the whole sign-up form. A field set to null is left empty, and the agreement box is ticked unless agree is false.
+// Presses the Continue button of the screen that is showing. The button must be on: the page keeps a screen with a
+// refused value where it is.
+// Continue on the first two screens only moves the form along in the page, so nothing is posted to the server.
+async function continueScreen(page) {
+  await page.locator("[data-step]:visible").getByRole("button", { name: "Continue", exact: true }).click()
+}
+
+// Fills the sign-up form, one screen at a time: name and handle, then birthday and optional email, then password and
+// the agreement box. A field set to null is left empty, and the agreement box is ticked unless agree is false. The
+// screens do not move on past a value the page refuses.
 export async function fillSignup(page, { name, handle, birthday, password, email, agree = true }) {
   await ready(page.locator("input[name=handle]"))
   await page.locator("input[name=name]").fill(name ?? "")
   await page.locator("input[name=handle]").fill(handle ?? "")
+  await continueScreen(page)
+  await ready(page.locator("#field-birthday"))
   if (birthday) await pickBirthday(page, birthday)
-  await page.locator("input[name=password]").fill(password ?? "")
   if (email) await page.locator("input[name=email]").fill(email)
+  await continueScreen(page)
+  await ready(page.locator("input[name=password]"))
+  await page.locator("input[name=password]").fill(password ?? "")
   // The age and terms box is required. A test that leaves it empty says so with agree: false.
   if (agree) await page.locator("input[name=agree]").check()
+}
+
+// Sends the sign-up form as it is, with every screen's button turned on so a refused value reaches the server.
+async function sendSignup(page) {
+  const create = page.locator("[data-step]:visible").getByRole("button", { name: "Create account", exact: true })
+  await create.evaluate((element) => (element.disabled = false))
+  await acted(page, () => create.click())
 }
 
 // After a form posts: where did the person end up? Waits for the page to move on, or for an error to show.
@@ -64,7 +84,8 @@ async function settleAuth(page, { timeout = TIMEOUT } = {}) {
     if (path === "/") return { ok: true, step: "home" }
     if (path === "/welcome") return { ok: true, step: "welcome" }
     if (path === "/login/verify") return { ok: true, step: "verify" }
-    const alert = page.locator('form [role="alert"]').first()
+    // Only what is on screen counts: a screen the form has moved away from can still hold an old message.
+    const alert = page.locator('form [role="alert"]:visible').first()
     if ((await alert.count()) > 0) {
       const error = (await alert.innerText()).replace(/\s+/g, " ").trim()
       if (error) return { ok: false, error }
@@ -74,11 +95,31 @@ async function settleAuth(page, { timeout = TIMEOUT } = {}) {
   throw new Error(`the form neither moved on nor showed an error; the page is at ${page.url()}`)
 }
 
-// Submits the sign-up form once and reports what happened.
+// The date as the form's hidden birthday field holds it.
+function isoDate({ year, month, day }) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+// Submits the sign-up form once and reports what the server said. The page will not move past a screen whose value it
+// refuses, so the form is filled with valid values as a person would type them. The handle and birthday are then
+// changed in the form's own fields before it is sent, which is how a value the page refuses reaches the server.
 export async function trySignUp(page, fields) {
   await go(page, "/signup", page.locator("input[name=handle]"))
-  await fillSignup(page, fields)
-  await acted(page, () => page.getByRole("button", { name: "Create account", exact: true }).click())
+  const { handle, birthday, ...rest } = fields
+  await fillSignup(page, { ...rest, handle: randomHandle("form"), birthday: GROWN_UP })
+  await page.evaluate(
+    ({ handle, birthday }) => {
+      for (const [name, value] of [
+        ["handle", handle],
+        ["birthday", birthday],
+      ]) {
+        const input = document.querySelector(`[name="${name}"]`)
+        if (input) input.value = value
+      }
+    },
+    { handle: handle ?? "", birthday: birthday ? isoDate(birthday) : "" }
+  )
+  await sendSignup(page)
   return settleAuth(page)
 }
 

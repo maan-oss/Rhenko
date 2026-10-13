@@ -10,10 +10,10 @@ export const GROUP_ORDER: readonly Group[] = ["exchange", "nearby", "mutual", "l
 
 export const GROUP_TEXT: Readonly<Record<Group, { title: string; description: string }>> = {
   exchange: { title: "Language swaps", description: "You can each help the other practise a language." },
-  nearby: { title: "Near you", description: "In the same city or town as you. You have both turned this on." },
-  mutual: { title: "Followed by people you follow", description: "People you follow also follow them." },
-  language: { title: "Speaks your languages", description: "Speaks a language you speak, or are learning." },
-  interest: { title: "Writes about your topics", description: "Has posted lately about a topic you follow." },
+  nearby: { title: "Near you", description: "Same city or town, and you both turned it on." },
+  mutual: { title: "Followed by people you follow", description: "People you follow follow them too." },
+  language: { title: "Speaks your languages", description: "Speaks a language you speak or are learning." },
+  interest: { title: "Writes about your topics", description: "Recently posted about a topic you follow." },
   starting: { title: "People to start with", description: "Not matched to you yet. Follow a few to fill your feed." },
 }
 

@@ -11,17 +11,17 @@ import { logout } from "@/actions/auth"
 export function AcceptTermsForm({ logoutButton }: { logoutButton?: ReactNode }) {
   const [state, formAction] = useActionState(acceptTerms, {} as LegalState)
   return (
-    <div className="flex flex-col gap-6">
-      <form action={formAction} className="flex flex-col gap-5">
-        <label className="flex items-start gap-3 text-[14px] leading-relaxed">
-          <input type="checkbox" name="agree" required className="mt-[3px] size-4 shrink-0 cursor-pointer accent-foreground" />
+    <div className="settle flex flex-col gap-6" style={{ animationDelay: "120ms" }}>
+      <form action={formAction} className="flex flex-col gap-6">
+        <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed">
+          <input type="checkbox" name="agree" required className="mt-[3px] size-4 shrink-0 cursor-pointer accent-dusk" />
           <span>
-            I have read and agree to the{" "}
-            <Link href="/terms" target="_blank" className="font-semibold underline underline-offset-4">
-              Terms of Service
+            I agree to the{" "}
+            <Link href="/terms" target="_blank" className="font-semibold underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">
+              Terms
             </Link>{" "}
             and the{" "}
-            <Link href="/privacy" target="_blank" className="font-semibold underline underline-offset-4">
+            <Link href="/privacy" target="_blank" className="font-semibold underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">
               Privacy Policy
             </Link>
             .
@@ -45,7 +45,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="h-12 w-full rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+      className="h-12 w-full rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {pending ? "Saving…" : "Agree and continue"}
     </button>
@@ -58,7 +58,7 @@ export function LogOutForm() {
     <form action={logout}>
       <button
         type="submit"
-        className="h-12 w-full rounded-full border border-border text-[15px] font-semibold transition-colors hover:bg-foreground/5"
+        className="h-12 w-full rounded-full border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
       >
         Log out instead
       </button>

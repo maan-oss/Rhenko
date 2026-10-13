@@ -18,7 +18,7 @@ import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { IconTabs, TabLinks } from "@/components/app/tabs"
-import { RhenkoSymbol } from "@/components/brand/symbol"
+import { RhenkoR } from "@/components/brand/symbol"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
@@ -115,7 +115,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           // eslint-disable-next-line @next/next/no-img-element
           <img src={`/media/${profile.bannerFile}?w=1280`} alt="" decoding="async" className="size-full object-cover" />
         ) : (
-          <RhenkoSymbol className="absolute -top-6 -right-10 size-56 text-foreground opacity-[0.07]" />
+          <RhenkoR className="absolute -top-6 -right-10 size-56 text-foreground opacity-[0.06]" />
         )}
         <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_30%,var(--background)_100%)]" />
       </div>

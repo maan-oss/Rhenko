@@ -34,10 +34,12 @@ function WhereSection({ initial }: { initial: WhereValue }) {
   }
   return (
     <section aria-labelledby="where-heading" className="flex flex-col gap-5 border-b border-border px-4 py-6">
-      <h2 id="where-heading" className="text-lg font-semibold">
-        Where you are
-      </h2>
-      <p className="text-[14px] leading-relaxed text-muted-foreground">Used to suggest people nearby.</p>
+      <div className="flex flex-col gap-1.5">
+        <h2 id="where-heading" className="text-lg font-semibold">
+          Where you are
+        </h2>
+        <p className="text-[14px] leading-relaxed text-muted-foreground">Used to suggest people nearby.</p>
+      </div>
       <WhereFields value={value} onChange={setValue} />
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -67,12 +69,14 @@ function LanguageSection({ initial }: { initial: LanguageValue }) {
   }
   return (
     <section aria-labelledby="languages-heading" className="flex flex-col gap-5 border-b border-border px-4 py-6">
-      <h2 id="languages-heading" className="text-lg font-semibold">
-        Languages
-      </h2>
-      <p className="text-[14px] leading-relaxed text-muted-foreground">
-        Languages you speak show on your profile. Languages you are learning are only used to find partners.
-      </p>
+      <div className="flex flex-col gap-1.5">
+        <h2 id="languages-heading" className="text-lg font-semibold">
+          Languages
+        </h2>
+        <p className="text-[14px] leading-relaxed text-muted-foreground">
+          Languages you speak show on your profile. Learning ones are only for finding partners.
+        </p>
+      </div>
       <LanguageFields value={value} onChange={setValue} />
       {error ? (
         <p role="alert" className="text-sm text-destructive">

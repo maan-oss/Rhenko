@@ -2,7 +2,7 @@
 import { area, assert, check, guard, need, note } from "./lib/harness.mjs"
 import { BASE, PASSWORD, RUN_ID, TIMEOUT, randomHandle } from "./lib/env.mjs"
 import { closeVisitor, newTab, newVisitor } from "./lib/browser.mjs"
-import { GROWN_UP, createUser, dateBefore, fillSignup, readableDate, signIn, signOut, trySignIn, trySignUp } from "./lib/accounts.mjs"
+import { GROWN_UP, createUser, dateBefore, fillSignup, pickBirthday, readableDate, signIn, signOut, trySignIn, trySignUp } from "./lib/accounts.mjs"
 import { Authenticator } from "./lib/totp.mjs"
 import { acted, bodyText, go, ready, toastText } from "./lib/ui.mjs"
 
@@ -32,19 +32,38 @@ export async function run() {
 async function signUpRules() {
   const visitor = await newVisitor({ label: "signup" })
   const { page } = visitor
-  await check("sign-up page lists the rules for handle, age and password in plain text", async () => {
+  await check("each sign-up screen states its rule in plain text, and asks one thing", async () => {
     await go(page, "/signup", page.locator("input[name=handle]"))
-    for (const label of ["Display name", "Handle", "Date of birth", "Password"]) {
-      await page.getByText(label, { exact: true }).first().waitFor()
+    for (const label of ["Name", "Handle"]) {
+      await page.locator(`label[for="field-${label.toLowerCase()}"]`).waitFor()
     }
-    const text = await bodyText(page)
-    assert.match(text, /3 to 15 characters/i, "the handle rule is not on the page")
-    assert.match(text, /18 or older/i, "the age rule is not on the page")
-    assert.match(text, /8 characters/i, "the password rule is written only as a placeholder or not at all; it must be visible text")
+    assert.match(await bodyText(page), /3 to 15 letters/i, "the handle rule is not on the first screen")
+    await page.locator("input[name=name]").fill("Rule Check")
+    await page.locator("input[name=handle]").fill(randomHandle("rules"))
+    await page.locator("[data-step]:visible").getByRole("button", { name: "Continue", exact: true }).click()
+    await page.locator("#field-birthday").waitFor()
+    assert.match(await bodyText(page), /18 or older/i, "the age rule is not on the birthday screen")
+    await pickBirthday(page, GROWN_UP)
+    await page.locator("[data-step]:visible").getByRole("button", { name: "Continue", exact: true }).click()
+    await page.locator("input[name=password]").waitFor()
+    assert.match(await bodyText(page), /8 characters/i, "the password rule is written only as a placeholder or not at all; it must be visible text")
+  })
+
+  await check("the Continue button stays off until the screen is valid, and a screen with a bad handle does not move on", async () => {
+    await go(page, "/signup", page.locator("input[name=handle]"))
+    const next = page.locator("[data-step]:visible").getByRole("button", { name: "Continue", exact: true })
+    assert.equal(await next.isDisabled(), true, "Continue is on before the name and handle are filled in")
+    await page.locator("input[name=name]").fill("Ab")
+    await page.locator("input[name=handle]").fill("ab")
+    await page.locator('[role="alert"]').filter({ hasText: /at least 3 characters/i }).first().waitFor({ timeout: 5000 })
+    assert.equal(await next.isDisabled(), true, "Continue is on for a handle that is too short")
+    await page.locator("input[name=handle]").fill("abc")
+    assert.equal(await next.isDisabled(), false, "Continue stays off for a valid handle")
   })
 
   await check("sign-up page links to the terms and the privacy policy, and both pages open", async () => {
     await go(page, "/signup", page.locator("input[name=handle]"))
+    await fillSignup(page, validFields())
     for (const [name, path] of [
       [/terms/i, "/terms"],
       [/privacy/i, "/privacy"],
@@ -128,7 +147,7 @@ async function signUpRules() {
     const result = await trySignUp(page, { ...adult, password: "abcd1234" })
     assert.equal(result.ok, true, `sign-up of an 18 year old failed: ${result.error}`)
     assert.equal(result.step, "welcome", "a new account did not open the setup steps")
-    await page.getByRole("heading", { name: "Where are you based?" }).waitFor()
+    await page.getByRole("heading", { name: "Where are you?" }).waitFor()
   })
 
   await check("the date picker shows the date that was chosen", async () => {
