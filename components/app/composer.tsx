@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { CalendarClock, ImageIcon, ListChecks, Plus, Save, Trash2, X } from "lucide-react"
+import { CalendarClock, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
@@ -89,7 +89,7 @@ const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline
 // that opens a dialog.
 const REPLY_PICKER_PHONE = "max-sm:[&_button[aria-haspopup=dialog]]:size-10"
 const EMOJI_PHONE =
-  "max-sm:static max-sm:[&>button]:size-10 max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
+  "max-sm:static max-sm:[&>button]:size-9 max-[389px]:[&>button]:size-8 max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
 // The emoji list opens upward. Near the top of the page there is no room above the toolbar, so it opens downward.
 const EMOJI_BELOW = "[&_[role=dialog]]:top-11 [&_[role=dialog]]:bottom-auto"
 const EMOJI_LIST_HEIGHT = 300
@@ -184,7 +184,7 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled && hint ? hint : label}
       className={cn(
-        "grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent sm:size-8",
+        "grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[389px]:size-8 sm:size-8",
         pressed && "bg-foreground/5"
       )}
     >
@@ -331,6 +331,8 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           : threading
             ? "Post all"
             : "Post"
+  // On a phone the submit button shows an icon instead of its words while it sends or schedules, because "Scheduling" is too wide for the row.
+  const iconOnlyPhone = sending || scheduling
 
   useEffect(() => {
     if (autoFocus || (id && window.location.hash === `#${id}`)) textareaRef.current?.focus()
@@ -842,7 +844,7 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           </div>
         ) : null}
 
-        <div ref={toolbarRef} className="relative flex flex-wrap items-center gap-x-0.5 gap-y-1 pt-1">
+        <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
           <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
             <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
           </ToolButton>
@@ -880,7 +882,7 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
             }}
           />
 
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1 pl-1 sm:gap-2 sm:pl-0">
             {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
             {!isReply && !threading ? (
               <button
@@ -889,7 +891,7 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
                 disabled={!canDraft}
                 aria-label="Save draft"
                 title="Save draft"
-                className="chrome-ring grid size-10 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                className="chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[389px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
               >
                 <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
                 <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
@@ -898,9 +900,19 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
             <button
               type="submit"
               disabled={!canPost}
-              className="metal h-10 rounded-full px-4 text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:h-9 sm:px-5"
+              className={cn(
+                "metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
+                iconOnlyPhone ? "w-9 max-[389px]:w-8 sm:w-auto" : "px-3.5"
+              )}
             >
-              {label}
+              {iconOnlyPhone ? (
+                sending ? (
+                  <LoaderCircle className="size-[17px] animate-spin sm:hidden" strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <CalendarClock className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
+                )
+              ) : null}
+              <span className={iconOnlyPhone ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
             </button>
           </div>
         </div>

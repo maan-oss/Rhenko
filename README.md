@@ -92,13 +92,13 @@ The scripts read the same database as the app, and the server can keep running w
 - A one-line status (up to 40 characters) set in Settings. It shows beside your name in the sidebar and as a pill on your profile.
 
 **Home and posts**
-- The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. A row of trending topics sits above the composer and links to `/topics/[tag]`.
-- Tabs across the app show an icon and a name. Every tab is the same size. The active tab is a solid fill (black on a light page, white on a dark one), and choosing another tab moves only that fill.
+- The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. Trending topics are in the right-hand column and on Explore, and link to `/topics/[tag]`.
+- Tabs show only their icon, except the active one, which also shows its name. Choosing a tab folds the old name back to its icon, then opens the new tab's name. The solid fill (black on a light page, white on a dark one) slides across to the chosen tab.
 - The composer posts text up to 25,000 characters, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
 - Long posts fold after their opening lines, with Show more and Show less. Posts can use **bold**, *italic* and ~~strike~~. A mark must touch its text, so "2 * 3 * 4" stays as written.
 - Threads: Add to thread adds another part under the first post. The parts post in order, each answering the one before, and a later part links back with Show this thread. Threads post right away, so they can't be drafted or scheduled.
 - The first link in a post shows a card with the page's title and description. The server reads each page once, refuses private and local addresses, and connects only to the address it checked.
-- Under the text are icon buttons for photos, poll, emoji and schedule. A "Who can reply" pill sits at the top right of the composer. It shows the current choice (everyone, accounts you follow, or accounts you mention), and opens an animated card with the three choices and a Done button. A "Mark media as sensitive" toggle appears when it applies. Replies inherit the post's settings.
+- Under the text, on one row to the left of Save draft and Post, are icon buttons for photos, poll, add to thread, emoji and schedule. The row stays on one line from 360 pixels wide up, with slightly smaller icons below 390 pixels. While a post sends or is scheduled, the phone button shows an icon in place of its words. A "Who can reply" pill sits at the top right of the composer. It shows the current choice (everyone, accounts you follow, or accounts you mention), and opens an animated card with the three choices and a Done button. A "Mark media as sensitive" toggle appears when it applies. Replies inherit the post's settings.
 - Schedule picks a date and a quarter-hour time. The server checks the time is far enough ahead and reports a problem as a toast. Scheduled posts go live within 15 seconds of their time.
 - Save draft keeps a new post on `/drafts` without publishing it. Cmd or Ctrl with Enter posts.
 - Posts with two or more photos or videos show as a carousel. Hover the post for the arrows, use the arrow keys once it has focus, swipe on a phone, or pick a dot.
@@ -113,7 +113,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Post view counts. The author's view count opens that post's analytics page.
 
 **Profiles and relationships**
-- A banner that fades into the page and a circle avatar. The tabs are icons with the name on hover and for screen readers: Posts, Replies, Media, Reposts and Likes (visible only to the account's owner). Highlights sits inside Posts as a second option. Empty tabs say so in the middle of the page.
+- A banner that fades into the page and a circle avatar. The tabs show only their icon, except the active one, which also shows its name. Each tab keeps its name for screen readers: Posts, Replies, Media, Reposts and Likes (visible only to the account's owner). Highlights sits inside Posts as a second option. Empty tabs say so in the middle of the page.
 - Posts holds the account's own posts. Reposts have their own tab, so they no longer mix in with posts.
 - A profile lists the people you follow who also follow it ("Followed by …"). The Message button sits below that line.
 - Follow, unfollow, and follow requests for protected accounts. Protected accounts show only to approved followers.
@@ -132,7 +132,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Likes, reposts, replies, quotes, follows, mentions, poll results, follow requests, and new posts from accounts you've switched alerts on for. Each kind has an on/off switch in Settings → Notifications.
 - Mentions can be limited to verified accounts in Settings → Notifications.
 - Each row shows the kind of notification as a small badge on the avatar, with the time under the name and a preview of the post when there is one. Unread rows are shaded and carry a dot.
-- The tabs show an icon and a name. The solid fill of the active tab slides to the one you pick.
+- The tabs show an icon, and the active one also shows its name. The solid fill slides to the one you pick.
 
 **Messages**
 - Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave. Anyone who doesn't follow the creator gets an invite and joins once they accept.

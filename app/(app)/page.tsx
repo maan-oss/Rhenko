@@ -4,7 +4,7 @@ import { Sparkles, Users } from "lucide-react"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { suggestionsFor, topPeople } from "@/lib/connections"
-import { trendingTags, whoToFollow } from "@/lib/data"
+import { whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
 import { Avatar } from "@/components/app/avatar"
@@ -22,9 +22,6 @@ import { SetupBanner } from "@/components/app/setup-banner"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
-const CHIP =
-  "glass inline-flex h-10 shrink-0 items-center rounded-full px-3.5 text-[14px] font-semibold transition-colors duration-200 hover:bg-foreground/5 sm:h-9"
-
 export default function HomePage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <Suspense fallback={<FeedSkeleton />}>
@@ -40,7 +37,6 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const spec: FeedSpec = { kind: "home", mode }
   const page = feedFor(spec, viewer.id)
   const following = mode === "following"
-  const tags = trendingTags(8)
   const empty = page.items.length === 0 && !page.next
   return (
     <>
@@ -58,18 +54,6 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         }
       />
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
-      {tags.length > 0 ? (
-        <nav aria-label="Trending topics" className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tags.map(({ tag }) => (
-            <Link key={tag} href={`/topics/${encodeURIComponent(tag)}`} className={`${CHIP} text-foreground`}>
-              #{tag}
-            </Link>
-          ))}
-          <Link href="/explore?tab=trending" className={`${CHIP} text-muted-foreground`}>
-            All topics
-          </Link>
-        </nav>
-      ) : null}
       <Composer viewer={viewer} placeholder="What's happening?" id="compose" />
       <FeedList
         key={mode}
