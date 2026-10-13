@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
-import { Bell, Bookmark, ChartNoAxesColumn, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
+import { Bell, Bookmark, ChartNoAxesColumn, CircleDot, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { TabFill } from "@/components/app/tabs"
@@ -34,6 +34,7 @@ export function buildItems(notifications: number, messages: number): NavItemConf
     { href: "/messages", label: "Messages", Icon: MessageCircle, badge: messages, filled: true, active: (p) => p.startsWith("/messages"), mobile: true },
     { href: "/bookmarks", label: "Bookmarks", Icon: Bookmark, filled: true, active: (p) => p.startsWith("/bookmarks"), mobile: false },
     { href: "/lists", label: "Lists", Icon: List, filled: false, active: (p) => p.startsWith("/lists"), mobile: false },
+    { href: "/circles", label: "Circles", Icon: CircleDot, filled: false, active: (p) => p.startsWith("/circles"), mobile: false },
     { href: "/drafts", label: "Drafts", Icon: FileText, filled: false, active: (p) => p.startsWith("/drafts"), mobile: false },
     { href: "/analytics", label: "Analytics", Icon: ChartNoAxesColumn, filled: false, active: (p) => p.startsWith("/analytics"), mobile: false },
     { href: "/settings", label: "Settings", Icon: Settings, filled: false, active: (p) => p.startsWith("/settings"), mobile: false },

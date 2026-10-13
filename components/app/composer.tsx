@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { CalendarClock, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
@@ -32,10 +32,16 @@ import { cn } from "@/lib/utils"
 // Post sends now, Schedule waits for a time, and Save draft keeps it for later.
 // A reply takes its reply setting from the post it answers, so a reply has no "Who can reply" choice, no schedule and no draft.
 
+type CircleOption = { id: string; name: string }
+
 type ComposerProps = {
   viewer: AvatarUser
   replyToId?: string
   quoteOfId?: string
+  // A circle page passes its own circle, so the post goes there. The home composer passes the circles the viewer is in,
+  // and the author picks one or none.
+  circle?: CircleOption
+  circles?: CircleOption[]
   placeholder: string
   id?: string
   compact?: boolean
@@ -280,9 +286,10 @@ function tokenBefore(text: string, caret: number): { token: string; start: numbe
   return { token: match[2], start: caret - match[2].length }
 }
 
-export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compact = false, autoFocus = false, onPosted }: ComposerProps) {
+export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeholder, id, compact = false, autoFocus = false, onPosted }: ComposerProps) {
   const router = useRouter()
   const [text, setText] = useState("")
+  const [circleChoice, setCircleChoice] = useState("")
   const [caret, setCaret] = useState(0)
   const [media, setMedia] = useState<Attachment[]>([])
   const [poll, setPoll] = useState(false)
@@ -506,6 +513,8 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
     }
     if (replyToId) body.set("replyTo", replyToId)
     if (quoteOfId) body.set("quoteOf", quoteOfId)
+    const inCircle = circle?.id ?? (circleChoice || null)
+    if (inCircle && !replyToId) body.set("circle", inCircle)
     if (!isReply) body.set("replySetting", replySetting)
     if (media.length > 0 && sensitive) body.set("sensitive", "on")
     if (draft) body.set("draft", "on")
@@ -844,6 +853,31 @@ export function Composer({ viewer, replyToId, quoteOfId, placeholder, id, compac
           </div>
         ) : null}
 
+        {!isReply && circle ? (
+          <p className="flex items-center gap-1.5 pt-1 text-sm text-muted-foreground">
+            <CircleDot className="size-4" aria-hidden="true" />
+            Posting in <span className="font-semibold text-foreground">{circle.name}</span>
+          </p>
+        ) : null}
+        {!isReply && !circle && circles && circles.length > 0 ? (
+          <label className="flex items-center gap-2 pt-1 text-sm">
+            <CircleDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-muted-foreground">Post in</span>
+            <select
+              aria-label="Post in"
+              value={circleChoice}
+              onChange={(event) => setCircleChoice(event.target.value)}
+              className={cn(FIELD, "h-9 min-w-0 max-w-[16rem] flex-1 text-sm sm:flex-none")}
+            >
+              <option value="">Everyone (no circle)</option>
+              {circles.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
           <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
             <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />

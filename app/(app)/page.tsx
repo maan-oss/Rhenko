@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Sparkles, Users } from "lucide-react"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
+import { circlesFor } from "@/lib/circles"
 import { suggestionsFor, topPeople } from "@/lib/connections"
 import { whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -54,7 +55,12 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         }
       />
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
-      <Composer viewer={viewer} placeholder="What's happening?" id="compose" />
+      <Composer
+        viewer={viewer}
+        placeholder="What's happening?"
+        id="compose"
+        circles={circlesFor(viewer.id).map((circle) => ({ id: circle.id, name: circle.name }))}
+      />
       <FeedList
         key={mode}
         items={page.items}

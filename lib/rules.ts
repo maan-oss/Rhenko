@@ -177,6 +177,19 @@ export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as c
 
 export const MAX_LIST_NAME = 25
 export const MAX_LIST_DESCRIPTION = 100
+
+// Circles. The charter is the circle's own rules, shown before anyone joins.
+export const MAX_CIRCLE_NAME = 50
+export const MAX_CIRCLE_TAGLINE = 120
+export const MAX_CIRCLE_CHARTER = 1000
+export const MAX_CIRCLE_QUESTION = 160
+export const MAX_CIRCLE_ANSWER = 500
+export const CIRCLE_ACCESS = ["open", "request", "closed"] as const
+export type CircleAccess = (typeof CIRCLE_ACCESS)[number]
+
+export function asCircleAccess(value: unknown): CircleAccess | null {
+  return (CIRCLE_ACCESS as readonly unknown[]).includes(value) ? (value as CircleAccess) : null
+}
 export const MAX_MUTED_WORD = 50
 export const MAX_GROUP_TITLE = 50
 export const MAX_GROUP_MEMBERS = 50

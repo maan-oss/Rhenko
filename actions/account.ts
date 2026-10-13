@@ -32,6 +32,7 @@ import {
   statusProblem,
 } from "@/lib/account-rules"
 import { hangUpFor } from "@/lib/call-state"
+import { releaseCirclesOf } from "@/lib/circles"
 import { endSubscriptionsAtPeriodEnd } from "@/lib/payments"
 import { all, get, run, transaction } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
@@ -409,9 +410,11 @@ function eraseAccount(userId: string): void {
       "SELECT avatar_file, banner_file FROM users WHERE id = ?",
       userId
     )
+    // Circles the account owns pass on or close before its row goes, so none is left without an owner.
+    const circleFiles = releaseCirclesOf(userId)
     run("DELETE FROM sessions WHERE user_id = ?", userId)
     run("DELETE FROM users WHERE id = ?", userId)
-    return [...postFiles, ...messageFiles, profile?.avatar_file ?? null, profile?.banner_file ?? null]
+    return [...postFiles, ...messageFiles, ...circleFiles, profile?.avatar_file ?? null, profile?.banner_file ?? null]
   })
   removeFiles(files.filter((file): file is string => file !== null))
 }

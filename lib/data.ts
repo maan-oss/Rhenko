@@ -56,6 +56,8 @@ export type PostCore = {
   replyToHandle: string | null
   threadId: string | null
   quoteOfId: string | null
+  // The circle the post was written in, shown as a label. Null for an ordinary post.
+  circle: { slug: string; name: string } | null
   // The language the post is written in, as a code, or "" when it is not clear. Read by the translate button.
   lang: string
   // The first link in the post, with what its page says, once it has been read.
@@ -111,6 +113,8 @@ type PostRow = {
   reply_to_id: string | null
   thread_id: string | null
   quote_of_id: string | null
+  circle_slug: string | null
+  circle_name: string | null
   reply_setting: string
   reply_to_handle: string | null
   author_id: string
@@ -180,17 +184,24 @@ function termClause(term: string): { sql: string; param: Param } {
 // A post hidden by moderation (removed_at) is gone for everyone, its author included, until it is restored.
 const LIVE = "p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL"
 
+// A post in a circle is shown to the circle's members and to its author. Posts in an open or ask-to-join circle are public
+// like any other post. It takes the viewer's id twice: once for the author, once for membership.
+const CIRCLE_VISIBLE = `(p.community_id IS NULL OR p.author_id = ?
+    OR EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND (c.access <> 'closed'
+      OR EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = ?))))`
+
 // Direct-access visibility for one viewer, applied to posts (alias p) and their authors (alias au). canSeePost and
-// visiblePostIds share it, so a post, its quote and its media follow one rule. It takes the viewer's id seven times.
+// visiblePostIds share it, so a post, its quote and its media follow one rule. It takes the viewer's id nine times.
 const CAN_SEE = `((p.is_draft = 0 AND p.publish_at IS NULL) OR p.author_id = ?)
   AND p.removed_at IS NULL
   AND au.deactivated_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = au.id) OR (b.blocker_id = au.id AND b.blocked_id = ?))
   AND (p.hidden_by_parent = 0 OR p.author_id = ? OR EXISTS (SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?))
-  AND (au.protected = 0 OR au.id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = au.id))`
+  AND (au.protected = 0 OR au.id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = au.id))
+  AND ${CIRCLE_VISIBLE}`
 
 function canSeeParams(viewerId: string): Param[] {
-  return [viewerId, viewerId, viewerId, viewerId, viewerId, viewerId, viewerId]
+  return [viewerId, viewerId, viewerId, viewerId, viewerId, viewerId, viewerId, viewerId, viewerId]
 }
 
 // One page of rows, newest first by a timestamp column, strictly older than `beforeAt` (null starts at the newest).
@@ -225,6 +236,7 @@ function visibilityClause(viewerId: string): { sql: string; params: Param[] } {
     AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = au.id)
     AND (p.hidden_by_parent = 0 OR p.author_id = ? OR EXISTS (SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?))
     AND (au.protected = 0 OR au.id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = au.id))
+    AND ${CIRCLE_VISIBLE}
     ${wordClauses}`
   return {
     sql,
@@ -236,6 +248,8 @@ function visibilityClause(viewerId: string): { sql: string; params: Param[] } {
       viewerId, // hidden reply: the parent's author
       viewerId, // protected: the viewer's own account
       viewerId, // protected: follows
+      viewerId, // circle: the post's author
+      viewerId, // circle: the viewer's membership
       ...words.map((w) => likePattern(w.toLowerCase())),
     ],
   }
@@ -309,7 +323,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   const marks = ids.map(() => "?").join(",")
   const rows = all<PostRow>(
     `SELECT p.id, p.body, p.lang, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
-       p.reply_setting, p.thread_id,
+       p.reply_setting, p.thread_id, c.slug AS circle_slug, c.name AS circle_name,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
        u.paid_verified AS author_paid_verified,
@@ -338,6 +352,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
        ) AS has_note
      FROM posts p
      JOIN users u ON u.id = p.author_id
+     LEFT JOIN communities c ON c.id = p.community_id
      WHERE p.id IN (${marks})`,
     viewerId, // tippable: the viewer is not the author
     viewerId, // liked
@@ -389,6 +404,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       threadId: r.thread_id,
       preview: linkOf.has(r.id) ? (previews.get(linkOf.get(r.id) ?? "") ?? null) : null,
       quoteOfId: r.quote_of_id,
+      circle: r.circle_slug ? { slug: r.circle_slug, name: r.circle_name ?? "" } : null,
       replySetting,
       canReply,
       poll: polls.get(r.id) ?? null,
@@ -1075,6 +1091,15 @@ export function listFeed(listId: string, viewerId: string, cursor?: string, limi
   return feedPage(source, [listId, listId], cursor, limit, viewerId)
 }
 
+// The posts written in a circle, newest first. Replies stay in the thread they are part of, so only original posts and
+// thread continuations are listed. The visibility rule then decides which of them this viewer can see.
+export function circleFeed(circleId: string, viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
+  const source = `
+    SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
+    FROM posts p WHERE ${AUTHORED} AND p.community_id = ?`
+  return feedPage(source, [circleId], cursor, limit, viewerId)
+}
+
 export function topicFeed(tag: string, viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
   const normalized = normalizeTag(tag)
   const source = `
@@ -1577,6 +1602,7 @@ export function trendingTags(limit = 6): { tag: string; count: number }[] {
     const rows = all<{ body: string }>(
       `SELECT p.body FROM posts p JOIN users u ON u.id = p.author_id
        WHERE p.created_at > ? AND ${LIVE} AND u.deactivated_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND c.access = 'closed')
        ORDER BY p.created_at DESC LIMIT 2000`,
       weekAgo
     )

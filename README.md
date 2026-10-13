@@ -152,6 +152,11 @@ The scripts read the same database as the app, and the server can keep running w
 **Lists**
 - Lists with members, a public or private setting, and a timeline for each list. Private lists can't be followed, and anyone else sees the same "This page is not here" page as for a list that doesn't exist.
 
+**Circles**
+- A circle is a small group with a name, a one-line tagline, and a charter of its own rules, which people read before they join. Each circle is open (anyone can join), ask to join (applicants answer the circle's question, and the owner approves or declines each one), or invite only (the owner adds people by handle).
+- Posts made in a circle carry its name. An invite-only circle's posts, replies and charter are shown only to its members, and stay out of For you, search, and direct links for everyone else.
+- The owner manages the circle from its Settings tab: the charter, access, the question, the requests, and deletion. Deleting an open circle keeps its posts as ordinary posts. Deleting an invite-only circle deletes its posts, because only its members could see them. When an account is deleted, its circles pass to the member who joined first, or close if nobody else is in them.
+
 **Bookmarks**
 - Bookmarks can be sorted into folders. Deleting a folder keeps its bookmarks.
 
@@ -188,5 +193,5 @@ The scripts read the same database as the app, and the server can keep running w
 - Email codes need SMTP. Without it, in production, the email features say they are not set up.
 - Scheduled posts are published by the 15-second tick, so a post can be up to 15 seconds late.
 - The likes tab shows only to the account's owner, matching X's default.
-- Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs. Drafts and scheduled posts are reached from the Drafts icon.
+- Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs. Circles have their own page in the navigation, and a post is put in a circle from the composer on Home or from the circle itself. Drafts and scheduled posts are reached from the Drafts icon.
 - Not included: ads and ad billing, premium tiers and payments, tip jar, the AI assistant, Spaces, jobs, articles, live video and shopping. Each needs its own product, payment or safety work before it can be offered safely here.

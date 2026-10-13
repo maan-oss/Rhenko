@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getViewer, newId } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost, canSeePost, editHistoryFor, visiblePostIds, type EditVersion } from "@/lib/data"
+import { memberRole } from "@/lib/circles"
 import { notify } from "@/lib/notify"
 import { hidePost } from "@/lib/moderation"
 import { mediaFilesFor, removeFiles, replyPermission, startPollClock, thread } from "@/lib/post-writes"
@@ -74,6 +75,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const scheduleAt = scheduleRaw && !draft ? Number(scheduleRaw) : null
   const replyTo = text(formData.get("replyTo"))
   const quoteOf = text(formData.get("quoteOf"))
+  // The circle a post is written in. The composer sends it for a post made on a circle page or picked in the composer.
+  const circleId = text(formData.get("circle"))
   // A thread continues the author's own post: threadOf is the first post of the thread, and replyTo the post before this one.
   const threadOf = text(formData.get("threadOf"))
 
@@ -96,14 +99,27 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
 
   // The post this answers or quotes is checked before any file is saved.
   let replySetting: ReplySetting = asReplySetting(text(formData.get("replySetting")))
+  let replyCircle: string | null = null
   if (replyTo !== null) {
     if (draft || scheduleAt !== null) return { ok: false, error: "Replies go out right away, so they can't be saved as drafts or scheduled." }
     const permission = isId(replyTo) ? replyPermission(viewer.id, replyTo) : { ok: false as const, error: POST_UNAVAILABLE }
     if (!permission.ok) return { ok: false, error: permission.error }
     // A reply takes the reply setting of the post it answers.
     replySetting = permission.setting
+    replyCircle = get<{ community_id: string | null }>("SELECT community_id FROM posts WHERE id = ?", replyTo)?.community_id ?? null
   }
   if (quoteOf !== null && (!isId(quoteOf) || !canSeeLivePost(quoteOf, viewer.id))) return { ok: false, error: POST_UNAVAILABLE }
+
+  // A post goes in a circle its author belongs to. A reply stays in the circle of the post it answers, so a conversation
+  // in a closed circle stays with its members.
+  let community: string | null = null
+  if (replyTo !== null) community = replyCircle
+  else if (circleId !== null) {
+    if (!isId(circleId) || memberRole(circleId, viewer.id) === null) {
+      return { ok: false, error: "You can only post in circles you belong to." }
+    }
+    community = circleId
+  }
 
   // A thread continuation must answer the viewer's own post, and that post must be the thread's first post or part of it.
   let threadId: string | null = null
@@ -157,8 +173,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   try {
     transaction(() => {
       run(
-        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         viewer.id,
         body,
@@ -170,7 +186,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         publishAt,
         draft ? 1 : 0,
         threadId,
-        languageOf(body)
+        languageOf(body),
+        community
       )
       saved.forEach((media, position) => {
         run(

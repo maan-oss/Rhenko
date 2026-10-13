@@ -73,8 +73,11 @@ async function notInterested() {
   await check("the post is still on its author's profile, and still on other people's feeds", async () => {
     await openProfile(author.page, author.handle)
     await waitForPost(author.page, text)
+    // A reader who follows the author reads the post on Following, which lists every post of the people they follow. For
+    // You is ranked across the whole site and shows only its first page, so it can't prove the post is still on screen.
     const other = await createUser({ tag: "rfo" })
-    await openHome(other.page)
+    await follow(other.page, author.handle)
+    await openHome(other.page, "following")
     await waitForPost(other.page, text, { reload: true })
   })
 }

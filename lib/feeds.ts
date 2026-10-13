@@ -1,6 +1,7 @@
 import { get } from "@/lib/db"
 import {
   bookmarkFeed,
+  circleFeed,
   hasSearchContent,
   homeFeed,
   listFeed,
@@ -12,6 +13,7 @@ import {
   type ProfileTab,
 } from "@/lib/data"
 import { isFollowing } from "@/lib/post-writes"
+import { memberRole } from "@/lib/circles"
 import { publishDue } from "@/lib/screening"
 import { withAds, type FeedEntry } from "@/lib/ads"
 import { normalizeTag } from "@/lib/rules"
@@ -23,6 +25,7 @@ export type FeedSpec =
   | { kind: "profile"; tab: ProfileTab; handle: string }
   | { kind: "bookmarks"; folder?: string }
   | { kind: "list"; listId: string }
+  | { kind: "circle"; circleId: string }
   | { kind: "explore"; sort: "top" | "latest"; media: boolean }
   | { kind: "topic"; tag: string }
   | { kind: "search"; q: string; sort: "top" | "latest" }
@@ -45,6 +48,8 @@ export function parseSpec(input: unknown): FeedSpec | null {
       return isString(spec.folder) ? { kind: "bookmarks", folder: spec.folder } : null
     case "list":
       return isString(spec.listId) ? { kind: "list", listId: spec.listId } : null
+    case "circle":
+      return isString(spec.circleId) ? { kind: "circle", circleId: spec.circleId } : null
     case "explore":
       return { kind: "explore", sort: spec.sort === "latest" ? "latest" : "top", media: spec.media === true }
     case "topic":
@@ -88,6 +93,13 @@ export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): Feed
       const list = get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", spec.listId)
       if (!list || (list.private === 1 && list.owner_id !== viewerId)) return EMPTY
       return listFeed(spec.listId, viewerId, cursor)
+    }
+    case "circle": {
+      // A closed circle's posts are for its members. Anyone else gets an empty feed from it.
+      const circle = get<{ access: string }>("SELECT access FROM communities WHERE id = ?", spec.circleId)
+      if (!circle) return EMPTY
+      if (circle.access === "closed" && !memberRole(spec.circleId, viewerId)) return EMPTY
+      return circleFeed(spec.circleId, viewerId, cursor)
     }
     case "explore":
       return searchPostFeed(parseSearch(spec.media ? "filter:media" : ""), spec.sort, viewerId, cursor)

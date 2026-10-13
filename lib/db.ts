@@ -880,6 +880,23 @@ CREATE TABLE IF NOT EXISTS message_translations (
   PRIMARY KEY (message_id, target)
 );
 `,
+  // Circles: a circle has a web address (slug), a one-line tagline in description, a charter of its own rules, and an
+  // access setting. Asking to join keeps the applicant's answer to the circle's question until the owner decides.
+  `
+ALTER TABLE communities ADD COLUMN slug TEXT;
+ALTER TABLE communities ADD COLUMN access TEXT NOT NULL DEFAULT 'open' CHECK (access IN ('open', 'request', 'closed'));
+ALTER TABLE communities ADD COLUMN charter TEXT NOT NULL DEFAULT '';
+ALTER TABLE communities ADD COLUMN join_question TEXT NOT NULL DEFAULT '';
+ALTER TABLE communities ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
+CREATE UNIQUE INDEX IF NOT EXISTS communities_slug ON communities(slug);
+CREATE TABLE IF NOT EXISTS community_requests (
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  answer TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (community_id, user_id)
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

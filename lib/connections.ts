@@ -321,6 +321,7 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
     for (const row of all<{ author_id: string; body: string }>(
       `SELECT p.author_id, p.body FROM posts p
        WHERE p.created_at >= ? AND ${LIVE} AND p.author_id <> ? AND (${clauses})
+         AND NOT EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND c.access = 'closed')
        ORDER BY p.created_at DESC LIMIT ?`,
       now - INTEREST_MS,
       viewerId,

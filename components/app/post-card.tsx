@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CalendarClock, EyeOff, Info, PenLine, Pin, Repeat2, Sparkles } from "lucide-react"
+import { CalendarClock, CircleDot, EyeOff, Info, PenLine, Pin, Repeat2, Sparkles } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { ProfileLink } from "@/components/app/profile-hover"
@@ -163,6 +163,17 @@ export function PostCard({
               <Link href={`/${post.replyToHandle}`} className="relative z-10 text-dusk hover:underline">
                 @{post.replyToHandle}
               </Link>
+            </p>
+          ) : null}
+          {post.circle && !post.replyToId ? (
+            <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+              <CircleDot className="size-3.5" aria-hidden="true" />
+              <span>
+                In{" "}
+                <Link href={`/circles/${post.circle.slug}`} className="relative z-10 font-semibold text-dusk hover:underline">
+                  {post.circle.name}
+                </Link>
+              </span>
             </p>
           ) : null}
           {post.body ? (

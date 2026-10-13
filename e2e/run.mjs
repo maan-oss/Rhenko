@@ -37,6 +37,7 @@ import * as auth from "./auth.mjs"
 import * as posts from "./posts.mjs"
 import * as ranking from "./ranking.mjs"
 import * as feed from "./feed.mjs"
+import * as circles from "./circles.mjs"
 import * as social from "./social.mjs"
 import * as messages from "./messages.mjs"
 import * as calls from "./calls.mjs"
@@ -89,6 +90,7 @@ const AREAS = [
   ["posts", posts],
   ["ranking", ranking],
   ["feed", feed],
+  ["circles", circles],
   ["social", social],
   ["messages", messages],
   ["calls", calls],
