@@ -2,6 +2,10 @@
 
 // Long posts are free here: X keeps 25,000 characters for paying accounts.
 export const MAX_POST = 25000
+// An article is a post with a title and a longer body. Its body is limited separately, and it can't be a reply, a quote,
+// a poll or part of a thread.
+export const MAX_ARTICLE = 50000
+export const MAX_TITLE = 120
 export const MAX_BIO = 160
 export const MAX_NAME = 50
 export const MAX_LOCATION = 30
@@ -78,10 +82,22 @@ export function validateWebsite(url: string): string | null {
   return null
 }
 
-export function validatePost(body: string, mediaCount: number, hasPoll: boolean): string | null {
+export function validatePost(body: string, mediaCount: number, hasPoll: boolean, article = false): string | null {
   const length = countChars(body)
-  if (length > MAX_POST) return `Posts can have up to ${MAX_POST} characters.`
+  if (article) {
+    if (length > MAX_ARTICLE) return `Articles can have up to ${MAX_ARTICLE} characters.`
+  } else if (length > MAX_POST) return `Posts can have up to ${MAX_POST} characters.`
   if (length === 0 && mediaCount === 0 && !hasPoll) return "Write something, or add media or a poll."
+  return null
+}
+
+// A title is one line of plain text. An empty title means an ordinary post.
+export function cleanTitle(value: string): string {
+  return value.replace(/\s+/g, " ").trim()
+}
+
+export function validateTitle(title: string): string | null {
+  if ([...title].length > MAX_TITLE) return `Titles can have up to ${MAX_TITLE} characters.`
   return null
 }
 
@@ -115,7 +131,10 @@ export function extractHashtags(body: string): string[] {
 export const MAX_IMAGES = 4
 export const MAX_VIDEOS = 1
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
-export const MAX_VIDEO_BYTES = 25 * 1024 * 1024
+// A video can run for up to 140 seconds, the length X allows, and up to 100 MB. The composer checks the length when a
+// video is picked, because the server does not decode video.
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
+export const MAX_VIDEO_SECONDS = 140
 export const MAX_ALT = 1000
 // A voice message is recorded for up to two minutes. Opus at a voice bitrate keeps that far under the size limit.
 export const MAX_VOICE_SECONDS = 120
@@ -255,3 +274,7 @@ export function ageFrom(birthday: string, now = new Date()): number | null {
   if (beforeBirthday) age -= 1
   return age
 }
+
+// Passkeys and security keys an account can keep, and the longest name a key can have.
+export const MAX_PASSKEYS = 10
+export const MAX_PASSKEY_NAME = 40

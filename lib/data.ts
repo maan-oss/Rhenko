@@ -46,6 +46,8 @@ export type PollView = {
 export type PostCore = {
   id: string
   body: string
+  // The title of an article, or "" for an ordinary post.
+  title: string
   createdAt: number
   editedAt: number | null
   publishAt: number | null
@@ -102,6 +104,7 @@ export type FeedItem = {
 export type Page<T> = { items: T[]; next: string | null }
 
 type PostRow = {
+  title: string
   id: string
   body: string
   lang: string | null
@@ -322,7 +325,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
   const rows = all<PostRow>(
-    `SELECT p.id, p.body, p.lang, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
+    `SELECT p.id, p.body, p.title, p.lang, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
        p.reply_setting, p.thread_id, c.slug AS circle_slug, c.name AS circle_name,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
@@ -392,6 +395,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
     result.set(r.id, {
       id: r.id,
       body: r.body,
+      title: r.title ?? "",
       lang: r.lang ?? "",
       createdAt: r.created_at,
       editedAt: r.edited_at,

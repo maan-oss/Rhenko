@@ -176,6 +176,11 @@ export function PostCard({
               </span>
             </p>
           ) : null}
+          {post.title ? (
+            <h2 className={cn("font-semibold tracking-tight text-pretty", detail ? "mt-2 text-3xl leading-tight" : "mt-0.5 text-[19px] leading-snug")}>
+              {post.title}
+            </h2>
+          ) : null}
           {post.body ? (
             <>
               <PostBody text={post.body} className={cn("leading-relaxed", detail ? "mt-2 text-xl" : "mt-0.5 text-[15px]")} />
@@ -256,6 +261,7 @@ export function PostCard({
               viewer={viewer}
               postId={post.id}
               body={post.body}
+              title={post.title}
               author={post.author}
               replies={post.replies}
               reposts={post.reposts}

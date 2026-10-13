@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { CalendarClock, CircleDot, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
@@ -15,13 +15,17 @@ import {
   MAX_IMAGE_BYTES,
   MAX_IMAGES,
   MAX_POLL_OPTION,
+  MAX_ARTICLE,
   MAX_POST,
+  MAX_TITLE,
   MAX_VIDEO_BYTES,
+  MAX_VIDEO_SECONDS,
   POLL_DURATIONS,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
   SCHEDULE_MAX_AHEAD_MS,
   UNDO_WINDOW_MS,
+  cleanTitle,
   countChars,
   validateSchedule,
   type ReplySetting,
@@ -95,7 +99,7 @@ const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline
 // that opens a dialog.
 const REPLY_PICKER_PHONE = "max-sm:[&_button[aria-haspopup=dialog]]:size-10"
 const EMOJI_PHONE =
-  "max-sm:static max-sm:[&>button]:size-9 max-[389px]:[&>button]:size-8 max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
+  "max-sm:static max-sm:[&>button]:size-9 max-[429px]:[&>button]:size-8 max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
 // The emoji list opens upward. Near the top of the page there is no room above the toolbar, so it opens downward.
 const EMOJI_BELOW = "[&_[role=dialog]]:top-11 [&_[role=dialog]]:bottom-auto"
 const EMOJI_LIST_HEIGHT = 300
@@ -190,7 +194,7 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled && hint ? hint : label}
       className={cn(
-        "grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[389px]:size-8 sm:size-8",
+        "grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[429px]:size-8 sm:size-8",
         pressed && "bg-foreground/5"
       )}
     >
@@ -280,6 +284,24 @@ function MediaTile({ item, onRemove, onPatch }: { item: Attachment; onRemove: ()
 }
 
 // The @ or # word being typed just before the caret, if any.
+const VIDEO_MB = Math.round(MAX_VIDEO_BYTES / (1024 * 1024))
+
+// The length of a picked video, read from its metadata. Null when the browser can't read it.
+function videoSeconds(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement("video")
+    video.preload = "metadata"
+    const done = (value: number | null) => {
+      URL.revokeObjectURL(url)
+      resolve(value)
+    }
+    video.onloadedmetadata = () => done(Number.isFinite(video.duration) ? video.duration : null)
+    video.onerror = () => done(null)
+    video.src = url
+  })
+}
+
 function tokenBefore(text: string, caret: number): { token: string; start: number } | null {
   const match = /(^|\s)([@#][\p{L}\p{N}_]*)$/u.exec(text.slice(0, caret))
   if (!match) return null
@@ -293,6 +315,9 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [caret, setCaret] = useState(0)
   const [media, setMedia] = useState<Attachment[]>([])
   const [poll, setPoll] = useState(false)
+  // An article has a title and a longer body. It can carry photos or a video, but not a poll, a thread or a schedule.
+  const [article, setArticle] = useState(false)
+  const [title, setTitle] = useState("")
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""])
   const [pollMinutes, setPollMinutes] = useState<number>(POLL_DEFAULT_MINUTES)
   const [replySetting, setReplySetting] = useState<ReplySetting>("everyone")
@@ -311,7 +336,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const toolbarRef = useRef<HTMLDivElement>(null)
 
   const count = countChars(text)
-  const remaining = MAX_POST - count
+  const limit = article ? MAX_ARTICLE : MAX_POST
+  const remaining = limit - count
   const over = remaining < 0
   const pollReady = !poll || pollOptions.filter((o) => o.trim().length > 0).length >= POLL_MIN_OPTIONS
   const hasContent = count > 0 || media.length > 0 || (poll && pollReady)
@@ -321,8 +347,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   // A thread is a row of posts sent one after another. Parts after the first are text only, none left empty.
   const threading = extra.length > 0
   const threadReady = extra.every((part) => part.trim().length > 0 && countChars(part) <= MAX_POST)
-  const canPost = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && (!scheduling || scheduledAt !== null) && threadReady
-  const canDraft = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && !isReply && !threading
+  const articleReady = !article || (cleanTitle(title).length > 0 && [...cleanTitle(title)].length <= MAX_TITLE)
+  const canPost =
+    hasContent && !over && !pending && pollReady && !mediaBlocksPoll && (!scheduling || scheduledAt !== null) && threadReady && articleReady
+  const canDraft = hasContent && !over && !pending && pollReady && !mediaBlocksPoll && !isReply && !threading && articleReady
 
   const sending = pending && intent === "post"
   const label = sending
@@ -373,7 +401,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
 
   const open = wordKey !== "" && suggestions.length > 0
 
-  function addFiles(list: FileList | null) {
+  async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return
     const picked = Array.from(list)
     const next: Attachment[] = [...media]
@@ -390,7 +418,13 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
       }
       if (isVideo) {
         if (file.size > MAX_VIDEO_BYTES) {
-          toast.error("Videos can be up to 25 MB.")
+          toast.error(`Videos can be up to ${VIDEO_MB} MB.`)
+          continue
+        }
+        // Browsers that can't read a file's length let it through. The server still checks its type and size.
+        const seconds = await videoSeconds(file)
+        if (seconds !== null && seconds > MAX_VIDEO_SECONDS) {
+          toast.error(`Videos can be up to ${MAX_VIDEO_SECONDS} seconds long.`)
           continue
         }
         if (next.length > 0) {
@@ -506,6 +540,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
       body.append("media", m.file)
       body.append("alt", m.alt)
     })
+    if (article) body.set("title", cleanTitle(title))
     if (poll) {
       body.set("poll", "on")
       body.set("pollMinutes", String(pollMinutes))
@@ -529,6 +564,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     setMedia([])
     setPoll(false)
     setPollOptions(["", ""])
+    setArticle(false)
+    setTitle("")
     setSensitive(false)
     setReplySetting("everyone")
     setScheduling(false)
@@ -641,6 +678,16 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     >
       <Avatar user={viewer} size={44} />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {article ? (
+          <input
+            aria-label="Article title"
+            placeholder="Title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={MAX_TITLE * 2}
+            className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
+          />
+        ) : null}
         <div className="flex items-start gap-2">
           <textarea
             ref={textareaRef}
@@ -669,7 +716,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                       </span>
                     </>
                   ) : null}
-                  <CountRing progress={Math.min(count / MAX_POST, 1)} over={over} />
+                  <CountRing progress={Math.min(count / limit, 1)} over={over} />
                 </span>
               ) : null}
               {!isReply ? (
@@ -885,14 +932,27 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           <ToolButton
             label={poll ? "Remove poll" : "Add a poll"}
             hint="Remove the photos or video to add a poll"
-            disabled={media.length > 0}
+            disabled={media.length > 0 || article}
             pressed={poll}
             onClick={() => setPoll((value) => !value)}
           >
             <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
           </ToolButton>
+          {!isReply && !quoteOfId && !threading && !poll && !scheduling ? (
+            <ToolButton
+              label={article ? "Turn off article" : "Write an article"}
+              hint="Articles can't have polls, threads, replies or quotes"
+              pressed={article}
+              onClick={() => {
+                setArticle((value) => !value)
+                setTitle("")
+              }}
+            >
+              <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+            </ToolButton>
+          ) : null}
           {!isReply ? (
-            <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling} onClick={addThreadPart}>
+            <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
               <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>
           ) : null}
@@ -925,7 +985,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 disabled={!canDraft}
                 aria-label="Save draft"
                 title="Save draft"
-                className="chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[389px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                className="chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
               >
                 <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
                 <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
@@ -936,7 +996,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               disabled={!canPost}
               className={cn(
                 "metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
-                iconOnlyPhone ? "w-9 max-[389px]:w-8 sm:w-auto" : "px-3.5"
+                iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : "px-3.5"
               )}
             >
               {iconOnlyPhone ? (

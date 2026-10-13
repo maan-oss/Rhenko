@@ -23,9 +23,11 @@ import {
   POST_UNAVAILABLE,
   REPORT_REASONS,
   UNDO_WINDOW_MS,
+  cleanTitle,
   validatePoll,
   validatePost,
   validateSchedule,
+  validateTitle,
   type ReplySetting,
 } from "@/lib/rules"
 import { saveUpload, type MediaKind } from "@/lib/uploads"
@@ -61,6 +63,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   if (!allowed.ok) return { ok: false, error: `You've posted a lot in the last minute. Try again in ${waitLabel(allowed.retryAfterSeconds)}.` }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
+  // A title makes the post an article.
+  const title = cleanTitle(String(formData.get("title") ?? ""))
   // Each file is paired with the alt text sent with it, in the same order, for photos and videos alike.
   const alts = formData.getAll("alt")
   const picked = formData
@@ -86,7 +90,15 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   if (images > MAX_IMAGES) return { ok: false, error: `Add up to ${MAX_IMAGES} images.` }
   if (wantsPoll && picked.length > 0) return { ok: false, error: "Polls can't include media." }
 
-  const validation = validatePost(body, picked.length, wantsPoll)
+  const article = title !== ""
+  if (article) {
+    const titleError = validateTitle(title)
+    if (titleError) return { ok: false, error: titleError }
+    if (wantsPoll) return { ok: false, error: "Articles can't have polls." }
+    if (threadOf !== null) return { ok: false, error: "Articles can't be part of a thread." }
+    if (replyTo !== null || quoteOf !== null) return { ok: false, error: "Articles can't be replies or quotes." }
+  }
+  const validation = validatePost(body, picked.length, wantsPoll, article)
   if (validation) return { ok: false, error: validation }
   if (wantsPoll) {
     const pollError = validatePoll(pollOptions, pollMinutes)
@@ -173,8 +185,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   try {
     transaction(() => {
       run(
-        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id, title)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         viewer.id,
         body,
@@ -187,7 +199,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         draft ? 1 : 0,
         threadId,
         languageOf(body),
-        community
+        community,
+        title
       )
       saved.forEach((media, position) => {
         run(
@@ -231,9 +244,10 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
     is_draft: number
     publish_at: number | null
     body: string
+    title: string
     edited_at: number | null
     removed_at: number | null
-  }>("SELECT author_id, created_at, is_draft, publish_at, body, edited_at, removed_at FROM posts WHERE id = ?", postId)
+  }>("SELECT author_id, created_at, is_draft, publish_at, body, title, edited_at, removed_at FROM posts WHERE id = ?", postId)
   if (!post) return { ok: false, error: "That post was deleted." }
   if (post.removed_at !== null) return { ok: false, error: POST_UNAVAILABLE }
   if (post.author_id !== viewer.id) return { ok: false, error: "You can only edit your own posts." }
@@ -244,15 +258,24 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
   }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
+  // An article keeps its title, which can be changed along with its text.
+  const article = post.title !== ""
+  const title = article ? cleanTitle(String(formData.get("title") ?? "")) : ""
+  if (article) {
+    if (title === "") return { ok: false, error: "Give the article a title." }
+    const titleError = validateTitle(title)
+    if (titleError) return { ok: false, error: titleError }
+  }
   const media = all<{ id: string }>("SELECT id FROM post_media WHERE post_id = ?", postId)
   const hasPoll = get("SELECT 1 AS found FROM polls WHERE post_id = ?", postId) !== undefined
-  const validation = validatePost(body, media.length, hasPoll)
+  const validation = validatePost(body, media.length, hasPoll, article)
   if (validation) return { ok: false, error: validation }
 
   transaction(() => {
     // Only a changed text counts as an edit: it is marked as edited and the text being replaced is kept, dated to
     // when it was written, for the edit history. Changing only the alt text leaves the post as it was.
     const changed = body !== post.body
+    const retitled = article && title !== post.title
     if (changed) {
       run(
         "INSERT INTO post_edits (id, post_id, body, created_at) VALUES (?, ?, ?, ?)",
@@ -262,7 +285,8 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
         post.edited_at ?? post.created_at
       )
     }
-    run("UPDATE posts SET body = ?, edited_at = ? WHERE id = ?", body, changed ? Date.now() : post.edited_at, postId)
+    if (retitled) run("UPDATE posts SET title = ? WHERE id = ?", title, postId)
+    run("UPDATE posts SET body = ?, edited_at = ? WHERE id = ?", body, changed || retitled ? Date.now() : post.edited_at, postId)
     if (changed) {
       // The language is found again for the new text, and a translation of the old text no longer applies.
       run("UPDATE posts SET lang = ? WHERE id = ?", languageOf(body), postId)
@@ -277,7 +301,7 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
   })
   // The new text is checked again, so an edit cannot turn a cleared post into spam. The check keeps its own transaction,
   // so it runs once the save above is done.
-  if (body !== post.body) screenPost(postId)
+  if (body !== post.body || (article && title !== post.title)) screenPost(postId)
   refresh()
   return { ok: true }
 }

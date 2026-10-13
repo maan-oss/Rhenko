@@ -1,10 +1,12 @@
 import { Suspense } from "react"
 import { requireViewer, currentSessionHash } from "@/lib/auth"
 import { sessionsFor, twoFactorFor } from "@/lib/settings-data"
+import { passkeysOf } from "@/lib/passkeys"
 import { formatCount } from "@/lib/format"
 import { RelativeTime } from "@/components/app/time-text"
 import { PageHeader } from "@/components/app/page-header"
 import { ChangePasswordForm, RevokeOthersButton, RevokeSessionButton, TwoFactorPanel } from "@/components/app/security-panels"
+import { PasskeysPanel } from "@/components/app/passkey-panel"
 
 export default function SecuritySettingsPage() {
   return (
@@ -27,6 +29,9 @@ async function SecurityBody() {
       </Section>
       <Section title="Two-factor sign-in">
         <TwoFactorPanel enabled={twoFactor.enabled} usable={twoFactor.usable} codesLeft={twoFactor.recoveryLeft} />
+      </Section>
+      <Section title="Passkeys and security keys">
+        <PasskeysPanel passkeys={passkeysOf(viewer.id)} />
       </Section>
       <Section title="Signed-in devices">
         <p className="text-[15px] text-muted-foreground">

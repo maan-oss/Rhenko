@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useActionState, useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
 import { useFormStatus } from "react-dom"
 import { Check, Eye, EyeOff } from "lucide-react"
+import { PasskeyLoginButton, SecurityKeyButton } from "@/components/app/passkey-panel"
 import {
   login,
   requestPasswordReset,
@@ -261,6 +262,7 @@ function LoginForm() {
   const [handle, setHandle] = useState("")
   const [password, setPassword] = useState("")
   return (
+    <>
     <form action={formAction} className="settle flex w-full flex-col gap-5">
       <HandleField isLogin value={handle} onChange={setHandle} />
       <PasswordField
@@ -279,6 +281,15 @@ function LoginForm() {
       <ErrorText message={state.error} />
       <SubmitButton label="Log in" pendingLabel="Logging in" disabled={handle.length === 0 || password.length === 0} />
     </form>
+    <div className="settle mt-5 flex w-full flex-col gap-5">
+      <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <PasskeyLoginButton />
+    </div>
+    </>
   )
 }
 
@@ -477,7 +488,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 
 // The second step of sign-in: a six-digit code from the authenticator app, or a recovery code. When the server
 // can't read the authenticator key, only recovery codes can work, and the field says so.
-export function VerifyCodeForm({ usable }: { usable: boolean }) {
+export function VerifyCodeForm({ usable, hasKeys }: { usable: boolean; hasKeys: boolean }) {
   const [state, action] = useActionState(verifySecondFactor, {} as AuthState)
   const [code, setCode] = useState("")
   return (
@@ -498,6 +509,16 @@ export function VerifyCodeForm({ usable }: { usable: boolean }) {
       />
       <ErrorText message={state.error} />
       <SubmitButton label="Continue" pendingLabel="Checking" disabled={code.trim().length === 0} />
+      {hasKeys ? (
+        <>
+          <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <SecurityKeyButton />
+        </>
+      ) : null}
     </form>
   )
 }

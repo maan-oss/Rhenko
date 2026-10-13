@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
+import { Readable } from "node:stream"
+import type { ReadableStream as WebReadableStream } from "node:stream/web"
+import { pipeline } from "node:stream/promises"
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VOICE_BYTES } from "@/lib/rules"
 import { UPLOAD_DIR } from "@/lib/db"
 import { stripImageMetadata } from "@/lib/image-metadata"
@@ -50,6 +53,25 @@ function matchesSignature(buf: Buffer, mime: string): boolean {
 
 export type SaveResult = { ok: true; name: string; kind: MediaKind } | { ok: false; error: string }
 
+const VIDEO_MB = MAX_VIDEO_BYTES / (1024 * 1024)
+
+async function saveVideo(value: File, type: string, format: Format): Promise<SaveResult> {
+  const head = Buffer.from(await value.slice(0, 16).arrayBuffer())
+  if (!matchesSignature(head, type)) return { ok: false, error: "That file is not a valid video." }
+  const name = `${randomUUID().replace(/-/g, "")}.${format.ext}`
+  const target = path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, name)
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+    await pipeline(Readable.fromWeb(value.stream() as unknown as WebReadableStream), fs.createWriteStream(target))
+  } catch (error) {
+    // A write that fails part way leaves nothing behind.
+    await fs.promises.unlink(target).catch(() => undefined)
+    console.error("[uploads] saving a file failed", error)
+    return { ok: false, error: "That file couldn't be saved. Try again." }
+  }
+  return { ok: true, name, kind: format.kind }
+}
+
 // Returns null when no file was chosen. Names are random, so a name never
 // points at two different files. `accept` restricts what a field may hold: "any" is a post's photos and video,
 // "audio" is a voice message, and "image" is an avatar or a chat photo.
@@ -69,9 +91,11 @@ export async function saveUpload(
   if (value.size > limit) {
     return {
       ok: false,
-      error: format.kind === "video" ? "Videos can be up to 25 MB." : format.kind === "audio" ? "Voice messages are too long." : "Images can be up to 4 MB.",
+      error: format.kind === "video" ? `Videos can be up to ${VIDEO_MB} MB.` : format.kind === "audio" ? "Voice messages are too long." : "Images can be up to 4 MB.",
     }
   }
+  // A video is checked from its first bytes and then streamed to disk, so a long clip is never held in memory whole.
+  if (format.kind === "video") return saveVideo(value, type, format)
   let buf: Buffer
   try {
     buf = Buffer.from(await value.arrayBuffer())
@@ -79,7 +103,7 @@ export async function saveUpload(
     return { ok: false, error: "That file didn't finish uploading. Try again." }
   }
   if (!matchesSignature(buf, type)) {
-    const problem = format.kind === "video" ? "That file is not a valid video." : format.kind === "audio" ? "That file is not a valid recording." : "That file is not a valid image."
+    const problem = format.kind === "audio" ? "That file is not a valid recording." : "That file is not a valid image."
     return { ok: false, error: problem }
   }
   // A photo keeps its picture only. Location, camera and time details are removed before anything is stored.

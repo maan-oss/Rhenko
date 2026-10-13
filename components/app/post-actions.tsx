@@ -30,6 +30,7 @@ type Props = {
   viewer: AvatarUser
   postId: string
   body: string
+  title: string
   author: MiniUser
   replies: number
   reposts: number
@@ -395,7 +396,7 @@ export function PostActions(props: Props) {
       </Dialog>
 
       {!isOwn && tippable ? <TipDialog open={tipOpen} onOpenChange={setTipOpen} postId={postId} handle={author.handle} /> : null}
-      {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} media={media} windowMs={editWindowMs} /> : null}
+      {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} title={props.title} media={media} windowMs={editWindowMs} /> : null}
 
       <ShareSheet
         open={shareOpen}

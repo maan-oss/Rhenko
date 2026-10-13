@@ -38,6 +38,8 @@ import * as posts from "./posts.mjs"
 import * as ranking from "./ranking.mjs"
 import * as feed from "./feed.mjs"
 import * as circles from "./circles.mjs"
+import * as passkeys from "./passkeys.mjs"
+import * as articles from "./articles.mjs"
 import * as social from "./social.mjs"
 import * as messages from "./messages.mjs"
 import * as calls from "./calls.mjs"
@@ -91,6 +93,8 @@ const AREAS = [
   ["ranking", ranking],
   ["feed", feed],
   ["circles", circles],
+  ["passkeys", passkeys],
+  ["articles", articles],
   ["social", social],
   ["messages", messages],
   ["calls", calls],

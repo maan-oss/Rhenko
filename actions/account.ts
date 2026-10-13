@@ -413,6 +413,7 @@ function eraseAccount(userId: string): void {
     // Circles the account owns pass on or close before its row goes, so none is left without an owner.
     const circleFiles = releaseCirclesOf(userId)
     run("DELETE FROM sessions WHERE user_id = ?", userId)
+    run("DELETE FROM passkeys WHERE user_id = ?", userId)
     run("DELETE FROM users WHERE id = ?", userId)
     return [...postFiles, ...messageFiles, ...circleFiles, profile?.avatar_file ?? null, profile?.banner_file ?? null]
   })

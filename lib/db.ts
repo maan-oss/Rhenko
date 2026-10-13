@@ -897,6 +897,22 @@ CREATE TABLE IF NOT EXISTS community_requests (
   PRIMARY KEY (community_id, user_id)
 );
 `,
+  `
+ALTER TABLE posts ADD COLUMN title TEXT NOT NULL DEFAULT '';
+`,
+  `
+CREATE TABLE IF NOT EXISTS passkeys (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  public_key TEXT NOT NULL,
+  counter INTEGER NOT NULL DEFAULT 0,
+  transports TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

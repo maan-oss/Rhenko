@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { findUserById, readChallenge, secondFactorState } from "@/lib/auth"
+import { passkeysOf } from "@/lib/passkeys"
 import { VerifyCodeForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../../auth-notice"
 
@@ -34,7 +35,7 @@ async function VerifyBody() {
             : ` You have ${state.recoveryLeft} left.`}
         </AuthNotice></div>
       )}
-      <VerifyCodeForm usable={state.usable} />
+      <VerifyCodeForm usable={state.usable} hasKeys={passkeysOf(user.id).length > 0} />
       <p className="mt-8 text-center text-sm text-muted-foreground">
         <Link href="/login" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
           Use a different account
