@@ -3,55 +3,219 @@
 import { useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 
-// The sign-in art is liquid chrome, shown on desktop only. A polished medallion sits at the centre with the
-// Rhenko mark cut out of it, so the mark stays crisp and shows the panel's colour. Droplets orbit it and merge in.
-// The chrome reflects a horizon that drifts slowly, and the whole piece bobs on a steady rhythm. The medallion
-// swells toward the pointer, a click sends a ripple through it and throws droplets off that fall back in, and the
-// light follows the pointer. The colours come from the theme tokens. Under reduced motion it holds still.
+// The sign-in art is liquid chrome, shown on desktop only. A medallion sits at the centre with the Rhenko mark cut out
+// of it, so the mark stays crisp and shows the panel's colour.
+//
+// The medallion is one signed-distance field. The coin, the bead that follows the pointer and each droplet are joined
+// with a smooth union, so a droplet leaves through a neck that stretches as it pulls away and merges back the same way.
+// A droplet swells on the surface, budges off, flies out under drag and gravity, is pulled back by a damped spring and
+// sinks in, and the coin takes a small ripple. A horizon and a point light sweep up and down over the whole medallion,
+// so the chrome's bright band and its glint travel across the body. The field, the chrome and the cut-out are one
+// fragment shader and one draw call, and the CPU only moves a dozen points a frame.
+//
+// Colours come from the theme tokens. The static medallion beneath the canvas shows until WebGL 2 is running. The loop
+// stops while the art is off screen or the tab is hidden, and under reduced motion the canvas draws one still frame.
 
 const VIEW_W = 600
 const VIEW_H = 800
 const CENTER = { x: 300, y: 400 }
+const COIN_R = 150
 const LOGO = { x: 200, y: 310, size: 200 }
-const REST = { x: CENTER.x + 120, y: CENTER.y + 140 }
 // The Rhenko R, the same path as components/brand/symbol.tsx. It is 510 by 457 units.
+const MARK_UNITS = 510
 const MARK =
   "M375.7 455.8C358.3 454.2 342 447.3 330.2 436.5C324.1 430.9 304 408.4 268.5 367.1C247.9 343.2 246 340.9 246 339.9C246 339.4 248.4 336.2 251.3 332.8C254.2 329.3 259 323.6 262 320C287.2 290.1 300.6 274.6 305.6 269.6C314.8 260.3 326 253.9 336.7 251.6C340.4 250.8 339.1 249.5 358.5 272C405.6 326.6 426.3 350.9 453.5 383.5C465 397.2 482.4 418 492.2 429.7C509.1 449.8 511.7 453.8 508.8 455.6C507.2 456.6 386.1 456.7 375.7 455.8ZM62.6 454.4C29.1 446.9 7 423.3 7 395.1C7 381.5 10.9 372.2 22.9 356.7C27.1 351.3 40.4 334.2 52.4 318.7C75.5 289.1 92.7 266.9 106.8 248.5C119.9 231.5 137.1 210.2 143.5 203C163.7 180.4 187.6 166.4 215.5 160.9C221.2 159.7 245.2 159.5 348.7 159.5C418.2 159.5 475 159.2 475 158.9C475 158.6 473.5 156.3 471.6 153.8C464.3 144.3 449.6 137.3 428.5 133.2C421.7 131.9 400.2 131.6 281 131C125.9 130.3 137.3 130.8 118.6 123.4C97.8 115 81.6 102.6 62.8 80.5C57.6 74.5 46.4 61.4 37.9 51.4C-2.8 3.7 -1 6 0.8 3.4C3 0 4 0 180.2 0C370.8 0 361.5 -0.2 374.4 5.8C387.9 12.2 399.2 23.2 408.9 39.5C411.6 43.9 427.1 69.8 443.5 97C459.9 124.2 474.7 149.4 476.3 153C484.2 170.1 478.6 190.7 461.2 209.1C453 217.8 441 226 429.5 230.6C412 237.6 419.1 237.2 288.5 238C162 238.7 166 238.6 146.5 243.9C132.7 247.7 110.8 257.8 104.7 263.2C103.3 264.4 104.5 264.1 108.1 262.1C116.6 257.5 136 251.4 149.9 249.1C161.7 247.1 165.9 247 242.4 247L322.5 247L316.5 250.3C301.4 258.4 299.3 260.6 238.3 331.4C173.8 406.1 162.9 418.1 148.5 429.9C135.7 440.4 119.8 448.6 103.5 453C92.8 455.9 72.5 456.6 62.6 454.4Z"
 
-// The medallion. It must cover the mark's farthest corner even when its edge is pushed in by its wobble.
-const COIN_R = 150
-const COIN_POINTS = 56
+// Droplets, by radius. Each one leaves and returns on its own schedule.
+const DROP_RADII = [34, 24, 40, 20, 28, 16, 12, 9]
+const DROP_COUNT = DROP_RADII.length
+// The shader reads one shape per droplet plus the pointer's bead.
+const SHAPES = DROP_COUNT + 1
+const HEAD_R = 30
+// How far neighbouring shapes pull together before they join: a longer reach gives a longer neck.
+const JOIN = 26
+// Each phase's length in seconds, and what it does.
+const SWELL = 0.7 // the droplet grows on the surface before it leaves
+const BUD_T = 0.55 // it moves out of the surface, its neck stretching as it goes
+const ABSORB_T = 0.45 // it sinks back in and shrinks to nothing
+const RETURN_MAX = 4.5 // a return that has not landed by then is taken to have landed
+const GRAVITY = 46 // view units per second squared, pulling droplets down
+const DRAG = 0.9 // how quickly flight slows
+const SPRING = 11 // pull back to the surface on the return
+const DAMP = 4.6 // keeps the return from overshooting
 
-// Each droplet orbits the medallion on its own slow path and breathes a little.
-// `pull` is how strongly the pointer drags it.
-const DROPS = [
-  { orbit: 0.4, speed: 0.11, rx: 200, ry: 210, r: 40, breath: 0.6, phase: 0.2, pull: 1 },
-  { orbit: 2.1, speed: -0.09, rx: 180, ry: 240, r: 30, breath: 0.9, phase: 1.4, pull: 0.8 },
-  { orbit: 3.6, speed: 0.075, rx: 230, ry: 195, r: 46, breath: 0.4, phase: 2.2, pull: 0.6 },
-  { orbit: 4.9, speed: -0.105, rx: 175, ry: 205, r: 24, breath: 1.1, phase: 0.8, pull: 1 },
-  { orbit: 1.2, speed: 0.05, rx: 250, ry: 275, r: 22, breath: 0.7, phase: 3.1, pull: 0.5 },
-  { orbit: 5.6, speed: 0.13, rx: 195, ry: 170, r: 20, breath: 1.3, phase: 4.0, pull: 0.9 },
-]
-type DropSpec = (typeof DROPS)[number]
+const DOCKED = 0
+const BUDDING = 1
+const FLYING = 2
+const RETURNING = 3
+const ABSORBING = 4
 
-const SPLASH_MAX = 10
-const SPRING = 1.6 // pull back to the orbit
-const DAMP = 3 // slows every droplet so the motion reads as thick liquid
-const POINTER_PULL = 320
-
-// Where a droplet's orbit puts it at time t.
-function homeOf(drop: DropSpec, t: number) {
-  const a = drop.orbit + drop.speed * t
-  return { x: CENTER.x + drop.rx * Math.cos(a), y: CENTER.y + drop.ry * Math.sin(a) }
+type Drop = {
+  base: number // resting radius
+  phase: number
+  t: number // time in the current phase
+  wait: number // time docked before it leaves
+  angle: number // where on the surface it sits
+  boost: number // speed multiplier, so a click throws it harder
+  flight: number // length of its flight
+  d0: number // distance from the centre when it started to bud
+  x: number
+  y: number
+  vx: number
+  vy: number
+  r: number
 }
 
-const START = DROPS.map((drop) => homeOf(drop, 0))
+type Rgb = [number, number, number]
+
+const FALLBACK_COLORS = {
+  top: [0.64, 0.64, 0.64] as Rgb,
+  mid: [0.96, 0.96, 0.96] as Rgb,
+  line: [1, 1, 1] as Rgb,
+  low: [0.08, 0.08, 0.08] as Rgb,
+  base: [0.29, 0.29, 0.29] as Rgb,
+}
+
+const VERTEX = `#version 300 es
+const vec2 CORNERS[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+void main() {
+  gl_Position = vec4(CORNERS[gl_VertexID], 0.0, 1.0);
+}`
+
+const FRAGMENT = `#version 300 es
+precision highp float;
+uniform vec2 uCanvas;
+uniform vec2 uOff;
+uniform float uScale;
+uniform float uTime;
+uniform int uCount;
+uniform vec4 uSeg[${SHAPES}];
+uniform float uRad[${SHAPES}];
+uniform vec2 uHead;
+uniform float uPull;
+uniform float uRippleAge;
+uniform vec2 uLight;
+uniform float uHorizon;
+uniform vec3 uTop;
+uniform vec3 uMid;
+uniform vec3 uLine;
+uniform vec3 uLow;
+uniform vec3 uBase;
+uniform sampler2D uMark;
+out vec4 fragColor;
+
+const vec2 C = vec2(${CENTER.x.toFixed(1)}, ${CENTER.y.toFixed(1)});
+const float R0 = ${COIN_R.toFixed(1)};
+const vec2 LOGO_XY = vec2(${LOGO.x.toFixed(1)}, ${LOGO.y.toFixed(1)});
+const float LOGO_SIZE = ${LOGO.size.toFixed(1)};
+const float JOIN = ${JOIN.toFixed(1)};
+
+// The medallion's radius at this point's angle: a slow wobble, a swell toward the pointer and a ripple after a drop lands.
+float coinRadius(vec2 p) {
+  float th = atan(p.y - C.y, p.x - C.x);
+  float r = R0 + 5.0 * sin(3.0 * th + uTime * 0.9) + 3.5 * sin(5.0 * th - uTime * 1.1);
+  float ang = atan(uHead.y - C.y, uHead.x - C.x);
+  float reach = uPull / (1.0 + length(uHead - C) / 260.0);
+  r += 34.0 * reach * pow(max(0.0, cos(th - ang)), 6.0);
+  float age = min(uRippleAge, 10.0);
+  r += 10.0 * exp(-age * 2.2) * sin(4.0 * th - age * 12.0);
+  return r;
+}
+
+float smoothJoin(float a, float b, float k) {
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+// Distance to a capsule (a segment with a radius). q is the point's offset from the spine, in radii.
+float capsule(vec2 p, vec4 seg, float r, out vec2 q) {
+  vec2 a = seg.xy;
+  vec2 ba = seg.zw - a;
+  float h = clamp(dot(p - a, ba) / max(dot(ba, ba), 1e-4), 0.0, 1.0);
+  vec2 c = a + ba * h;
+  q = (p - c) / r;
+  return length(p - c) - r;
+}
+
+void main() {
+  vec2 px = vec2(gl_FragCoord.x, uCanvas.y - gl_FragCoord.y);
+  vec2 p = (px - uOff) / uScale;
+
+  // The coin, then each shape joined to it. The shape nearest the surface sets the normal used for shading.
+  vec2 cq = p - C;
+  float R = coinRadius(p);
+  float d = length(cq) - R;
+  float bestD = d;
+  vec2 bestQ = cq / R;
+  for (int i = 0; i < ${SHAPES}; i++) {
+    if (i >= uCount) break;
+    float r = uRad[i];
+    if (r <= 0.0) continue;
+    vec2 q;
+    float dp = capsule(p, uSeg[i], r, q);
+    d = smoothJoin(d, dp, JOIN);
+    if (dp < bestD) {
+      bestD = dp;
+      bestQ = q;
+    }
+  }
+
+  // A dome from the nearest shape gives each surface its own curve, so the glint and the horizon bend over it.
+  vec3 n = normalize(vec3(bestQ, sqrt(max(0.04, 1.0 - dot(bestQ, bestQ)))));
+
+  float aa = max(fwidth(d), 0.5);
+  float body = 1.0 - smoothstep(-aa, aa, d);
+
+  // The chrome environment: a horizon moves up and down over the body. Just above it the metal is bright, and the sky
+  // greys toward the top; just below it the metal goes dark toward the base.
+  float e = (uHorizon - p.y) / 70.0 + 0.45 * n.y;
+  vec3 col;
+  if (e > 0.0) {
+    vec3 near = mix(uLine, uMid, smoothstep(0.0, 0.6, e));
+    col = mix(near, uTop, smoothstep(0.6, 2.4, e));
+  } else {
+    vec3 below = mix(uLine, uLow, smoothstep(0.0, 0.7, -e));
+    col = mix(below, uBase, 0.7 * smoothstep(1.2, 3.0, -e));
+  }
+
+  // The glint: a point light that sweeps over the body, and a soft rim where the surface turns away.
+  vec3 lightDir = normalize(vec3(uLight - p, 210.0));
+  vec3 halfVec = normalize(lightDir + vec3(0.0, 0.0, 1.0));
+  float spec = pow(max(dot(n, halfVec), 0.0), 120.0);
+  float rim = pow(1.0 - n.z, 3.0);
+  col += uLine * (spec * 1.15 + rim * 0.16);
+  col = min(col, vec3(1.0));
+
+  // The Rhenko mark is cut out of the body, so the panel shows through it.
+  vec2 uv = (p - LOGO_XY) / LOGO_SIZE;
+  // The texture is clamped at its edges, so outside the mark's box it is masked to nothing rather than smeared.
+  vec2 inBox = step(vec2(0.0), uv) * step(uv, vec2(1.0));
+  float mark = texture(uMark, uv).r * inBox.x * inBox.y;
+  float alpha = body * (1.0 - mark);
+  fragColor = vec4(col * alpha, alpha);
+}`
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-// Smallest signed difference between two angles.
+function lerp(a: number, b: number, k: number) {
+  return a + (b - a) * k
+}
+
+function easeInOut(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+function easeOut(t: number) {
+  return 1 - Math.pow(1 - t, 3)
+}
+
+function rand(min: number, max: number) {
+  return min + Math.random() * (max - min)
+}
+
+// The signed gap between two angles, wrapped to (-PI, PI].
 function angleGap(a: number, b: number) {
   let d = a - b
   while (d > Math.PI) d -= Math.PI * 2
@@ -59,364 +223,528 @@ function angleGap(a: number, b: number) {
   return d
 }
 
-// A droplet stretches along the way it is moving, and keeps its area as it does.
-function shape(el: SVGEllipseElement, x: number, y: number, r: number, vx: number, vy: number) {
-  const stretch = 1 + Math.min(0.5, Math.hypot(vx, vy) / 500)
-  const angle = (Math.atan2(vy, vx) * 180) / Math.PI
-  el.setAttribute("cx", x.toFixed(1))
-  el.setAttribute("cy", y.toFixed(1))
-  el.setAttribute("rx", (r * stretch).toFixed(1))
-  el.setAttribute("ry", (r / Math.sqrt(stretch)).toFixed(1))
-  el.setAttribute("transform", `rotate(${angle.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})`)
+// The point a droplet sits at on the medallion's surface, pushed in by a quarter of its radius so it merges.
+function surfacePoint(angle: number, r: number) {
+  const d = COIN_R - 0.25 * r
+  return { x: CENTER.x + Math.cos(angle) * d, y: CENTER.y + Math.sin(angle) * d }
+}
+
+// The point itself, or the nearest point inside a circle of radius max around the centre.
+function pullInside(x: number, y: number, max: number) {
+  const dx = x - CENTER.x
+  const dy = y - CENTER.y
+  const d = Math.hypot(dx, dy)
+  if (d <= max || d === 0) return { x, y }
+  return { x: CENTER.x + (dx / d) * max, y: CENTER.y + (dy / d) * max }
+}
+
+// Reads '#rrggbb' or '#rgb' into 0 to 1 channels, or returns null for anything else.
+function parseHex(value: string): Rgb | null {
+  const hex = value.trim().replace(/^#/, "")
+  const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null
+  return [parseInt(full.slice(0, 2), 16) / 255, parseInt(full.slice(2, 4), 16) / 255, parseInt(full.slice(4, 6), 16) / 255]
+}
+
+function compile(gl: WebGL2RenderingContext, type: number, source: string) {
+  const shader = gl.createShader(type)
+  if (!shader) throw new Error("no shader")
+  gl.shaderSource(shader, source)
+  gl.compileShader(shader)
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(shader)
+    gl.deleteShader(shader)
+    throw new Error(log ?? "shader failed")
+  }
+  return shader
+}
+
+function linkProgram(gl: WebGL2RenderingContext) {
+  const vs = compile(gl, gl.VERTEX_SHADER, VERTEX)
+  const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT)
+  const program = gl.createProgram()
+  if (!program) throw new Error("no program")
+  gl.attachShader(program, vs)
+  gl.attachShader(program, fs)
+  gl.linkProgram(program)
+  gl.deleteShader(vs)
+  gl.deleteShader(fs)
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(program)
+    gl.deleteProgram(program)
+    throw new Error(log ?? "link failed")
+  }
+  return program
+}
+
+// The mark, drawn once: white inside the R and black elsewhere, in the path's own units. Every mount shares it.
+let markSource: HTMLCanvasElement | null = null
+function markCanvas() {
+  if (markSource) return markSource
+  const canvas = document.createElement("canvas")
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext("2d")
+  if (ctx) {
+    ctx.fillStyle = "#000"
+    ctx.fillRect(0, 0, 512, 512)
+    ctx.setTransform(512 / MARK_UNITS, 0, 0, 512 / MARK_UNITS, 0, 0)
+    ctx.fillStyle = "#fff"
+    ctx.fill(new Path2D(MARK), "evenodd")
+  }
+  markSource = canvas
+  return canvas
+}
+
+function markTexture(gl: WebGL2RenderingContext) {
+  const texture = gl.createTexture()
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, texture)
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, markCanvas())
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  return texture
+}
+
+function uniformsOf(gl: WebGL2RenderingContext, program: WebGLProgram) {
+  const at = (name: string) => gl.getUniformLocation(program, name)
+  return {
+    canvas: at("uCanvas"),
+    off: at("uOff"),
+    scale: at("uScale"),
+    time: at("uTime"),
+    count: at("uCount"),
+    seg: at("uSeg[0]"),
+    rad: at("uRad[0]"),
+    head: at("uHead"),
+    pull: at("uPull"),
+    ripple: at("uRippleAge"),
+    light: at("uLight"),
+    horizon: at("uHorizon"),
+    top: at("uTop"),
+    mid: at("uMid"),
+    line: at("uLine"),
+    low: at("uLow"),
+    base: at("uBase"),
+    mark: at("uMark"),
+  }
+}
+
+// Runs the medallion on a WebGL 2 canvas. Returns the teardown, or undefined when the shader cannot run, which leaves
+// the static medallion on screen.
+function start(
+  wrap: HTMLDivElement,
+  canvas: HTMLCanvasElement,
+  gl: WebGL2RenderingContext,
+  statics: SVGSVGElement | null,
+): (() => void) | undefined {
+  let program: WebGLProgram
+  try {
+    program = linkProgram(gl)
+  } catch {
+    return undefined
+  }
+  gl.useProgram(program)
+  const vao = gl.createVertexArray()
+  gl.bindVertexArray(vao)
+  const texture = markTexture(gl)
+  const u = uniformsOf(gl, program)
+  gl.uniform1i(u.mark, 0)
+
+  // Colours follow the theme. They are read from the tokens, so a theme change repaints the art.
+  const colors = { ...FALLBACK_COLORS }
+  function readColors() {
+    const style = getComputedStyle(document.documentElement)
+    const read = (name: string, fallback: Rgb) => parseHex(style.getPropertyValue(name)) ?? fallback
+    colors.top = read("--art-top", FALLBACK_COLORS.top)
+    colors.mid = read("--art-mid", FALLBACK_COLORS.mid)
+    colors.line = read("--art-line", FALLBACK_COLORS.line)
+    colors.low = read("--art-low", FALLBACK_COLORS.low)
+    colors.base = read("--art-base", FALLBACK_COLORS.base)
+  }
+  readColors()
+
+  // The canvas is sized to the panel in device pixels, at most 2x, and the view box is cropped to fill it the way the
+  // static medallion is. This runs when the panel resizes, not every frame.
+  const view = { scale: 1, offX: 0, offY: 0 }
+  function fit() {
+    const rect = wrap.getBoundingClientRect()
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const w = Math.max(1, Math.round(rect.width * dpr))
+    const h = Math.max(1, Math.round(rect.height * dpr))
+    if (canvas.width !== w) canvas.width = w
+    if (canvas.height !== h) canvas.height = h
+    gl.viewport(0, 0, w, h)
+    const css = Math.max(rect.width / VIEW_W, rect.height / VIEW_H, 1e-3)
+    view.scale = css * dpr
+    view.offX = (w - VIEW_W * view.scale) / 2
+    view.offY = (h - VIEW_H * view.scale) / 2
+  }
+
+  // The bead that follows the pointer, with a trail behind it so a moving pointer leaves a stretched drop.
+  const head = { x: CENTER.x, y: CENTER.y - COIN_R + 16, tx: CENTER.x, ty: CENTER.y - COIN_R + 16 }
+  const pointer = { inside: false, x: CENTER.x, y: CENTER.y }
+  const light = { x: CENTER.x, y: CENTER.y }
+  let pull = 0
+  let rippleAge = 1e9
+  let t = 0
+
+  const drops: Drop[] = DROP_RADII.map((base, index) => {
+    const angle = (index / DROP_COUNT) * Math.PI * 2 + rand(-0.3, 0.3)
+    const r = base * 0.62
+    const at = surfacePoint(angle, r)
+    return {
+      base,
+      phase: DOCKED,
+      t: 0,
+      wait: rand(0.6, 4.8),
+      angle,
+      boost: 1,
+      flight: 1,
+      d0: 0,
+      x: at.x,
+      y: at.y,
+      vx: 0,
+      vy: 0,
+      r,
+    }
+  })
+
+  function pickAngle() {
+    if (pointer.inside && Math.random() < 0.6) {
+      return Math.atan2(pointer.y - CENTER.y, pointer.x - CENTER.x) + rand(-0.45, 0.45)
+    }
+    return rand(0, Math.PI * 2)
+  }
+
+  function dock(drop: Drop) {
+    drop.phase = DOCKED
+    drop.t = 0
+    drop.wait = rand(3, 6.5)
+    drop.angle = pickAngle()
+    drop.boost = 1
+    drop.r = drop.base * 0.62
+    const at = surfacePoint(drop.angle, drop.r)
+    drop.x = at.x
+    drop.y = at.y
+    drop.vx = 0
+    drop.vy = 0
+  }
+
+  // Starts a droplet budding from where it sits now, so the move out is continuous.
+  function bud(drop: Drop, boost: number) {
+    drop.phase = BUDDING
+    drop.t = 0
+    drop.boost = boost
+    drop.d0 = Math.hypot(drop.x - CENTER.x, drop.y - CENTER.y)
+  }
+
+  // A click throws the two droplets nearest to it off the surface straight away, and ripples the coin.
+  function burst(px: number, py: number) {
+    rippleAge = 0
+    const angle = Math.atan2(py - CENTER.y, px - CENTER.x)
+    drops
+      .filter((drop) => drop.phase === DOCKED)
+      .sort((a, b) => Math.abs(angleGap(a.angle, angle)) - Math.abs(angleGap(b.angle, angle)))
+      .slice(0, 2)
+      .forEach((drop) => bud(drop, 1.3))
+  }
+
+  function stepDrop(drop: Drop, dt: number) {
+    drop.t += dt
+    if (drop.phase === DOCKED) {
+      // It swells on the surface, then leaves.
+      const swell = easeInOut(clamp((drop.t - (drop.wait - SWELL)) / SWELL, 0, 1))
+      drop.r = drop.base * (0.62 + 0.38 * swell)
+      const at = surfacePoint(drop.angle, drop.r)
+      drop.x = at.x
+      drop.y = at.y
+      if (drop.t >= drop.wait) bud(drop, 1)
+    } else if (drop.phase === BUDDING) {
+      // It moves out from the surface. The neck to the coin stretches as it goes.
+      const k = clamp(drop.t / BUD_T, 0, 1)
+      const dist = lerp(drop.d0, COIN_R + 1.15 * drop.base + 14, easeOut(k))
+      const dx = Math.cos(drop.angle)
+      const dy = Math.sin(drop.angle)
+      drop.x = CENTER.x + dx * dist
+      drop.y = CENTER.y + dy * dist
+      drop.r = lerp(drop.r, drop.base * 0.92, 1 - Math.exp(-dt * 8))
+      if (k >= 1) {
+        const speed = rand(80, 125) * drop.boost
+        const spin = rand(-22, 22)
+        drop.vx = dx * speed - dy * spin
+        drop.vy = dy * speed + dx * spin
+        drop.flight = rand(0.8, 1.25)
+        drop.phase = FLYING
+        drop.t = 0
+      }
+    } else if (drop.phase === FLYING) {
+      // Drag slows it and gravity bends it down, so it arcs out and shrinks a little as it goes.
+      drop.vx -= DRAG * drop.vx * dt
+      drop.vy += (GRAVITY - DRAG * drop.vy) * dt
+      drop.x += drop.vx * dt
+      drop.y += drop.vy * dt
+      const k = clamp(drop.t / drop.flight, 0, 1)
+      drop.r = lerp(drop.r, drop.base * (0.92 - 0.14 * k), 1 - Math.exp(-dt * 6))
+      if (drop.t >= drop.flight) {
+        drop.phase = RETURNING
+        drop.t = 0
+      }
+    } else if (drop.phase === RETURNING) {
+      // A damped spring draws it back to where it left. It speeds up toward the coin and settles into it.
+      const anchor = surfacePoint(drop.angle, drop.base)
+      const ax = SPRING * (anchor.x - drop.x) - DAMP * drop.vx
+      const ay = SPRING * (anchor.y - drop.y) - DAMP * drop.vy
+      drop.vx += ax * dt
+      drop.vy += ay * dt
+      drop.x += drop.vx * dt
+      drop.y += drop.vy * dt
+      drop.r = lerp(drop.r, drop.base * 0.84, 1 - Math.exp(-dt * 6))
+      const gap = Math.hypot(anchor.x - drop.x, anchor.y - drop.y)
+      if (gap < 0.5 * drop.r + 10 || drop.t > RETURN_MAX) {
+        drop.phase = ABSORBING
+        drop.t = 0
+        rippleAge = 0
+      }
+    } else {
+      // It sinks into the coin and shrinks to nothing. The landing sends a ripple across the coin.
+      const anchor = surfacePoint(drop.angle, drop.base)
+      const k = clamp(drop.t / ABSORB_T, 0, 1)
+      const follow = 1 - Math.exp(-dt * 14)
+      drop.x = lerp(drop.x, anchor.x, follow)
+      drop.y = lerp(drop.y, anchor.y, follow)
+      drop.r = drop.base * 0.84 * (1 - easeInOut(k))
+      if (k >= 1) dock(drop)
+    }
+  }
+
+  // One step of the scene: the bead, the light, the droplets and the ripple.
+  function step(dt: number) {
+    t += dt
+    rippleAge += dt
+    // The bead follows the pointer across the surface. Away from the art it rolls round the rim, so the coin never looks flat.
+    const goal = pointer.inside
+      ? pullInside(pointer.x, pointer.y, COIN_R - 14)
+      : {
+          x: CENTER.x + (COIN_R - 16) * Math.cos(t * 0.3 + 1.1),
+          y: CENTER.y + (COIN_R - 16) * Math.sin(t * 0.3 + 1.1),
+        }
+    head.tx = lerp(head.tx, head.x, 1 - Math.exp(-dt * 1.8))
+    head.ty = lerp(head.ty, head.y, 1 - Math.exp(-dt * 1.8))
+    const headK = 1 - Math.exp(-dt * 4)
+    head.x = lerp(head.x, goal.x, headK)
+    head.y = lerp(head.y, goal.y, headK)
+    pull = lerp(pull, pointer.inside ? 1 : 0, 1 - Math.exp(-dt * 3))
+
+    for (const drop of drops) stepDrop(drop, dt)
+
+    // The light sweeps up and down over the body, and the pointer draws it toward itself while it is over the art.
+    const lightGoal = pointer.inside
+      ? { x: pointer.x - 40, y: pointer.y - 70 }
+      : { x: CENTER.x - 60 + 42 * Math.sin(t * 0.31), y: CENTER.y + 210 * Math.sin(t * 0.55 + 0.6) }
+    const lightK = 1 - Math.exp(-dt * 2.5)
+    light.x = lerp(light.x, lightGoal.x, lightK)
+    light.y = lerp(light.y, lightGoal.y, lightK)
+  }
+
+  // Each shape is a capsule from its trail to its position, so a fast droplet stretches along its path.
+  const segs = new Float32Array(SHAPES * 4)
+  const rads = new Float32Array(SHAPES)
+  function fillShapes() {
+    for (let index = 0; index < DROP_COUNT; index++) {
+      const drop = drops[index]
+      const speed = Math.hypot(drop.vx, drop.vy)
+      const moving = drop.phase === FLYING || drop.phase === RETURNING
+      const tail = moving ? clamp(speed * 0.055, 0, 26) : 0
+      const ux = speed > 1e-3 ? drop.vx / speed : 0
+      const uy = speed > 1e-3 ? drop.vy / speed : 0
+      segs[index * 4] = drop.x - ux * tail
+      segs[index * 4 + 1] = drop.y - uy * tail
+      segs[index * 4 + 2] = drop.x
+      segs[index * 4 + 3] = drop.y
+      rads[index] = drop.r
+    }
+    const h = DROP_COUNT
+    segs[h * 4] = head.tx
+    segs[h * 4 + 1] = head.ty
+    segs[h * 4 + 2] = head.x
+    segs[h * 4 + 3] = head.y
+    // The bead only shows while the pointer is over the art; otherwise it sinks back into the coin.
+    rads[h] = HEAD_R * pull
+  }
+
+  let shown = false
+  function render() {
+    fillShapes()
+    // The horizon sweeps up and down over the whole medallion, so the chrome's bright band travels across it.
+    gl.uniform2f(u.canvas, canvas.width, canvas.height)
+    gl.uniform2f(u.off, view.offX, view.offY)
+    gl.uniform1f(u.scale, view.scale)
+    gl.uniform1f(u.time, t)
+    gl.uniform1i(u.count, SHAPES)
+    gl.uniform4fv(u.seg, segs)
+    gl.uniform1fv(u.rad, rads)
+    gl.uniform2f(u.head, head.x, head.y)
+    gl.uniform1f(u.pull, pull)
+    gl.uniform1f(u.ripple, rippleAge)
+    gl.uniform2f(u.light, light.x, light.y)
+    gl.uniform1f(u.horizon, CENTER.y + 190 * Math.sin(t * 0.55))
+    gl.uniform3fv(u.top, colors.top)
+    gl.uniform3fv(u.mid, colors.mid)
+    gl.uniform3fv(u.line, colors.line)
+    gl.uniform3fv(u.low, colors.low)
+    gl.uniform3fv(u.base, colors.base)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    if (!shown) {
+      shown = true
+      canvas.style.opacity = "1"
+      if (statics) statics.style.opacity = "0"
+    }
+  }
+
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  let visible = true
+  let frame = 0
+  let last = 0
+
+  function running() {
+    return visible && !reduced && !document.hidden
+  }
+
+  function tick(now: number) {
+    frame = 0
+    if (!running()) return
+    const dt = last ? Math.min(0.05, (now - last) / 1000) : 0
+    last = now
+    step(dt)
+    render()
+    frame = requestAnimationFrame(tick)
+  }
+
+  // Starts the loop when the art is on screen and the tab is visible. Nothing runs while it is not.
+  function wake() {
+    if (!frame && running()) frame = requestAnimationFrame(tick)
+  }
+
+  function toView(clientX: number, clientY: number) {
+    const rect = wrap.getBoundingClientRect()
+    const css = Math.max(rect.width / VIEW_W, rect.height / VIEW_H, 1e-3)
+    const ox = (rect.width - VIEW_W * css) / 2
+    const oy = (rect.height - VIEW_H * css) / 2
+    return {
+      x: clamp((clientX - rect.left - ox) / css, 0, VIEW_W),
+      y: clamp((clientY - rect.top - oy) / css, 0, VIEW_H),
+    }
+  }
+
+  function onMove(event: PointerEvent) {
+    const point = toView(event.clientX, event.clientY)
+    pointer.x = point.x
+    pointer.y = point.y
+    pointer.inside = true
+  }
+  function onDown(event: PointerEvent) {
+    const point = toView(event.clientX, event.clientY)
+    pointer.x = point.x
+    pointer.y = point.y
+    pointer.inside = true
+    burst(point.x, point.y)
+  }
+  function onLeave() {
+    pointer.inside = false
+  }
+
+  fit()
+  const observer = new IntersectionObserver(([entry]) => {
+    visible = entry?.isIntersecting ?? true
+    wake()
+  })
+  observer.observe(wrap)
+  const resize = new ResizeObserver(() => {
+    fit()
+    if (reduced) render()
+  })
+  resize.observe(wrap)
+  const themeObserver = new MutationObserver(() => {
+    readColors()
+    if (reduced) render()
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "style"] })
+  document.addEventListener("visibilitychange", wake)
+
+  if (reduced) {
+    // A still frame: the medallion at rest, with its glint and horizon where the sweep starts.
+    step(0)
+    render()
+  } else {
+    wrap.addEventListener("pointermove", onMove)
+    wrap.addEventListener("pointerdown", onDown)
+    wrap.addEventListener("pointerleave", onLeave)
+    wake()
+  }
+
+  return () => {
+    cancelAnimationFrame(frame)
+    observer.disconnect()
+    resize.disconnect()
+    themeObserver.disconnect()
+    document.removeEventListener("visibilitychange", wake)
+    wrap.removeEventListener("pointermove", onMove)
+    wrap.removeEventListener("pointerdown", onDown)
+    wrap.removeEventListener("pointerleave", onLeave)
+    gl.deleteProgram(program)
+    gl.deleteTexture(texture)
+    gl.deleteVertexArray(vao)
+  }
 }
 
 export function AuthArt({ className }: { className?: string }) {
   const wrapRef = useRef<HTMLDivElement>(null)
-  const coinRef = useRef<SVGPathElement>(null)
-  const dropRefs = useRef<(SVGEllipseElement | null)[]>([])
-  const splashRefs = useRef<(SVGEllipseElement | null)[]>([])
-  const headRef = useRef<SVGCircleElement>(null)
-  const trailRef = useRef<SVGCircleElement>(null)
-  const lightRef = useRef<SVGFEPointLightElement>(null)
-  const chromeRef = useRef<SVGLinearGradientElement>(null)
-  const bobRef = useRef<SVGGElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const staticRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
-    const wrapEl = wrapRef.current
-    const coinEl = coinRef.current
-    const headEl = headRef.current
-    const trailEl = trailRef.current
-    const lightEl = lightRef.current
-    const chromeEl = chromeRef.current
-    const bobEl = bobRef.current
-    if (!wrapEl || !coinEl || !headEl || !trailEl || !lightEl || !chromeEl || !bobEl) return
-    // Typed, non-null copies, so the helpers below don't have to re-check them.
-    const wrap: HTMLDivElement = wrapEl
-    const coin: SVGPathElement = coinEl
-    const head: SVGCircleElement = headEl
-    const trail: SVGCircleElement = trailEl
-    const light: SVGFEPointLightElement = lightEl
-    const chrome: SVGLinearGradientElement = chromeEl
-    const bob: SVGGElement = bobEl
-    const dropEls = dropRefs.current.filter((el): el is SVGEllipseElement => Boolean(el))
-    const splashEls = splashRefs.current.filter((el): el is SVGEllipseElement => Boolean(el))
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-
-    const drops = START.map((start) => ({ x: start.x, y: start.y, vx: 0, vy: 0 }))
-    const ax = new Float64Array(drops.length)
-    const ay = new Float64Array(drops.length)
-    const splashes = Array.from({ length: SPLASH_MAX }, () => ({ x: 0, y: 0, vx: 0, vy: 0, r: 0, life: 0, total: 1 }))
-    const pointer = { inside: false, x: REST.x, y: REST.y }
-    const headPos = { x: REST.x, y: REST.y }
-    const trailPos = { x: REST.x, y: REST.y }
-    const lightPos = { x: -80, y: -120 }
-    // How far the pointer's pull has risen, so the medallion swells in and out instead of snapping.
-    let pull = 0
-    // Seconds since the last click. Beyond a few seconds the ripple has died away.
-    let ripple = Infinity
-    let t = 0
-    let last = 0
-    let frame = 0
-
-    // Map a client point into the art's view box. The art is cropped to fill, so the offsets matter.
-    function toView(clientX: number, clientY: number) {
-      const rect = wrap.getBoundingClientRect()
-      const scale = Math.max(rect.width / VIEW_W, rect.height / VIEW_H)
-      const ox = (rect.width - VIEW_W * scale) / 2
-      const oy = (rect.height - VIEW_H * scale) / 2
-      return {
-        x: clamp((clientX - rect.left - ox) / scale, 0, VIEW_W),
-        y: clamp((clientY - rect.top - oy) / scale, 0, VIEW_H),
-      }
-    }
-
-    // A click sends a ripple through the medallion, throws the droplets outward and flicks off a few beads.
-    function burst(px: number, py: number) {
-      ripple = 0
-      for (const drop of drops) {
-        const dx = drop.x - px
-        const dy = drop.y - py
-        const dist = Math.hypot(dx, dy) + 1
-        const power = 380 / (1 + dist / 140)
-        drop.vx += (dx / dist) * power
-        drop.vy += (dy / dist) * power
-      }
-      let spawned = 0
-      for (const splash of splashes) {
-        if (splash.life > 0) continue
-        const angle = Math.random() * Math.PI * 2
-        const speed = 160 + Math.random() * 170
-        const life = 1.1 + Math.random() * 0.6
-        splash.x = px
-        splash.y = py
-        splash.vx = Math.cos(angle) * speed
-        splash.vy = Math.sin(angle) * speed
-        splash.r = 13 + Math.random() * 11
-        splash.total = life
-        splash.life = life
-        spawned += 1
-        if (spawned >= 6) break
-      }
-    }
-
-    function step(dt: number) {
-      t += dt
-      ripple += dt
-
-      // The head follows the pointer with a little lag, and the trail follows the head more slowly.
-      // With no pointer over the art, the head drifts on its own.
-      const goal = pointer.inside
-        ? pointer
-        : { x: CENTER.x + 200 * Math.cos(t * 0.21 + 1.2), y: CENTER.y + 240 * Math.sin(t * 0.16) }
-      const headK = 1 - Math.exp(-dt * 4)
-      const trailK = 1 - Math.exp(-dt * 1.8)
-      headPos.x += (goal.x - headPos.x) * headK
-      headPos.y += (goal.y - headPos.y) * headK
-      trailPos.x += (headPos.x - trailPos.x) * trailK
-      trailPos.y += (headPos.y - trailPos.y) * trailK
-      pull += ((pointer.inside ? 1 : 0) - pull) * (1 - Math.exp(-dt * 3))
-
-      // Each droplet has a spring to its orbit, is dragged toward the head while the pointer is over the art,
-      // and is pushed off its neighbours when they overlap, so they stay separate beads until they meet.
-      ax.fill(0)
-      ay.fill(0)
-      for (let i = 0; i < drops.length; i++) {
-        const drop = drops[i]
-        const home = homeOf(DROPS[i], t)
-        ax[i] += SPRING * (home.x - drop.x)
-        ay[i] += SPRING * (home.y - drop.y)
-        if (pointer.inside) {
-          const dx = headPos.x - drop.x
-          const dy = headPos.y - drop.y
-          const dist = Math.hypot(dx, dy) + 1
-          const strength = (POINTER_PULL * DROPS[i].pull) / (1 + dist / 150)
-          ax[i] += (dx / dist) * strength
-          ay[i] += (dy / dist) * strength
-        }
-      }
-      for (let i = 0; i < drops.length; i++) {
-        for (let j = i + 1; j < drops.length; j++) {
-          const a = drops[i]
-          const b = drops[j]
-          const dx = b.x - a.x
-          const dy = b.y - a.y
-          const dist = Math.hypot(dx, dy) + 0.01
-          const min = (DROPS[i].r + DROPS[j].r) * 0.7
-          if (dist >= min) continue
-          const push = (min - dist) * 18
-          const nx = dx / dist
-          const ny = dy / dist
-          ax[i] -= nx * push
-          ay[i] -= ny * push
-          ax[j] += nx * push
-          ay[j] += ny * push
-        }
-      }
-      for (let i = 0; i < drops.length; i++) {
-        const drop = drops[i]
-        drop.vx += (ax[i] - DAMP * drop.vx) * dt
-        drop.vy += (ay[i] - DAMP * drop.vy) * dt
-        drop.x = clamp(drop.x + drop.vx * dt, 30, VIEW_W - 30)
-        drop.y = clamp(drop.y + drop.vy * dt, 40, VIEW_H - 40)
-      }
-
-      // Thrown droplets are pulled back toward the medallion, so they rejoin it.
-      for (const splash of splashes) {
-        if (splash.life <= 0) continue
-        splash.life -= dt
-        splash.vx += ((CENTER.x - splash.x) * 0.5 - splash.vx * 2.2) * dt
-        splash.vy += ((CENTER.y - splash.y) * 0.5 - splash.vy * 2.2) * dt
-        splash.x += splash.vx * dt
-        splash.y += splash.vy * dt
-      }
-
-      // The light follows the pointer, and drifts across the top of the panel when the pointer is away.
-      const lightGoal = pointer.inside
-        ? { x: pointer.x - 40, y: pointer.y - 70 }
-        : { x: CENTER.x + 240 * Math.cos(t * 0.25), y: 170 + 90 * Math.sin(t * 0.25) }
-      const lightK = 1 - Math.exp(-dt * 2.5)
-      lightPos.x += (lightGoal.x - lightPos.x) * lightK
-      lightPos.y += (lightGoal.y - lightPos.y) * lightK
-    }
-
-    // The medallion's edge: a slow wobble, a swell toward the pointer, and a ripple after a click.
-    function coinPath() {
-      const toward = Math.atan2(headPos.y - CENTER.y, headPos.x - CENTER.x)
-      const reach = pull * (1 / (1 + Math.hypot(headPos.x - CENTER.x, headPos.y - CENTER.y) / 260))
-      const rippling = ripple < 3
-      let d = ""
-      for (let i = 0; i < COIN_POINTS; i++) {
-        const theta = (i / COIN_POINTS) * Math.PI * 2
-        let r = COIN_R + 5 * Math.sin(3 * theta + t * 0.9) + 3.5 * Math.sin(5 * theta - t * 1.1)
-        const facing = Math.max(0, Math.cos(angleGap(theta, toward)))
-        r += 34 * reach * facing ** 6
-        if (rippling) r += 10 * Math.exp(-ripple * 2.2) * Math.sin(4 * theta - ripple * 12)
-        const x = CENTER.x + r * Math.cos(theta)
-        const y = CENTER.y + r * Math.sin(theta)
-        d += `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`
-      }
-      return `${d}Z`
-    }
-
-    function shapeOf(splash: { r: number; life: number; total: number }) {
-      return splash.r * Math.min(1, (splash.life / splash.total) * 1.6)
-    }
-
-    function render() {
-      // The horizon drifts up and down the medallion, so the chrome seems to turn in the light.
-      const horizon = CENTER.y + 46 * Math.sin(t * 0.45) + (pull * 30) * Math.cos(t * 0.8)
-      chrome.setAttribute("y1", (horizon - 240).toFixed(1))
-      chrome.setAttribute("y2", (horizon + 240).toFixed(1))
-      // The whole piece rises and falls on one steady rhythm, with a slight sway.
-      bob.setAttribute("transform", `translate(${(5 * Math.sin(t * 0.27)).toFixed(2)} ${(12 * Math.sin(t * 0.6)).toFixed(2)})`)
-      coin.setAttribute("d", coinPath())
-
-      head.setAttribute("cx", headPos.x.toFixed(1))
-      head.setAttribute("cy", headPos.y.toFixed(1))
-      trail.setAttribute("cx", trailPos.x.toFixed(1))
-      trail.setAttribute("cy", trailPos.y.toFixed(1))
-
-      drops.forEach((drop, index) => {
-        const el = dropEls[index]
-        if (!el) return
-        const spec = DROPS[index]
-        const r = spec.r * (1 + 0.07 * Math.sin(t * spec.breath + spec.phase))
-        shape(el, drop.x, drop.y, r, drop.vx, drop.vy)
-      })
-
-      splashes.forEach((splash, index) => {
-        const el = splashEls[index]
-        if (!el) return
-        if (splash.life <= 0) {
-          el.setAttribute("rx", "0")
-          el.setAttribute("ry", "0")
-          return
-        }
-        shape(el, splash.x, splash.y, shapeOf(splash), splash.vx, splash.vy)
-      })
-
-      light.setAttribute("x", lightPos.x.toFixed(1))
-      light.setAttribute("y", lightPos.y.toFixed(1))
-    }
-
-    function frameTick(dt: number) {
-      step(dt)
-      render()
-    }
-
-    function loop(now: number) {
-      const dt = last ? Math.min(0.05, (now - last) / 1000) : 0
-      last = now
-      // Hidden on phones: keep the clock running but skip the work until the art is on screen again.
-      if (wrap.offsetParent !== null) frameTick(dt)
-      frame = requestAnimationFrame(loop)
-    }
-
-    function onMove(event: PointerEvent) {
-      const point = toView(event.clientX, event.clientY)
-      pointer.x = point.x
-      pointer.y = point.y
-      pointer.inside = true
-    }
-    function onDown(event: PointerEvent) {
-      const point = toView(event.clientX, event.clientY)
-      pointer.x = point.x
-      pointer.y = point.y
-      pointer.inside = true
-      burst(point.x, point.y)
-    }
-    function onLeave() {
-      pointer.inside = false
-    }
-
-    if (still) {
-      frameTick(0)
-    } else {
-      frame = requestAnimationFrame(loop)
-      wrap.addEventListener("pointermove", onMove)
-      wrap.addEventListener("pointerdown", onDown)
-      wrap.addEventListener("pointerleave", onLeave)
-    }
-
-    return () => {
-      cancelAnimationFrame(frame)
-      wrap.removeEventListener("pointermove", onMove)
-      wrap.removeEventListener("pointerdown", onDown)
-      wrap.removeEventListener("pointerleave", onLeave)
-    }
+    const wrap = wrapRef.current
+    const canvas = canvasRef.current
+    if (!wrap || !canvas) return
+    const gl = canvas.getContext("webgl2", { alpha: true, antialias: false, premultipliedAlpha: true })
+    if (!gl) return
+    return start(wrap, canvas, gl, staticRef.current)
   }, [])
 
   return (
     <div ref={wrapRef} aria-hidden="true" className={cn("absolute inset-0 overflow-hidden", className)}>
-      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid slice" className="absolute inset-0 size-full">
+      {/* The static medallion: the first paint, and what remains if WebGL 2 is not available. */}
+      <svg
+        ref={staticRef}
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        preserveAspectRatio="xMidYMid slice"
+        className="absolute inset-0 size-full transition-opacity duration-500"
+      >
         <defs>
-          {/* Chrome: a sky, a bright horizon line, then a dark ground. The horizon moves; see render(). */}
-          <linearGradient ref={chromeRef} id="auth-art-chrome" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={CENTER.y - 240} y2={CENTER.y + 240}>
+          <linearGradient id="auth-art-static" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={CENTER.y - COIN_R} y2={CENTER.y + COIN_R}>
             <stop offset="0" style={{ stopColor: "var(--art-top)" }} />
-            <stop offset="0.44" style={{ stopColor: "var(--art-mid)" }} />
+            <stop offset="0.46" style={{ stopColor: "var(--art-mid)" }} />
             <stop offset="0.5" style={{ stopColor: "var(--art-line)" }} />
             <stop offset="0.56" style={{ stopColor: "var(--art-low)" }} />
             <stop offset="1" style={{ stopColor: "var(--art-base)" }} />
           </linearGradient>
-
-          {/* Blur, then sharpen the edge into a bead of liquid, then light the bead so it glints. */}
-          <filter id="auth-art-liquid" x="-40%" y="-40%" width="180%" height="180%" colorInterpolationFilters="sRGB">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
-            <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -11" result="body" />
-            <feSpecularLighting in="body" surfaceScale="6" specularConstant="1.1" specularExponent="28" lightingColor="#ffffff" result="glint">
-              <fePointLight ref={lightRef} x={-80} y={-120} z="200" />
-            </feSpecularLighting>
-            <feComposite in="glint" in2="body" operator="in" result="glintIn" />
-            <feMerge>
-              <feMergeNode in="body" />
-              <feMergeNode in="glintIn" />
-            </feMerge>
-          </filter>
-
-          {/* The mark is cut out of the medallion, so it stays crisp and shows the panel behind it. */}
-          <mask id="auth-art-cut" maskUnits="userSpaceOnUse" x="0" y="0" width={VIEW_W} height={VIEW_H}>
+          <mask id="auth-art-static-cut" maskUnits="userSpaceOnUse" x="0" y="0" width={VIEW_W} height={VIEW_H}>
             <rect width={VIEW_W} height={VIEW_H} fill="#fff" />
             <path
               fill="#000"
               fillRule="evenodd"
               d={MARK}
-              transform={`translate(${LOGO.x} ${LOGO.y}) scale(${LOGO.size / 510})`}
+              transform={`translate(${LOGO.x} ${LOGO.y}) scale(${LOGO.size / MARK_UNITS})`}
             />
           </mask>
         </defs>
-
-        <g ref={bobRef} mask="url(#auth-art-cut)">
-          <g filter="url(#auth-art-liquid)" fill="url(#auth-art-chrome)">
-            <path ref={coinRef} d={`M${CENTER.x - COIN_R} ${CENTER.y}A${COIN_R} ${COIN_R} 0 1 0 ${CENTER.x + COIN_R} ${CENTER.y}A${COIN_R} ${COIN_R} 0 1 0 ${CENTER.x - COIN_R} ${CENTER.y}Z`} />
-            {DROPS.map((drop, index) => (
-              <ellipse
-                key={index}
-                ref={(el) => {
-                  dropRefs.current[index] = el
-                }}
-                cx={START[index].x.toFixed(1)}
-                cy={START[index].y.toFixed(1)}
-                rx={drop.r}
-                ry={drop.r}
-              />
-            ))}
-            {Array.from({ length: SPLASH_MAX }, (_, index) => (
-              <ellipse
-                key={`splash-${index}`}
-                ref={(el) => {
-                  splashRefs.current[index] = el
-                }}
-                cx={REST.x}
-                cy={REST.y}
-                rx={0}
-                ry={0}
-              />
-            ))}
-            <circle ref={trailRef} cx={REST.x} cy={REST.y} r={20} />
-            <circle ref={headRef} cx={REST.x} cy={REST.y} r={36} />
-          </g>
-        </g>
+        <circle cx={CENTER.x} cy={CENTER.y} r={COIN_R} fill="url(#auth-art-static)" mask="url(#auth-art-static-cut)" />
       </svg>
+      <canvas ref={canvasRef} className="absolute inset-0 size-full opacity-0 transition-opacity duration-500" />
     </div>
   )
 }
