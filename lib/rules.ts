@@ -13,8 +13,8 @@ export const MAX_PASSWORD = 200
 // Profiles live at /<handle>, so a handle must never take the name of a top-level route. These lists follow the route
 // tree: each folder directly under app/(app), app/(auth), app/api and app/media, the app's own top-level routes, and
 // the pages the app links to. A new top-level route folder goes into its list here in the same change.
-const ROUTES_APP = ["advertise", "analytics", "bookmarks", "drafts", "explore", "lists", "messages", "notices", "notifications", "search", "settings", "topics"]
-const ROUTES_AUTH = ["login", "signup", "forgot-password", "reset-password"]
+const ROUTES_APP = ["advertise", "analytics", "bookmarks", "connect", "drafts", "explore", "lists", "messages", "notices", "notifications", "search", "settings", "topics"]
+const ROUTES_AUTH = ["login", "signup", "forgot-password", "reset-password", "welcome"]
 const ROUTES_API = ["api", "account-data", "calls", "events", "feed", "health", "suggest"]
 const ROUTES_ROOT = [
   "media", "offline", "terms", "privacy", "rules", "safety", "copyright", "transparency", "legal", "notice", "accept-terms", "manifest", "favicon",

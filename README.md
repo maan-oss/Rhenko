@@ -31,6 +31,7 @@ Every setting is optional. `.env.example` lists them, and a line that starts wit
 
 - `RHENKO_SECRET` (16 characters or more) protects the stored two-factor keys. Without it the server makes `data/secret.key` on first use.
 - `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM` send the email codes for address confirmation and password reset. In production, without SMTP, those features say email isn't set up.
+- `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if that service needs one, turn on the translate button through a LibreTranslate-compatible service. Off by default, and only the text a reader asks to translate is sent.
 - `RHENKO_TRUST_PROXY=1` when a reverse proxy sets `X-Forwarded-For`. Without it, every visitor shares one rate-limit bucket.
 - `RHENKO_ICE_SERVERS`, or `RHENKO_TURN_SECRET` with `RHENKO_TURN_URLS`, give voice calls a TURN relay for networks that block direct connections. Without them calls use Google's public STUN server.
 - `RHENKO_OPERATOR_NAME` and `RHENKO_CONTACT_EMAIL` appear on the Terms and Privacy pages.
@@ -45,7 +46,7 @@ Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls nee
 - Photos lose their location, camera and time details when they are uploaded. That covers EXIF, XMP, IPTC, text chunks and comments in JPEG, PNG, WebP and GIF. The picture itself is unchanged. Videos keep their metadata.
 - `npm run backup` writes a folder into `backups/` with a consistent copy of the database, the server key and the uploads. It keeps the newest 14. Copy the backup folder off the machine as well. The script's header has the restore steps.
 - A background tick runs every 15 seconds. It publishes scheduled posts on time, announces poll results, ends calls that have stopped answering, and removes expired sessions and codes.
-- Retention is enforced by the background tick: views and profile visits after 90 days, For you impressions and time on screen after 30 days, read notifications after 180 days, and notices and moderation records after three years. Hidden posts are deleted when their appeal window closes or an appeal fails.
+- Retention is enforced by the background tick: views and profile visits after 90 days, For you impressions and time on screen after 30 days, read notifications after 180 days, notices and moderation records after three years, and "Not now" choices on connection suggestions after 180 days. Hidden posts are deleted when their appeal window closes or an appeal fails.
 - Delete the data directory to reset the app to empty.
 
 ## Operations

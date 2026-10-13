@@ -51,6 +51,9 @@ export type UserRow = {
   email: string | null
   email_verified_at: number | null
   terms_version: string | null
+  onboarding: string
+  // The language codes this account speaks, joined with commas. Read only by getViewer.
+  speaks_codes?: string | null
 }
 
 export type Viewer = {
@@ -76,6 +79,10 @@ export type Viewer = {
   plus: boolean
   // A paid subscriber badge. It is shown to others, and says nothing about who the person is.
   paidVerified: boolean
+  // Setting up connections: pending until the person finishes or skips the steps after sign-up.
+  onboarding: "pending" | "done" | "skipped"
+  // The languages this account speaks. Used to tell whether a post or message is in one the viewer can read.
+  speaks: string[]
 }
 
 export function toViewer(row: UserRow): Viewer {
@@ -98,6 +105,8 @@ export function toViewer(row: UserRow): Viewer {
     emailVerified: row.email_verified_at !== null,
     plus: row.plus_active === 1,
     paidVerified: row.paid_verified === 1,
+    onboarding: row.onboarding === "pending" || row.onboarding === "done" ? row.onboarding : "skipped",
+    speaks: row.speaks_codes ? row.speaks_codes.split(",") : [],
   }
 }
 
@@ -565,7 +574,8 @@ export async function getViewer(): Promise<Viewer | null> {
   const now = Date.now()
   const row = get<UserRow & { last_seen: number }>(
     `SELECT u.*, s.last_seen,
-       EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.user_id = u.id AND sub.kind = 'plus' AND sub.status IN ('active', 'trialing')) AS plus_active
+       EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.user_id = u.id AND sub.kind = 'plus' AND sub.status IN ('active', 'trialing')) AS plus_active,
+       (SELECT group_concat(ul.code) FROM user_languages ul WHERE ul.user_id = u.id AND ul.kind = 'speak') AS speaks_codes
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND u.deactivated_at IS NULL`,
     hash,

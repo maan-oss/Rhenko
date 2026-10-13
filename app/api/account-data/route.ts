@@ -1,6 +1,8 @@
 import fs from "node:fs"
 import { getViewer } from "@/lib/auth"
+import { settingsFor } from "@/lib/connections"
 import { all, get } from "@/lib/db"
+import { languageName } from "@/lib/languages"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { notificationPrefsFor } from "@/lib/settings-data"
 import { uploadPath } from "@/lib/uploads"
@@ -89,9 +91,10 @@ function collect(userId: string, media: Map<string, Media>) {
     is_draft: number
     sensitive: number
     reply_setting: string
+    lang: string | null
   }>(
     `SELECT p.id, p.body, p.reply_to_id, pu.handle AS reply_to_author, p.quote_of_id, p.created_at, p.edited_at,
-       p.publish_at, p.is_draft, p.sensitive, p.reply_setting
+       p.publish_at, p.is_draft, p.sensitive, p.reply_setting, p.lang
      FROM posts p
      LEFT JOIN posts parent ON parent.id = p.reply_to_id
      LEFT JOIN users pu ON pu.id = parent.author_id
@@ -140,6 +143,7 @@ function collect(userId: string, media: Map<string, Media>) {
       quoteOf: row.quote_of_id,
       sensitive: row.sensitive === 1,
       whoCanReply: row.reply_setting,
+      language: row.lang || null,
       media: mediaByPost.get(row.id) ?? [],
       poll: endsAt === undefined ? null : { endsAt: iso(endsAt), choices: optionsByPost.get(row.id) ?? [] },
     }
@@ -180,8 +184,9 @@ function collect(userId: string, media: Map<string, Media>) {
     call_status: string | null
     call_seconds: number
     created_at: number
+    lang: string | null
   }>(
-    `SELECT m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.call_status, m.call_seconds, m.created_at
+    `SELECT m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.call_status, m.call_seconds, m.created_at, m.lang
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
      WHERE m.conversation_id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?) AND m.deleted_at IS NULL
      ORDER BY m.conversation_id, m.created_at, m.id`,
@@ -203,6 +208,7 @@ function collect(userId: string, media: Map<string, Media>) {
       photo: file(row.media_file),
       sharedPostId: row.post_id,
       call: row.call_status ? { outcome: row.call_status, seconds: row.call_seconds } : null,
+      language: row.lang || null,
     })
     messagesByConversation.set(row.conversation_id, list)
   }
@@ -225,6 +231,27 @@ function collect(userId: string, media: Map<string, Media>) {
       profilePhoto: file(user.avatar_file),
       banner: file(user.banner_file),
     },
+    // Where the person is and the languages they use, for suggestions only. Nobody else sees the city or town.
+    connections: (() => {
+      const settings = settingsFor(userId)
+      return {
+        where: {
+          country: settings.country || null,
+          countryName: settings.countryName,
+          cityOrTown: settings.area || null,
+        },
+        suggestNearby: settings.suggestNearby,
+        suggestLanguagePartners: settings.suggestLanguage,
+        setup: settings.onboarding,
+        languages: {
+          speak: settings.speak.map((item) => ({ code: item.code, name: languageName(item.code), level: item.level })),
+          learn: settings.learn.map((code) => ({ code, name: languageName(code) })),
+        },
+        notNow: handleRows(
+          "SELECT u.handle, d.created_at FROM connection_dismissals d JOIN users u ON u.id = d.user_id WHERE d.viewer_id = ? ORDER BY d.created_at DESC"
+        ),
+      }
+    })(),
     posts: postRows.filter((row) => row.reply_to_id === null).map(shapePost),
     replies: postRows.filter((row) => row.reply_to_id !== null).map(shapePost),
     likes: all<{ post_id: string; author: string; created_at: number }>(

@@ -1,5 +1,6 @@
 "use server"
 
+import { languageOf } from "@/lib/languages"
 import { revalidatePath } from "next/cache"
 import { getViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
@@ -143,14 +144,15 @@ function previewOf(body: string, media: string | null, hasPost: boolean): string
 function insertMessage(conversationId: string, senderId: string, body: string, mediaFile: string | null, postId: string | null): void {
   const now = Date.now()
   run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     newId(),
     conversationId,
     senderId,
     body,
     mediaFile,
     postId,
-    now
+    now,
+    languageOf(body)
   )
   run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
@@ -582,6 +584,7 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   if (!id || !message || message.sender_id !== viewer.id) return { ok: false, error: "You can only delete your own messages." }
   run("UPDATE chat_messages SET deleted_at = ?, body = '', media_file = NULL, post_id = NULL WHERE id = ?", Date.now(), id)
   run("DELETE FROM message_reactions WHERE message_id = ?", id)
+  run("DELETE FROM message_translations WHERE message_id = ?", id)
   removeUpload(message.media_file)
   publish(memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })
   refresh()

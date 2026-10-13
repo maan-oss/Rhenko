@@ -1,12 +1,13 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
-import { BarChart3, CalendarDays, FileText, Heart, Image as ImageIcon, Link as LinkIcon, Lock, MapPin, MessageCircle, Repeat2, Star } from "lucide-react"
+import { BarChart3, CalendarDays, FileText, Heart, Image as ImageIcon, Languages, Link as LinkIcon, Lock, MapPin, MessageCircle, Repeat2, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { canSeePost, getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
 import { hostOf, joinedLabel, pluralize } from "@/lib/format"
+import { languageName, SPEAK_LEVELS } from "@/lib/languages"
 import { Avatar } from "@/components/app/avatar"
 import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
@@ -168,6 +169,12 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
               {profile.location}
             </span>
           ) : null}
+          {profile.languages.speak.length > 0 || profile.languages.learn.length > 0 ? (
+            <span className="flex items-center gap-1.5">
+              <Languages className="size-4" aria-hidden="true" />
+              <span>{languagesLine(profile.languages)}</span>
+            </span>
+          ) : null}
           {profile.website ? (
             <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center gap-1.5 text-foreground underline-offset-4 hover:underline">
               <LinkIcon className="size-4" />
@@ -265,4 +272,21 @@ function MutualLine({ users, total }: { users: MiniUser[]; total: number }) {
       </p>
     </div>
   )
+}
+
+// "Speaks English (native), Spanish (fluent). Learning French." Written as sentences, so it reads the same everywhere.
+function languagesLine(languages: { speak: { code: string; level: string }[]; learn: string[] }): string {
+  const sentences: string[] = []
+  if (languages.speak.length > 0) {
+    const spoken = languages.speak.map((item) => {
+      const name = languageName(item.code) ?? item.code
+      const level = SPEAK_LEVELS.find((option) => option.id === item.level)?.label
+      return level ? `${name} (${level.toLowerCase()})` : name
+    })
+    sentences.push(`Speaks ${spoken.join(", ")}.`)
+  }
+  if (languages.learn.length > 0) {
+    sentences.push(`Learning ${languages.learn.map((code) => languageName(code) ?? code).join(", ")}.`)
+  }
+  return sentences.join(" ")
 }

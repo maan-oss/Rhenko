@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "node e2e/run.mjs",
-    "test:unit": "node --experimental-strip-types --test tests/abuse.test.mjs tests/ranking.test.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/abuse.test.mjs tests/ranking.test.mjs tests/languages.test.mjs tests/places-connections.test.mjs",
     "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
     "moderation": "node --env-file-if-exists=.env scripts/moderation.mjs",
     "legal": "node --env-file-if-exists=.env scripts/legal.mjs",

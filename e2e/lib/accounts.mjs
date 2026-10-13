@@ -62,6 +62,7 @@ async function settleAuth(page, { timeout = TIMEOUT } = {}) {
   while (Date.now() < end) {
     const path = new URL(page.url()).pathname
     if (path === "/") return { ok: true, step: "home" }
+    if (path === "/welcome") return { ok: true, step: "welcome" }
     if (path === "/login/verify") return { ok: true, step: "verify" }
     const alert = page.locator('form [role="alert"]').first()
     if ((await alert.count()) > 0) {
@@ -81,9 +82,15 @@ export async function trySignUp(page, fields) {
   return settleAuth(page)
 }
 
-export async function signUp(page, fields) {
+// A new account lands on the setup steps first. Most checks only need the home page, so they go straight there; a check
+// about the setup steps passes { stay: true } and gets the page it was sent to.
+export async function signUp(page, fields, { stay = false } = {}) {
   const result = await trySignUp(page, fields)
   if (!result.ok) throw new Error(`sign-up of @${fields.handle} failed: ${result.error}`)
+  if (result.step === "welcome") {
+    if (stay) return result
+    await go(page, "/", page.locator("textarea[aria-label='Post text']"))
+  }
   await page.locator("textarea[aria-label='Post text']").first().waitFor()
   return result
 }

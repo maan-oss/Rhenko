@@ -23,6 +23,8 @@ export const RETENTION = {
   visitsDays: 90,
   // Which posts were put in someone's For you, how long they were on screen, and the training they feed.
   feedSignalsDays: 30,
+  // A "not now" on a connection suggestion. Where someone is, and their languages, are kept until they change them.
+  dismissedConnectionsDays: 180,
   readNotificationsDays: 180,
   legalNoticesDays: 365 * 3,
 }

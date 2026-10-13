@@ -219,6 +219,83 @@ const SECTIONS: LegalSection[] = [
     ),
   },
   {
+    id: "connections",
+    title: "How people are suggested to connect",
+    body: (
+      <>
+        <P>
+          Connect, the right-hand column and the last setup step show people you could follow. Each suggestion says why it is there,
+          in words, such as &quot;In Leeds, like you&quot; or &quot;Language swap: French for English&quot;.
+        </P>
+        <List>
+          <li>
+            <B>Groups, in order.</B> A person appears in one group only, the first that fits: a language swap, the same town or city,
+            people you follow follow, a language you speak or are learning, or posts on topics you follow.
+          </li>
+          <li>
+            <B>What is used.</B> The town or city you gave and your country, your languages and how well you speak them, the people
+            you follow, the topics you follow, how many followers someone has, whether they posted in the last two weeks, and your
+            switches.
+          </li>
+          <li>
+            <B>What is never used.</B> Your age, your gender, your religion, your race, your health, your politics, your messages, and
+            your own posts. Rhenko never asks for a street address and never reads your device&apos;s location.
+          </li>
+          <li>
+            <B>Both people agree.</B> Nearby suggestions need both people to have them turned on, and so do language partner
+            suggestions.
+          </li>
+          <li>
+            <B>Your town is not shown to others.</B> Your city or town is never on your profile. The only place it appears is in the
+            reason on a suggestion, and only you see that.
+          </li>
+          <li>
+            <B>Nobody is told.</B> No one is told they were suggested to someone, and a suggestion is not a post. Suggestions do not
+            change how any post is ranked.
+          </li>
+          <li>
+            <B>Never suggested.</B> People you block or mute, people who have blocked you, protected and deactivated accounts, and
+            people you already follow. A person you chose Not now on stays out of your suggestions for 180 days.
+          </li>
+          <li>
+            <B>Your controls.</B> In Settings, under Connections and languages, you can change where you are and your languages, turn
+            off nearby or language suggestions, and show again the people you chose Not now on. Your data export lists all of it.
+          </li>
+        </List>
+      </>
+    ),
+  },
+  {
+    id: "translations",
+    title: "How translation works",
+    body: (
+      <>
+        <P>Translation is optional. The operator of this server decides whether to connect a translation service.</P>
+        <List>
+          <li>
+            <B>Off unless set up.</B> Where no service is connected, no translate button appears on any post or message.
+          </li>
+          <li>
+            <B>Asked for, one at a time.</B> Nothing is translated on its own. A reader asks for a translation of one post or message.
+            The translated text is kept with that post or message, so the next reader who asks for the same language does not send it
+            again.
+          </li>
+          <li>
+            <B>What is sent.</B> The text of that one post or message, the language it is in, and the language you read. Nothing else
+            goes to the service.
+          </li>
+          <li>
+            <B>Limits.</B> Each person can ask for 120 translations an hour. Text longer than 5,000 characters is not translated.
+          </li>
+          <li>
+            <B>Language guesses.</B> Rhenko guesses the language of each post and message from its text, and a guess can be wrong. If
+            the guess matches a language you speak, no translation is offered.
+          </li>
+        </List>
+      </>
+    ),
+  },
+  {
     id: "paid",
     title: "What paid features change",
     body: (

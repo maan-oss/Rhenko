@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PostBody } from "@/components/app/post-body"
+import { TranslateControl } from "@/components/app/translate-control"
 import { LocalTime } from "@/components/app/time-text"
 import { callSummary } from "@/lib/format"
 import { isVoiceFile } from "@/lib/media-names"
@@ -263,7 +264,14 @@ function MessageRow({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={`/media/${message.mediaFile}?w=1280`} alt="Shared photo" loading="lazy" decoding="async" className="max-h-72 rounded-xl object-cover" />
               ) : null}
-              {message.body ? <PostBody text={message.body} className="text-[15px]" /> : null}
+              {message.body ? (
+                <>
+                  <PostBody text={message.body} className="text-[15px]" />
+                  <div className="relative z-10">
+                    <TranslateControl kind="message" id={message.id} lang={message.lang} />
+                  </div>
+                </>
+              ) : null}
               {message.post ? (
                 <Link
                   href={`/${message.post.author.handle}/status/${message.post.id}`}

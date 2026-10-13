@@ -83,8 +83,8 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const hash = await hashPassword(password)
   try {
     run(
-      `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at, terms_version, terms_accepted_at)
-       VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
+      `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at, terms_version, terms_accepted_at, onboarding)
+       VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL, ?, ?, 'pending')`,
       id,
       handle,
       name,
@@ -101,7 +101,8 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     throw error
   }
   await createSession(id)
-  redirect("/")
+  // A new account first sets where it is, its languages and its interests. Each step can be skipped.
+  redirect("/welcome")
 }
 
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {

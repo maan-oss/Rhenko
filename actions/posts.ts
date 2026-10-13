@@ -1,5 +1,6 @@
 "use server"
 
+import { languageOf } from "@/lib/languages"
 import { revalidatePath } from "next/cache"
 import { getViewer, newId } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
@@ -156,8 +157,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   try {
     transaction(() => {
       run(
-        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         viewer.id,
         body,
@@ -168,7 +169,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         sensitive ? 1 : 0,
         publishAt,
         draft ? 1 : 0,
-        threadId
+        threadId,
+        languageOf(body)
       )
       saved.forEach((media, position) => {
         run(
@@ -244,6 +246,11 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
       )
     }
     run("UPDATE posts SET body = ?, edited_at = ? WHERE id = ?", body, changed ? Date.now() : post.edited_at, postId)
+    if (changed) {
+      // The language is found again for the new text, and a translation of the old text no longer applies.
+      run("UPDATE posts SET lang = ? WHERE id = ?", languageOf(body), postId)
+      run("DELETE FROM post_translations WHERE post_id = ?", postId)
+    }
     for (const item of media) {
       const raw = formData.get(`alt-${item.id}`)
       if (typeof raw === "string") {

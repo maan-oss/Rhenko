@@ -3,7 +3,13 @@ import { ArrowLeft } from "lucide-react"
 import { PageHeader } from "@/components/app/page-header"
 import { NewChatForm, NewGroupForm } from "@/components/app/new-message-forms"
 
-export default function NewMessagePage() {
+type SearchParams = Promise<{ with?: string | string[] }>
+
+// `?with=handle` comes from a Message button on a suggestion. Only a handle-shaped value is used.
+export default async function NewMessagePage({ searchParams }: { searchParams: SearchParams }) {
+  const raw = (await searchParams).with
+  const candidate = (Array.isArray(raw) ? raw[0] : raw) ?? ""
+  const withHandle = /^[A-Za-z0-9_]{3,15}$/.test(candidate) ? candidate : undefined
   return (
     <>
       <PageHeader title="New message" backHref="/messages" />
@@ -12,7 +18,7 @@ export default function NewMessagePage() {
         <p className="text-sm text-muted-foreground">
           If they don&apos;t follow you, your first message waits as a request until they accept.
         </p>
-        <NewChatForm />
+        <NewChatForm defaultHandle={withHandle} />
       </section>
       <section className="flex flex-col gap-3 px-4 py-5">
         <h2 className="text-lg font-semibold">Start a group</h2>

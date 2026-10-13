@@ -4,8 +4,8 @@ import { area, assert, check, guard } from "./lib/harness.mjs"
 import { BASE, RUN_ID, TIMEOUT, randomWord } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { execute } from "./lib/db.mjs"
-import { card, likeButton, openHome, waitForPost, writePost } from "./lib/posts.mjs"
-import { go } from "./lib/ui.mjs"
+import { card, likeButton, openHome, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
+import { acted, go } from "./lib/ui.mjs"
 
 export async function run() {
   area("rules")
@@ -36,9 +36,13 @@ export async function run() {
     await check("a paid subscriber's post reaches followers the same way as anyone's", async () => {
       const paidText = `Paid reach ${RUN_ID}${randomWord(4)}`
       const plainText = `Plain reach ${RUN_ID}${randomWord(4)}`
+      // The author's own posts are checked on their profile. Home's For you feed leaves out the viewer's own posts, so a
+      // new post may not be there on a reload; the profile lists it in time order.
       await writePost(paid.page, paidText)
+      await openProfile(paid.page, paid.handle)
       await waitForPost(paid.page, paidText)
       await writePost(author.page, plainText)
+      await openProfile(author.page, author.handle)
       await waitForPost(author.page, plainText)
       await openHome(reader.page, "following")
       await waitForPost(reader.page, paidText)
@@ -48,10 +52,12 @@ export async function run() {
     await check("hiding the counts on a post hides them from others, and the author still sees them", async () => {
       const text = `Counts ${RUN_ID}${randomWord(4)}`
       await writePost(author.page, text)
+      await openProfile(author.page, author.handle)
       await waitForPost(author.page, text)
       await openHome(reader.page, "following")
       await waitForPost(reader.page, text)
-      await likeButton(card(reader.page, text)).click()
+      // The like is saved before the counts are read: wait for the server to answer the click.
+      await acted(reader.page, () => likeButton(card(reader.page, text)).click())
       const feedUrl = `${BASE}/api/feed?spec=${encodeURIComponent(JSON.stringify({ kind: "profile", tab: "posts", handle: author.handle }))}`
       const countsFor = async (user) => {
         const response = await user.page.request.get(feedUrl)

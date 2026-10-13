@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
-import { Bell, Bookmark, ChartNoAxesColumn, FileText, House, List, MessageCircle, Plus, Search, Settings } from "lucide-react"
+import { Bell, Bookmark, ChartNoAxesColumn, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
@@ -28,6 +28,7 @@ export function buildItems(notifications: number, messages: number): NavItemConf
   return [
     { href: "/", label: "Home", Icon: House, filled: true, active: (p) => p === "/", mobile: true },
     { href: "/explore", label: "Explore", Icon: Search, filled: false, active: (p) => p.startsWith("/explore") || p.startsWith("/search") || p.startsWith("/topics"), mobile: true },
+    { href: "/connect", label: "Connect", Icon: UsersRound, filled: false, active: (p) => p.startsWith("/connect"), mobile: false },
     { href: "/notifications", label: "Notifications", Icon: Bell, badge: notifications, filled: true, active: (p) => p.startsWith("/notifications"), mobile: true },
     { href: "/messages", label: "Messages", Icon: MessageCircle, badge: messages, filled: true, active: (p) => p.startsWith("/messages"), mobile: true },
     { href: "/bookmarks", label: "Bookmarks", Icon: Bookmark, filled: true, active: (p) => p.startsWith("/bookmarks"), mobile: false },

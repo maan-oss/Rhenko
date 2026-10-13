@@ -112,6 +112,27 @@ const SECTIONS: LegalSection[] = [
             notified about, and your muted words.
           </li>
           <li>
+            <B>Where you are.</B> Optional. Your country and a city or town. Rhenko never stores a street address, postcode, house
+            number or your device&apos;s location. It is used only to suggest people near you, and nobody else is shown it.
+          </li>
+          <li>
+            <B>Languages.</B> The languages you speak, how well you speak each one, and the ones you are learning. They are used to
+            suggest people to practise with.
+          </li>
+          <li>
+            <B>Connection choices.</B> Whether you are suggested to people nearby and to language partners, whether you finished
+            setup, and the people you chose Not now on. Those last are kept for {RETENTION.dismissedConnectionsDays} days.
+          </li>
+          <li>
+            <B>Language of posts and messages.</B> A guess at the language of each post and message, made from its text when it is
+            saved. It can be wrong. It is used to offer a translation to the people who read it.
+          </li>
+          <li>
+            <B>Translations.</B> When someone asks for a translation, the translated text is kept with the post or message, so the
+            same text is not sent twice. A post&apos;s translations are removed when it is edited, and a message&apos;s when it is
+            deleted.
+          </li>
+          <li>
             <B>Settings.</B> Whether your posts are protected, whether the counts on your posts are hidden, and which notifications you
             want.
           </li>
@@ -338,6 +359,11 @@ const SECTIONS: LegalSection[] = [
           once an hour. A new set of weights is used only when it predicts that later behaviour better than the default weights. The
           learned weights are the same for every account and hold no record of any one person.
         </P>
+        <P>
+          Suggested people on Connect, and in the setup steps, are a separate list and are not part of any feed. They use the city
+          or town you gave, the languages you speak and are learning, the people and topics you follow, how many followers someone
+          has, and whether they posted in the last two weeks. Only you see them. The transparency page sets out the rules in full.
+        </P>
         <List>
           <li>
             <B>For you</B> shows the posts you are allowed to see, ranked as described above.
@@ -464,6 +490,11 @@ const SECTIONS: LegalSection[] = [
             that under its own privacy policy. Rhenko does not receive card numbers or bank details.
           </li>
           <li>The operator&apos;s mail service receives the address and the text of each verification, reset or notice email.</li>
+          <li>
+            A translation service, only if the operator has turned translation on. It receives the text of the one post or message you
+            ask to translate, and the two languages involved. Nothing else is sent to it. Translation is off unless the operator sets
+            it up.
+          </li>
           <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
           <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
           <li>
@@ -507,6 +538,18 @@ const SECTIONS: LegalSection[] = [
         </li>
         <li>Read notifications are deleted after {RETENTION.readNotificationsDays} days. Unread ones are kept until you read them.</li>
         <li>
+          Your city or town, your country, your languages and your connection choices are kept until you change them or delete your
+          account.
+        </li>
+        <li>
+          People you chose Not now on are kept for {RETENTION.dismissedConnectionsDays} days, then forgotten. You can show them again
+          at any time, in Settings, under Connections and languages.
+        </li>
+        <li>
+          Translations are kept with the post or message they translate. A post&apos;s translations are removed when it is edited, and
+          a message&apos;s when it is deleted.
+        </li>
+        <li>
           Payment and accounting records (subscriptions, tips, advertising payments and the advertising ledger) are kept for as long as
           the accounting and tax law where the operator is based requires. The operator deletes them when that period ends. The one-way
           codes in the advertising ledger are kept with those entries. Stripe keeps its own records under its own policy.
@@ -537,7 +580,8 @@ const SECTIONS: LegalSection[] = [
         <List>
           <li>
             <B>Access and a copy.</B> <TextLink href="/settings">Settings, under Account, Your data</TextLink>, downloads a ZIP of
-            your profile, posts, likes, bookmarks, lists, messages and your photos and videos.
+            your profile, posts, likes, bookmarks, lists, messages, your city or town, your languages and connection choices, and
+            your photos and videos.
           </li>
           <li>
             <B>Correction.</B> Edit your profile from your profile page, and your handle and email address in Settings, under

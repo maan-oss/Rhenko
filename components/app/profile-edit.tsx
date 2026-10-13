@@ -64,6 +64,9 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
           </Field>
           <Field label="Location">
             <input name="location" maxLength={MAX_LOCATION} defaultValue={defaults.location} className={INPUT} />
+            <span className="text-[13px] text-muted-foreground">
+              Shown on your profile, in any words you like. The city used for suggestions is private, and is set in Settings.
+            </span>
           </Field>
           <Field label="Website">
             <input name="website" type="url" maxLength={MAX_WEBSITE} placeholder="https://" defaultValue={defaults.website} className={INPUT} />

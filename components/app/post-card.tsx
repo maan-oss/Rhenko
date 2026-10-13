@@ -9,6 +9,7 @@ import { PendingActions } from "@/components/app/pending-actions"
 import { PollView } from "@/components/app/poll-view"
 import { PostActions } from "@/components/app/post-actions"
 import { PostBody } from "@/components/app/post-body"
+import { TranslateControl } from "@/components/app/translate-control"
 import { LinkCard } from "@/components/app/link-card"
 import { LocalTime, RelativeTime } from "@/components/app/time-text"
 import { ViewBeacon } from "@/components/app/view-beacon"
@@ -165,7 +166,12 @@ export function PostCard({
             </p>
           ) : null}
           {post.body ? (
-            <PostBody text={post.body} className={cn("leading-relaxed", detail ? "mt-2 text-xl" : "mt-0.5 text-[15px]")} />
+            <>
+              <PostBody text={post.body} className={cn("leading-relaxed", detail ? "mt-2 text-xl" : "mt-0.5 text-[15px]")} />
+              <div className="relative z-10">
+                <TranslateControl kind="post" id={post.id} lang={post.lang} />
+              </div>
+            </>
           ) : null}
           {post.preview && post.media.length === 0 && !post.quotedUnavailable && !post.quoted ? <LinkCard preview={post.preview} /> : null}
           {post.threadId && !detail ? (

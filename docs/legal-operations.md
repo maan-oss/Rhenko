@@ -54,6 +54,9 @@ Work through this list in order. Each item names who is responsible.
    decision-making transparency, and the Children's Online Privacy Code, which the regulator must make by December 2026.
 9. **Email (operator).** Set `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM`. Without SMTP, reference and decision emails are
    printed to the log and the command line, so they must be sent by hand.
+    **Translation (operator, optional).** Set `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if the service needs a key. The
+    service receives the text of each post or message a reader asks to translate, so name it in the Privacy Policy's list of
+    recipients and put in place the processing terms the law requires. Without the variable, no translate button appears.
 10. **Hosting and backups (operator).** Serve over HTTPS. Keep off-site copies of `npm run backup` output, and remember that
     a backup holds deleted content until it is replaced. Keep `RHENKO_SECRET` safe: without it, two-factor keys cannot
     be read.
@@ -112,7 +115,8 @@ and the answer in the operator's own records, because the app does not keep a re
 Tell affected people in plain words what happened, what data, and what they can do. Record every step.
 
 **Retention.** The tick removes views and profile visits after 90 days, For you impressions and time on screen after 30 days, read
-notifications after 180 days, and notices and moderation records after three years. The For you ranking is refit from those
+notifications after 180 days, notices and moderation records after three years, and "Not now" choices on connection suggestions after
+180 days. Translations are removed with the post when it is edited, and with the message when it is deleted. The For you ranking is refit from those
 impressions once an hour (`trainFeedModel` in `lib/feed-learning.ts`); its weights hold no record of any one person. Check the backups too: they keep what was deleted until they are replaced.
 
 ## 5. Reviewing the figures

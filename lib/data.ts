@@ -56,6 +56,8 @@ export type PostCore = {
   replyToHandle: string | null
   threadId: string | null
   quoteOfId: string | null
+  // The language the post is written in, as a code, or "" when it is not clear. Read by the translate button.
+  lang: string
   // The first link in the post, with what its page says, once it has been read.
   preview: LinkPreview | null
   replySetting: ReplySetting
@@ -100,6 +102,7 @@ export type Page<T> = { items: T[]; next: string | null }
 type PostRow = {
   id: string
   body: string
+  lang: string | null
   created_at: number
   edited_at: number | null
   publish_at: number | null
@@ -305,7 +308,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
   const rows = all<PostRow>(
-    `SELECT p.id, p.body, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
+    `SELECT p.id, p.body, p.lang, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
        p.reply_setting, p.thread_id,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
@@ -374,6 +377,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
     result.set(r.id, {
       id: r.id,
       body: r.body,
+      lang: r.lang ?? "",
       createdAt: r.created_at,
       editedAt: r.edited_at,
       publishAt: r.publish_at,
@@ -1300,6 +1304,20 @@ export type ProfileView = {
   relationship: Relationship
   // The viewer asked to hear about every new post from this account.
   notifying: boolean
+  // The languages this person speaks, with a level, and the ones they are learning. Shown to everyone, so people can find a
+  // language partner. Where they are is never shown.
+  languages: { speak: { code: string; level: string }[]; learn: string[] }
+}
+
+function profileLanguages(userId: string): ProfileView["languages"] {
+  const rows = all<{ code: string; kind: string; level: string }>(
+    "SELECT code, kind, level FROM user_languages WHERE user_id = ? ORDER BY rowid",
+    userId
+  )
+  return {
+    speak: rows.filter((row) => row.kind === "speak").map((row) => ({ code: row.code, level: row.level })),
+    learn: rows.filter((row) => row.kind === "learn").map((row) => row.code),
+  }
 }
 
 export function getProfileByHandle(handle: string, viewerId: string): ProfileView | null {
@@ -1355,6 +1373,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     birthday: isSelf ? row.birthday : null,
     relationship,
     notifying: !isSelf && get("SELECT 1 AS found FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewerId, row.id) !== undefined,
+    languages: profileLanguages(row.id),
   }
 }
 
@@ -1874,6 +1893,8 @@ export type MessageView = {
   senderHandle: string
   mine: boolean
   body: string
+  // The language the text is written in, or "" when it is not clear.
+  lang: string
   deleted: boolean
   mediaFile: string | null
   // A shared post the viewer may see. When the viewer may not see it, `post` is null and `postUnavailable` is true.
@@ -1890,6 +1911,7 @@ type MessageRow = {
   id: string
   sender_id: string
   body: string
+  lang: string | null
   media_file: string | null
   post_id: string | null
   created_at: number
@@ -1902,7 +1924,7 @@ type MessageRow = {
   sender_handle: string
 }
 
-const MESSAGE_SELECT = `SELECT m.id, m.sender_id, m.body, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
+const MESSAGE_SELECT = `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
        u.name AS sender_name, u.handle AS sender_handle
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
      WHERE m.conversation_id = ?`
@@ -1965,6 +1987,7 @@ function toMessageViews(rows: MessageRow[], conversationId: string, viewerId: st
       senderHandle: r.sender_handle,
       mine: r.sender_id === viewerId,
       body: r.deleted_at ? "" : r.body,
+      lang: r.deleted_at ? "" : (r.lang ?? ""),
       deleted: r.deleted_at !== null,
       mediaFile: r.deleted_at ? null : r.media_file,
       post,

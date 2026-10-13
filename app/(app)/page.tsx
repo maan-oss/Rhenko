@@ -14,6 +14,7 @@ import { TabLinks } from "@/components/app/tabs"
 import { Composer } from "@/components/app/composer"
 import { FeedList } from "@/components/app/feed-list"
 import { FeedSkeleton } from "@/components/app/feed-skeleton"
+import { SetupBanner } from "@/components/app/setup-banner"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
@@ -52,6 +53,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
           />
         }
       />
+      {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       {tags.length > 0 ? (
         <nav aria-label="Trending topics" className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tags.map(({ tag }) => (

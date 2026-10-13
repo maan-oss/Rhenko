@@ -23,6 +23,8 @@
 //   ONLY             run only some areas, for example ONLY=auth,posts
 //   E2E_TIMEOUT_MS   how long one wait for something on a page may take (default 20000; raise it for a server that
 //                    compiles pages as it goes)
+//   E2E_TRANSLATE    set to 1 when the server runs with RHENKO_TRANSLATE_URL (e2e/lib/translate-stub.mjs is a stand-in).
+//                    Without it, the connections area expects no Translate button at all.
 //
 // The server must run with RHENKO_TRUST_PROXY=1. Each browser sends its own fake client address in x-real-ip, and the
 // rate limits count by that address only when the server is told a proxy sets it.
@@ -42,6 +44,7 @@ import * as billing from "./billing.mjs"
 import * as ads from "./ads.mjs"
 import * as rules from "./rules.mjs"
 import * as settings from "./settings.mjs"
+import * as connections from "./connections.mjs"
 import * as visibility from "./visibility.mjs"
 import * as account from "./account.mjs"
 import * as legal from "./legal.mjs"
@@ -93,6 +96,7 @@ const AREAS = [
   ["ads", ads],
   ["rules", rules],
   ["settings", settings],
+  ["connections", connections],
   ["visibility", visibility],
   ["account", account],
   ["legal", legal],

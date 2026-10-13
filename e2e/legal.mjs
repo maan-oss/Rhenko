@@ -423,6 +423,8 @@ async function transparency() {
     await check("the transparency page shows the counts of reports, notices and hidden posts", async () => {
       await visitor.page.goto(`${BASE}/transparency`, { waitUntil: "domcontentloaded" })
       await visitor.page.getByRole("heading", { level: 1, name: "Transparency" }).waitFor({ timeout: TIMEOUT })
+      // The figures are streamed after the heading, so wait for the first of them before reading the page.
+      await visitor.page.getByText("Reports received", { exact: true }).waitFor({ timeout: TIMEOUT })
       const text = await bodyText(visitor.page)
       for (const label of [
         "Reports received",

@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/app/page-header"
 const SECTIONS = [
   { href: "/settings/appearance", title: "Appearance" },
   { href: "/settings/account", title: "Account" },
+  { href: "/settings/connections", title: "Connections and languages" },
   { href: "/settings/security", title: "Security" },
   { href: "/settings/privacy", title: "Privacy and safety" },
   { href: "/notices", title: "Notices and appeals" },

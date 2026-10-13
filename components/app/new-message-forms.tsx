@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useEffect, useState, useTransition } from "react"
+import { useActionState, useEffect, useRef, useState, useTransition } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -11,29 +11,48 @@ import { MAX_GROUP_TITLE } from "@/lib/rules"
 const INPUT =
   "h-11 min-w-0 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
-// Start a one-to-one message with a handle.
-export function NewChatForm() {
+// Start a one-to-one message with a handle. With `defaultHandle` (from a Message button on a suggestion) the conversation
+// opens by itself: nothing is sent, and the person writes their first message in it.
+export function NewChatForm({ defaultHandle }: { defaultHandle?: string }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const started = useRef(false)
+  const open = (handle: string) => {
+    startTransition(async () => {
+      const result = await startConversation(handle)
+      if (!result.ok) setError(result.error)
+      else router.push(`/messages/${result.id}`)
+    })
+  }
+  useEffect(() => {
+    if (!defaultHandle || started.current) return
+    started.current = true
+    open(defaultHandle)
+    // Opens once, for the handle the page was given.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultHandle])
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
-        const handle = String(new FormData(event.currentTarget).get("handle") ?? "").trim().replace(/^@/, "")
-        startTransition(async () => {
-          const result = await startConversation(handle)
-          if (!result.ok) setError(result.error)
-          else router.push(`/messages/${result.id}`)
-        })
+        open(String(new FormData(event.currentTarget).get("handle") ?? "").trim().replace(/^@/, ""))
       }}
     >
       <label htmlFor="chat-handle" className="text-sm font-semibold">
         Handle
       </label>
       <div className="flex gap-2">
-        <input id="chat-handle" name="handle" required placeholder="@someone" autoComplete="off" className={`${INPUT} flex-1`} />
+        <input
+          id="chat-handle"
+          name="handle"
+          required
+          placeholder="@someone"
+          autoComplete="off"
+          defaultValue={defaultHandle ? `@${defaultHandle}` : undefined}
+          className={`${INPUT} flex-1`}
+        />
         <Button type="submit" disabled={pending} className="h-11 rounded-lg px-5">
           {pending ? "Opening" : "Next"}
         </Button>

@@ -6,6 +6,8 @@ import { sweepLimits } from "@/lib/rate-limit"
 import { RETENTION } from "@/lib/legal"
 import { purgeHidden } from "@/lib/moderation"
 import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
+import { purgeDismissals } from "@/lib/connections"
+import { recordMissingLanguages } from "@/lib/translate"
 
 // Background work that does not wait for anyone to open a page: scheduled posts go live on time, polls announce
 // their results, calls that have stopped answering end, and expired sessions and codes are removed.
@@ -51,6 +53,8 @@ export function runMaintenance(now = Date.now()): void {
     }
     purgeFeedSignals(now)
   }
+  // Older posts and messages get their language recorded a few at a time, so translation can tell what they are written in.
+  recordMissingLanguages(100)
   sweepLimits(now)
 }
 
@@ -66,6 +70,7 @@ function keepWithinRetention(now: number): void {
   // Refreshes the planner's statistics as the tables grow. Cheap, and keeps the feed queries on their indexes.
   optimizeDatabase()
   run("DELETE FROM post_views WHERE created_at < ?", now - RETENTION.viewsDays * DAY)
+  purgeDismissals(now)
   run("DELETE FROM profile_visits WHERE created_at < ?", now - RETENTION.visitsDays * DAY)
   run("DELETE FROM notifications WHERE read = 1 AND created_at < ?", now - RETENTION.readNotificationsDays * DAY)
   run("DELETE FROM legal_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)

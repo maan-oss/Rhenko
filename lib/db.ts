@@ -834,6 +834,52 @@ CREATE TABLE IF NOT EXISTS feed_model (
   trained_at INTEGER NOT NULL
 );
 `,
+  // 24. Connections. Where someone is: a country and a city or town, kept for matching and never shown on a profile or
+  // to anyone else. The languages they speak (with a level) and are learning. Two switches, one for nearby suggestions and
+  // one for language partners: a pair is matched only when both people have the switch on. Accounts made before this
+  // step are marked skipped, so they are not asked to set up; new accounts start pending. A dismissal is a "not now" on a
+  // suggestion. Posts and messages get a language guess, and translations are kept so each is asked for once.
+  `
+ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN area TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN area_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN suggest_nearby INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE users ADD COLUMN suggest_language INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE users ADD COLUMN onboarding TEXT NOT NULL DEFAULT 'skipped';
+CREATE INDEX IF NOT EXISTS users_area ON users(country, area_key) WHERE area_key <> '' AND suggest_nearby = 1;
+CREATE TABLE IF NOT EXISTS user_languages (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('speak', 'learn')),
+  level TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (user_id, code, kind)
+);
+CREATE INDEX IF NOT EXISTS user_languages_code ON user_languages(code, kind);
+CREATE TABLE IF NOT EXISTS connection_dismissals (
+  viewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (viewer_id, user_id)
+);
+ALTER TABLE posts ADD COLUMN lang TEXT;
+ALTER TABLE chat_messages ADD COLUMN lang TEXT;
+CREATE TABLE IF NOT EXISTS post_translations (
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  target TEXT NOT NULL,
+  source TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (post_id, target)
+);
+CREATE TABLE IF NOT EXISTS message_translations (
+  message_id TEXT NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  target TEXT NOT NULL,
+  source TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (message_id, target)
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }
