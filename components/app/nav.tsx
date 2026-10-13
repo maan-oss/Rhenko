@@ -7,6 +7,7 @@ import { motion } from "motion/react"
 import { Bell, Bookmark, ChartNoAxesColumn, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
+import { TabFill } from "@/components/app/tabs"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
 import type { AccountSummary } from "@/lib/auth"
 import { cn } from "@/lib/utils"
@@ -219,14 +220,8 @@ export function MobileTabBar({
                   aria-current={isActive ? "page" : undefined}
                   className="relative grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
                 >
-                  {isActive ? (
-                    <motion.span
-                      layoutId="mobile-dock-pill"
-                      className="metal absolute inset-0 rounded-full"
-                      transition={{ type: "spring", stiffness: 500, damping: 38 }}
-                    />
-                  ) : null}
-                  <Icon className={cn("relative size-[22px]", isActive ? "text-[var(--metal-text)]" : "text-foreground/80")} strokeWidth={isActive ? 2.2 : 1.75} aria-hidden="true" />
+                  {isActive ? <TabFill layoutId="mobile-dock-pill" /> : null}
+                  <Icon className={cn("relative size-[22px]", isActive ? "text-background" : "text-foreground/80")} strokeWidth={isActive ? 2.2 : 1.75} aria-hidden="true" />
                   {badge && badge > 0 ? (
                     <span className="metal absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold">
                       {badge > 9 ? "9+" : badge}

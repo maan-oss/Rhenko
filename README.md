@@ -93,7 +93,7 @@ The scripts read the same database as the app, and the server can keep running w
 
 **Home and posts**
 - The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. A row of trending topics sits above the composer and links to `/topics/[tag]`.
-- Tabs across the app are icons. The active tab also shows its name, so you always know where you are.
+- Tabs across the app show an icon and a name. Every tab is the same size. The active tab is a solid fill (black on a light page, white on a dark one), and choosing another tab moves only that fill.
 - The composer posts text up to 25,000 characters, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, 25 MB) with alt text, or a poll with two to four options.
 - Long posts fold after their opening lines, with Show more and Show less. Posts can use **bold**, *italic* and ~~strike~~. A mark must touch its text, so "2 * 3 * 4" stays as written.
 - Threads: Add to thread adds another part under the first post. The parts post in order, each answering the one before, and a later part links back with Show this thread. Threads post right away, so they can't be drafted or scheduled.
@@ -113,7 +113,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Post view counts. The author's view count opens that post's analytics page.
 
 **Profiles and relationships**
-- A banner that fades into the page and a circle avatar. The tabs are icons, and the active one shows its name: Posts, Replies, Media, Reposts and Likes (visible only to the account's owner). Highlights sits inside Posts as a second option. Empty tabs say so in the middle of the page.
+- A banner that fades into the page and a circle avatar. The tabs are icons with the name on hover and for screen readers: Posts, Replies, Media, Reposts and Likes (visible only to the account's owner). Highlights sits inside Posts as a second option. Empty tabs say so in the middle of the page.
 - Posts holds the account's own posts. Reposts have their own tab, so they no longer mix in with posts.
 - A profile lists the people you follow who also follow it ("Followed by …"). The Message button sits below that line.
 - Follow, unfollow, and follow requests for protected accounts. Protected accounts show only to approved followers.
@@ -132,7 +132,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Likes, reposts, replies, quotes, follows, mentions, poll results, follow requests, and new posts from accounts you've switched alerts on for. Each kind has an on/off switch in Settings → Notifications.
 - Mentions can be limited to verified accounts in Settings → Notifications.
 - Each row shows the kind of notification as a small badge on the avatar, with the time under the name and a preview of the post when there is one. Unread rows are shaded and carry a dot.
-- The tabs are icons and slide between sections.
+- The tabs show an icon and a name. The solid fill of the active tab slides to the one you pick.
 
 **Messages**
 - Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave. Anyone who doesn't follow the creator gets an invite and joins once they accept.
@@ -165,7 +165,7 @@ The scripts read the same database as the app, and the server can keep running w
 - The sidebar is one full-height, opaque surface. The logo leads at the top left. At the top right, the settings gear and the sun/moon switch sit as a pair, and a collapse button closes the sidebar (its arrow points left). Expanded, the labels show. Collapsed, the logo becomes the open button on hover (its arrow points right), and each icon's label appears beside it. The state is kept in a cookie, so the page never flashes the wrong width.
 - The sidebar footer holds the Post button, then your profile, with the `…` account switcher and a log out button beside it. Post is always there, even when the sidebar is collapsed.
 - The switch between light and dark sweeps a panel down the screen in the new colour, then the page converts underneath it. The pair squashes under the pointer and wobbles apart on a press.
-- On phones the bottom navigation is a glass dock: Home, Explore, Notifications and Messages. The active item is a metal pill that slides between them. The avatar at the end opens the left panel, which holds every section. In a conversation the dock stays folded so the composer's Send button stays free, and tapping it opens the left panel.
+- On phones the bottom navigation is a glass dock: Home, Explore, Notifications and Messages. The active item is a solid fill that slides between them. The avatar at the end opens the left panel, which holds every section. In a conversation the dock stays folded so the composer's Send button stays free, and tapping it opens the left panel.
 - The left panel slides in from the left with rounded edges that overlap the page, and it is fully opaque. The logo leads at the top, the same settings and theme pair and a close button sit at the top right, then every section, with Post above your profile at the foot. Swipe right from the left edge to open it; swipe left, press Escape, or tap the dimmed page to close it.
 - The sign-in art is liquid metal: a polished medallion carries the Rhenko mark, cut out of it, and droplets drift in and merge with it. The medallion swells toward the pointer, the light in the metal follows the pointer, and a click sends a ripple through it and throws droplets off that fall back in. The metal uses the theme's colours, and it holds still under reduced motion.
 - The sign-in handle always shows its `@` in the normal text colour, and the Rhenko wordmark is the same size as the logo.

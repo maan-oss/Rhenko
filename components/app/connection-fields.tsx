@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { motion } from "motion/react"
+import { useId, useMemo, useState } from "react"
 import { Check } from "lucide-react"
+import { TabFill } from "@/components/app/tabs"
 import { COMMON_LANGUAGE_CODES, LANGUAGES, SPEAK_LEVELS, type SpeakLevel } from "@/lib/languages"
 import { AREA_MAX, COUNTRIES } from "@/lib/places"
 import { cn } from "@/lib/utils"
@@ -133,6 +133,7 @@ type Tab = "speak" | "learn"
 // list only. The tabs choose which list a tap changes; the chips show what is in each.
 export function LanguageFields({ value, onChange }: { value: LanguageValue; onChange: (next: LanguageValue) => void }) {
   const [tab, setTab] = useState<Tab>("speak")
+  const id = useId()
   const [query, setQuery] = useState("")
   const spoken = useMemo(() => new Set(value.speak.map((item) => item.code)), [value.speak])
   const learning = useMemo(() => new Set(value.learn), [value.learn])
@@ -169,7 +170,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
 
   return (
     <div className="flex flex-col gap-6">
-      <div role="tablist" aria-label="Language lists" className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1">
+      <div role="tablist" aria-label="Language lists" className="grid grid-cols-2 gap-1 rounded-full border border-border p-1">
         {tabs.map((item) => {
           const active = tab === item.id
           return (
@@ -181,19 +182,13 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
               onClick={() => setTab(item.id)}
               className={cn(
                 "relative h-10 rounded-full text-[14px] font-semibold transition-colors duration-200",
-                active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                active ? "text-background" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {active ? (
-                <motion.span
-                  layoutId="language-tab"
-                  className="absolute inset-0 rounded-full bg-background shadow-sm"
-                  transition={{ type: "spring", stiffness: 520, damping: 42 }}
-                />
-              ) : null}
+              {active ? <TabFill layoutId={`${id}-fill`} /> : null}
               <span className="relative inline-flex items-center gap-1.5">
                 {item.label}
-                {item.count > 0 ? <span className="tabular-nums text-muted-foreground">{item.count}</span> : null}
+                {item.count > 0 ? <span className={cn("tabular-nums", active ? "text-background/70" : "text-muted-foreground")}>{item.count}</span> : null}
               </span>
             </button>
           )
