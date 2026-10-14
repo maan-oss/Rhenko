@@ -73,22 +73,6 @@ export function restorePost(postId: string, now = Date.now()): boolean {
 
 export type AppealDecision = "reversed" | "upheld"
 
-// Records the decision on an appeal. A reversal restores the post. Either way the notice is closed.
-export function decideAppeal(appealId: string, decision: AppealDecision, note: string, now = Date.now()): { ok: true } | { ok: false; error: string } {
-  const appeal = get<{ id: string; notice_id: string; decided_at: number | null }>(
-    "SELECT id, notice_id, decided_at FROM appeals WHERE id = ?",
-    appealId
-  )
-  if (!appeal) return { ok: false, error: "No appeal has that id." }
-  if (appeal.decided_at !== null) return { ok: false, error: "That appeal was already decided." }
-  const notice = get<{ post_id: string }>("SELECT post_id FROM moderation_notices WHERE id = ?", appeal.notice_id)
-  transaction(() => {
-    run("UPDATE appeals SET decided_at = ?, decision = ?, decision_note = ? WHERE id = ?", now, decision, note.trim(), appeal.id)
-    if (decision === "reversed" && notice) restorePost(notice.post_id, now)
-  })
-  return { ok: true }
-}
-
 // Deletes hidden posts whose appeal window has closed with no appeal, or whose appeal was decided against the author.
 // Their files go too, and the notice keeps its reason but loses the excerpt of the content.
 export function purgeHidden(now = Date.now()): number {

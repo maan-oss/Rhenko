@@ -1470,8 +1470,3 @@ export function dismissLiveCall(callId: string): void {
   post({ t: "dismiss", callId })
   syncLive()
 }
-
-// Whether this tab is busy with a call, for the call buttons.
-export function callBusy(): boolean {
-  return session !== null || starting || (state.status !== "idle" && state.status !== "ended")
-}

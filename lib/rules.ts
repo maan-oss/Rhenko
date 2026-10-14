@@ -156,12 +156,6 @@ export const SCHEDULE_MAX_AHEAD_MS = 75 * 24 * 60 * 60 * 1000
 export const REPLY_SETTINGS = ["everyone", "following", "mentioned"] as const
 export type ReplySetting = (typeof REPLY_SETTINGS)[number]
 
-export const REPLY_SETTING_LABELS: Record<ReplySetting, string> = {
-  everyone: "Everyone",
-  following: "Accounts you follow",
-  mentioned: "Only accounts you mention",
-}
-
 export function asReplySetting(value: string | null | undefined): ReplySetting {
   return (REPLY_SETTINGS as readonly string[]).includes(value ?? "") ? (value as ReplySetting) : "everyone"
 }
@@ -255,10 +249,6 @@ export function validateSchedule(at: number, now: number): string | null {
 
 export function normalizeTag(tag: string): string {
   return tag.replace(/^#/, "").toLowerCase()
-}
-
-export function normalizeWord(word: string): string {
-  return word.trim().replace(/^#/, "").toLowerCase()
 }
 
 // Age is checked against the date given, so a 13th birthday today counts.

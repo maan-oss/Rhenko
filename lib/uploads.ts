@@ -30,11 +30,6 @@ const BY_EXT: Record<string, Format> = Object.fromEntries(Object.values(FORMATS)
 
 export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga)$/
 
-export function mediaKindOf(name: string): MediaKind {
-  const ext = name.slice(name.lastIndexOf(".") + 1)
-  return BY_EXT[ext]?.kind ?? "image"
-}
-
 function matchesSignature(buf: Buffer, mime: string): boolean {
   if (mime === "image/jpeg") return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
   if (mime === "image/png") return buf.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))

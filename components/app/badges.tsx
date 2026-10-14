@@ -37,10 +37,6 @@ export function AiLabel({ className }: { className?: string }) {
   )
 }
 
-export function EditedMark({ className }: { className?: string }) {
-  return <span className={cn("text-[13px] text-muted-foreground", className)}>· Edited</span>
-}
-
 export function LockedBadge({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" role="img" aria-label="Protected account" className={cn("size-[0.9em] shrink-0 text-muted-foreground", className)} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

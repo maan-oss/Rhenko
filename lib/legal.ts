@@ -49,8 +49,6 @@ export const MODERATION_CATEGORIES = [
   { id: "rules", label: "Breaks our Rules" },
 ] as const
 
-export type ModerationCategory = (typeof MODERATION_CATEGORIES)[number]["id"]
-
 export function categoryLabel(id: string): string {
   return MODERATION_CATEGORIES.find((c) => c.id === id)?.label ?? "Breaks our Rules"
 }
@@ -64,8 +62,6 @@ export const NOTICE_KINDS = [
   { id: "privacy", label: "Private information shared without consent" },
   { id: "illegal", label: "Other illegal content" },
 ] as const
-
-export type NoticeKind = (typeof NOTICE_KINDS)[number]["id"]
 
 export function noticeKindLabel(id: string): string {
   return NOTICE_KINDS.find((k) => k.id === id)?.label ?? "Other illegal content"

@@ -344,10 +344,6 @@ export async function readChallenge(): Promise<{ userId: string; tokenHash: stri
   return row ? { userId: row.user_id, tokenHash } : null
 }
 
-export async function challengedUserId(): Promise<string | null> {
-  return (await readChallenge())?.userId ?? null
-}
-
 // Counts a wrong code against one sign-in. Returns false on the fifth wrong code, when the sign-in has to start
 // again. consume() allows `limit` calls in its window and refuses the next, so a limit of four refuses the fifth.
 export function countChallengeFailure(tokenHash: string): boolean {

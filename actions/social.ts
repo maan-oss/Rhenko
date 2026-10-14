@@ -254,16 +254,6 @@ export async function setTopicFollow(tag: string, follow: boolean): Promise<Topi
   return { ok: true, following: true }
 }
 
-// Flips the follow on a topic and returns the state it ended in.
-export async function toggleTopicFollow(tag: string): Promise<VoidResult & { following?: boolean }> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in to follow topics." }
-  const checked = checkTopic(tag)
-  if (!checked.ok) return checked
-  const existing = get("SELECT 1 AS found FROM topic_follows WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
-  return setTopicFollow(checked.tag, !existing)
-}
-
 // The next page of an account's followers or following, newest first. It applies the same rules as the page: a protected
 // account only shows its lists to the owner and to people who follow it.
 export async function loadMorePeople(handle: string, kind: "followers" | "following", before: number): Promise<PeoplePage> {

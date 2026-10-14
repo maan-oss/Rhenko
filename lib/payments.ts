@@ -299,7 +299,6 @@ export async function payoutOnboardingUrl(viewer: Viewer): Promise<string> {
 
 // ── Advertising credit (the ad balance is in micro-units: one cent is 10,000) ───────────────────────────────────────
 
-
 // Adds the paid amount to the balance once: a repeated record for the same checkout is ignored. Runs inside the
 // webhook's transaction (processStripeEvent), so it does not open one of its own.
 function creditAdAccount(accountId: string, amount: number, reference: string): void {
@@ -336,7 +335,6 @@ export async function adCreditUrl(viewer: Viewer, accountId: string, amount: num
   if (!session.url) throw new Error("Stripe did not return a payment page. Try again.")
   return session.url
 }
-
 
 // ── Webhooks ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -453,9 +451,4 @@ export function billingState(viewer: Viewer): BillingState {
     tips: { count: tips?.count ?? 0, total: tips?.total ?? 0, currency: CURRENCY },
     payouts: { started: Boolean(account), ready: account?.charges_enabled === 1 },
   }
-}
-
-// The ad credit balance and payments for the advertiser page, read straight from the ledger.
-export function formatCredit(micro: number, currency: string): string {
-  return formatMoney(Math.floor(micro / MICRO_PER_CENT), currency)
 }

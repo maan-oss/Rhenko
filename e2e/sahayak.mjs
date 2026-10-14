@@ -7,7 +7,7 @@ import { area, assert, check, guard } from "./lib/harness.mjs"
 import { RUN_ID, TIMEOUT, PASSWORD, randomWord, sleep } from "./lib/env.mjs"
 import { createUser, signOut, trySignIn } from "./lib/accounts.mjs"
 import { postIdByBody, query } from "./lib/db.mjs"
-import { card, homeComposer, openHome, replyButton, typeIn, waitForPost } from "./lib/posts.mjs"
+import { card, homeComposer, openHome, replyButton, typeIn } from "./lib/posts.mjs"
 import { acted, go, toastText } from "./lib/ui.mjs"
 
 const SAHAYAK_ON = process.env.E2E_SAHAYAK === "1"

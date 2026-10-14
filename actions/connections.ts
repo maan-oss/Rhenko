@@ -11,9 +11,6 @@ import {
   saveLanguages as storeLanguages,
   saveWhere as storeWhere,
   setOnboarding,
-  suggestionsFor,
-  topPeople,
-  type SuggestedPerson,
 } from "@/lib/connections"
 
 export type ConnectionResult = { ok: true } | { ok: false; error: string }
@@ -93,13 +90,6 @@ export async function resetDismissed(): Promise<ConnectionResult> {
   clearDismissals(viewer.id)
   refresh()
   return { ok: true }
-}
-
-// The first few people the viewer could connect with, for the last setup step.
-export async function suggestedPeople(): Promise<SuggestedPerson[]> {
-  const viewer = await getViewer()
-  if (!viewer) return []
-  return topPeople(suggestionsFor(viewer.id, Date.now(), 6), 6)
 }
 
 // "Not now" on the setup prompt on Home. Setup stays available from Connect and from Settings.
