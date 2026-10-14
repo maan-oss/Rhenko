@@ -36,8 +36,9 @@ type Post = {
   quote_of_id: string | null
   removed_at: number | null
 }
-type Job = { post_id: string; asker_id: string; attempts: number }
+type Job = { post_id: string; asker_id: string }
 
+// One batch at a time in this process. Across processes, each question is claimed in the database before it is answered.
 let busy = false
 
 export async function answerQuestions(): Promise<void> {
@@ -47,14 +48,16 @@ export async function answerQuestions(): Promise<void> {
     // Loops until nothing is due, so a question queued during a pass is picked up in the same pass.
     for (let pass = 0; pass < MAX_PASSES; pass++) {
       const due = all<Job>(
-        "SELECT post_id, asker_id, attempts FROM sahayak_jobs WHERE status = 'queued' AND run_after <= ? ORDER BY run_after LIMIT ?",
+        "SELECT post_id, asker_id FROM sahayak_jobs WHERE status = 'queued' AND run_after <= ? ORDER BY run_after LIMIT ?",
         Date.now(),
         BATCH
       )
       if (due.length === 0) break
       for (const job of due) {
+        const attempts = claim(job.post_id, Date.now())
+        if (attempts === null) continue
         try {
-          await answerOne(job)
+          await answerOne(job, attempts)
         } catch (error) {
           console.error("[sahayak] an answer failed", error)
         }
@@ -65,10 +68,20 @@ export async function answerQuestions(): Promise<void> {
   }
 }
 
-async function answerOne(job: Job): Promise<void> {
-  // Taken for a while before anything else is read or called. If this process stops now, or a step fails, the question
-  // waits out the lease instead of being tried again straight away.
-  run("UPDATE sahayak_jobs SET attempts = attempts + 1, run_after = ? WHERE post_id = ?", Date.now() + LEASE_MS, job.post_id)
+// Takes a due question for this attempt. One conditional update does it, so when several processes look at the same question
+// only one gets it. The question is held for a while, so if this process stops now the question waits out the lease instead of
+// being tried again straight away. Returns the attempts used so far, this one included, or null when someone else has it.
+function claim(postId: string, now: number): number | null {
+  const row = get<{ attempts: number }>(
+    "UPDATE sahayak_jobs SET attempts = attempts + 1, run_after = ? WHERE post_id = ? AND status = 'queued' AND run_after <= ? RETURNING attempts",
+    now + LEASE_MS,
+    postId,
+    now
+  )
+  return row ? row.attempts : null
+}
+
+async function answerOne(job: Job, attempts: number): Promise<void> {
   const post = get<Post>(
     "SELECT id, author_id, body, community_id, reply_to_id, quote_of_id, removed_at FROM posts WHERE id = ?",
     job.post_id
@@ -91,13 +104,12 @@ async function answerOne(job: Job): Promise<void> {
     finish(job.post_id, "done")
     return
   }
-  // The attempt just made counts too, so this is the number of attempts so far.
-  if (job.attempts + 1 >= MAX_ATTEMPTS) {
+  if (attempts >= MAX_ATTEMPTS) {
     reply(post, FAILED_TEXT)
     finish(job.post_id, "failed")
     return
   }
-  run("UPDATE sahayak_jobs SET run_after = ? WHERE post_id = ?", Date.now() + BACKOFF_MS * (job.attempts + 1), job.post_id)
+  run("UPDATE sahayak_jobs SET run_after = ? WHERE post_id = ?", Date.now() + BACKOFF_MS * attempts, job.post_id)
 }
 
 // The quoted post, then the chain of replies above the question, nearest first. The walk stops at the first post the asker

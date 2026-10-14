@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { all, get, run } from "@/lib/db"
+import { all, get, run, transaction } from "@/lib/db"
 import {
   listenerCount,
   publish,
@@ -17,9 +17,13 @@ import { iceServersFor } from "@/lib/ice"
 import { blockedEitherWay } from "@/lib/notify"
 import { CALL_RING_MS } from "@/lib/rules"
 
-// Live calls: who is ringing, who is talking, and from which tab. They are kept in memory beside the event bus, so a
-// call lasts as long as this server process does. Every event stream opens with the boot id, so a browser can tell a
-// restart apart from a dropped connection. Each call leaves one record in its conversation when it ends.
+// Live calls: who is ringing, who is talking, and from which tab. Several server processes serve the calls, and a tab may
+// be connected to any of them, so the state lives in the database. Each call is one row that holds the call as a document.
+// An operation reads the calls it needs, changes them in memory, and writes back what changed, all in one transaction. So
+// two processes never change the same call at once. Each call leaves one record in its conversation when it ends.
+//
+// A ring has a deadline (ringUntil). The maintenance pass checks the deadlines every second, so a ring ends on time.
+// Every event stream opens with the boot id, so a browser can tell a restart apart from a dropped connection.
 
 // One tab taking part in a call. The session is the hash of the sign-in it runs under, so a sign-out on one browser
 // can end only the call running there.
@@ -38,8 +42,9 @@ type DmCall = {
   startedAt: number
   answeredAt: number | null
   connectedAt: number | null
+  // When an unanswered ring stops. Null once it is answered or the call has ended.
+  ringUntil: number | null
   beats: Map<string, number>
-  timer: ReturnType<typeof setTimeout> | null
 }
 
 type Participant = Device & { seq: number; person: EventPerson; beat: number }
@@ -50,6 +55,8 @@ type GroupCall = {
   conversationId: string
   starterId: string
   startedAt: number
+  // When the rings stop. Null once they have stopped.
+  ringUntil: number | null
   seq: number
   participants: Map<string, Participant>
   // Everyone who took part at some point, everyone rung, and who is ringing now.
@@ -60,16 +67,15 @@ type GroupCall = {
   // Time counts only while two or more people are in the call after it first connected.
   togetherSince: number | null
   togetherMs: number
-  timer: ReturnType<typeof setTimeout> | null
 }
 
 type Call = DmCall | GroupCall
 type BannerEvent = Extract<RealtimeEvent, { type: "banner" }>
-type Store = { bootId: string; calls: Map<string, Call>; banners: Map<string, { event: BannerEvent; at: number }[]> }
 
-type Globals = { __rhenkoCallState?: Store }
+// Set once per server run. The cluster master gives every process of the run the same id.
+type Globals = { __rhenkoBootId?: string }
 const globals = globalThis as unknown as Globals
-const store: Store = (globals.__rhenkoCallState ??= { bootId: randomUUID(), calls: new Map(), banners: new Map() })
+const BOOT_ID: string = (globals.__rhenkoBootId ??= process.env.RHENKO_BOOT_ID || randomUUID())
 
 export type HangUpReason = "signed-out" | "deactivated" | "deleted" | "blocked"
 
@@ -96,16 +102,21 @@ export type SignalResult = { ok: true } | { ok: false; error: string }
 
 const GONE = "That call has ended."
 const OK: SignalResult = { ok: true }
-// A ring whose timer was lost still ends this long after it should have.
-const RING_SLACK_MS = 10_000
 // A dropped call is counted up to when it dropped, but no further back than the reconnect window.
 const MAX_LOST_MS = CALL_RECONNECT_MS + CALL_RESTART_WAIT_MS + 5_000
 const BANNER_KEEP_MS = 12 * 60 * 60 * 1000
 const BANNERS_KEPT = 5
 
-// Set once when this server process starts.
+// The calls one operation works on. Each is read from the database once, and written back at the end if it changed.
+type Working = {
+  entries: Map<string, { call: Call; doc: string | null }>
+  removed: Set<string>
+}
+let working: Working | null = null
+
+// Set once when the server run starts.
 export function serverBootId(): string {
-  return store.bootId
+  return BOOT_ID
 }
 
 export function personOf(userId: string): EventPerson | null {
@@ -118,8 +129,106 @@ export function personOf(userId: string): EventPerson | null {
 
 // Which kind of call an id names, and where, for the checks the server actions make before acting on it.
 export function callInfo(callId: string): { kind: "dm" | "group"; conversationId: string } | null {
-  const call = store.calls.get(callId)
-  return call ? { kind: call.kind, conversationId: call.conversationId } : null
+  const row = get<{ kind: "dm" | "group"; conversation_id: string }>("SELECT kind, conversation_id FROM calls WHERE id = ?", callId)
+  return row ? { kind: row.kind, conversationId: row.conversation_id } : null
+}
+
+function encode(call: Call): string {
+  return JSON.stringify(call, (_key, value: unknown) => {
+    if (value instanceof Map) return { $map: [...value.entries()] }
+    if (value instanceof Set) return { $set: [...value] }
+    return value
+  })
+}
+
+function decode(doc: string): Call {
+  return JSON.parse(doc, (_key, value: unknown) => {
+    if (value && typeof value === "object") {
+      if ("$map" in value) return new Map((value as { $map: [unknown, unknown][] }).$map)
+      if ("$set" in value) return new Set((value as { $set: unknown[] }).$set)
+    }
+    return value
+  }) as Call
+}
+
+function openWork(): Working {
+  if (!working) throw new Error("Calls are changed only inside a call operation.")
+  return working
+}
+
+// Runs one operation on the calls. A write runs in a transaction and saves what it changed. A read takes no lock. An
+// operation started inside another one joins it.
+function operate<T>(writes: boolean, fn: () => T): T {
+  if (working) return fn()
+  const body = (): T => {
+    const state: Working = { entries: new Map(), removed: new Set() }
+    working = state
+    try {
+      const result = fn()
+      if (writes) saveCalls(state)
+      return result
+    } finally {
+      working = null
+    }
+  }
+  return writes ? transaction(body) : body()
+}
+
+function saveCalls(state: Working): void {
+  for (const id of state.removed) run("DELETE FROM calls WHERE id = ?", id)
+  for (const [id, entry] of state.entries) {
+    const doc = encode(entry.call)
+    if (doc === entry.doc) continue
+    run(
+      "INSERT INTO calls (id, kind, conversation_id, doc) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET doc = excluded.doc",
+      id,
+      entry.call.kind,
+      entry.call.conversationId,
+      doc
+    )
+  }
+}
+
+function getCall(id: string): Call | null {
+  const state = openWork()
+  const known = state.entries.get(id)
+  if (known) return known.call
+  if (state.removed.has(id)) return null
+  const row = get<{ doc: string }>("SELECT doc FROM calls WHERE id = ?", id)
+  if (!row) return null
+  const call = decode(row.doc)
+  state.entries.set(id, { call, doc: row.doc })
+  return call
+}
+
+function listCalls(): Call[] {
+  const state = openWork()
+  for (const row of all<{ id: string; doc: string }>("SELECT id, doc FROM calls")) {
+    if (state.entries.has(row.id) || state.removed.has(row.id)) continue
+    state.entries.set(row.id, { call: decode(row.doc), doc: row.doc })
+  }
+  return [...state.entries.values()].map((entry) => entry.call)
+}
+
+// Whether a call, as this operation holds it, has not ended yet.
+function alive(call: Call): boolean {
+  return openWork().entries.get(call.id)?.call === call
+}
+
+function createCall(call: Call): void {
+  const state = openWork()
+  state.removed.delete(call.id)
+  state.entries.set(call.id, { call, doc: null })
+}
+
+function endCall(call: Call): void {
+  const state = openWork()
+  state.entries.delete(call.id)
+  state.removed.add(call.id)
+}
+
+function anyCalls(): boolean {
+  return get("SELECT 1 AS found FROM calls LIMIT 1") !== undefined
 }
 
 function relay(userId: string, callId: string, signal: CallSignal, device?: string): void {
@@ -162,7 +271,7 @@ function groupTitle(conversationId: string, viewerId: string): string {
 // Talking or ringing out counts as talking. Being rung counts as ringing.
 function busyState(userId: string, except?: string): "talking" | "ringing" | null {
   let ringing = false
-  for (const call of store.calls.values()) {
+  for (const call of listCalls()) {
     if (call.id === except) continue
     if (call.kind === "dm") {
       if (call.caller.userId === userId) return "talking"
@@ -223,18 +332,30 @@ function deliverBanner(userId: string, event: BannerEvent): void {
     publish([userId], event)
     return
   }
-  const now = Date.now()
-  const kept = (store.banners.get(userId) ?? []).filter((entry) => now - entry.at < BANNER_KEEP_MS)
-  kept.push({ event, at: now })
-  store.banners.set(userId, kept.slice(-BANNERS_KEPT))
+  run("INSERT INTO queued_banners (user_id, event, created_at) VALUES (?, ?, ?)", userId, JSON.stringify(event), Date.now())
+  run(
+    "DELETE FROM queued_banners WHERE user_id = ?1 AND id NOT IN (SELECT id FROM queued_banners WHERE user_id = ?1 ORDER BY id DESC LIMIT ?2)",
+    userId,
+    BANNERS_KEPT
+  )
 }
 
 // Banners saved while the person had nothing open. They are handed over once.
 export function takeQueuedBanners(userId: string): RealtimeEvent[] {
-  const kept = store.banners.get(userId) ?? []
-  store.banners.delete(userId)
-  const now = Date.now()
-  return kept.filter((entry) => now - entry.at < BANNER_KEEP_MS).map((entry) => entry.event)
+  return transaction(() => {
+    const rows = all<{ event: string; created_at: number }>(
+      "SELECT event, created_at FROM queued_banners WHERE user_id = ? ORDER BY id",
+      userId
+    )
+    run("DELETE FROM queued_banners WHERE user_id = ?", userId)
+    const now = Date.now()
+    return rows.filter((row) => now - row.created_at < BANNER_KEEP_MS).map((row) => JSON.parse(row.event) as RealtimeEvent)
+  })
+}
+
+// Drops banners nobody came back for. Runs from the maintenance pass.
+export function pruneQueuedBanners(now: number): void {
+  run("DELETE FROM queued_banners WHERE created_at <= ?", now - BANNER_KEEP_MS)
 }
 
 // Tells someone they missed a call, unless they muted the conversation or a block stands between them.
@@ -256,12 +377,11 @@ function missedCallBanner(call: Call, recipientId: string, fromId: string): void
   })
 }
 
-// ── One-to-one calls ────────────────────────────────────────────────────────────────────────────────────────────
+// ── One-to-one calls ────────────────────────────────────────────────────────────────────────────────────────────────
 
 function closeDm(call: DmCall, outcome: CallOutcome, seconds: number): void {
-  if (call.timer !== null) clearTimeout(call.timer)
-  call.timer = null
-  store.calls.delete(call.id)
+  call.ringUntil = null
+  endCall(call)
   writeRecord(call, outcome, seconds, 2, [call.caller.userId])
 }
 
@@ -269,10 +389,9 @@ function answerDm(call: DmCall, device: Device): void {
   const now = Date.now()
   call.answeredAt = now
   call.callee = device
+  call.ringUntil = null
   call.beats.set(call.caller.userId, now)
   call.beats.set(device.userId, now)
-  if (call.timer !== null) clearTimeout(call.timer)
-  call.timer = null
   relay(call.caller.userId, call.id, { kind: "accept" }, call.caller.deviceId)
   // Every other tab of the person called was ringing too. They stop, since this one answered.
   relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
@@ -313,11 +432,10 @@ function hangUpDm(call: DmCall, byUserId: string, at: number, byReason?: CallEnd
   if (mine) relay(mine.userId, call.id, { kind: "end", reason: byReason ?? outcome, seconds }, mine.deviceId)
 }
 
-function ringTimedOut(callId: string): void {
-  const call = store.calls.get(callId)
-  if (!call) return
+// The ring ran out. A one-to-one ring ends as missed, and a group ring stops.
+function ringTimedOut(call: Call): void {
   if (call.kind === "dm") {
-    call.timer = null
+    call.ringUntil = null
     if (call.answeredAt === null) unansweredDm(call, true)
     return
   }
@@ -327,47 +445,49 @@ function ringTimedOut(callId: string): void {
 // Rings the other person in a one-to-one chat. Pressing call while they are already calling you answers them.
 // Someone with nothing open cannot ring: the caller hears so at once and they get a missed call.
 export function startDmCall(conversationId: string, caller: Device, callee: EventPerson, from: EventPerson, video: boolean): StartResult {
-  for (const call of store.calls.values()) {
-    if (
-      call.kind === "dm" &&
-      call.conversationId === conversationId &&
-      call.answeredAt === null &&
-      call.calleeId === caller.userId &&
-      call.caller.userId === callee.id
-    ) {
-      answerDm(call, caller)
-      return { ok: true, mode: "answered", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: store.bootId, peer: callee }
+  return operate<StartResult>(true, () => {
+    for (const call of listCalls()) {
+      if (
+        call.kind === "dm" &&
+        call.conversationId === conversationId &&
+        call.answeredAt === null &&
+        call.calleeId === caller.userId &&
+        call.caller.userId === callee.id
+      ) {
+        answerDm(call, caller)
+        return { ok: true, mode: "answered", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: BOOT_ID, peer: callee }
+      }
     }
-  }
-  const mine = busyState(caller.userId)
-  if (mine === "talking") return { ok: false, error: "You're already on a call." }
-  if (mine === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
-  if (busyState(callee.id) !== null) return { ok: false, error: `${callee.name} is on another call.` }
+    const mine = busyState(caller.userId)
+    if (mine === "talking") return { ok: false, error: "You're already on a call." }
+    if (mine === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
+    if (busyState(callee.id) !== null) return { ok: false, error: `${callee.name} is on another call.` }
 
-  const now = Date.now()
-  const call: DmCall = {
-    kind: "dm",
-    id: randomUUID(),
-    conversationId,
-    video,
-    caller,
-    calleeId: callee.id,
-    callee: null,
-    startedAt: now,
-    answeredAt: null,
-    connectedAt: null,
-    beats: new Map(),
-    timer: null,
-  }
-  if (listenerCount(callee.id) === 0) {
-    writeRecord(call, "missed", 0, 2, [caller.userId])
-    missedCallBanner(call, callee.id, caller.userId)
-    return { ok: false, unavailable: true, error: `${callee.name} isn't available right now.` }
-  }
-  store.calls.set(call.id, call)
-  call.timer = setTimeout(() => ringTimedOut(call.id), CALL_RING_MS)
-  relay(callee.id, call.id, { kind: "ring", call: "dm", conversationId, from, title: null, iceServers: iceServersFor(callee.id), video })
-  return { ok: true, mode: "ringing", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: store.bootId }
+    const now = Date.now()
+    const call: DmCall = {
+      kind: "dm",
+      id: randomUUID(),
+      conversationId,
+      video,
+      caller,
+      calleeId: callee.id,
+      callee: null,
+      startedAt: now,
+      answeredAt: null,
+      connectedAt: null,
+      ringUntil: null,
+      beats: new Map(),
+    }
+    if (listenerCount(callee.id) === 0) {
+      writeRecord(call, "missed", 0, 2, [caller.userId])
+      missedCallBanner(call, callee.id, caller.userId)
+      return { ok: false, unavailable: true, error: `${callee.name} isn't available right now.` }
+    }
+    call.ringUntil = now + CALL_RING_MS
+    createCall(call)
+    relay(callee.id, call.id, { kind: "ring", call: "dm", conversationId, from, title: null, iceServers: iceServersFor(callee.id), video })
+    return { ok: true, mode: "ringing", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: BOOT_ID }
+  })
 }
 
 function lostAt(action: Extract<CallAction, { kind: "end" }>, now: number): number {
@@ -440,7 +560,7 @@ function dmSignal(call: DmCall, from: Device, action: CallAction): SignalResult 
   }
 }
 
-// ── Group calls ─────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Group calls ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 function membersOf(call: GroupCall): GroupMember[] {
   return [...call.participants.values()]
@@ -476,7 +596,7 @@ function settleTogether(call: GroupCall, at: number): void {
 }
 
 function liveGroupIn(conversationId: string): GroupCall | null {
-  for (const call of store.calls.values()) {
+  for (const call of listCalls()) {
     if (call.kind === "group" && call.conversationId === conversationId) return call
   }
   return null
@@ -488,7 +608,7 @@ function joinedResult(call: GroupCall, me: Participant): JoinResult {
     callId: call.id,
     conversationId: call.conversationId,
     iceServers: iceServersFor(me.userId),
-    bootId: store.bootId,
+    bootId: BOOT_ID,
     seq: me.seq,
     members: membersOf(call).filter((member) => member.userId !== me.userId),
     title: groupTitle(call.conversationId, me.userId),
@@ -498,9 +618,8 @@ function joinedResult(call: GroupCall, me: Participant): JoinResult {
 // The last person left: the call writes its one record. It counts everyone who joined, and the time two or more
 // people were connected. If nobody joined, it is a missed group call for everyone it rang.
 function finishGroup(call: GroupCall, at: number): void {
-  if (call.timer !== null) clearTimeout(call.timer)
-  call.timer = null
-  store.calls.delete(call.id)
+  call.ringUntil = null
+  endCall(call)
   settleTogether(call, at)
   const people = call.joined.size
   const outcome: CallOutcome = people < 2 ? "missed" : call.connectedAt !== null ? "ended" : "failed"
@@ -528,8 +647,7 @@ function leaveGroup(call: GroupCall, userId: string, reason: CallEndReason | nul
 
 // The rings stop. A call nobody joined ends, and whoever started it hears that no one joined.
 function ringWindowClosed(call: GroupCall): void {
-  if (call.timer !== null) clearTimeout(call.timer)
-  call.timer = null
+  call.ringUntil = null
   for (const userId of call.ringing) relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
   call.ringing.clear()
   if (call.joined.size >= 2) {
@@ -546,86 +664,89 @@ function ringWindowClosed(call: GroupCall): void {
 // Starts a call in a group, or joins the one already going there. It rings the members who are free, reachable, have
 // not muted the group, and have no block with anyone in the call.
 export function startGroupCall(conversationId: string, device: Device, person: EventPerson): JoinResult {
-  const live = liveGroupIn(conversationId)
-  if (live) return joinGroupCall(live.id, device, person)
-  const busy = busyState(device.userId)
-  if (busy === "talking") return { ok: false, error: "You're already on a call." }
-  if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
+  return operate<JoinResult>(true, () => {
+    const live = liveGroupIn(conversationId)
+    if (live) return joinGroupCall(live.id, device, person)
+    const busy = busyState(device.userId)
+    if (busy === "talking") return { ok: false, error: "You're already on a call." }
+    if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
 
-  const others = acceptedMembers(conversationId).filter(
-    (member) =>
-      member.user_id !== device.userId &&
-      busyState(member.user_id) === null &&
-      listenerCount(member.user_id) > 0 &&
-      !blockedEitherWay(member.user_id, device.userId)
-  )
-  const now = Date.now()
-  const me: Participant = { ...device, seq: 1, person, beat: now }
-  const call: GroupCall = {
-    kind: "group",
-    id: randomUUID(),
-    conversationId,
-    starterId: device.userId,
-    startedAt: now,
-    seq: 1,
-    participants: new Map([[device.userId, me]]),
-    joined: new Set([device.userId]),
-    rung: new Set(),
-    ringing: new Set(),
-    connectedAt: null,
-    togetherSince: null,
-    togetherMs: 0,
-    timer: null,
-  }
-  if (others.length === 0) {
-    writeRecord(call, "missed", 0, 1, [device.userId])
-    return { ok: false, error: "No one in this group is available right now." }
-  }
-  store.calls.set(call.id, call)
-  for (const member of others) {
-    if (member.muted === 1) continue
-    call.ringing.add(member.user_id)
-    call.rung.add(member.user_id)
-    relay(member.user_id, call.id, {
-      kind: "ring",
-      call: "group",
+    const others = acceptedMembers(conversationId).filter(
+      (member) =>
+        member.user_id !== device.userId &&
+        busyState(member.user_id) === null &&
+        listenerCount(member.user_id) > 0 &&
+        !blockedEitherWay(member.user_id, device.userId)
+    )
+    const now = Date.now()
+    const me: Participant = { ...device, seq: 1, person, beat: now }
+    const call: GroupCall = {
+      kind: "group",
+      id: randomUUID(),
       conversationId,
-      from: person,
-      title: groupTitle(conversationId, member.user_id),
-      iceServers: iceServersFor(member.user_id),
-    })
-  }
-  call.timer = setTimeout(() => ringTimedOut(call.id), CALL_RING_MS)
-  broadcastGroup(call, true)
-  return joinedResult(call, me)
+      starterId: device.userId,
+      startedAt: now,
+      ringUntil: now + CALL_RING_MS,
+      seq: 1,
+      participants: new Map([[device.userId, me]]),
+      joined: new Set([device.userId]),
+      rung: new Set(),
+      ringing: new Set(),
+      connectedAt: null,
+      togetherSince: null,
+      togetherMs: 0,
+    }
+    if (others.length === 0) {
+      writeRecord(call, "missed", 0, 1, [device.userId])
+      return { ok: false, error: "No one in this group is available right now." }
+    }
+    createCall(call)
+    for (const member of others) {
+      if (member.muted === 1) continue
+      call.ringing.add(member.user_id)
+      call.rung.add(member.user_id)
+      relay(member.user_id, call.id, {
+        kind: "ring",
+        call: "group",
+        conversationId,
+        from: person,
+        title: groupTitle(conversationId, member.user_id),
+        iceServers: iceServersFor(member.user_id),
+      })
+    }
+    broadcastGroup(call, true)
+    return joinedResult(call, me)
+  })
 }
 
 // Joins a group call, from its ring or from a Join banner. Joining from a second tab moves you there, and the first
 // tab hears why it stopped.
 export function joinGroupCall(callId: string, device: Device, person: EventPerson): JoinResult {
-  const call = store.calls.get(callId)
-  if (!call || call.kind !== "group") return { ok: false, error: GONE }
-  const current = call.participants.get(device.userId)
-  if (current && current.deviceId === device.deviceId) return joinedResult(call, current)
-  if (current) {
-    call.participants.delete(device.userId)
-    relay(device.userId, call.id, { kind: "end", reason: "moved", seconds: 0 }, current.deviceId)
-  } else {
-    const busy = busyState(device.userId, call.id)
-    if (busy === "talking") return { ok: false, error: "You're already on a call." }
-    if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
-    if (call.participants.size >= GROUP_CALL_MAX) return { ok: false, error: `This call is full. Calls can have up to ${GROUP_CALL_MAX} people.` }
-    if (blockedWithAnyone(call, device.userId)) return { ok: false, error: "You can't join this call." }
-  }
-  const now = Date.now()
-  call.seq += 1
-  const me: Participant = { ...device, seq: call.seq, person, beat: now }
-  call.participants.set(device.userId, me)
-  call.joined.add(device.userId)
-  if (call.ringing.delete(device.userId)) relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
-  settleTogether(call, now)
-  broadcastGroup(call, true)
-  return joinedResult(call, me)
+  return operate<JoinResult>(true, () => {
+    const call = getCall(callId)
+    if (!call || call.kind !== "group") return { ok: false, error: GONE }
+    const current = call.participants.get(device.userId)
+    if (current && current.deviceId === device.deviceId) return joinedResult(call, current)
+    if (current) {
+      call.participants.delete(device.userId)
+      relay(device.userId, call.id, { kind: "end", reason: "moved", seconds: 0 }, current.deviceId)
+    } else {
+      const busy = busyState(device.userId, call.id)
+      if (busy === "talking") return { ok: false, error: "You're already on a call." }
+      if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
+      if (call.participants.size >= GROUP_CALL_MAX) return { ok: false, error: `This call is full. Calls can have up to ${GROUP_CALL_MAX} people.` }
+      if (blockedWithAnyone(call, device.userId)) return { ok: false, error: "You can't join this call." }
+    }
+    const now = Date.now()
+    call.seq += 1
+    const me: Participant = { ...device, seq: call.seq, person, beat: now }
+    call.participants.set(device.userId, me)
+    call.joined.add(device.userId)
+    if (call.ringing.delete(device.userId)) relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
+    settleTogether(call, now)
+    broadcastGroup(call, true)
+    return joinedResult(call, me)
+  })
 }
 
 function groupSignal(call: GroupCall, from: Device, action: CallAction): SignalResult {
@@ -667,76 +788,80 @@ function groupSignal(call: GroupCall, from: Device, action: CallAction): SignalR
   }
 }
 
-// ── Both kinds ──────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Both kinds ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // One step of a call from a tab, already checked for shape by the server action.
 export function signalCall(callId: string, from: Device, action: CallAction): SignalResult {
-  const call = store.calls.get(callId)
-  if (!call) return { ok: false, error: GONE }
-  return call.kind === "dm" ? dmSignal(call, from, action) : groupSignal(call, from, action)
+  return operate<SignalResult>(true, () => {
+    const call = getCall(callId)
+    if (!call) return { ok: false, error: GONE }
+    return call.kind === "dm" ? dmSignal(call, from, action) : groupSignal(call, from, action)
+  })
 }
 
 // A tab in a call checks in. False tells it the call is over.
 export function heartbeat(callId: string, device: Device): boolean {
-  const call = store.calls.get(callId)
-  if (!call) return false
-  const now = Date.now()
-  if (call.kind === "dm") {
-    const own = device.userId === call.caller.userId ? call.caller : call.callee
-    if (!own || own.userId !== device.userId || own.deviceId !== device.deviceId) return false
-    call.beats.set(device.userId, now)
+  return operate<boolean>(true, () => {
+    const call = getCall(callId)
+    if (!call) return false
+    const now = Date.now()
+    if (call.kind === "dm") {
+      const own = device.userId === call.caller.userId ? call.caller : call.callee
+      if (!own || own.userId !== device.userId || own.deviceId !== device.deviceId) return false
+      call.beats.set(device.userId, now)
+      return true
+    }
+    const participant = call.participants.get(device.userId)
+    if (!participant || participant.deviceId !== device.deviceId) return false
+    participant.beat = now
     return true
-  }
-  const participant = call.participants.get(device.userId)
-  if (!participant || participant.deviceId !== device.deviceId) return false
-  participant.beat = now
-  return true
+  })
 }
 
 // A tab closing mid-call. It ends a call it placed or answered, and leaves a group call. A tab that was only ringing
 // leaves the person's other tabs ringing.
 export function endFromClosingTab(callId: string, device: Device): void {
-  const call = store.calls.get(callId)
-  if (!call) return
-  if (call.kind === "dm") {
-    const own = device.userId === call.caller.userId ? call.caller : call.callee
-    if (!own || own.userId !== device.userId || own.deviceId !== device.deviceId) return
-    dmSignal(call, device, { kind: "end" })
-    return
-  }
-  const participant = call.participants.get(device.userId)
-  if (participant && participant.deviceId === device.deviceId) leaveGroup(call, device.userId, null)
+  operate(true, () => {
+    const call = getCall(callId)
+    if (!call) return
+    if (call.kind === "dm") {
+      const own = device.userId === call.caller.userId ? call.caller : call.callee
+      if (!own || own.userId !== device.userId || own.deviceId !== device.deviceId) return
+      dmSignal(call, device, { kind: "end" })
+      return
+    }
+    const participant = call.participants.get(device.userId)
+    if (participant && participant.deviceId === device.deviceId) leaveGroup(call, device.userId, null)
+  })
 }
 
-// Runs every few seconds. An answered call whose tabs stopped checking in ends where it was last heard from, and a
-// ring whose timer was lost ends as missed. Banners nobody came back for are dropped.
+// Runs every second on the process that holds the maintenance lease. An unanswered ring ends at its deadline. An answered
+// call whose tabs stopped checking in ends where it was last heard from.
 export function expireStaleCalls(now: number): void {
-  for (const call of [...store.calls.values()]) {
-    if (!store.calls.has(call.id)) continue
-    if (call.kind === "dm") {
-      if (call.answeredAt === null) {
-        if (now - call.startedAt > CALL_RING_MS + RING_SLACK_MS) unansweredDm(call, true)
+  if (!anyCalls()) return
+  operate(true, () => {
+    for (const call of listCalls()) {
+      if (!alive(call)) continue
+      if (call.kind === "dm") {
+        if (call.answeredAt === null) {
+          if (call.ringUntil !== null && now >= call.ringUntil) ringTimedOut(call)
+          continue
+        }
+        for (const [userId, beat] of call.beats) {
+          if (now - beat > CALL_STALE_MS) {
+            hangUpDm(call, userId, beat, "dropped", "dropped")
+            break
+          }
+        }
         continue
       }
-      for (const [userId, beat] of call.beats) {
-        if (now - beat > CALL_STALE_MS) {
-          hangUpDm(call, userId, beat, "dropped", "dropped")
-          break
-        }
+      if (call.ringUntil !== null && now >= call.ringUntil) ringTimedOut(call)
+      for (const participant of [...call.participants.values()]) {
+        if (!alive(call)) break
+        if (now - participant.beat > CALL_STALE_MS) leaveGroup(call, participant.userId, "dropped", participant.beat)
       }
-      continue
     }
-    if (call.ringing.size > 0 && now - call.startedAt > CALL_RING_MS + RING_SLACK_MS) ringWindowClosed(call)
-    for (const participant of [...call.participants.values()]) {
-      if (!store.calls.has(call.id)) break
-      if (now - participant.beat > CALL_STALE_MS) leaveGroup(call, participant.userId, "dropped", participant.beat)
-    }
-  }
-  for (const [userId, kept] of store.banners) {
-    const fresh = kept.filter((entry) => now - entry.at < BANNER_KEEP_MS)
-    if (fresh.length > 0) store.banners.set(userId, fresh)
-    else store.banners.delete(userId)
-  }
+  })
 }
 
 function departDm(call: DmCall, userId: string, reason: HangUpReason | "left" | "removed", session: string | null): void {
@@ -764,15 +889,15 @@ function blocks(blockerId: string, blockedId: string): boolean {
 }
 
 // A block between two people in one group call: whoever was blocked goes, so the person who blocked keeps their call.
-// A ring for a call with someone across a block stops.
+// A ring for a call with someone across the block stops.
 function settleBlocks(call: GroupCall, userId: string): void {
   if (call.ringing.has(userId) && blockedWithAnyone(call, userId)) leaveGroup(call, userId, null)
-  if (!store.calls.has(call.id) || !call.participants.has(userId)) return
+  if (!alive(call) || !call.participants.has(userId)) return
   for (const other of [...call.ringing]) {
     if (blockedEitherWay(userId, other)) leaveGroup(call, other, null)
   }
   for (const other of [...call.participants.keys()]) {
-    if (other === userId || !store.calls.has(call.id) || !call.participants.has(userId)) continue
+    if (other === userId || !alive(call) || !call.participants.has(userId)) continue
     if (blocks(other, userId)) leaveGroup(call, userId, "blocked")
     else if (blocks(userId, other)) leaveGroup(call, other, "blocked")
   }
@@ -798,62 +923,71 @@ function departGroup(call: GroupCall, userId: string, reason: HangUpReason | "le
 // ends. In a group call the person who was blocked leaves and the person who blocked stays, and a ring for a call
 // with someone across the block stops.
 export function hangUpFor(userId: string, reason: HangUpReason, session: string | null = null): void {
-  for (const call of [...store.calls.values()]) {
-    if (!store.calls.has(call.id)) continue
-    if (call.kind === "dm") departDm(call, userId, reason, session)
-    else departGroup(call, userId, reason, session)
-  }
+  if (!anyCalls()) return
+  operate(true, () => {
+    for (const call of listCalls()) {
+      if (!alive(call)) continue
+      if (call.kind === "dm") departDm(call, userId, reason, session)
+      else departGroup(call, userId, reason, session)
+    }
+  })
 }
 
 // A person leaves a conversation, declines its request, or (with "removed") is removed from a group by the person who
 // made it. Their call in it ends, or, in a group, they leave the call and it drops out of their view. Their tab says
 // which of the two happened.
 export function leaveConversationCalls(userId: string, conversationId: string, how: "left" | "removed" = "left"): void {
-  for (const call of [...store.calls.values()]) {
-    if (call.conversationId !== conversationId || !store.calls.has(call.id)) continue
-    if (call.kind === "dm") {
-      departDm(call, userId, how, null)
-      continue
+  if (!anyCalls()) return
+  operate(true, () => {
+    for (const call of listCalls()) {
+      if (call.conversationId !== conversationId || !alive(call)) continue
+      if (call.kind === "dm") {
+        departDm(call, userId, how, null)
+        continue
+      }
+      departGroup(call, userId, how, null)
+      relay(userId, call.id, { kind: "group", conversationId, title: "", live: false, members: [], quiet: true })
     }
-    departGroup(call, userId, how, null)
-    relay(userId, call.id, { kind: "group", conversationId, title: "", live: false, members: [], quiet: true })
-  }
+  })
 }
 
 // What a newly opened event stream needs at once: the group calls going on in the person's groups, and rings still
 // waiting for them, so a tab opened mid-ring can answer.
 export function openingEvents(userId: string): RealtimeEvent[] {
-  const events: RealtimeEvent[] = []
-  for (const call of store.calls.values()) {
-    if (call.kind === "dm") {
-      if (call.calleeId !== userId || call.answeredAt !== null) continue
-      const from = personOf(call.caller.userId)
+  if (!anyCalls()) return []
+  return operate(false, () => {
+    const events: RealtimeEvent[] = []
+    for (const call of listCalls()) {
+      if (call.kind === "dm") {
+        if (call.calleeId !== userId || call.answeredAt !== null) continue
+        const from = personOf(call.caller.userId)
+        if (!from) continue
+        events.push({
+          type: "call",
+          callId: call.id,
+          signal: { kind: "ring", call: "dm", conversationId: call.conversationId, from, title: null, iceServers: iceServersFor(userId), video: call.video },
+        })
+        continue
+      }
+      const muted = memberMuted(call.conversationId, userId)
+      if (muted === null) continue
+      events.push({ type: "call", callId: call.id, signal: groupState(call, true, userId, muted) })
+      if (!call.ringing.has(userId)) continue
+      const from = personOf(call.starterId) ?? [...call.participants.values()][0]?.person ?? null
       if (!from) continue
       events.push({
         type: "call",
         callId: call.id,
-        signal: { kind: "ring", call: "dm", conversationId: call.conversationId, from, title: null, iceServers: iceServersFor(userId), video: call.video },
+        signal: {
+          kind: "ring",
+          call: "group",
+          conversationId: call.conversationId,
+          from,
+          title: groupTitle(call.conversationId, userId),
+          iceServers: iceServersFor(userId),
+        },
       })
-      continue
     }
-    const muted = memberMuted(call.conversationId, userId)
-    if (muted === null) continue
-    events.push({ type: "call", callId: call.id, signal: groupState(call, true, userId, muted) })
-    if (!call.ringing.has(userId)) continue
-    const from = personOf(call.starterId) ?? [...call.participants.values()][0]?.person ?? null
-    if (!from) continue
-    events.push({
-      type: "call",
-      callId: call.id,
-      signal: {
-        kind: "ring",
-        call: "group",
-        conversationId: call.conversationId,
-        from,
-        title: groupTitle(call.conversationId, userId),
-        iceServers: iceServersFor(userId),
-      },
-    })
-  }
-  return events
+    return events
+  })
 }

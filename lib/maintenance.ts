@@ -1,7 +1,9 @@
 import { all, optimizeDatabase, run } from "@/lib/db"
 import { notify } from "@/lib/notify"
 import { publishDue } from "@/lib/screening"
-import { expireStaleCalls } from "@/lib/call-state"
+import { expireStaleCalls, pruneQueuedBanners } from "@/lib/call-state"
+import { sweepBus } from "@/lib/bus"
+import { holdLease } from "@/lib/leases"
 import { sweepLimits } from "@/lib/rate-limit"
 import { RETENTION } from "@/lib/legal"
 import { purgeHidden } from "@/lib/moderation"
@@ -10,32 +12,52 @@ import { purgeDismissals } from "@/lib/connections"
 import { recordMissingLanguages } from "@/lib/translate"
 import { answerQuestions } from "@/lib/sahayak"
 
-// Background work that does not wait for anyone to open a page: scheduled posts go live on time, polls announce
-// their results, calls that have stopped answering end, and expired sessions and codes are removed.
-const TICK_MS = 15_000
+// Background work that does not wait for anyone to open a page. Several server processes run this timer. Each tick asks
+// the database for the maintenance lease, and only the holder does the shared work: scheduled posts go live on time, polls
+// announce their results, and expired sessions and codes are removed. Calls are checked every second, because a ring has
+// to end on time. The rest runs every 15 seconds.
+const TICK_MS = 1_000
+const PASS_MS = 15_000
+const LEASE_MS = 20_000
+const LEASE_NAME = "maintenance"
 
 type Globals = { __rhenkoMaintenance?: ReturnType<typeof setInterval> }
 const globals = globalThis as unknown as Globals
 
+let lastPass = 0
+let lastAnswers = 0
+
 export function startMaintenance(): void {
   if (globals.__rhenkoMaintenance) return
-  globals.__rhenkoMaintenance = setInterval(() => {
-    try {
-      runMaintenance()
-    } catch (error) {
-      console.error("[maintenance] pass failed", error)
-    }
-    // Sahayak answers questions as they are asked. This picks up any whose attempt has timed out, or that were waiting.
-    answerQuestions().catch((error) => console.error("[maintenance] Sahayak pass failed", error))
-  }, TICK_MS)
+  globals.__rhenkoMaintenance = setInterval(tick, TICK_MS)
   globals.__rhenkoMaintenance.unref?.()
-  runMaintenance()
+  tick()
+}
+
+function tick(): void {
+  const now = Date.now()
+  try {
+    if (holdLease(LEASE_NAME, LEASE_MS, now)) {
+      expireStaleCalls(now)
+      if (now - lastPass >= PASS_MS) {
+        lastPass = now
+        runMaintenance(now)
+      }
+    }
+  } catch (error) {
+    console.error("[maintenance] pass failed", error)
+  }
+  // Sahayak answers questions as they are asked. This picks up any whose attempt has timed out, or that were waiting. Each
+  // question is claimed in the database before it is answered, so every process may run this.
+  if (now - lastAnswers >= PASS_MS) {
+    lastAnswers = now
+    answerQuestions().catch((error) => console.error("[maintenance] Sahayak pass failed", error))
+  }
 }
 
 export function runMaintenance(now = Date.now()): void {
   publishDue(now)
   announceEndedPolls(now)
-  expireStaleCalls(now)
   run("DELETE FROM sessions WHERE expires_at < ?", now)
   run("DELETE FROM login_challenges WHERE expires_at < ?", now)
   run("DELETE FROM email_codes WHERE expires_at < ?", now)
@@ -59,6 +81,8 @@ export function runMaintenance(now = Date.now()): void {
   // Older posts and messages get their language recorded a few at a time, so translation can tell what they are written in.
   recordMissingLanguages(100)
   sweepLimits(now)
+  sweepBus(now)
+  pruneQueuedBanners(now)
 }
 
 // Records are kept only as long as the Privacy Policy says. Views and profile visits 90 days, read notifications 180
