@@ -17,7 +17,7 @@ import {
   type ResetRequestState,
 } from "@/actions/auth"
 import { DateField } from "@/components/app/date-field"
-import { OnboardingSteps } from "@/components/app/onboarding-steps"
+import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
@@ -338,7 +338,7 @@ function LoginForm() {
 // showing is hidden, not removed, and the Continue button only moves on when that screen is valid.
 const SIGNUP_LAST = 2
 // The three sign-up screens, then the profile screen in setup: four dots in all, the same on every onboarding screen.
-const SIGNUP_STEPS_TOTAL = 4
+const SIGNUP_STEPS_TOTAL = SETUP_STEPS.total
 
 function SignupForm() {
   const [state, formAction] = useActionState(signup, {} as AuthState)
