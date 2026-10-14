@@ -9,9 +9,9 @@ import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
-import { StickerEditLayer, StickerLayer } from "@/components/app/sticker-layer"
+import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
 import type { StickerPick } from "@/components/app/sticker-tray"
-import { MAX_STICKERS, type Placement, type Sticker } from "@/lib/stickers"
+import { MAX_STICKERS, TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_LOOK_FIELDS, clamp, type Sticker } from "@/lib/stickers"
 import { ReplyPicker } from "@/components/app/reply-picker"
 import { fullTimestamp, pluralize } from "@/lib/format"
 import {
@@ -69,7 +69,27 @@ type Attachment = {
   stickers: Sticker[]
   stickerOpen: boolean
   selected: number | null
+  // The selected text sticker is being edited in place.
+  editing: boolean
 }
+
+// The choices for a selected text sticker, in the order the panel shows them.
+const FONT_OPTIONS: { value: (typeof TEXT_FONTS)[number]; name: string }[] = [
+  { value: "sans", name: "Sans" },
+  { value: "serif", name: "Serif" },
+  { value: "mono", name: "Mono" },
+]
+const COLOR_OPTIONS: { value: (typeof TEXT_COLORS)[number]; name: string }[] = [
+  { value: "white", name: "White" },
+  { value: "black", name: "Black" },
+  { value: "dusk", name: "Dusk" },
+  { value: "yellow", name: "Yellow" },
+]
+const BACKGROUND_OPTIONS: { value: (typeof TEXT_BACKGROUNDS)[number]; name: string }[] = [
+  { value: "solid", name: "Solid" },
+  { value: "outline", name: "Outline" },
+  { value: "none", name: "None" },
+]
 
 const StickerTray = dynamic(() => import("@/components/app/sticker-tray").then((module) => module.StickerTray), { ssr: false, loading: () => null })
 
@@ -239,6 +259,44 @@ function CountRing({ progress, over }: { progress: number; over: boolean }) {
   )
 }
 
+const PANEL_BUTTON =
+  "h-9 rounded-full border border-border px-3 font-semibold transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-50"
+
+// A row of pills where one is chosen. The chosen one is filled, and says so to assistive technology.
+function ChoiceGroup<T extends string>({
+  label,
+  options,
+  value,
+  onChoose,
+}: {
+  label: string
+  options: { value: T; name: string }[]
+  value: T
+  onChoose: (value: T) => void
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1.5">
+      <span aria-hidden className="mr-0.5 text-muted-foreground">
+        {label}
+      </span>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChoose(option.value)}
+          className={cn(
+            "h-9 rounded-full px-3 font-semibold transition-colors duration-200",
+            value === option.value ? "bg-foreground text-background" : "border border-border hover:bg-foreground/5"
+          )}
+        >
+          {option.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // One picture or video with its remove control, its ALT control and, for a picture, its stickers. Photos and videos take
 // the same description, and both say what they show to people who can't see them. On a video the ALT control sits at the
 // top, clear of the player's controls. A picture's stickers are added and changed from the tile; the controls for a
@@ -262,12 +320,34 @@ function MediaTile({
   const selectedIndex = item.selected
   const selected = selectedIndex !== null ? (item.stickers[selectedIndex] ?? null) : null
 
-  function changeSticker(index: number, patch: Partial<Placement>) {
+  function changeSticker(index: number, patch: StickerPatch) {
     onPatch((current) => ({ stickers: current.stickers.map((s, i) => (i === index ? ({ ...s, ...patch } as Sticker) : s)) }))
   }
 
   function removeSticker(index: number) {
-    onPatch((current) => ({ stickers: current.stickers.filter((_, i) => i !== index), selected: null }))
+    onPatch((current) => ({ stickers: current.stickers.filter((_, i) => i !== index), selected: null, editing: false }))
+  }
+
+  // The selected sticker moves to the top of the stack, which is the last one in the list.
+  function bringToFront() {
+    onPatch((current) => {
+      if (current.selected === null) return {}
+      const sticker = current.stickers[current.selected]
+      if (!sticker) return {}
+      const rest = current.stickers.filter((_, i) => i !== current.selected)
+      return { stickers: [...rest, sticker], selected: rest.length, editing: false }
+    })
+  }
+
+  // A copy of the selected sticker goes on top, a little down and to the right of the first.
+  function duplicateSticker() {
+    onPatch((current) => {
+      if (current.selected === null || current.stickers.length >= MAX_STICKERS) return {}
+      const sticker = current.stickers[current.selected]
+      if (!sticker) return {}
+      const copy = { ...sticker, x: clamp(sticker.x + 0.03, 0, 1), y: clamp(sticker.y + 0.03, 0, 1) } as Sticker
+      return { stickers: [...current.stickers, copy], selected: current.stickers.length, editing: false }
+    })
   }
 
   return (
@@ -293,7 +373,9 @@ function MediaTile({
           <StickerEditLayer
             set={set}
             selected={selectedIndex}
-            onSelect={(index) => onPatch({ selected: index })}
+            editing={item.editing}
+            onSelect={(index) => onPatch({ selected: index, editing: false })}
+            onEdit={(editing) => onPatch({ editing })}
             onChange={changeSticker}
             onRemove={removeSticker}
           />
@@ -325,7 +407,7 @@ function MediaTile({
         {video ? null : (
           <button
             type="button"
-            onClick={() => onPatch((current) => ({ stickerOpen: !current.stickerOpen, selected: null }))}
+            onClick={() => onPatch((current) => ({ stickerOpen: !current.stickerOpen, selected: null, editing: false }))}
             disabled={item.aspect === null}
             aria-expanded={item.stickerOpen}
             title={item.stickerOpen ? "Finish with stickers" : "Add stickers to this photo"}
@@ -340,51 +422,92 @@ function MediaTile({
         )}
       </div>
       {!video && item.stickerOpen && item.aspect !== null ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-background p-2.5 text-[13px]">
-          <button
-            type="button"
-            onClick={onOpenTray}
-            disabled={full}
-            className="h-9 rounded-full border border-border px-3 font-semibold transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-50"
-          >
-            {full ? `Up to ${MAX_STICKERS} stickers` : "Add a sticker"}
-          </button>
+        <div className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-2.5 text-[13px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={onOpenTray} disabled={full} className={PANEL_BUTTON}>
+              {full ? `Up to ${MAX_STICKERS} stickers` : "Add a sticker"}
+            </button>
+            {selected && selectedIndex !== null ? (
+              <>
+                <button
+                  type="button"
+                  onClick={bringToFront}
+                  disabled={selectedIndex === item.stickers.length - 1}
+                  className={PANEL_BUTTON}
+                >
+                  Bring to front
+                </button>
+                <button type="button" onClick={duplicateSticker} disabled={full} className={PANEL_BUTTON}>
+                  Duplicate
+                </button>
+                {selected.kind === "text" ? (
+                  <button type="button" onClick={() => onPatch({ editing: true })} className={PANEL_BUTTON}>
+                    Edit text
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => removeSticker(selectedIndex)}
+                  className="h-9 rounded-full px-3 font-semibold text-destructive transition-colors duration-200 hover:bg-destructive/10"
+                >
+                  Delete sticker
+                </button>
+              </>
+            ) : null}
+          </div>
           {selected && selectedIndex !== null ? (
             <>
-              <label className="flex items-center gap-2">
-                <span className="text-muted-foreground">Size</span>
-                <input
-                  type="range"
-                  min={5}
-                  max={60}
-                  aria-label="Sticker size"
-                  value={Math.round(selected.size * 100)}
-                  onChange={(event) => changeSticker(selectedIndex, { size: Number(event.target.value) / 100 })}
-                  className="accent-dusk"
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                <span className="text-muted-foreground">Turn</span>
-                <input
-                  type="range"
-                  min={-180}
-                  max={180}
-                  aria-label="Sticker turn"
-                  value={Math.round(selected.rotate)}
-                  onChange={(event) => changeSticker(selectedIndex, { rotate: Number(event.target.value) })}
-                  className="accent-dusk"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => removeSticker(selectedIndex)}
-                className="h-9 rounded-full px-3 font-semibold text-destructive transition-colors duration-200 hover:bg-destructive/10"
-              >
-                Delete sticker
-              </button>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <label className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Size</span>
+                  <input
+                    type="range"
+                    min={5}
+                    max={60}
+                    aria-label="Sticker size"
+                    value={Math.round(selected.size * 100)}
+                    onChange={(event) => changeSticker(selectedIndex, { size: Number(event.target.value) / 100 })}
+                    className="accent-dusk"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Turn</span>
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    aria-label="Sticker turn"
+                    value={Math.round(selected.rotate)}
+                    onChange={(event) => changeSticker(selectedIndex, { rotate: Number(event.target.value) })}
+                    className="accent-dusk"
+                  />
+                </label>
+              </div>
+              {selected.kind === "text" ? (
+                <div className="flex flex-col gap-2.5">
+                  <ChoiceGroup
+                    label="Font"
+                    options={FONT_OPTIONS}
+                    value={selected.font}
+                    onChoose={(font) => changeSticker(selectedIndex, { font })}
+                  />
+                  <ChoiceGroup
+                    label="Colour"
+                    options={COLOR_OPTIONS}
+                    value={selected.color}
+                    onChoose={(color) => changeSticker(selectedIndex, { color })}
+                  />
+                  <ChoiceGroup
+                    label="Background"
+                    options={BACKGROUND_OPTIONS}
+                    value={selected.background}
+                    onChoose={(background) => changeSticker(selectedIndex, { background })}
+                  />
+                </div>
+              ) : null}
             </>
           ) : (
-            <p className="text-muted-foreground">Drag a sticker to move it. Tap one to change its size and turn.</p>
+            <p className="text-muted-foreground">Tap a sticker to select it. Drag one to move it, or drop it on the bin to remove it.</p>
           )}
         </div>
       ) : null}
@@ -579,6 +702,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
         stickers: [],
         stickerOpen: false,
         selected: null,
+        editing: false,
       })
     }
     setMedia(next)
@@ -597,8 +721,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
       const sticker: Sticker =
         pick.kind === "emoji"
           ? { kind: "emoji", code: pick.code, ...place, size: 0.22 }
-          : { kind: "text", text: pick.text, style: pick.style, ...place, size: 0.12 }
-      return { stickers: [...current.stickers, sticker], selected: count, stickerOpen: true }
+          : pick.kind === "text"
+            ? { kind: "text", text: pick.text, ...TEXT_LOOK_FIELDS[pick.look], ...place, size: 0.12 }
+            : { kind: "hashtag", tag: pick.tag, ...place, size: 0.12 }
+      return { stickers: [...current.stickers, sticker], selected: count, editing: false, stickerOpen: true }
     })
   }
 

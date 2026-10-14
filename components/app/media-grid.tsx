@@ -40,18 +40,22 @@ function Tile({
       </div>
     )
   }
+  // The photo opens the lightbox from its button. The stickers sit over the button, not inside it, so a hashtag sticker can be
+  // a link of its own: only that link takes pointer events, and the rest of the photo still opens the lightbox.
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(item)}
-      aria-label={item.alt ? `Open image: ${item.alt}` : "Open image"}
-      className={cn("relative z-10 block overflow-hidden rounded-2xl border border-border bg-muted", className)}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`/media/${item.file}?w=1280`} alt={item.alt} loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
-      {item.stickers ? <StickerLayer set={item.stickers} /> : null}
+    <div className={cn("relative z-10 overflow-hidden rounded-2xl border border-border bg-muted", className)}>
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
+        aria-label={item.alt ? `Open image: ${item.alt}` : "Open image"}
+        className="block size-full overflow-hidden"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/media/${item.file}?w=1280`} alt={item.alt} loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
+      </button>
+      {item.stickers ? <StickerLayer set={item.stickers} linkHashtags /> : null}
       <AltBadge alt={item.alt} />
-    </button>
+    </div>
   )
 }
 
@@ -212,7 +216,7 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
             <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/media/${open.file}`} alt={open.alt} className="block h-auto max-h-[85dvh] max-w-full" />
-              {open.stickers ? <StickerLayer set={open.stickers} /> : null}
+              {open.stickers ? <StickerLayer set={open.stickers} linkHashtags /> : null}
             </div>
           ) : null}
           {open?.alt ? <p className="rounded-lg bg-background/90 px-3 py-2 text-sm text-foreground">{open.alt}</p> : null}

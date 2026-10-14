@@ -1,5 +1,6 @@
-// Unit checks for photo stickers in lib/stickers.ts: the set the server accepts, the ranges it brings values into, and the
-// catalogue of emoji, which must match the artwork shipped in public/stickers/twemoji. Run with: npm run test:unit
+// Unit checks for photo stickers in lib/stickers.ts: the set the server accepts, the ranges it brings values into, the
+// catalogue of emoji, which must match the artwork shipped in public/stickers/twemoji, and the text and hashtag rules.
+// Run with: npm run test:unit
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -25,7 +26,21 @@ function set(items, aspect = 1.5) {
 }
 
 const emoji = (over = {}) => ({ kind: "emoji", code: "1f600", x: 0.5, y: 0.5, size: 0.2, rotate: 0, ...over })
-const text = (over = {}) => ({ kind: "text", text: "hello", style: "dusk", x: 0.5, y: 0.5, size: 0.2, rotate: 0, ...over })
+const text = (over = {}) => ({
+  kind: "text",
+  text: "hello",
+  font: "sans",
+  color: "dusk",
+  background: "solid",
+  x: 0.5,
+  y: 0.5,
+  size: 0.2,
+  rotate: 0,
+  ...over,
+})
+const hashtag = (over = {}) => ({ kind: "hashtag", tag: "summer", x: 0.5, y: 0.5, size: 0.2, rotate: 0, ...over })
+// A text sticker saved before fonts, colours and backgrounds existed: it carries only a look name.
+const legacy = (style, over = {}) => ({ kind: "text", text: "hi", style, x: 0.5, y: 0.5, size: 0.2, rotate: 0, ...over })
 
 test("every emoji in the catalogue has its artwork in public/stickers/twemoji", () => {
   const codes = EMOJI_STICKERS.map((sticker) => sticker.code)
@@ -45,7 +60,7 @@ test("an emoji sticker outside the catalogue is refused", () => {
 })
 
 test("a valid set is accepted, and a JSON text is read the same as an object", () => {
-  const value = set([emoji(), text()])
+  const value = set([emoji(), text(), hashtag()])
   const fromObject = parseStickerSet(value)
   const fromText = parseStickerSet(JSON.stringify(value))
   assert.deepEqual(fromObject, value)
@@ -92,13 +107,69 @@ test("text stickers keep their words, with spaces tidied, up to the length limit
   assert.ok(parseStickerSet(set([text({ text: "x".repeat(MAX_STICKER_TEXT) })])))
 })
 
-test("a text sticker must name one of the styles", () => {
-  assert.ok(parseStickerSet(set([text({ style: "light" })])))
-  assert.equal(parseStickerSet(set([text({ style: "neon" })])), null)
+test("a text sticker's font, colour and background must each be one of its choices", () => {
+  for (const font of ["sans", "serif", "mono"]) assert.ok(parseStickerSet(set([text({ font })])), font)
+  for (const color of ["white", "black", "dusk", "yellow"]) assert.ok(parseStickerSet(set([text({ color })])), color)
+  for (const background of ["solid", "outline", "none"]) assert.ok(parseStickerSet(set([text({ background })])), background)
+  assert.equal(parseStickerSet(set([text({ font: "comic" })])), null)
+  assert.equal(parseStickerSet(set([text({ color: "red" })])), null)
+  assert.equal(parseStickerSet(set([text({ background: "glow" })])), null)
+  assert.equal(parseStickerSet(set([text({ font: undefined, color: "white", background: "solid" })])), null)
 })
 
-test("the kind of a sticker must be emoji or text", () => {
+test("a text sticker that names some of its look fields must name all of them", () => {
+  const partial = { kind: "text", text: "hi", font: "sans", x: 0.5, y: 0.5, size: 0.2, rotate: 0 }
+  assert.equal(parseStickerSet(set([partial])), null)
+})
+
+test("a sticker saved in the old style is read as the look it was drawn with", () => {
+  const [light] = parseStickerSet(set([legacy("light")])).items
+  const [dark] = parseStickerSet(set([legacy("dark")])).items
+  const [dusk] = parseStickerSet(set([legacy("dusk")])).items
+  assert.deepEqual(
+    { font: light.font, color: light.color, background: light.background },
+    { font: "sans", color: "white", background: "solid" },
+    "light is black text on a white box"
+  )
+  assert.deepEqual(
+    { font: dark.font, color: dark.color, background: dark.background },
+    { font: "sans", color: "black", background: "solid" },
+    "dark is white text on a black box"
+  )
+  assert.deepEqual(
+    { font: dusk.font, color: dusk.color, background: dusk.background },
+    { font: "sans", color: "dusk", background: "solid" },
+    "dusk is white text on a dusk box"
+  )
+})
+
+test("the set returned for storage has no old style field, and reads back to itself", () => {
+  const stored = parseStickerSet(set([legacy("dark")]))
+  assert.equal("style" in stored.items[0], false)
+  assert.deepEqual(parseStickerSet(stickerSetJson(stored)), stored)
+})
+
+test("an old style name that is not a look is refused", () => {
+  assert.equal(parseStickerSet(set([legacy("neon")])), null)
+  assert.equal(parseStickerSet(set([legacy(undefined)])), null)
+})
+
+test("a hashtag is letters, digits or underscores, from one to fifty of them", () => {
+  assert.ok(parseStickerSet(set([hashtag({ tag: "a" })])))
+  assert.ok(parseStickerSet(set([hashtag({ tag: "Launch_2026" })])))
+  assert.ok(parseStickerSet(set([hashtag({ tag: "café" })])))
+  assert.ok(parseStickerSet(set([hashtag({ tag: "x".repeat(50) })])))
+  assert.equal(parseStickerSet(set([hashtag({ tag: "" })])), null)
+  assert.equal(parseStickerSet(set([hashtag({ tag: "x".repeat(51) })])), null)
+  assert.equal(parseStickerSet(set([hashtag({ tag: "#summer" })])), null)
+  assert.equal(parseStickerSet(set([hashtag({ tag: "two words" })])), null)
+  assert.equal(parseStickerSet(set([hashtag({ tag: "a-b" })])), null)
+  assert.equal(parseStickerSet(set([hashtag({ tag: 42 })])), null)
+})
+
+test("the kind of a sticker must be emoji, text or hashtag, so mentions and other kinds are refused", () => {
   assert.equal(parseStickerSet(set([{ ...emoji(), kind: "gif" }])), null)
+  assert.equal(parseStickerSet(set([{ kind: "mention", handle: "someone", x: 0, y: 0, size: 0.2, rotate: 0 }])), null)
   assert.equal(parseStickerSet(set([{ kind: "script", x: 0, y: 0, size: 0.2, rotate: 0 }])), null)
 })
 
@@ -112,6 +183,6 @@ test("malformed input is refused rather than thrown", () => {
 })
 
 test("a set written to the database reads back to the same set", () => {
-  const value = parseStickerSet(set([emoji({ x: 0.25 }), text({ text: "hi" })]))
+  const value = parseStickerSet(set([emoji({ x: 0.25 }), text({ text: "hi", color: "yellow", background: "outline" }), hashtag()]))
   assert.deepEqual(parseStickerSet(stickerSetJson(value)), value)
 })

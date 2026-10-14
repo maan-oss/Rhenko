@@ -1,4 +1,4 @@
-// Stickers for photos: small emoji and short text placed over a picture, the way TikTok lets people decorate a video.
+// Stickers for photos: emoji, short text and hashtags placed over a picture, the way TikTok lets people decorate a video.
 //
 // A sticker's position is a fraction of the whole photo, from 0 to 1 on each side, so it lands on the same part of the
 // picture wherever the picture is shown. The layer that draws stickers matches the crop the picture is shown with.
@@ -75,17 +75,44 @@ export const EMOJI_STICKERS: readonly { code: string; name: string }[] = [
   { code: "274c", name: "Cross mark" },
 ]
 
-export const TEXT_STICKER_STYLES = ["light", "dark", "dusk"] as const
-export type TextStickerStyle = (typeof TEXT_STICKER_STYLES)[number]
+// The look of a text sticker: its font, its colour and its background. A solid sticker is filled with its colour, and its
+// text is black or white, whichever reads on that fill. An outline sticker is text in its colour with an edge in the
+// opposite colour. A plain sticker is text in its colour on the photo, with a shadow.
+export const TEXT_FONTS = ["sans", "serif", "mono"] as const
+export const TEXT_COLORS = ["white", "black", "dusk", "yellow"] as const
+export const TEXT_BACKGROUNDS = ["solid", "outline", "none"] as const
+export type TextFont = (typeof TEXT_FONTS)[number]
+export type TextColor = (typeof TEXT_COLORS)[number]
+export type TextBackground = (typeof TEXT_BACKGROUNDS)[number]
+
+// The three looks the tray offers as presets. A sticker saved before fonts, colours and backgrounds existed carries one of
+// these names in its style field, and is read as the look it was drawn with.
+export const TEXT_LOOKS = ["light", "dark", "dusk"] as const
+export type TextLook = (typeof TEXT_LOOKS)[number]
+export const TEXT_LOOK_FIELDS: Record<TextLook, { font: TextFont; color: TextColor; background: TextBackground }> = {
+  light: { font: "sans", color: "white", background: "solid" }, // black text on a white box
+  dark: { font: "sans", color: "black", background: "solid" }, // white text on a black box
+  dusk: { font: "sans", color: "dusk", background: "solid" }, // white text on a dusk box
+}
 
 export type Placement = { x: number; y: number; size: number; rotate: number }
 export type EmojiSticker = Placement & { kind: "emoji"; code: string }
-export type TextSticker = Placement & { kind: "text"; text: string; style: TextStickerStyle }
-export type Sticker = EmojiSticker | TextSticker
+export type TextSticker = Placement & {
+  kind: "text"
+  text: string
+  font: TextFont
+  color: TextColor
+  background: TextBackground
+}
+// A hashtag is written the way it is in a post: letters, digits and underscores. It links to the topic.
+export type HashtagSticker = Placement & { kind: "hashtag"; tag: string }
+export type Sticker = EmojiSticker | TextSticker | HashtagSticker
 export type StickerSet = { aspect: number; items: Sticker[] }
 
 export const MAX_STICKERS = 12
 export const MAX_STICKER_TEXT = 40
+export const MAX_HASHTAG = 50
+const HASHTAG_PATTERN = /^[\p{L}\p{N}_]{1,50}$/u
 // A sticker's width, as a share of the photo's width.
 export const SIZE_MIN = 0.05
 export const SIZE_MAX = 0.6
@@ -107,12 +134,30 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+// Text as it is kept: the ends trimmed and each run of spaces made one space.
+export function tidyText(value: string): string {
+  return value.trim().replace(/\s+/g, " ")
+}
+
+// A hashtag as it is typed: spaces at the ends and any leading # taken away.
+export function tidyTag(value: string): string {
+  return value.trim().replace(/^#+/, "")
+}
+
+export function isHashtag(tag: string): boolean {
+  return HASHTAG_PATTERN.test(tag)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function finite(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function oneOf<T extends string>(options: readonly T[], value: unknown): T | null {
+  return typeof value === "string" && (options as readonly string[]).includes(value) ? (value as T) : null
 }
 
 // The shared part of a sticker: where it sits, how big, and how far it is turned. Out-of-range values are brought into
@@ -131,6 +176,20 @@ export function clampPlacement(raw: Record<string, unknown>): Placement | null {
   }
 }
 
+// The font, colour and background of a text sticker. A sticker saved with only a look name is read as that look. A sticker
+// that names any of the three must name all of them, each one from its list.
+function textLook(raw: Record<string, unknown>): Pick<TextSticker, "font" | "color" | "background"> | null {
+  if (raw.font === undefined && raw.color === undefined && raw.background === undefined) {
+    const look = oneOf(TEXT_LOOKS, raw.style)
+    return look === null ? null : { ...TEXT_LOOK_FIELDS[look] }
+  }
+  const font = oneOf(TEXT_FONTS, raw.font)
+  const color = oneOf(TEXT_COLORS, raw.color)
+  const background = oneOf(TEXT_BACKGROUNDS, raw.background)
+  if (font === null || color === null || background === null) return null
+  return { font, color, background }
+}
+
 function parseSticker(raw: unknown): Sticker | null {
   if (!isRecord(raw)) return null
   const place = clampPlacement(raw)
@@ -140,19 +199,22 @@ function parseSticker(raw: unknown): Sticker | null {
     return { kind: "emoji", code: raw.code, ...place }
   }
   if (raw.kind === "text") {
-    const text = typeof raw.text === "string" ? raw.text.trim().replace(/\s+/g, " ") : ""
+    const text = typeof raw.text === "string" ? tidyText(raw.text) : ""
     if (text === "" || [...text].length > MAX_STICKER_TEXT) return null
-    const style = (TEXT_STICKER_STYLES as readonly string[]).includes(raw.style as string)
-      ? (raw.style as TextStickerStyle)
-      : null
-    if (style === null) return null
-    return { kind: "text", text, style, ...place }
+    const look = textLook(raw)
+    if (look === null) return null
+    return { kind: "text", text, ...look, ...place }
+  }
+  if (raw.kind === "hashtag") {
+    if (typeof raw.tag !== "string" || !isHashtag(raw.tag)) return null
+    return { kind: "hashtag", tag: raw.tag, ...place }
   }
   return null
 }
 
 // Checks a sticker set sent with a photo. The set is a JSON text, or an object already parsed. Anything that is not a
-// valid set is refused with null, which means the photo has no stickers.
+// valid set is refused with null, which means the photo has no stickers. The set returned is the one that is kept: text
+// is tidied, and a sticker saved in the old style is written in the current one.
 export function parseStickerSet(raw: unknown): StickerSet | null {
   let value: unknown = raw
   if (typeof raw === "string") {
