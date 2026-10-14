@@ -356,7 +356,8 @@ async function postFlows({ phone }) {
     await openProfile(reader.page, reader.handle)
     const mine = await waitForPost(reader.page, quoteText)
     await mine.getByText(plain).first().waitFor()
-    await mine.getByRole("link").filter({ hasText: plain }).first().waitFor()
+    // The quoted post is a link named for its author, so a screen reader announces who it is.
+    await mine.getByRole("link", { name: `Open ${author.name}'s post`, exact: true }).waitFor()
   })
 
   // -------------------------------------------------------------------------------------------------- repost

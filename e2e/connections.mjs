@@ -48,11 +48,15 @@ async function setLanguages(page, { speak = [], learn = [] }) {
   await acted(page, () => page.getByRole("button", { name: "Save languages", exact: true }).click())
 }
 
-// Finishes the profile screen after sign-up and opens Home. The city is entered there, and topics are picked there, as a
-// person would pick them. Languages are set in Settings first, when a check gives any.
+// Finishes the two setup screens after sign-up and opens Home. Continue on the profile saves it and moves on to About you.
+// The city is entered there, and topics are picked there, as a person would pick them. Languages are set in Settings
+// first, when a check gives any.
 async function setUp(page, { city, country = "AU", speak = [], learn = [], topics = [] }) {
   if (speak.length > 0 || learn.length > 0) await setLanguages(page, { speak, learn })
   await go(page, "/welcome", page.getByRole("heading", { name: "Set up your profile" }))
+  await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
+  await page.waitForURL((url) => url.pathname === "/welcome/about", { timeout: TIMEOUT })
+  await page.getByRole("heading", { name: "About you", exact: true }).waitFor()
   if (city) {
     await ready(page.locator("#where-country"))
     await page.locator("#where-country").selectOption(country)
@@ -122,11 +126,13 @@ async function connectionsFlow() {
     await ana.page.waitForURL((url) => /^\/messages\/[^/]+$/.test(url.pathname) && url.pathname !== "/messages/new", { timeout: TIMEOUT })
   })
 
-  await check("a profile shows the languages a person speaks, and never their town", async () => {
-    await openProfile(cal.page, ana.handle)
+  // Languages sit on the About page now, under the profile. The town for suggestions is private, so it never shows there.
+  await check("the About page shows the languages a person speaks, and never their town", async () => {
+    await go(cal.page, `/${ana.handle}/about`, cal.page.locator("main").getByText("Speaks", { exact: true }))
     const main = cal.page.locator("main")
-    await main.getByText(/Speaks English \(fluent\)\. Learning French\./).waitFor()
-    assert.equal((await main.innerText()).includes(TOWN), false, "the profile shows the town")
+    await main.getByText("English (fluent)", { exact: true }).waitFor()
+    await main.getByText("French", { exact: true }).waitFor()
+    assert.equal((await main.innerText()).includes(TOWN), false, "the About page shows the town")
   })
 
   await check(
