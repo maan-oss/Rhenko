@@ -57,7 +57,7 @@ async function StatusBody({ params }: { params: Params }) {
           ) : (
             <p className="border-b border-border px-4 py-4 text-sm text-muted-foreground">{replyRefusal(post.replySetting)}</p>
           )}
-          <FeedList items={items} emptyTitle="No replies yet" emptyBody="Be the first to reply." viewer={viewer} />
+          <FeedList items={items} emptyTitle="No replies yet" emptyBody="Be the first to reply." viewer={viewer} threadOf={post.id} />
         </>
       ) : null}
     </>

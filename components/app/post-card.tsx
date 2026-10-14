@@ -20,29 +20,34 @@ import { fullTimestamp, pluralize } from "@/lib/format"
 import { editWindowMs } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
+// The quoted post is a box with its own link across the whole of it. The links inside the text (mentions, tags) sit above
+// that link, so no anchor is ever placed inside another.
 function QuotedPost({ post }: { post: PostCore }) {
   return (
-    <Link
-      href={`/${post.author.handle}/status/${post.id}`}
-      className="relative z-10 mt-2 block rounded-2xl border border-border p-3 transition-colors hover:bg-muted/40"
-    >
-      <p className="text-sm">
-        <span className="font-semibold">{post.author.name}</span>
-        {post.author.verified ? <VerifiedBadge className="ml-1 inline-block align-[-2px]" /> : null}
-        {post.author.paidVerified ? <SubscriberBadge className="ml-1 inline-block align-[-2px]" /> : null}
-        {post.author.bot ? <AiLabel /> : null}{" "}
-        <span className="text-muted-foreground">
+    <div className="relative z-10 mt-2 rounded-2xl border border-border p-3 transition-colors hover:bg-muted/40">
+      <Link
+        href={`/${post.author.handle}/status/${post.id}`}
+        aria-label={`Open ${post.author.name}'s post`}
+        className="absolute inset-0 z-0 rounded-2xl"
+      />
+      <p className="pointer-events-none flex min-w-0 items-center gap-2 text-sm">
+        <Avatar user={post.author} size={22} />
+        <span className="min-w-0 truncate font-semibold">{post.author.name}</span>
+        {post.author.verified ? <VerifiedBadge className="shrink-0" /> : null}
+        {post.author.paidVerified ? <SubscriberBadge className="shrink-0" /> : null}
+        {post.author.bot ? <AiLabel /> : null}
+        <span className="shrink-0 text-muted-foreground">
           · <RelativeTime at={post.createdAt} />
         </span>
       </p>
       {post.body ? <PostBody text={post.body} className="mt-1 line-clamp-6 text-[15px]" fold={false} /> : null}
       {post.media.length > 0 ? (
-        <p className="mt-1 text-[13px] text-muted-foreground">
+        <p className="pointer-events-none mt-1 text-[13px] text-muted-foreground">
           {post.media.length} {post.media[0].kind === "video" ? "video" : "photo"}
           {post.media.length > 1 ? "s" : ""}
         </p>
       ) : null}
-    </Link>
+    </div>
   )
 }
 
@@ -77,6 +82,8 @@ export function PostCard({
   detail = false,
   showPinned = false,
   draft = false,
+  threadOf,
+  threadLine = false,
 }: {
   post: PostView
   viewer: Viewer
@@ -86,18 +93,23 @@ export function PostCard({
   // A draft or scheduled post, which has no public engagement yet. The post's own fields say the same thing,
   // so a card is treated this way wherever it is shown.
   draft?: boolean
+  // The post this card's list belongs to. A reply to it doesn't need to say "Replying to" again.
+  threadOf?: string
+  // Draws a thin line from this card's avatar down to the next card, so a list of replies reads as one conversation.
+  threadLine?: boolean
 }) {
   const statusHref = `/${post.author.handle}/status/${post.id}`
   const isOwn = post.author.id === viewer.id
   const pending = draft || post.isDraft || post.publishAt !== null
   // Drafts and scheduled posts can't be edited, only published or deleted. A live post can be edited for a short while.
   // The window is checked again on the server when the post is saved.
-  const editWindow = editWindowMs(viewer.plus)
+  const editWindow = editWindowMs(viewer.plus, post.replyToId !== null)
   // eslint-disable-next-line react-hooks/purity
   const editable = isOwn && !pending && Date.now() - post.createdAt < editWindow
   return (
     <article className={cn("relative border-b border-border px-4 pt-3 pb-2 transition-colors", !detail && "hover:bg-secondary/60")}>
       {pending || isOwn ? null : <ViewBeacon postId={post.id} />}
+      {threadLine ? <span aria-hidden="true" className="absolute top-14 bottom-[-13px] left-[35px] z-0 w-0.5 rounded-full bg-border" /> : null}
       {pending ? (
         <p className="mb-1 flex items-center gap-2 pl-12 text-[13px] text-muted-foreground">
           {post.publishAt !== null ? <CalendarClock className="size-3.5 shrink-0" aria-hidden="true" /> : <PenLine className="size-3.5 shrink-0" aria-hidden="true" />}
@@ -159,7 +171,7 @@ export function PostCard({
             </time>
             {post.editedAt ? <EditHistory postId={post.id} /> : null}
           </header>
-          {post.replyToHandle && !detail ? (
+          {post.replyToHandle && !detail && post.replyToId !== threadOf ? (
             <p className="text-[13px] text-muted-foreground">
               Replying to{" "}
               <Link href={`/${post.replyToHandle}`} className="relative z-10 text-dusk hover:underline">

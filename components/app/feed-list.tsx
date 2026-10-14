@@ -45,10 +45,12 @@ type Props = {
   // What to offer when the list is empty: a button, a link, a short list of people.
   emptyAction?: ReactNode
   folders?: { id: string; name: string }[]
+  // The post these items are replies to. Its replies are drawn as one conversation, joined by a thread line.
+  threadOf?: string
 }
 
 // Renders a feed and loads older pages as the reader reaches the end.
-export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders }: Props) {
+export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders, threadOf }: Props) {
   const router = useRouter()
   const [items, setItems] = useState(initialItems)
   const [next, setNext] = useState<string | null>(initialNext)
@@ -167,7 +169,13 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
           <AdCard ad={item.ad} />
         ) : (
           <>
-            <PostCard post={item.post} viewer={viewer} repostedBy={item.repostedBy} />
+            <PostCard
+              post={item.post}
+              viewer={viewer}
+              repostedBy={item.repostedBy}
+              threadOf={threadOf}
+              threadLine={threadOf !== undefined && index < items.length - 1}
+            />
             {folders ? <MoveBookmark postId={item.post.id} folderId={item.folderId} folders={folders} /> : null}
           </>
         )
