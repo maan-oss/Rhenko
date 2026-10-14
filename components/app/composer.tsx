@@ -1,13 +1,17 @@
 "use client"
 
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
+import { StickerEditLayer, StickerLayer } from "@/components/app/sticker-layer"
+import type { StickerPick } from "@/components/app/sticker-tray"
+import { MAX_STICKERS, type Placement, type Sticker } from "@/lib/stickers"
 import { ReplyPicker } from "@/components/app/reply-picker"
 import { fullTimestamp, pluralize } from "@/lib/format"
 import {
@@ -60,7 +64,16 @@ type Attachment = {
   kind: "image" | "video"
   alt: string
   altOpen: boolean
+  // The photo's width over its height, once it has loaded, and the stickers on it. A video never carries stickers.
+  aspect: number | null
+  stickers: Sticker[]
+  stickerOpen: boolean
+  selected: number | null
 }
+
+const StickerTray = dynamic(() => import("@/components/app/sticker-tray").then((module) => module.StickerTray), { ssr: false, loading: () => null })
+
+type MediaPatch = Partial<Attachment> | ((current: Attachment) => Partial<Attachment>)
 
 // The day a schedule starts from, and the first and last days the date field offers (the server's limits, in local days).
 type Schedule = { date: string; time: string; min: string; max: string }
@@ -226,12 +239,37 @@ function CountRing({ progress, over }: { progress: number; over: boolean }) {
   )
 }
 
-// One picture or video with its remove control and its ALT control. Photos and videos take the same description, and both
-// say what they show to people who can't see them. On a video the ALT control sits at the top, clear of the player's controls.
-function MediaTile({ item, onRemove, onPatch }: { item: Attachment; onRemove: () => void; onPatch: (patch: Partial<Attachment>) => void }) {
+// One picture or video with its remove control, its ALT control and, for a picture, its stickers. Photos and videos take
+// the same description, and both say what they show to people who can't see them. On a video the ALT control sits at the
+// top, clear of the player's controls. A picture's stickers are added and changed from the tile; the controls for a
+// selected sticker sit under the picture.
+function MediaTile({
+  item,
+  onRemove,
+  onPatch,
+  onOpenTray,
+}: {
+  item: Attachment
+  onRemove: () => void
+  onPatch: (patch: MediaPatch) => void
+  onOpenTray: () => void
+}) {
   const url = usePreview(item.file)
   const altId = useId()
   const video = item.kind === "video"
+  const full = item.stickers.length >= MAX_STICKERS
+  const set = !video && item.aspect !== null && item.stickers.length > 0 ? { aspect: item.aspect, items: item.stickers } : null
+  const selectedIndex = item.selected
+  const selected = selectedIndex !== null ? (item.stickers[selectedIndex] ?? null) : null
+
+  function changeSticker(index: number, patch: Partial<Placement>) {
+    onPatch((current) => ({ stickers: current.stickers.map((s, i) => (i === index ? ({ ...s, ...patch } as Sticker) : s)) }))
+  }
+
+  function removeSticker(index: number) {
+    onPatch((current) => ({ stickers: current.stickers.filter((_, i) => i !== index), selected: null }))
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-muted">
@@ -241,8 +279,27 @@ function MediaTile({ item, onRemove, onPatch }: { item: Attachment; onRemove: ()
           <video src={url} muted playsInline controls preload="metadata" className="max-h-72 w-full" aria-label={item.alt || "Selected video"} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={item.alt || "Selected image"} className="max-h-72 w-full object-cover" />
+          <img
+            src={url}
+            alt={item.alt || "Selected image"}
+            onLoad={(event) => {
+              const img = event.currentTarget
+              if (item.aspect === null && img.naturalHeight > 0) onPatch({ aspect: img.naturalWidth / img.naturalHeight })
+            }}
+            className="max-h-72 w-full object-cover"
+          />
         )}
+        {set && item.stickerOpen ? (
+          <StickerEditLayer
+            set={set}
+            selected={selectedIndex}
+            onSelect={(index) => onPatch({ selected: index })}
+            onChange={changeSticker}
+            onRemove={removeSticker}
+          />
+        ) : set ? (
+          <StickerLayer set={set} />
+        ) : null}
         <button
           type="button"
           onClick={onRemove}
@@ -265,7 +322,72 @@ function MediaTile({ item, onRemove, onPatch }: { item: Attachment; onRemove: ()
         >
           ALT
         </button>
+        {video ? null : (
+          <button
+            type="button"
+            onClick={() => onPatch((current) => ({ stickerOpen: !current.stickerOpen, selected: null }))}
+            disabled={item.aspect === null}
+            aria-expanded={item.stickerOpen}
+            title={item.stickerOpen ? "Finish with stickers" : "Add stickers to this photo"}
+            className={cn(
+              "absolute right-2 bottom-2 inline-flex items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold transition-colors duration-200 disabled:opacity-50 max-sm:h-10 max-sm:min-w-10 max-sm:text-[13px] sm:h-6",
+              item.stickerOpen ? "metal" : "glass text-foreground"
+            )}
+          >
+            <StickerIcon className="size-4" aria-hidden />
+            {item.stickerOpen ? "Done" : "Stickers"}
+          </button>
+        )}
       </div>
+      {!video && item.stickerOpen && item.aspect !== null ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-background p-2.5 text-[13px]">
+          <button
+            type="button"
+            onClick={onOpenTray}
+            disabled={full}
+            className="h-9 rounded-full border border-border px-3 font-semibold transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-50"
+          >
+            {full ? `Up to ${MAX_STICKERS} stickers` : "Add a sticker"}
+          </button>
+          {selected && selectedIndex !== null ? (
+            <>
+              <label className="flex items-center gap-2">
+                <span className="text-muted-foreground">Size</span>
+                <input
+                  type="range"
+                  min={5}
+                  max={60}
+                  aria-label="Sticker size"
+                  value={Math.round(selected.size * 100)}
+                  onChange={(event) => changeSticker(selectedIndex, { size: Number(event.target.value) / 100 })}
+                  className="accent-dusk"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-muted-foreground">Turn</span>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  aria-label="Sticker turn"
+                  value={Math.round(selected.rotate)}
+                  onChange={(event) => changeSticker(selectedIndex, { rotate: Number(event.target.value) })}
+                  className="accent-dusk"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => removeSticker(selectedIndex)}
+                className="h-9 rounded-full px-3 font-semibold text-destructive transition-colors duration-200 hover:bg-destructive/10"
+              >
+                Delete sticker
+              </button>
+            </>
+          ) : (
+            <p className="text-muted-foreground">Drag a sticker to move it. Tap one to change its size and turn.</p>
+          )}
+        </div>
+      ) : null}
       {item.altOpen ? (
         <label className="flex flex-col gap-1 text-[13px]">
           <span className="text-muted-foreground">Describe this for people who can&apos;t see it</span>
@@ -314,6 +436,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [circleChoice, setCircleChoice] = useState("")
   const [caret, setCaret] = useState(0)
   const [media, setMedia] = useState<Attachment[]>([])
+  // The photo whose sticker tray is open. The tray sits outside the form, so its events never reach the form's handlers.
+  const [trayFor, setTrayFor] = useState<string | null>(null)
   const [poll, setPoll] = useState(false)
   // An article has a title and a longer body. It can carry photos or a video, but not a poll, a thread or a schedule.
   const [article, setArticle] = useState(false)
@@ -445,7 +569,17 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           continue
         }
       }
-      next.push({ key: `${Date.now()}-${Math.random().toString(36).slice(2)}`, file, kind: isVideo ? "video" : "image", alt: "", altOpen: false })
+      next.push({
+        key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        kind: isVideo ? "video" : "image",
+        alt: "",
+        altOpen: false,
+        aspect: null,
+        stickers: [],
+        stickerOpen: false,
+        selected: null,
+      })
     }
     setMedia(next)
   }
@@ -454,8 +588,22 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     setMedia((current) => current.filter((m) => m.key !== key))
   }
 
-  function patchMedia(key: string, patch: Partial<Attachment>) {
-    setMedia((current) => current.map((m) => (m.key === key ? { ...m, ...patch } : m)))
+  // A sticker picked in the tray goes onto the photo the tray was opened for, at a place that doesn't stack on the last one.
+  function addSticker(key: string, pick: StickerPick) {
+    patchMedia(key, (current) => {
+      if (current.aspect === null || current.stickers.length >= MAX_STICKERS) return {}
+      const count = current.stickers.length
+      const place = { x: 0.5 + ((count % 5) - 2) * 0.06, y: 0.5, rotate: 0 }
+      const sticker: Sticker =
+        pick.kind === "emoji"
+          ? { kind: "emoji", code: pick.code, ...place, size: 0.22 }
+          : { kind: "text", text: pick.text, style: pick.style, ...place, size: 0.12 }
+      return { stickers: [...current.stickers, sticker], selected: count, stickerOpen: true }
+    })
+  }
+
+  function patchMedia(key: string, patch: MediaPatch) {
+    setMedia((current) => current.map((m) => (m.key === key ? { ...m, ...(typeof patch === "function" ? patch(m) : patch) } : m)))
   }
 
   function applySuggestion(item: Suggestion) {
@@ -539,6 +687,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     media.forEach((m) => {
       body.append("media", m.file)
       body.append("alt", m.alt)
+      // The stickers of a photo, as a set with the photo's shape. An empty entry keeps the list in step with the files.
+      body.append("stickers", m.kind === "image" && m.aspect !== null && m.stickers.length > 0 ? JSON.stringify({ aspect: m.aspect, items: m.stickers }) : "")
     })
     if (article) body.set("title", cleanTitle(title))
     if (poll) {
@@ -667,350 +817,367 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const showCorner = showCount || !isReply
 
   return (
-    <form
-      id={id}
-      onSubmit={(event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault()
-        send(false)
-      }}
-      aria-busy={pending}
-      className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 pt-3 pb-3")}
-    >
-      <Avatar user={viewer} size={44} />
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {article ? (
-          <input
-            aria-label="Article title"
-            placeholder="Title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            maxLength={MAX_TITLE * 2}
-            className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
-          />
-        ) : null}
-        <div className="flex items-start gap-2">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={onChangeText}
-            onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
-            onKeyDown={onKeyDown}
-            placeholder={placeholder}
-            aria-label="Post text"
-            aria-autocomplete="list"
-            readOnly={pending}
-            rows={1}
-            className="field-sizing-content min-h-[30px] min-w-0 flex-1 resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground max-sm:min-h-10 max-sm:pt-1.5"
-          />
-          {showCorner ? (
-            <div className="flex h-8 shrink-0 items-center gap-2">
-              {showCount ? (
-                <span className="flex items-center gap-1.5">
-                  {remaining <= 20 ? (
-                    <>
-                      <span aria-hidden="true" className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>
-                        {remaining}
-                      </span>
-                      <span role="status" className="sr-only">
-                        {over ? `${-remaining} ${pluralize(-remaining, "character")} over the limit` : `${remaining} ${pluralize(remaining, "character")} left`}
-                      </span>
-                    </>
-                  ) : null}
-                  <CountRing progress={Math.min(count / limit, 1)} over={over} />
-                </span>
-              ) : null}
-              {!isReply ? (
-                <div className={REPLY_PICKER_PHONE}>
-                  <ReplyPicker value={replySetting} onChange={setReplySetting} />
-                </div>
-              ) : null}
-            </div>
+    <>
+      <form
+        id={id}
+        onSubmit={(event: FormEvent<HTMLFormElement>) => {
+          event.preventDefault()
+          send(false)
+        }}
+        aria-busy={pending}
+        className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 pt-3 pb-3")}
+      >
+        <Avatar user={viewer} size={44} />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {article ? (
+            <input
+              aria-label="Article title"
+              placeholder="Title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={MAX_TITLE * 2}
+              className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
+            />
           ) : null}
-        </div>
-        {open ? (
-          <ul role="listbox" aria-label="Suggestions" className="glass z-30 w-full max-w-sm overflow-hidden rounded-[22px] py-1">
-            {suggestions.map((item, index) => (
-              <li key={item.kind === "user" ? item.id : item.tag} role="option" aria-selected={index === active}>
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault()
-                    applySuggestion(item)
-                  }}
-                  onMouseEnter={() => setActive(index)}
-                  className={cn("flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150", index === active && "bg-foreground/5")}
-                >
-                  {item.kind === "user" ? (
-                    <>
-                      <Avatar user={{ id: item.id, name: item.name, avatarFile: item.avatarFile }} size={28} />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">{item.name}</span>
-                        <span className="block truncate text-[13px] text-muted-foreground">@{item.handle}</span>
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-sm font-semibold">#{item.tag}</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        {media.length > 0 ? (
-          <div className={cn("grid gap-2", media.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
-            {media.map((item) => (
-              <MediaTile key={item.key} item={item} onRemove={() => removeMedia(item.key)} onPatch={(patch) => patchMedia(item.key, patch)} />
-            ))}
-          </div>
-        ) : null}
-
-        {poll ? (
-          <fieldset className="glass flex flex-col gap-2 rounded-[22px] p-3">
-            <legend className="px-1 text-[13px] text-muted-foreground">Poll</legend>
-            {pollOptions.map((option, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  value={option}
-                  maxLength={MAX_POLL_OPTION}
-                  onChange={(event) => setPollOptions((current) => current.map((o, i) => (i === index ? event.target.value : o)))}
-                  placeholder={`Choice ${index + 1}`}
-                  aria-label={`Choice ${index + 1}`}
-                  className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-[15px] outline-none transition-colors focus:border-foreground"
-                />
-                {pollOptions.length > POLL_MIN_OPTIONS ? (
-                  <button
-                    type="button"
-                    aria-label={`Remove choice ${index + 1}`}
-                    onClick={() => setPollOptions((current) => current.filter((_, i) => i !== index))}
-                    className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+          <div className="flex items-start gap-2">
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={onChangeText}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
+              onKeyDown={onKeyDown}
+              placeholder={placeholder}
+              aria-label="Post text"
+              aria-autocomplete="list"
+              readOnly={pending}
+              rows={1}
+              className="field-sizing-content min-h-[30px] min-w-0 flex-1 resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground max-sm:min-h-10 max-sm:pt-1.5"
+            />
+            {showCorner ? (
+              <div className="flex h-8 shrink-0 items-center gap-2">
+                {showCount ? (
+                  <span className="flex items-center gap-1.5">
+                    {remaining <= 20 ? (
+                      <>
+                        <span aria-hidden="true" className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>
+                          {remaining}
+                        </span>
+                        <span role="status" className="sr-only">
+                          {over ? `${-remaining} ${pluralize(-remaining, "character")} over the limit` : `${remaining} ${pluralize(remaining, "character")} left`}
+                        </span>
+                      </>
+                    ) : null}
+                    <CountRing progress={Math.min(count / limit, 1)} over={over} />
+                  </span>
+                ) : null}
+                {!isReply ? (
+                  <div className={REPLY_PICKER_PHONE}>
+                    <ReplyPicker value={replySetting} onChange={setReplySetting} />
+                  </div>
                 ) : null}
               </div>
-            ))}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {pollOptions.length < POLL_MAX_OPTIONS ? (
-                <button
-                  type="button"
-                  onClick={() => setPollOptions((current) => [...current, ""])}
-                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold transition-colors duration-200 hover:bg-foreground/5 max-sm:min-h-10 max-sm:px-3"
-                >
-                  <Plus className="size-4" /> Add choice
-                </button>
-              ) : (
-                <span />
-              )}
-              <label className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Length</span>
-                <select value={pollMinutes} onChange={(event) => setPollMinutes(Number(event.target.value))} className={cn(FIELD, "text-sm")}>
-                  {POLL_DURATIONS.map((minutes) => (
-                    <option key={minutes} value={minutes}>
-                      {DURATION_LABELS[minutes]}
+            ) : null}
+          </div>
+          {open ? (
+            <ul role="listbox" aria-label="Suggestions" className="glass z-30 w-full max-w-sm overflow-hidden rounded-[22px] py-1">
+              {suggestions.map((item, index) => (
+                <li key={item.kind === "user" ? item.id : item.tag} role="option" aria-selected={index === active}>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      applySuggestion(item)
+                    }}
+                    onMouseEnter={() => setActive(index)}
+                    className={cn("flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150", index === active && "bg-foreground/5")}
+                  >
+                    {item.kind === "user" ? (
+                      <>
+                        <Avatar user={{ id: item.id, name: item.name, avatarFile: item.avatarFile }} size={28} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold">{item.name}</span>
+                          <span className="block truncate text-[13px] text-muted-foreground">@{item.handle}</span>
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-sm font-semibold">#{item.tag}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {media.length > 0 ? (
+            <div className={cn("grid gap-2", media.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
+              {media.map((item) => (
+                <MediaTile
+                  key={item.key}
+                  item={item}
+                  onRemove={() => removeMedia(item.key)}
+                  onPatch={(patch) => patchMedia(item.key, patch)}
+                  onOpenTray={() => setTrayFor(item.key)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {poll ? (
+            <fieldset className="glass flex flex-col gap-2 rounded-[22px] p-3">
+              <legend className="px-1 text-[13px] text-muted-foreground">Poll</legend>
+              {pollOptions.map((option, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    value={option}
+                    maxLength={MAX_POLL_OPTION}
+                    onChange={(event) => setPollOptions((current) => current.map((o, i) => (i === index ? event.target.value : o)))}
+                    placeholder={`Choice ${index + 1}`}
+                    aria-label={`Choice ${index + 1}`}
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-[15px] outline-none transition-colors focus:border-foreground"
+                  />
+                  {pollOptions.length > POLL_MIN_OPTIONS ? (
+                    <button
+                      type="button"
+                      aria-label={`Remove choice ${index + 1}`}
+                      onClick={() => setPollOptions((current) => current.filter((_, i) => i !== index))}
+                      className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {pollOptions.length < POLL_MAX_OPTIONS ? (
+                  <button
+                    type="button"
+                    onClick={() => setPollOptions((current) => [...current, ""])}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold transition-colors duration-200 hover:bg-foreground/5 max-sm:min-h-10 max-sm:px-3"
+                  >
+                    <Plus className="size-4" /> Add choice
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Length</span>
+                  <select value={pollMinutes} onChange={(event) => setPollMinutes(Number(event.target.value))} className={cn(FIELD, "text-sm")}>
+                    {POLL_DURATIONS.map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {DURATION_LABELS[minutes]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+          ) : null}
+
+          {/* Whether the media needs a warning. */}
+          {media.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                aria-pressed={sensitive}
+                onClick={() => setSensitive((value) => !value)}
+                className={cn(PILL, sensitive ? "metal" : "glass text-foreground hover:bg-foreground/5")}
+              >
+                Mark media as sensitive
+              </button>
+            </div>
+          ) : null}
+
+          {scheduling ? (
+            <div className="glass flex flex-wrap items-center gap-2 rounded-[22px] p-3 text-sm">
+              <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <label className="flex items-center">
+                <span className="sr-only">Date</span>
+                <input
+                  type="date"
+                  value={schedule.date}
+                  min={schedule.min}
+                  max={schedule.max}
+                  onChange={(event) => setSchedule((current) => ({ ...current, date: event.target.value }))}
+                  className={FIELD}
+                />
+              </label>
+              <label className="flex items-center">
+                <span className="sr-only">Time</span>
+                <select value={schedule.time} onChange={(event) => setSchedule((current) => ({ ...current, time: event.target.value }))} className={FIELD}>
+                  {TIME_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
               </label>
+              <span className="min-w-0 text-muted-foreground">{scheduledAt !== null ? `Goes out ${fullTimestamp(scheduledAt)}` : "Pick a date and time"}</span>
+              <button
+                type="button"
+                onClick={() => setScheduling(false)}
+                className="ml-auto rounded-full px-3 py-1.5 font-semibold transition-colors duration-200 hover:bg-foreground/5 max-sm:min-h-10"
+              >
+                Post now instead
+              </button>
             </div>
-          </fieldset>
-        ) : null}
+          ) : null}
 
-        {/* Whether the media needs a warning. */}
-        {media.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={sensitive}
-              onClick={() => setSensitive((value) => !value)}
-              className={cn(PILL, sensitive ? "metal" : "glass text-foreground hover:bg-foreground/5")}
-            >
-              Mark media as sensitive
-            </button>
-          </div>
-        ) : null}
+          {threading ? (
+            <div className="flex flex-col gap-3 border-l-2 border-border pl-4">
+              {extra.map((part, index) => {
+                const remaining = MAX_POST - countChars(part)
+                return (
+                  <div key={index} className="flex items-start gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <textarea
+                        value={part}
+                        onChange={(event) => setExtra((current) => current.map((p, i) => (i === index ? event.target.value : p)))}
+                        placeholder="Continue the thread"
+                        aria-label={`Thread part ${index + 2} of ${extra.length + 1}`}
+                        readOnly={pending}
+                        rows={2}
+                        className="field-sizing-content min-h-[30px] w-full resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground"
+                      />
+                      <span className={cn("self-end text-xs tabular-nums", remaining < 0 ? "text-destructive" : "text-muted-foreground")}>
+                        {index + 2} of {extra.length + 1}
+                        {remaining <= 20 ? ` · ${remaining}` : ""}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Remove part ${index + 2}`}
+                      onClick={() => setExtra((current) => current.filter((_, i) => i !== index))}
+                      className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
 
-        {scheduling ? (
-          <div className="glass flex flex-wrap items-center gap-2 rounded-[22px] p-3 text-sm">
-            <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <label className="flex items-center">
-              <span className="sr-only">Date</span>
-              <input
-                type="date"
-                value={schedule.date}
-                min={schedule.min}
-                max={schedule.max}
-                onChange={(event) => setSchedule((current) => ({ ...current, date: event.target.value }))}
-                className={FIELD}
-              />
-            </label>
-            <label className="flex items-center">
-              <span className="sr-only">Time</span>
-              <select value={schedule.time} onChange={(event) => setSchedule((current) => ({ ...current, time: event.target.value }))} className={FIELD}>
-                {TIME_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+          {!isReply && circle ? (
+            <p className="flex items-center gap-1.5 pt-1 text-sm text-muted-foreground">
+              <CircleDot className="size-4" aria-hidden="true" />
+              Posting in <span className="font-semibold text-foreground">{circle.name}</span>
+            </p>
+          ) : null}
+          {!isReply && !circle && circles && circles.length > 0 ? (
+            <label className="flex items-center gap-2 pt-1 text-sm">
+              <CircleDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="text-muted-foreground">Post in</span>
+              <select
+                aria-label="Post in"
+                value={circleChoice}
+                onChange={(event) => setCircleChoice(event.target.value)}
+                className={cn(FIELD, "h-9 min-w-0 max-w-[16rem] flex-1 text-sm sm:flex-none")}
+              >
+                <option value="">Everyone (no circle)</option>
+                {circles.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
                   </option>
                 ))}
               </select>
             </label>
-            <span className="min-w-0 text-muted-foreground">{scheduledAt !== null ? `Goes out ${fullTimestamp(scheduledAt)}` : "Pick a date and time"}</span>
-            <button
-              type="button"
-              onClick={() => setScheduling(false)}
-              className="ml-auto rounded-full px-3 py-1.5 font-semibold transition-colors duration-200 hover:bg-foreground/5 max-sm:min-h-10"
-            >
-              Post now instead
-            </button>
-          </div>
-        ) : null}
-
-        {threading ? (
-          <div className="flex flex-col gap-3 border-l-2 border-border pl-4">
-            {extra.map((part, index) => {
-              const remaining = MAX_POST - countChars(part)
-              return (
-                <div key={index} className="flex items-start gap-2">
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <textarea
-                      value={part}
-                      onChange={(event) => setExtra((current) => current.map((p, i) => (i === index ? event.target.value : p)))}
-                      placeholder="Continue the thread"
-                      aria-label={`Thread part ${index + 2} of ${extra.length + 1}`}
-                      readOnly={pending}
-                      rows={2}
-                      className="field-sizing-content min-h-[30px] w-full resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground"
-                    />
-                    <span className={cn("self-end text-xs tabular-nums", remaining < 0 ? "text-destructive" : "text-muted-foreground")}>
-                      {index + 2} of {extra.length + 1}
-                      {remaining <= 20 ? ` · ${remaining}` : ""}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Remove part ${index + 2}`}
-                    onClick={() => setExtra((current) => current.filter((_, i) => i !== index))}
-                    className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        ) : null}
-
-        {!isReply && circle ? (
-          <p className="flex items-center gap-1.5 pt-1 text-sm text-muted-foreground">
-            <CircleDot className="size-4" aria-hidden="true" />
-            Posting in <span className="font-semibold text-foreground">{circle.name}</span>
-          </p>
-        ) : null}
-        {!isReply && !circle && circles && circles.length > 0 ? (
-          <label className="flex items-center gap-2 pt-1 text-sm">
-            <CircleDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="text-muted-foreground">Post in</span>
-            <select
-              aria-label="Post in"
-              value={circleChoice}
-              onChange={(event) => setCircleChoice(event.target.value)}
-              className={cn(FIELD, "h-9 min-w-0 max-w-[16rem] flex-1 text-sm sm:flex-none")}
-            >
-              <option value="">Everyone (no circle)</option>
-              {circles.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
-          <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
-            <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-          </ToolButton>
-          <ToolButton
-            label={poll ? "Remove poll" : "Add a poll"}
-            hint="Remove the photos or video to add a poll"
-            disabled={media.length > 0 || article}
-            pressed={poll}
-            onClick={() => setPoll((value) => !value)}
-          >
-            <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-          </ToolButton>
-          {!isReply && !quoteOfId && !threading && !poll && !scheduling ? (
+          ) : null}
+          <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
+            <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
+              <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+            </ToolButton>
             <ToolButton
-              label={article ? "Turn off article" : "Write an article"}
-              hint="Articles can't have polls, threads, replies or quotes"
-              pressed={article}
-              onClick={() => {
-                setArticle((value) => !value)
-                setTitle("")
-              }}
+              label={poll ? "Remove poll" : "Add a poll"}
+              hint="Remove the photos or video to add a poll"
+              disabled={media.length > 0 || article}
+              pressed={poll}
+              onClick={() => setPoll((value) => !value)}
             >
-              <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+              <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>
-          ) : null}
-          {!isReply ? (
-            <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
-              <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-            </ToolButton>
-          ) : null}
-          <span className="contents" onClickCapture={placeEmojiList}>
-            <EmojiPicker onPick={insertEmoji} className={cn(EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
-          </span>
-          {!isReply && !threading ? (
-            <ToolButton label="Schedule this post" pressed={scheduling} onClick={toggleScheduling}>
-              <CalendarClock className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-            </ToolButton>
-          ) : null}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              addFiles(event.target.files)
-              event.target.value = ""
-            }}
-          />
-
-          <div className="ml-auto flex shrink-0 items-center gap-1 pl-1 sm:gap-2 sm:pl-0">
-            {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
-            {!isReply && !threading ? (
-              <button
-                type="button"
-                onClick={() => send(true)}
-                disabled={!canDraft}
-                aria-label="Save draft"
-                title="Save draft"
-                className="chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+            {!isReply && !quoteOfId && !threading && !poll && !scheduling ? (
+              <ToolButton
+                label={article ? "Turn off article" : "Write an article"}
+                hint="Articles can't have polls, threads, replies or quotes"
+                pressed={article}
+                onClick={() => {
+                  setArticle((value) => !value)
+                  setTitle("")
+                }}
               >
-                <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
-                <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
-              </button>
+                <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+              </ToolButton>
             ) : null}
-            <button
-              type="submit"
-              disabled={!canPost}
-              className={cn(
-                "metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
-                iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : "px-3.5"
-              )}
-            >
-              {iconOnlyPhone ? (
-                sending ? (
-                  <LoaderCircle className="size-[17px] animate-spin sm:hidden" strokeWidth={2} aria-hidden="true" />
-                ) : (
-                  <CalendarClock className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
-                )
+            {!isReply ? (
+              <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
+                <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+              </ToolButton>
+            ) : null}
+            <span className="contents" onClickCapture={placeEmojiList}>
+              <EmojiPicker onPick={insertEmoji} className={cn(EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
+            </span>
+            {!isReply && !threading ? (
+              <ToolButton label="Schedule this post" pressed={scheduling} onClick={toggleScheduling}>
+                <CalendarClock className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+              </ToolButton>
+            ) : null}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                addFiles(event.target.files)
+                event.target.value = ""
+              }}
+            />
+
+            <div className="ml-auto flex shrink-0 items-center gap-1 pl-1 sm:gap-2 sm:pl-0">
+              {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
+              {!isReply && !threading ? (
+                <button
+                  type="button"
+                  onClick={() => send(true)}
+                  disabled={!canDraft}
+                  aria-label="Save draft"
+                  title="Save draft"
+                  className="chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                >
+                  <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
+                  <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
+                </button>
               ) : null}
-              <span className={iconOnlyPhone ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
-            </button>
+              <button
+                type="submit"
+                disabled={!canPost}
+                className={cn(
+                  "metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
+                  iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : "px-3.5"
+                )}
+              >
+                {iconOnlyPhone ? (
+                  sending ? (
+                    <LoaderCircle className="size-[17px] animate-spin sm:hidden" strokeWidth={2} aria-hidden="true" />
+                  ) : (
+                    <CalendarClock className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
+                  )
+                ) : null}
+                <span className={iconOnlyPhone ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </form>
+      </form>
+    {trayFor !== null ? (
+      <StickerTray
+        open
+        onOpenChange={(open) => {
+          if (!open) setTrayFor(null)
+        }}
+        onPick={(pick) => addSticker(trayFor, pick)}
+      />
+    ) : null}
+    </>
   )
 }

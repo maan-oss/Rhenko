@@ -4,6 +4,8 @@ import { notify } from "@/lib/notify"
 import { asReplySetting, extractMentions, POST_UNAVAILABLE, replyAllowed, replyRefusal, type ReplySetting } from "@/lib/rules"
 import { publish } from "@/lib/bus"
 import { removeUpload } from "@/lib/uploads"
+import { queueQuestion } from "@/lib/sahayak-queue"
+import { asksSahayak } from "@/lib/sahayak-prompt"
 
 export function isFollowing(followerId: string, followeeId: string): boolean {
   return get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", followerId, followeeId) !== undefined
@@ -55,19 +57,23 @@ export function announcePost(post: Announced): void {
       notified.add(quoted.author_id)
     }
   }
-  const author = get<{ verified: number }>("SELECT verified FROM users WHERE id = ?", post.author_id)
-  for (const handle of extractMentions(post.body)) {
-    const user = get<{ id: string; mentions_verified_only: number }>(
-      "SELECT id, mentions_verified_only FROM users WHERE handle = ? COLLATE NOCASE",
+  const author = get<{ verified: number; bot: number }>("SELECT verified, bot FROM users WHERE id = ?", post.author_id)
+  const mentions = extractMentions(post.body)
+  for (const handle of mentions) {
+    const user = get<{ id: string; mentions_verified_only: number; bot: number }>(
+      "SELECT id, mentions_verified_only, bot FROM users WHERE handle = ? COLLATE NOCASE",
       handle
     )
-    // Someone who only wants mentions from verified accounts doesn't hear about the rest.
+    // Someone who only wants mentions from verified accounts doesn't hear about the rest. The bot account has no
+    // notifications: a mention of it is a question, queued below.
     const filtered = user?.mentions_verified_only === 1 && author?.verified !== 1
-    if (user && user.id !== post.author_id && !notified.has(user.id) && !filtered) {
+    if (user && user.bot !== 1 && user.id !== post.author_id && !notified.has(user.id) && !filtered) {
       notify(user.id, post.author_id, "mention", post.id)
       notified.add(user.id)
     }
   }
+  // A question for Sahayak. Its own replies never queue one, so an answer cannot start another.
+  if (author?.bot !== 1 && asksSahayak(mentions)) queueQuestion(post.id, post.author_id)
   // People who turned on post notifications for this account hear about new posts,
   // not replies. They must still follow the account, so an unfollow ends the alert.
   if (!post.reply_to_id) {

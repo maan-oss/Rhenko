@@ -4,6 +4,7 @@ import { useRef, useState, type KeyboardEvent } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
+import { StickerLayer } from "@/components/app/sticker-layer"
 import { cn } from "@/lib/utils"
 
 function AltBadge({ alt }: { alt: string }) {
@@ -48,6 +49,7 @@ function Tile({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`/media/${item.file}?w=1280`} alt={item.alt} loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
+      {item.stickers ? <StickerLayer set={item.stickers} /> : null}
       <AltBadge alt={item.alt} />
     </button>
   )
@@ -206,8 +208,12 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
         <DialogContent className="max-w-[min(92vw,960px)] border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-[min(92vw,960px)]" showCloseButton>
           <DialogTitle className="sr-only">Image</DialogTitle>
           {open ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/media/${open.file}`} alt={open.alt} className="max-h-[85dvh] w-full rounded-xl object-contain" />
+            // The box is the size of the photo itself, so the stickers line up with it exactly.
+            <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/media/${open.file}`} alt={open.alt} className="block h-auto max-h-[85dvh] max-w-full" />
+              {open.stickers ? <StickerLayer set={open.stickers} /> : null}
+            </div>
           ) : null}
           {open?.alt ? <p className="rounded-lg bg-background/90 px-3 py-2 text-sm text-foreground">{open.alt}</p> : null}
         </DialogContent>

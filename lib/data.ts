@@ -13,6 +13,7 @@ import {
 } from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
 import { isVoiceFile } from "@/lib/media-names"
+import { parseStickerSet, type StickerSet } from "@/lib/stickers"
 import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib/link-previews"
 import { callSummary, type CallOutcome } from "@/lib/format"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
@@ -30,9 +31,11 @@ export type MiniUser = {
   verified: boolean
   // An active paid verification subscription. It makes no identity claim, so it is shown apart from `verified`.
   paidVerified?: boolean
+  // The account is Sahayak, an AI assistant, and says so wherever it appears.
+  bot?: boolean
 }
 
-export type MediaItem = { id: string; file: string; kind: MediaKind; alt: string }
+export type MediaItem = { id: string; file: string; kind: MediaKind; alt: string; stickers: StickerSet | null }
 
 export type PollOption = { id: string; label: string; votes: number }
 
@@ -126,6 +129,7 @@ type PostRow = {
   author_avatar: string | null
   author_verified: number
   author_paid_verified: number
+  author_bot: number
   author_hide_counts: number
   tippable: number
   replies: number
@@ -262,13 +266,16 @@ function mediaFor(ids: string[]): Map<string, MediaItem[]> {
   const result = new Map<string, MediaItem[]>()
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
-  const rows = all<{ id: string; post_id: string; file: string; kind: string; alt: string }>(
-    `SELECT id, post_id, file, kind, alt FROM post_media WHERE post_id IN (${marks}) ORDER BY position ASC`,
+  const rows = all<{ id: string; post_id: string; file: string; kind: string; alt: string; stickers: string | null }>(
+    `SELECT id, post_id, file, kind, alt, stickers FROM post_media WHERE post_id IN (${marks}) ORDER BY position ASC`,
     ...ids
   )
   for (const row of rows) {
     const list = result.get(row.post_id) ?? []
-    list.push({ id: row.id, file: row.file, kind: row.kind === "video" ? "video" : "image", alt: row.alt })
+    const kind = row.kind === "video" ? "video" : "image"
+    // A photo with stickers carries its set. A video never has one, and a set that no longer reads as valid is dropped.
+    const stickers = kind === "image" ? parseStickerSet(row.stickers) : null
+    list.push({ id: row.id, file: row.file, kind, alt: row.alt, stickers })
     result.set(row.post_id, list)
   }
   return result
@@ -329,7 +336,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
        p.reply_setting, p.thread_id, c.slug AS circle_slug, c.name AS circle_name,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
-       u.paid_verified AS author_paid_verified,
+       u.paid_verified AS author_paid_verified, u.bot AS author_bot,
        u.hide_counts AS author_hide_counts,
        (u.id <> ? AND EXISTS(SELECT 1 FROM connect_accounts ca WHERE ca.user_id = u.id AND ca.charges_enabled = 1)) AS tippable,
        p.replies_count AS replies,
@@ -419,6 +426,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
         avatarFile: r.author_avatar,
         verified: r.author_verified === 1,
         paidVerified: r.author_paid_verified === 1,
+        bot: r.author_bot === 1,
       },
       // Counts an author has hidden are zero for everyone else. Ranking is not affected by this: it only changes what is shown.
       replies: hideFor(r) ? 0 : r.replies,
@@ -1353,6 +1361,7 @@ export type ProfileView = {
   verified: boolean
   // An active paid verification subscription. It makes no identity claim.
   paidVerified: boolean
+  bot: boolean
   protected: boolean
   deactivated: boolean
   pinnedPostId: string | null
@@ -1390,6 +1399,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     created_at: number
     verified: number
     paid_verified: number
+    bot: number
     protected: number
     deactivated_at: number | null
     pinned_post_id: string | null
@@ -1399,7 +1409,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     posts: number
   }>(
     `SELECT u.id, u.handle, u.name, u.bio, u.location, u.website, u.avatar_file, u.banner_file, u.status, u.created_at,
-       u.verified, u.paid_verified, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
+       u.verified, u.paid_verified, u.bot, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
        u.followers_count AS followers, u.following_count AS following, u.posts_count AS posts
      FROM users u WHERE u.handle = ? COLLATE NOCASE`,
     handle
@@ -1423,6 +1433,7 @@ export function getProfileByHandle(handle: string, viewerId: string): ProfileVie
     posts: row.posts,
     verified: row.verified === 1,
     paidVerified: row.paid_verified === 1,
+  bot: row.bot === 1,
     protected: row.protected === 1,
     deactivated: row.deactivated_at !== null,
     pinnedPostId: row.pinned_post_id,

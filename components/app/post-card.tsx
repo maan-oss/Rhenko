@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { CalendarClock, CircleDot, EyeOff, Info, PenLine, Pin, Repeat2, Sparkles } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
-import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
+import { AiLabel, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { ProfileLink } from "@/components/app/profile-hover"
 import { EditHistory } from "@/components/app/edit-history"
 import { MediaGrid } from "@/components/app/media-grid"
@@ -29,7 +29,8 @@ function QuotedPost({ post }: { post: PostCore }) {
       <p className="text-sm">
         <span className="font-semibold">{post.author.name}</span>
         {post.author.verified ? <VerifiedBadge className="ml-1 inline-block align-[-2px]" /> : null}
-        {post.author.paidVerified ? <SubscriberBadge className="ml-1 inline-block align-[-2px]" /> : null}{" "}
+        {post.author.paidVerified ? <SubscriberBadge className="ml-1 inline-block align-[-2px]" /> : null}
+        {post.author.bot ? <AiLabel /> : null}{" "}
         <span className="text-muted-foreground">
           · <RelativeTime at={post.createdAt} />
         </span>
@@ -148,6 +149,7 @@ export function PostCard({
               <span className="truncate">{post.author.name}</span>
               {post.author.verified ? <VerifiedBadge className="ml-1 shrink-0" /> : null}
               {post.author.paidVerified ? <SubscriberBadge className="ml-1 shrink-0" /> : null}
+              {post.author.bot ? <AiLabel /> : null}
             </ProfileLink>
             <span className="truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
             <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="text-[15px] text-muted-foreground">

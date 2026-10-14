@@ -8,6 +8,7 @@ import { purgeHidden } from "@/lib/moderation"
 import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
 import { recordMissingLanguages } from "@/lib/translate"
+import { answerQuestions } from "@/lib/sahayak"
 
 // Background work that does not wait for anyone to open a page: scheduled posts go live on time, polls announce
 // their results, calls that have stopped answering end, and expired sessions and codes are removed.
@@ -24,6 +25,8 @@ export function startMaintenance(): void {
     } catch (error) {
       console.error("[maintenance] pass failed", error)
     }
+    // Sahayak answers questions as they are asked. This picks up any whose attempt has timed out, or that were waiting.
+    answerQuestions().catch((error) => console.error("[maintenance] Sahayak pass failed", error))
   }, TICK_MS)
   globals.__rhenkoMaintenance.unref?.()
   runMaintenance()
@@ -75,6 +78,7 @@ function keepWithinRetention(now: number): void {
   run("DELETE FROM notifications WHERE read = 1 AND created_at < ?", now - RETENTION.readNotificationsDays * DAY)
   run("DELETE FROM legal_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
   run("DELETE FROM moderation_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
+  run("DELETE FROM sahayak_jobs WHERE finished_at IS NOT NULL AND finished_at < ?", now - RETENTION.sahayakDays * DAY)
 }
 
 // Tells everyone who voted in a poll that it has ended, once.

@@ -24,6 +24,19 @@ export function SubscriberBadge({ className }: { className?: string }) {
   )
 }
 
+// The label on Sahayak and any other AI account. It says what the account is, so nobody takes its words for a person's.
+export function AiLabel({ className }: { className?: string }) {
+  return (
+    <span
+      aria-label="AI account"
+      title="An AI account"
+      className={cn("ml-1 inline-flex items-center rounded-[4px] border border-dusk/60 px-1 align-[1px] text-[11px] font-semibold leading-4 tracking-normal text-dusk", className)}
+    >
+      AI
+    </span>
+  )
+}
+
 export function EditedMark({ className }: { className?: string }) {
   return <span className={cn("text-[13px] text-muted-foreground", className)}>· Edited</span>
 }

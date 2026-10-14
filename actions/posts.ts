@@ -1,6 +1,7 @@
 "use server"
 
 import { languageOf } from "@/lib/languages"
+import { parseStickerSet, stickerSetJson } from "@/lib/stickers"
 import { revalidatePath } from "next/cache"
 import { getViewer, newId } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
@@ -67,9 +68,15 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const title = cleanTitle(String(formData.get("title") ?? ""))
   // Each file is paired with the alt text sent with it, in the same order, for photos and videos alike.
   const alts = formData.getAll("alt")
+  // Stickers come the same way: one entry per picked file, in order. Only a valid set is kept, and only on photos.
+  const stickerFields = formData.getAll("stickers")
   const picked = formData
     .getAll("media")
-    .flatMap((value, index) => (value instanceof File && value.size > 0 ? [{ file: value, alt: String(alts[index] ?? "").trim().slice(0, MAX_ALT) }] : []))
+    .flatMap((value, index) =>
+      value instanceof File && value.size > 0
+        ? [{ file: value, alt: String(alts[index] ?? "").trim().slice(0, MAX_ALT), stickers: parseStickerSet(stickerFields[index]) }]
+        : []
+    )
   const wantsPoll = formData.get("poll") === "on"
   const pollOptions = formData.getAll("pollOption").map((v) => String(v).trim()).filter((v) => v.length > 0)
   const pollMinutes = Number(formData.get("pollMinutes") ?? 0)
@@ -160,7 +167,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   }
 
   // From here on, every way out without a post removes the files saved for it.
-  const saved: { file: string; kind: MediaKind; alt: string }[] = []
+  const saved: { file: string; kind: MediaKind; alt: string; stickers: string | null }[] = []
   const discard = () => removeFiles(saved.map((s) => s.file))
   try {
     for (const item of picked) {
@@ -170,7 +177,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         discard()
         return { ok: false, error: upload.error }
       }
-      saved.push({ file: upload.name, kind: upload.kind, alt: item.alt })
+      const stickers = upload.kind === "image" && item.stickers ? stickerSetJson(item.stickers) : null
+      saved.push({ file: upload.name, kind: upload.kind, alt: item.alt, stickers })
     }
   } catch (error) {
     discard()
@@ -204,13 +212,14 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
       )
       saved.forEach((media, position) => {
         run(
-          "INSERT INTO post_media (id, post_id, file, kind, alt, position) VALUES (?, ?, ?, ?, ?, ?)",
+          "INSERT INTO post_media (id, post_id, file, kind, alt, position, stickers) VALUES (?, ?, ?, ?, ?, ?, ?)",
           newId(),
           id,
           media.file,
           media.kind,
           media.alt,
-          position
+          position,
+          media.stickers
         )
       })
       if (wantsPoll) {

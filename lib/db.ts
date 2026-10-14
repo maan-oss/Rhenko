@@ -913,6 +913,24 @@ CREATE TABLE IF NOT EXISTS passkeys (
 );
 CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
 `,
+  // Sahayak, the account that answers when someone mentions @sahayak. It is an ordinary account row with the bot flag on.
+  // Its password hash is not a valid scrypt hash, so no password can sign in as it. One job per asking post keeps a
+  // mention from being answered twice.
+  `ALTER TABLE users ADD COLUMN bot INTEGER NOT NULL DEFAULT 0;
+   INSERT OR IGNORE INTO users (id, handle, name, bio, password_hash, created_at, bot)
+     VALUES ('sahayak-bot', 'sahayak', 'Sahayak', 'An AI assistant. Mention @sahayak under a post to ask it a question.', '!locked', CAST(strftime('%s', 'now') AS INTEGER) * 1000, 1);
+   CREATE TABLE IF NOT EXISTS sahayak_jobs (
+     post_id TEXT PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+     asker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     status TEXT NOT NULL DEFAULT 'queued',
+     attempts INTEGER NOT NULL DEFAULT 0,
+     run_after INTEGER NOT NULL,
+     created_at INTEGER NOT NULL,
+     finished_at INTEGER
+   );
+   CREATE INDEX IF NOT EXISTS sahayak_jobs_due ON sahayak_jobs (status, run_after);`,
+  // Stickers on a photo: a JSON set (lib/stickers.ts) with the photo's shape and where each sticker sits. Null when there are none.
+  `ALTER TABLE post_media ADD COLUMN stickers TEXT;`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

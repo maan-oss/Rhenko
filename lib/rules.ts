@@ -24,7 +24,7 @@ const ROUTES_ROOT = [
   "media", "offline", "terms", "privacy", "rules", "safety", "copyright", "transparency", "legal", "notice", "accept-terms", "manifest", "favicon",
 ]
 // Words kept back for paths the app uses or would read as its own.
-const RESERVED_WORDS = ["logout", "status", "kit", "home", "compose", "admin", "rhenko"]
+const RESERVED_WORDS = ["logout", "status", "kit", "home", "compose", "admin", "rhenko", "sahayak"]
 
 export const RESERVED_HANDLES: ReadonlySet<string> = new Set([...ROUTES_APP, ...ROUTES_AUTH, ...ROUTES_API, ...ROUTES_ROOT, ...RESERVED_WORDS])
 

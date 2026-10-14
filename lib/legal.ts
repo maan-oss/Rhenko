@@ -27,6 +27,8 @@ export const RETENTION = {
   dismissedConnectionsDays: 180,
   readNotificationsDays: 180,
   legalNoticesDays: 365 * 3,
+  // A finished question for Sahayak: the question text, kept only so the answer can be checked and retried. The answer itself is a post.
+  sahayakDays: 30,
 }
 
 // Why a post was hidden or removed. A moderator picks one of these, and the notice the author sees names it.

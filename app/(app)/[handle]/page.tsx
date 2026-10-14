@@ -16,7 +16,7 @@ import { PostCard } from "@/components/app/post-card"
 import { MessageButton, ProfileActions } from "@/components/app/profile-actions"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
-import { LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
+import { AiLabel, LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { IconTabs, TabLinks } from "@/components/app/tabs"
 import { RhenkoR } from "@/components/brand/symbol"
 import { NumberTicker } from "@/components/ui/number-ticker"
@@ -148,6 +148,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             {profile.name}
             {profile.verified ? <VerifiedBadge /> : null}
             {profile.paidVerified ? <SubscriberBadge /> : null}
+            {profile.bot ? <AiLabel /> : null}
             {profile.protected ? <LockedBadge /> : null}
           </h2>
           <p className="flex flex-wrap items-center gap-2 text-muted-foreground">

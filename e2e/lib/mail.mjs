@@ -12,9 +12,15 @@ function sizeOfLog() {
   }
 }
 
+// A sink creates its log on the first message it receives, so a log that does not exist yet is empty, not missing. The file is
+// created here (append mode, so nothing already in it is lost) so the suite can start watching it before the first mail.
 export function mailReadable() {
   if (!MAIL_LOG) return "No mail log is set. Set MAIL_LOG to the mail sink's log, or SERVER_LOG to the server's output when it prints mail."
-  if (!fs.existsSync(MAIL_LOG)) return `The mail log ${MAIL_LOG} does not exist.`
+  try {
+    fs.closeSync(fs.openSync(MAIL_LOG, "a"))
+  } catch (error) {
+    return `The mail log ${MAIL_LOG} cannot be written: ${error.message}`
+  }
   return null
 }
 

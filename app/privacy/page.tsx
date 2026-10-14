@@ -495,6 +495,11 @@ const SECTIONS: LegalSection[] = [
             ask to translate, and the two languages involved. Nothing else is sent to it. Translation is off unless the operator sets
             it up.
           </li>
+          <li>
+            Sarvam AI, the service Sahayak answers with, only if the operator has turned Sahayak on. When someone mentions @sahayak,
+            it receives that post&apos;s question, and the posts it replies to or quotes that the person asking can see. Nothing else is
+            sent to it.
+          </li>
           <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
           <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
           <li>
@@ -548,6 +553,10 @@ const SECTIONS: LegalSection[] = [
         <li>
           Translations are kept with the post or message they translate. A post&apos;s translations are removed when it is edited, and
           a message&apos;s when it is deleted.
+        </li>
+        <li>
+          A question for Sahayak is kept until it is answered, and its record is removed {RETENTION.sahayakDays} days after that. The
+          answer is a post, kept like any other.
         </li>
         <li>
           Payment and accounting records (subscriptions, tips, advertising payments and the advertising ledger) are kept for as long as

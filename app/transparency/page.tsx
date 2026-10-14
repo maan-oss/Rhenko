@@ -266,6 +266,32 @@ const SECTIONS: LegalSection[] = [
     ),
   },
   {
+    id: "sahayak",
+    title: "How Sahayak works",
+    body: (
+      <>
+        <P>Sahayak is an AI assistant. It answers when someone mentions it under a post. The operator decides whether to turn it on.</P>
+        <List>
+          <li>
+            <B>Off unless set up.</B> Where the operator has not connected the answering service, Sahayak does not answer, and no question is kept.
+          </li>
+          <li>
+            <B>Asked for in a post.</B> Only a mention of @sahayak under a post starts an answer. Sahayak cannot be messaged, and no one can sign in as it.
+          </li>
+          <li>
+            <B>What is sent.</B> The question, and the posts it replies to or quotes that the person asking can see. Nothing else goes to the service.
+          </li>
+          <li>
+            <B>Labelled.</B> Its posts and profile carry an AI label. Its answers can be wrong, and a report works on them like any post.
+          </li>
+          <li>
+            <B>Limits.</B> Each person can ask Sahayak 20 questions an hour. An answer is a short post.
+          </li>
+        </List>
+      </>
+    ),
+  },
+  {
     id: "translations",
     title: "How translation works",
     body: (

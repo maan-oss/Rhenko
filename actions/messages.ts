@@ -124,8 +124,12 @@ function openDirect(viewerId: string, targetId: string): IdResult {
 export async function startConversation(handle: string): Promise<IdResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to send messages." }
-  const target = get<{ id: string }>("SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL", asHandle(handle))
+  const target = get<{ id: string; bot: number }>(
+    "SELECT id, bot FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL",
+    asHandle(handle)
+  )
   if (!target) return { ok: false, error: "That account doesn't exist." }
+  if (target.bot === 1) return { ok: false, error: "Sahayak answers in posts. Mention @sahayak under a post to ask it." }
   const opened = openDirect(viewer.id, target.id)
   if (opened.ok) refresh()
   return opened
