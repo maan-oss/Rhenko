@@ -30,7 +30,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     RHENKO_DATA_DIR=/app/data \
-    RHENKO_BACKUP_DIR=/app/backups
+    RHENKO_BACKUP_DIR=/app/backups \
+    NODE_OPTIONS=--max-semi-space-size=64
 RUN mkdir -p /app/data /app/backups && chown node:node /app /app/data /app/backups
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
