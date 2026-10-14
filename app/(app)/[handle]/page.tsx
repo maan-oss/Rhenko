@@ -1,24 +1,23 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
-import { BarChart3, CalendarDays, FileText, Heart, Image as ImageIcon, Languages, Link as LinkIcon, Lock, MapPin, MessageCircle, Repeat2, Star } from "lucide-react"
+import { BarChart3, FileText, Heart, Image as ImageIcon, Lock, MessageCircle, Repeat2, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { canSeePost, getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
-import { hostOf, joinedLabel, pluralize } from "@/lib/format"
-import { languageName, SPEAK_LEVELS } from "@/lib/languages"
+import { pluralize } from "@/lib/format"
 import { Avatar } from "@/components/app/avatar"
 import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
 import { MessageButton, ProfileActions } from "@/components/app/profile-actions"
+import { ProfileBanner } from "@/components/app/profile-banner"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { AiLabel, LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { IconTabs, TabLinks } from "@/components/app/tabs"
-import { RhenkoR } from "@/components/brand/symbol"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
@@ -109,19 +108,14 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
     <>
       <PageHeader title={profile.name} backHref="/" />
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
-      {/* The banner fades into the page below it, so the top of the profile reads as one surface. */}
-      <div className="relative h-40 overflow-hidden bg-muted md:h-48">
-        {profile.bannerFile ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/media/${profile.bannerFile}?w=1280`} alt="" decoding="async" className="size-full object-cover" />
-        ) : (
-          <RhenkoR className="absolute -top-6 -right-10 size-56 text-foreground opacity-[0.06]" />
-        )}
-        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_30%,var(--background)_100%)]" />
+
+      {/* The banner is a box of its own. Its edge stays put, and the colour stays inside it. */}
+      <div className="px-4 pt-4">
+        <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-36 sm:h-52" />
       </div>
 
-      <div className="flex items-end justify-between gap-3 px-4">
-        <div className="relative z-10 -mt-14 rounded-full bg-background p-1">
+      <div className="relative z-10 flex items-end justify-between gap-3 px-7">
+        <div className="-mt-12 rounded-full bg-background p-1.5">
           <Avatar user={profile} size={96} />
         </div>
         <div className="flex items-center gap-2 pb-1">
@@ -134,7 +128,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
                 <BarChart3 className="size-4" />
                 Analytics
               </Link>
-              <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio, location: profile.location, website: profile.website }} />
+              <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
             </>
           ) : (
             <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} />
@@ -142,62 +136,32 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 px-4 pt-3 pb-4">
-        <div>
-          <h2 className="flex flex-wrap items-center gap-1.5 text-2xl leading-tight font-semibold">
+      <div className="flex flex-col gap-4 px-7 pt-4 pb-4">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[26px] leading-tight font-semibold tracking-tight sm:text-3xl">
             {profile.name}
             {profile.verified ? <VerifiedBadge /> : null}
             {profile.paidVerified ? <SubscriberBadge /> : null}
             {profile.bot ? <AiLabel /> : null}
             {profile.protected ? <LockedBadge /> : null}
           </h2>
-          <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-[15px] text-muted-foreground">
             @{profile.handle}
             {rel.followsMe && !isSelf ? (
               <span className="glass rounded-md px-1.5 py-0.5 text-xs font-medium text-foreground">Follows you</span>
             ) : null}
           </p>
-          {profile.status ? <p className="glass mt-2 w-fit max-w-full truncate rounded-full px-3 py-1 text-sm">{profile.status}</p> : null}
+          {profile.status ? <p className="glass mt-1 w-fit max-w-full truncate rounded-full px-3 py-1 text-sm">{profile.status}</p> : null}
         </div>
+
         {rel.blockedByMe && !isSelf ? (
           <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
         ) : null}
         {profile.bio ? <p className="text-[15px] leading-relaxed whitespace-pre-line">{profile.bio}</p> : null}
-        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-          {profile.location ? (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="size-4" />
-              {profile.location}
-            </span>
-          ) : null}
-          {profile.languages.speak.length > 0 || profile.languages.learn.length > 0 ? (
-            <span className="flex items-center gap-1.5">
-              <Languages className="size-4" aria-hidden="true" />
-              <span>{languagesLine(profile.languages)}</span>
-            </span>
-          ) : null}
-          {profile.website ? (
-            <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center gap-1.5 text-foreground underline-offset-4 hover:underline">
-              <LinkIcon className="size-4" />
-              {hostOf(profile.website)}
-            </a>
-          ) : null}
-          <span className="flex items-center gap-1.5">
-            <CalendarDays className="size-4" />
-            Joined {joinedLabel(profile.createdAt)}
-          </span>
-        </div>
-        <div className="flex gap-5 text-[15px]">
-          <Link href={`${base}/following`} className="hover:underline">
-            <NumberTicker value={profile.following} className="font-semibold text-foreground" />{" "}
-            <span className="text-muted-foreground">Following</span>
-          </Link>
-          <Link href={`${base}/followers`} className="hover:underline">
-            <NumberTicker value={profile.followers} className="font-semibold text-foreground" />{" "}
-            <span className="text-muted-foreground">{pluralize(profile.followers, "Follower")}</span>
-          </Link>
-        </div>
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
+
+        <ProfileStrip base={base} following={profile.following} followers={profile.followers} joined={String(new Date(profile.createdAt).getFullYear())} />
+
         {isSelf ? null : <MessageButton handle={profile.handle} />}
       </div>
 
@@ -248,6 +212,30 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   )
 }
 
+// The long strip under the bio: following, followers, and the About page. One box, three cells, each a link.
+function ProfileStrip({ base, following, followers, joined }: { base: string; following: number; followers: number; joined: string }) {
+  return (
+    <nav aria-label="Following, followers and about" className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card">
+      <StripCell href={`${base}/following`} value={following} label="Following" />
+      <StripCell href={`${base}/followers`} value={followers} label={pluralize(followers, "Follower")} />
+      <StripCell href={`${base}/about`} label={`Joined ${joined}`}>
+        About
+      </StripCell>
+    </nav>
+  )
+}
+
+function StripCell({ href, value, label, children }: { href: string; value?: number; label: string; children?: ReactNode }) {
+  return (
+    <Link href={href} className="flex min-w-0 flex-col gap-0.5 px-3.5 py-3 transition-colors hover:bg-muted/60 sm:px-5">
+      <span className="truncate text-[17px] leading-tight font-semibold tabular-nums text-foreground">
+        {value !== undefined ? <NumberTicker value={value} /> : children}
+      </span>
+      <span className="truncate text-[13px] text-muted-foreground">{label}</span>
+    </Link>
+  )
+}
+
 // "Followed by Ana, Ben and 4 others", with the first few avatars overlapping.
 function MutualLine({ users, total }: { users: MiniUser[]; total: number }) {
   const names = users.map((u) => u.name)
@@ -273,21 +261,4 @@ function MutualLine({ users, total }: { users: MiniUser[]; total: number }) {
       </p>
     </div>
   )
-}
-
-// "Speaks English (native), Spanish (fluent). Learning French." Written as sentences, so it reads the same everywhere.
-function languagesLine(languages: { speak: { code: string; level: string }[]; learn: string[] }): string {
-  const sentences: string[] = []
-  if (languages.speak.length > 0) {
-    const spoken = languages.speak.map((item) => {
-      const name = languageName(item.code) ?? item.code
-      const level = SPEAK_LEVELS.find((option) => option.id === item.level)?.label
-      return level ? `${name} (${level.toLowerCase()})` : name
-    })
-    sentences.push(`Speaks ${spoken.join(", ")}.`)
-  }
-  if (languages.learn.length > 0) {
-    sentences.push(`Learning ${languages.learn.map((code) => languageName(code) ?? code).join(", ")}.`)
-  }
-  return sentences.join(" ")
 }

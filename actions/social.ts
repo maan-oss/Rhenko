@@ -336,15 +336,20 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
 
   const name = String(formData.get("name") ?? "").trim()
   const bio = String(formData.get("bio") ?? "").trim()
+  // Location and website belong to About you, so this form changes them only when it sends them.
+  const sendsLocation = formData.has("location")
+  const sendsWebsite = formData.has("website")
   const location = String(formData.get("location") ?? "").trim()
   const website = String(formData.get("website") ?? "").trim()
 
   const nameError = validateName(name)
   if (nameError) return { error: nameError }
   if ([...bio].length > MAX_BIO) return { error: `Bios can have up to ${MAX_BIO} characters.` }
-  if ([...location].length > MAX_LOCATION) return { error: `Locations can have up to ${MAX_LOCATION} characters.` }
-  const websiteError = validateWebsite(website)
-  if (websiteError) return { error: websiteError }
+  if (sendsLocation && [...location].length > MAX_LOCATION) return { error: `Locations can have up to ${MAX_LOCATION} characters.` }
+  if (sendsWebsite) {
+    const websiteError = validateWebsite(website)
+    if (websiteError) return { error: websiteError }
+  }
 
   const avatar = formData.get("avatar")
   const banner = formData.get("banner")
@@ -356,8 +361,8 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
     return { error: bannerUpload.error }
   }
 
-  const previous = get<{ avatar_file: string | null; banner_file: string | null }>(
-    "SELECT avatar_file, banner_file FROM users WHERE id = ?",
+  const previous = get<{ avatar_file: string | null; banner_file: string | null; location: string | null; website: string | null }>(
+    "SELECT avatar_file, banner_file, location, website FROM users WHERE id = ?",
     viewer.id
   )
   run(
@@ -366,14 +371,28 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
      WHERE id = ?`,
     name,
     bio,
-    location,
-    website,
+    sendsLocation ? location : (previous?.location ?? ""),
+    sendsWebsite ? website : (previous?.website ?? ""),
     avatarUpload?.ok ? avatarUpload.name : null,
     bannerUpload?.ok ? bannerUpload.name : null,
     viewer.id
   )
   if (avatarUpload?.ok) removeUpload(previous?.avatar_file ?? null)
   if (bannerUpload?.ok) removeUpload(previous?.banner_file ?? null)
+  refresh()
+  return { ok: true }
+}
+
+// About you: where someone is and their website. Both are shown on the About page, and both can be left empty.
+export async function saveAbout(input: { location: string; website: string }): Promise<VoidResult> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: "Sign in to edit your details." }
+  const location = typeof input.location === "string" ? input.location.trim() : ""
+  const website = typeof input.website === "string" ? input.website.trim() : ""
+  if ([...location].length > MAX_LOCATION) return { ok: false, error: `Locations can have up to ${MAX_LOCATION} characters.` }
+  const websiteError = validateWebsite(website)
+  if (websiteError) return { ok: false, error: websiteError }
+  run("UPDATE users SET location = ?, website = ? WHERE id = ?", location, website, viewer.id)
   refresh()
   return { ok: true }
 }

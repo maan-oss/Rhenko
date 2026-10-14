@@ -6,9 +6,11 @@ import { toast } from "sonner"
 import { updateProfile, type ProfileState } from "@/actions/social"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { MAX_BIO, MAX_LOCATION, MAX_NAME, MAX_WEBSITE } from "@/lib/rules"
+import { MAX_BIO, MAX_NAME } from "@/lib/rules"
 
-type Defaults = { name: string; bio: string; location: string; website: string }
+// The profile itself: name, bio, photo and banner. Where someone is, their languages, interests and website are edited on
+// About you (Settings), so they stay off the profile.
+type Defaults = { name: string; bio: string }
 
 const FILE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
 
@@ -61,15 +63,6 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
               defaultValue={defaults.bio}
               className="rounded-xl border border-input bg-background px-3 py-2 text-[15px] outline-none focus-visible:border-foreground/50"
             />
-          </Field>
-          <Field label="Location">
-            <input name="location" maxLength={MAX_LOCATION} defaultValue={defaults.location} className={INPUT} />
-            <span className="text-[13px] text-muted-foreground">
-              Shown on your profile, in any words you like. The city used for suggestions is private, and is set in Settings.
-            </span>
-          </Field>
-          <Field label="Website">
-            <input name="website" type="url" maxLength={MAX_WEBSITE} placeholder="https://" defaultValue={defaults.website} className={INPUT} />
           </Field>
           <Field label="Profile photo">
             <input name="avatar" type="file" accept={FILE_ACCEPT} className="text-sm file:mr-3 file:rounded-lg file:border file:border-border file:bg-background file:px-3 file:py-1.5" />
