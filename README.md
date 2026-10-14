@@ -13,8 +13,10 @@ For production:
 
 ```bash
 npm run build        # Turbopack build
-npm start -- -p 3100 # serves the built app on http://localhost:3100
+PORT=3100 npm start  # serves the built app on http://localhost:3100
 ```
+
+`npm start` runs `server.mjs`, which starts several worker processes on the one port (see `RHENKO_WORKERS` below). They share their state through the database, so any of them can serve any request, and a worker that stops is replaced.
 
 Or with Docker, which keeps the data and the backups in folders on the host:
 
@@ -39,6 +41,7 @@ Every setting is optional. `.env.example` lists them, and a line that starts wit
 - `RHENKO_ICE_SERVERS`, or `RHENKO_TURN_SECRET` with `RHENKO_TURN_URLS`, give voice calls a TURN relay for networks that block direct connections. Without them calls use Google's public STUN server.
 - `RHENKO_OPERATOR_NAME` and `RHENKO_CONTACT_EMAIL` appear on the Terms and Privacy pages.
 - `RHENKO_DATA_DIR` moves the data folder (default `./data`). `RHENKO_BACKUP_DIR` moves the backups (default `./backups`). `PORT` sets the port.
+- `RHENKO_WORKERS` sets how many worker processes serve the app (default 4, or the number of CPUs when there are fewer). `RHENKO_HOST` sets the address they listen on (default `0.0.0.0`).
 
 Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls need a secure page.
 
@@ -75,7 +78,7 @@ The scripts read the same database as the app, and the server can keep running w
 
 ## Testing
 
-`npm run test:e2e` drives a real Chromium through the whole product against a server that is already running. It creates its own accounts for each run, on desktop and phone sizes. Start the server with `RHENKO_TRUST_PROXY=1`. Settings the suite reads from the environment are `BASE_URL`, `CHROMIUM_PATH`, `SERVER_LOG` (the server's output, for codes it prints), `MAIL_LOG` (the log of a local mail sink when the server sends through SMTP), `RHENKO_DATA_DIR` and `ONLY` (for example `ONLY=auth,posts`). The header of `e2e/run.mjs` has the full list.
+`npm run test:e2e` drives a real Chromium through the whole product against a server that is already running. It creates its own accounts for each run, on desktop and phone sizes. Start the server with `RHENKO_TRUST_PROXY=1` and `RHENKO_PROOF_BITS=8`. Settings the suite reads from the environment are `BASE_URL`, `CHROMIUM_PATH`, `SERVER_LOG` (the server's output, for codes it prints), `MAIL_LOG` (the log of a local mail sink when the server sends through SMTP), `RHENKO_DATA_DIR` and `ONLY` (for example `ONLY=auth,posts`). The header of `e2e/run.mjs` has the full list.
 
 ## What's in it
 
@@ -188,7 +191,7 @@ The scripts read the same database as the app, and the server can keep running w
 
 ## Known limits
 
-- One server process. Live events, call state and rate-limit counters are kept in memory, so a restart ends any call in progress and starts the rate-limit windows again. Several instances would need a shared store (for example Redis) first.
+- One machine. The worker processes share live events, call state, rate-limit counters and the background-work lease through the SQLite database. Several machines would need a shared store (for example Redis) first. A restart of the server reloads open tabs, so any call in progress ends.
 - SQLite and local uploads need one machine with a persistent disk. They are not built for serverless hosting.
 - A page that doesn't exist, or that the viewer may not see, answers HTTP 200 with the "This page is not here" view and a `noindex` tag. Cache Components sends the page shell before the page's checks run, so the status can't change. The app is behind sign-in, so search engines see only the sign-in, terms and privacy pages. A path with no matching route at all, such as `/nope/a/b`, gets a real 404. A single unknown name is read as a handle, so it gets the same "not here" view as any missing profile.
 - Messages are stored as readable text on the server. They are not end-to-end encrypted.

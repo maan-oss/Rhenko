@@ -36,11 +36,11 @@ RUN mkdir -p /app/data /app/backups && chown node:node /app /app/data /app/backu
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
-COPY --chown=node:node package.json next.config.ts ./
+COPY --chown=node:node package.json next.config.ts server.mjs ./
 COPY --chown=node:node scripts ./scripts
 USER node
 VOLUME ["/app/data", "/app/backups"]
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1), () => process.exit(1))"]
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node", "server.mjs"]

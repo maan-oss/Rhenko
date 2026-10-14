@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.mjs",
     "lint": "eslint",
     "test:e2e": "node e2e/run.mjs",
     "test:unit": "node --experimental-strip-types --test tests/abuse.test.mjs tests/ranking.test.mjs tests/languages.test.mjs tests/places-connections.test.mjs tests/sahayak.test.mjs tests/stickers.test.mjs",
