@@ -962,18 +962,69 @@ CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
   `
 CREATE INDEX IF NOT EXISTS posts_publish_due ON posts (publish_at) WHERE publish_at IS NOT NULL;
 `,
+  // State every server process shares. Several processes serve one port, so anything one of them keeps in memory would
+  // be missed by the others. Events are passed between processes through this table, and each stream is recorded here so
+  // any process can tell whether a person has a tab open. Call state, rate limits and the maintenance lease live here too.
+  `
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_created ON events (created_at);
+CREATE TABLE IF NOT EXISTS streams (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  worker TEXT NOT NULL,
+  seen_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS streams_user ON streams (user_id, seen_at);
+CREATE INDEX IF NOT EXISTS streams_worker ON streams (worker);
+CREATE TABLE IF NOT EXISTS calls (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  doc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS calls_conversation ON calls (conversation_id);
+CREATE TABLE IF NOT EXISTS queued_banners (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  event TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS queued_banners_user ON queued_banners (user_id, id);
+CREATE TABLE IF NOT EXISTS rate_limits (
+  limit_key TEXT PRIMARY KEY,
+  hits INTEGER NOT NULL,
+  reset_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_limits_reset ON rate_limits (reset_at);
+CREATE TABLE IF NOT EXISTS leases (
+  name TEXT PRIMARY KEY,
+  holder TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }
 const globals = globalThis as unknown as Globals
 
+// Several server processes start against one database, so each step takes the write lock and reads the version under it. A
+// process that starts while another is migrating waits, then finds the step already applied and moves on.
 function migrate(instance: DatabaseSync): void {
-  const row = instance.prepare("PRAGMA user_version").get() as { user_version: number }
-  for (let step = row.user_version; step < MIGRATIONS.length; step++) {
-    instance.exec("BEGIN")
+  for (;;) {
+    instance.exec("BEGIN IMMEDIATE")
     try {
-      instance.exec(MIGRATIONS[step])
-      instance.exec(`PRAGMA user_version = ${step + 1}`)
+      const { user_version: version } = instance.prepare("PRAGMA user_version").get() as { user_version: number }
+      if (version >= MIGRATIONS.length) {
+        instance.exec("COMMIT")
+        return
+      }
+      instance.exec(MIGRATIONS[version])
+      instance.exec(`PRAGMA user_version = ${version + 1}`)
       instance.exec("COMMIT")
     } catch (error) {
       instance.exec("ROLLBACK")
@@ -986,10 +1037,11 @@ export function db(): DatabaseSync {
   if (!globals.__rhenkoDb) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true })
     const instance = new DatabaseSync(path.join(DATA_DIR, "rhenko.sqlite"))
+    // The busy timeout comes first, so the settings below wait for another process rather than failing at once.
     // WAL lets readers run beside the writer. synchronous NORMAL is safe with WAL: a power cut can lose the last
     // commits, never corrupt the file. The cache and mmap keep hot pages in memory.
-    instance.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;
-      PRAGMA busy_timeout = 5000; PRAGMA cache_size = -65536; PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;`)
+    instance.exec(`PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;
+      PRAGMA cache_size = -65536; PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;`)
     migrate(instance)
     globals.__rhenkoDb = instance
   }
@@ -1039,10 +1091,37 @@ export function run(sql: string, ...params: Param[]): void {
   statement(sql).run(...params)
 }
 
-// Runs a function inside a transaction. Rolls back when it throws.
+// Runs a statement and returns how many rows it changed.
+export function change(sql: string, ...params: Param[]): number {
+  return Number(statement(sql).run(...params).changes)
+}
+
+// How many transactions are open in this process. A transaction opened inside another one is a savepoint of it, so
+// functions that each take a transaction can call one another.
+let openTransactions = 0
+
+// Runs a function inside a transaction. Rolls back when it throws. BEGIN IMMEDIATE takes the write lock straight away, so
+// no other process can change the data while the function runs.
 export function transaction<T>(fn: () => T): T {
   const conn = db()
+  if (openTransactions > 0) {
+    const name = `sp${openTransactions}`
+    conn.exec(`SAVEPOINT ${name}`)
+    openTransactions++
+    try {
+      const result = fn()
+      conn.exec(`RELEASE ${name}`)
+      return result
+    } catch (error) {
+      conn.exec(`ROLLBACK TO ${name}`)
+      conn.exec(`RELEASE ${name}`)
+      throw error
+    } finally {
+      openTransactions--
+    }
+  }
   conn.exec("BEGIN IMMEDIATE")
+  openTransactions++
   try {
     const result = fn()
     conn.exec("COMMIT")
@@ -1050,5 +1129,7 @@ export function transaction<T>(fn: () => T): T {
   } catch (error) {
     conn.exec("ROLLBACK")
     throw error
+  } finally {
+    openTransactions--
   }
 }
