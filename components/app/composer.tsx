@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
+import { useProofGate } from "@/components/app/proof-dialog"
 import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
 import type { StickerPick } from "@/components/app/sticker-tray"
 import { MAX_STICKERS, TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_LOOK_FIELDS, clamp, type Sticker } from "@/lib/stickers"
@@ -578,6 +579,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [intent, setIntent] = useState<"post" | "draft">("post")
   const [emojiBelow, setEmojiBelow] = useState(false)
   const [pending, startTransition] = useTransition()
+  const proof = useProofGate()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -860,9 +862,18 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     setIntent("post")
     const parts = [text, ...extra].map((part) => part.trim())
     const head = buildForm(false, null)
-    startTransition(async () => {
-      const first = await createPost(head)
+    // A check asked for by the server is run, and the same part is sent again with its answer.
+    const start = (form: FormData) =>
+      startTransition(async () => {
+      const first = await createPost(form)
       if (!first.ok) {
+        if (first.proofRequired) {
+          proof.askForProof((passed) => {
+            form.set("proof", passed)
+            start(form)
+          })
+          return
+        }
         toast.error(first.error)
         return
       }
@@ -885,6 +896,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
       toast.success("Thread posted.")
       onPosted?.()
     })
+    start(head)
   }
 
   // Post or schedule (draft = false) or save a draft (draft = true).
@@ -906,9 +918,18 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     setIntent(draft ? "draft" : "post")
     const body = buildForm(draft, at)
 
-    startTransition(async () => {
-      const result = await createPost(body)
+    // A check asked for by the server is run, and the post is sent again with its answer.
+    const publish = (form: FormData) =>
+      startTransition(async () => {
+      const result = await createPost(form)
       if (!result.ok) {
+        if (result.proofRequired) {
+          proof.askForProof((passed) => {
+            form.set("proof", passed)
+            publish(form)
+          })
+          return
+        }
         toast.error(result.error)
         return
       }
@@ -936,6 +957,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
       }
       onPosted?.()
     })
+    publish(body)
   }
 
   // The count and, on a new post, the reply picker sit in the corner, beside the first line of text.
@@ -1295,6 +1317,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           </div>
         </div>
       </form>
+    {proof.dialog}
     {trayFor !== null ? (
       <StickerTray
         open

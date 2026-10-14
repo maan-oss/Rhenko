@@ -51,10 +51,13 @@ export function factsFor(postId: string, authorId: string, hash: string | null, 
     "SELECT COUNT(*) AS n FROM moderation_notices WHERE user_id = ? AND category = 'spam' AND restored_at IS NULL",
     authorId
   )
+  // Reports from accounts less than a week old do not count. A crowd of new accounts is how a post gets reported away.
   const reports = get<{ n: number }>(
-    `SELECT COUNT(DISTINCT reporter_id) AS n FROM reports
-     WHERE created_at >= ? AND (user_id = ? OR post_id IN (SELECT id FROM posts WHERE author_id = ?))`,
+    `SELECT COUNT(DISTINCT r.reporter_id) AS n FROM reports r
+     JOIN users u ON u.id = r.reporter_id
+     WHERE r.created_at >= ? AND u.created_at <= ? AND (r.user_id = ? OR r.post_id IN (SELECT id FROM posts WHERE author_id = ?))`,
     now - REPORT_WINDOW,
+    now - 7 * DAY,
     authorId,
     authorId
   )

@@ -33,7 +33,9 @@ Every setting is optional. `.env.example` lists them, and a line that starts wit
 - `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM` send the email codes for address confirmation and password reset. In production, without SMTP, those features say email isn't set up.
 - `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if that service needs one, turn on the translate button through a LibreTranslate-compatible service. Off by default, and only the text a reader asks to translate is sent.
 - `RHENKO_SARVAM_KEY` turns on Sahayak, the AI account that answers a mention of `@sahayak` under a post. It uses Sarvam AI (`RHENKO_SARVAM_URL` and `RHENKO_SARVAM_MODEL` can point it elsewhere). Off by default. When on, only the question and the posts it replies to or quotes that the asker can see are sent, and Sahayak labels its posts and profile as AI.
-- `RHENKO_TRUST_PROXY=1` when a reverse proxy sets `X-Forwarded-For`. Without it, every visitor shares one rate-limit bucket.
+- `RHENKO_TRUST_PROXY=1` when a reverse proxy sets `X-Forwarded-For` or `X-Real-IP`. Without it, every visitor shares one rate-limit bucket, and the checks that count accounts by network are off.
+- `RHENKO_TURNSTILE_SITE_KEY` and `RHENKO_TURNSTILE_SECRET_KEY`, set together, use Cloudflare Turnstile for the human check on sign-up, sign-in, password resets, and new follows, messages and posts from accounts that look automated. Without them the check is a puzzle that runs in the visitor's browser, and nothing is sent to a third party.
+- `RHENKO_PROOF_BITS` sets how hard the built-in puzzle is, from 8 to 22 zero bits (default 16). The end-to-end suite sets it to 8 so each sign-up is quick.
 - `RHENKO_ICE_SERVERS`, or `RHENKO_TURN_SECRET` with `RHENKO_TURN_URLS`, give voice calls a TURN relay for networks that block direct connections. Without them calls use Google's public STUN server.
 - `RHENKO_OPERATOR_NAME` and `RHENKO_CONTACT_EMAIL` appear on the Terms and Privacy pages.
 - `RHENKO_DATA_DIR` moves the data folder (default `./data`). `RHENKO_BACKUP_DIR` moves the backups (default `./backups`). `PORT` sets the port.

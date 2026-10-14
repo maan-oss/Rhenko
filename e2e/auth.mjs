@@ -94,6 +94,9 @@ async function signUpRules() {
 
   await check("handle field stops at 15 characters and ignores a typed @", async () => {
     await go(page, "/signup", page.locator("input[name=handle]"))
+    // Typing starts once the page is running. Keys typed while it is still loading are lost when the field is set up. The
+    // form's start time is written only after that, so it marks the point where typing is safe.
+    await page.waitForFunction(() => (document.querySelector('input[name="stamp"]')?.value ?? "") !== "", null, { timeout: 60_000 })
     const input = page.locator("input[name=handle]")
     await input.pressSequentially("abcdefghijklmnopqrstuvwxyz")
     assert.equal((await input.inputValue()).length, 15, "the handle field accepts more than 15 characters")

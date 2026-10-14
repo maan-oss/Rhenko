@@ -30,13 +30,25 @@ import { cleanEmail, emailProblem, EMAIL_CODE_MINUTES, MAX_EMAIL, passwordProble
 import { hangUpFor } from "@/lib/call-state"
 import { get, run } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
-import { consume, waitLabel } from "@/lib/rate-limit"
+import { consume, reached, waitLabel } from "@/lib/rate-limit"
 import { HANDLE_MAX, MAX_PASSWORD, ageFrom, validateHandle, validateName } from "@/lib/rules"
 import { MINIMUM_AGE, TERMS_VERSION } from "@/lib/legal"
 import { emailReady } from "@/lib/settings-data"
+import { stampOk, verifyProof } from "@/lib/proof"
+import { parseAnswer } from "@/lib/proof-rules"
+import { recordSignal } from "@/lib/risk"
 
-export type AuthState = { error?: string }
-export type ResetRequestState = { error?: string; sent?: boolean; email?: string }
+// proofRequired tells the form to run the human check again and send the answer with the next try.
+export type AuthState = { error?: string; proofRequired?: boolean }
+export type ResetRequestState = { error?: string; sent?: boolean; email?: string; proofRequired?: boolean }
+
+// Bots fill in every field, including the one a person never sees, and send forms faster than a person can. Their errors
+// say nothing about why they failed, so a bot learns nothing from them.
+const UNSENT = "Something went wrong. Refresh the page and try again."
+function filledHoneypot(formData: FormData): boolean {
+  return String(formData.get("website") ?? "") !== ""
+}
+const CHECK_FIRST = "Confirm you're a person, then try again."
 
 const MINUTE = 60 * 1000
 
@@ -52,6 +64,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const email = cleanEmail(String(formData.get("email") ?? ""))
   // The box is ticked by the person, never by the form. Its value is what the account records as its acceptance.
   const agreed = formData.get("agree") === "on"
+  if (filledHoneypot(formData) || !stampOk(formData.get("stamp"))) return { error: UNSENT }
 
   const handleError = validateHandle(handle)
   if (handleError) return { error: handleError }
@@ -72,6 +85,10 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const emailTaken = "That email is already used by another account. Use a different one, or leave it blank."
   if (get("SELECT id FROM users WHERE handle = ? COLLATE NOCASE", handle)) return { error: taken }
   if (email && get("SELECT id FROM users WHERE email = ? COLLATE NOCASE", email)) return { error: emailTaken }
+
+  // The human check comes once the fields are right, so a typo does not use up a puzzle.
+  const answer = parseAnswer(formData.get("proof"))
+  if (!answer || !(await verifyProof(answer))) return { error: CHECK_FIRST, proofRequired: true }
 
   // Ten new accounts per network each hour. Only a sign-up that is about to succeed counts.
   const limit = consume(`signup:${await clientIp()}`, 10, 60 * MINUTE)
@@ -100,6 +117,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     if (isUniqueViolation(error, "users.handle")) return { error: taken }
     throw error
   }
+  await recordSignal(id, "signup")
   await createSession(id)
   // A new account first sets where it is, its languages and its interests. Each step can be skipped.
   redirect("/welcome")
@@ -109,6 +127,12 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   const handle = cleanHandle(formData.get("handle"))
   const password = String(formData.get("password") ?? "")
   if (!handle || !password) return { error: "Enter your handle and password." }
+  if (filledHoneypot(formData)) return { error: "Handle or password is wrong." }
+  // After three wrong passwords for one handle, or ten from one network, in fifteen minutes, the sign-in needs the human check
+  // too. Sign-ins that work are not counted, so a person who signs in often is not asked for it.
+  const failures = `loginfail:${handle.toLowerCase().slice(0, 32)}`
+  const networkFailures = `loginfailip:${await clientIp()}`
+  const checkFirst = reached(failures, 3, 15 * MINUTE) || reached(networkFailures, 10, 15 * MINUTE)
 
   const ipLimit = consume(`loginip:${await clientIp()}`, 30, 15 * MINUTE)
   if (!ipLimit.ok) {
@@ -118,13 +142,24 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   if (!handleLimit.ok) {
     return { error: `Too many sign-in attempts for that handle. Try again in ${waitLabel(handleLimit.retryAfterSeconds)}.` }
   }
+  if (checkFirst) {
+    const answer = parseAnswer(formData.get("proof"))
+    if (!answer || !(await verifyProof(answer))) {
+      return { error: "Confirm you're a person to keep signing in.", proofRequired: true }
+    }
+  }
 
   // One password check runs whether or not the handle exists, so a failed sign-in takes as long either way.
   const user = handle.length <= HANDLE_MAX ? findUserByHandleWithSecret(handle) : undefined
   let ok = false
   if (user && password.length <= MAX_PASSWORD) ok = await verifyPassword(password, user.password_hash)
   else await spendPasswordCheck(password.slice(0, MAX_PASSWORD))
-  if (!user || !ok) return { error: "Handle or password is wrong." }
+  if (!user || !ok) {
+    // Only a wrong password is counted, for the check above.
+    consume(failures, 3, 15 * MINUTE)
+    consume(networkFailures, 10, 15 * MINUTE)
+    return { error: "Handle or password is wrong." }
+  }
 
   // A deactivated account comes back only after the whole sign-in, so with two-factor on it waits for the code.
   if (user.totp_enabled === 1) {
@@ -132,6 +167,7 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
     redirect("/login/verify")
   }
   if (user.deactivated_at !== null) run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
+  await recordSignal(user.id, "login")
   await createSession(user.id)
   redirect("/")
 }
@@ -198,6 +234,7 @@ export async function requestPasswordReset(_prev: ResetRequestState, formData: F
   const value = cleanHandle(formData.get("account"))
   if (!value) return { error: "Enter your handle or email." }
   if (value.length > MAX_EMAIL) return { error: "That's longer than any handle or email. Check it and try again." }
+  if (filledHoneypot(formData)) return { error: UNSENT }
 
   const ipLimit = consume(`resetip:${await clientIp()}`, 10, 60 * MINUTE)
   if (!ipLimit.ok) {
@@ -207,6 +244,9 @@ export async function requestPasswordReset(_prev: ResetRequestState, formData: F
   if (!targetLimit.ok) {
     return { error: `Too many reset requests for that handle or email. Try again in ${waitLabel(targetLimit.retryAfterSeconds)}.` }
   }
+  // Every reset request sends an email, so each one needs the human check.
+  const answer = parseAnswer(formData.get("proof"))
+  if (!answer || !(await verifyProof(answer))) return { error: CHECK_FIRST, proofRequired: true }
 
   const byEmail = value.includes("@")
   const user = get<{ id: string; handle: string; email: string }>(

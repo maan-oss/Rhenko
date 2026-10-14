@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createGroup, startConversation, type ChatState } from "@/actions/messages"
 import { Button } from "@/components/ui/button"
+import { useProofGate } from "@/components/app/proof-dialog"
 import { MAX_GROUP_TITLE } from "@/lib/rules"
 
 const INPUT =
@@ -18,11 +19,17 @@ export function NewChatForm({ defaultHandle }: { defaultHandle?: string }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
-  const open = (handle: string) => {
+  const proof = useProofGate()
+  const open = (handle: string, answer?: string) => {
     startTransition(async () => {
-      const result = await startConversation(handle)
-      if (!result.ok) setError(result.error)
-      else router.push(`/messages/${result.id}`)
+      const result = await startConversation(handle, answer)
+      if (!result.ok) {
+        if (result.proofRequired) {
+          proof.askForProof((passed) => open(handle, passed))
+          return
+        }
+        setError(result.error)
+      } else router.push(`/messages/${result.id}`)
     })
   }
   useEffect(() => {
@@ -33,6 +40,7 @@ export function NewChatForm({ defaultHandle }: { defaultHandle?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultHandle])
   return (
+    <>
     <form
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -63,6 +71,8 @@ export function NewChatForm({ defaultHandle }: { defaultHandle?: string }) {
         </p>
       ) : null}
     </form>
+    {proof.dialog}
+    </>
   )
 }
 

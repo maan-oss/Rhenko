@@ -29,6 +29,9 @@ export const RETENTION = {
   legalNoticesDays: 365 * 3,
   // A finished question for Sahayak: the question text, kept only so the answer can be checked and retried. The answer itself is a post.
   sahayakDays: 30,
+  // When an account was made from, signed in from or passed a check: the network as a keyed hash that cannot be read back to an
+  // address. The browser is not kept. Used to see many accounts coming from one place (lib/risk.ts).
+  signalsDays: 30,
 }
 
 // Why a post was hidden or removed. A moderator picks one of these, and the notice the author sees names it.

@@ -931,6 +931,32 @@ CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
    CREATE INDEX IF NOT EXISTS sahayak_jobs_due ON sahayak_jobs (status, run_after);`,
   // Stickers on a photo: a JSON set (lib/stickers.ts) with the photo's shape and where each sticker sits. Null when there are none.
   `ALTER TABLE post_media ADD COLUMN stickers TEXT;`,
+  // Human checks (lib/proof.ts). A puzzle a browser solves once: it is used up by any answer and is gone after it expires.
+  // ip_hash is a keyed hash of the network it was issued to, so a busy network gets harder puzzles.
+  `CREATE TABLE IF NOT EXISTS proof_challenges (
+     id TEXT PRIMARY KEY,
+     salt TEXT NOT NULL,
+     bits INTEGER NOT NULL,
+     ip_hash TEXT,
+     created_at INTEGER NOT NULL,
+     expires_at INTEGER NOT NULL,
+     used_at INTEGER
+   );
+   CREATE INDEX IF NOT EXISTS proof_challenges_ip ON proof_challenges (ip_hash, created_at);
+   CREATE INDEX IF NOT EXISTS proof_challenges_expiry ON proof_challenges (expires_at);
+   -- What an account was made or signed in from: keyed hashes of the network address and the browser, never the raw values.
+   -- Used to see many accounts coming from one place (lib/risk.ts). Kept for RETENTION.signalsDays.
+   CREATE TABLE IF NOT EXISTS account_signals (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     ip_hash TEXT,
+     ua_hash TEXT,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS account_signals_network ON account_signals (kind, ip_hash, created_at);
+   CREATE INDEX IF NOT EXISTS account_signals_browser ON account_signals (ua_hash, created_at);
+   CREATE INDEX IF NOT EXISTS account_signals_user ON account_signals (user_id);`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

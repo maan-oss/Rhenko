@@ -4,6 +4,8 @@ import Link from "next/link"
 import { useActionState, useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
 import { useFormStatus } from "react-dom"
 import { Check, Eye, EyeOff } from "lucide-react"
+import { requestStamp } from "@/actions/proof"
+import { ProofCheck } from "@/components/app/proof-check"
 import { PasskeyLoginButton, SecurityKeyButton } from "@/components/app/passkey-panel"
 import {
   login,
@@ -257,10 +259,40 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   return mode === "login" ? <LoginForm /> : <SignupForm />
 }
 
+// A field no person sees or fills in. Programs fill in every field they find, so a value here marks the form as sent by one.
+function HoneyPot() {
+  return (
+    <input
+      type="text"
+      name="website"
+      tabIndex={-1}
+      autoComplete="off"
+      aria-hidden="true"
+      defaultValue=""
+      className="pointer-events-none absolute -left-[10000px] h-0 w-0 opacity-0"
+    />
+  )
+}
+
+// The answer to the human check for one form. An answer is used up by a send, so after every reply from the action the
+// check runs again for a new answer, and the form waits for it.
+function useCheckAnswer(reply: { error?: string; sent?: boolean; proofRequired?: boolean }) {
+  const [proof, setProof] = useState("")
+  const [key, setKey] = useState(0)
+  const [seen, setSeen] = useState(reply)
+  if (seen !== reply) {
+    setSeen(reply)
+    setProof("")
+    setKey((count) => count + 1)
+  }
+  return { proof, key, onReady: (value: string | null) => setProof(value ?? "") }
+}
+
 function LoginForm() {
   const [state, formAction] = useActionState(login, {} as AuthState)
   const [handle, setHandle] = useState("")
   const [password, setPassword] = useState("")
+  const check = useCheckAnswer(state)
   return (
     <>
     <form action={formAction} className="settle flex w-full flex-col gap-5">
@@ -278,8 +310,15 @@ function LoginForm() {
           </Link>
         }
       />
+      <HoneyPot />
+      <input type="hidden" name="proof" value={state.proofRequired ? check.proof : ""} />
       <ErrorText message={state.error} />
-      <SubmitButton label="Log in" pendingLabel="Logging in" disabled={handle.length === 0 || password.length === 0} />
+      {state.proofRequired ? <ProofCheck key={check.key} onReady={check.onReady} /> : null}
+      <SubmitButton
+        label="Log in"
+        pendingLabel="Logging in"
+        disabled={handle.length === 0 || password.length === 0 || (state.proofRequired === true && check.proof === "")}
+      />
     </form>
     <div className="settle mt-5 flex w-full flex-col gap-5">
       <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
@@ -308,6 +347,20 @@ function SignupForm() {
   const [password, setPassword] = useState("")
   const [agree, setAgree] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
+  // The human check runs from the moment the form opens, while the person fills in the screens, so it is ready at the end.
+  const check = useCheckAnswer(state)
+  // The form's start time goes straight into its hidden field, with no re-render, so a person who is typing when it arrives
+  // is not interrupted. It is ready long before the last screen, when the form is sent.
+  const stampField = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    let live = true
+    requestStamp().then((value) => {
+      if (live && stampField.current) stampField.current.value = value
+    })
+    return () => {
+      live = false
+    }
+  }, [])
 
   const valid = [
     name.trim().length > 0 && name.length <= MAX_NAME && handle.length > 0 && !handleProblem(handle),
@@ -447,13 +500,19 @@ function SignupForm() {
             </span>
           </label>
           <div className="flex flex-col gap-3">
-            <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2]} />
+            {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
+            {step === SIGNUP_LAST ? <ProofCheck key={check.key} onReady={check.onReady} /> : null}
+            <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
             <BackButton onClick={() => setStep(1)} />
           </div>
         </section>
 
         {/* Outside the screens, so a refused sign-up shows its reason on whichever screen it sends the person back to. */}
         <ErrorText message={state.error} />
+        <HoneyPot />
+        {/* No value prop: React would write its value back on the next render and clear the stamp. */}
+        <input ref={stampField} type="hidden" name="stamp" />
+        <input type="hidden" name="proof" value={check.proof} />
 
       </form>
     </div>
@@ -527,6 +586,7 @@ export function VerifyCodeForm({ usable, hasKeys }: { usable: boolean; hasKeys: 
 export function ForgotPasswordForm() {
   const [state, action] = useActionState(requestPasswordReset, {} as ResetRequestState)
   const [account, setAccount] = useState("")
+  const check = useCheckAnswer(state)
   const next = state.email ? `/reset-password?email=${encodeURIComponent(state.email)}` : "/reset-password"
   return (
     <form action={action} className="settle flex w-full flex-col gap-5">
@@ -541,6 +601,8 @@ export function ForgotPasswordForm() {
         value={account}
         onChange={(event) => setAccount(event.target.value)}
       />
+      <HoneyPot />
+      <input type="hidden" name="proof" value={check.proof} />
       <ErrorText message={state.error} />
       {state.sent ? (
         <div role="status" className="settle flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-4 text-[14px] leading-snug">
@@ -550,7 +612,13 @@ export function ForgotPasswordForm() {
           </Link>
         </div>
       ) : null}
-      <SubmitButton label={state.sent ? "Send another code" : "Send code"} pendingLabel="Sending" disabled={account.trim().length === 0} />
+      {/* Every reset request sends an email, so each one waits for the human check. */}
+      <ProofCheck key={check.key} onReady={check.onReady} />
+      <SubmitButton
+        label={state.sent ? "Send another code" : "Send code"}
+        pendingLabel="Sending"
+        disabled={account.trim().length === 0 || check.proof === ""}
+      />
     </form>
   )
 }

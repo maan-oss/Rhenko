@@ -10,6 +10,7 @@ import { canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUs
 import { blockedEitherWay } from "@/lib/notify"
 import { isVoiceFile } from "@/lib/media-names"
 import { consume, waitLabel } from "@/lib/rate-limit"
+import { gate, isNewAccount } from "@/lib/risk"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
 import { removeUpload, saveUpload } from "@/lib/uploads"
 
@@ -121,7 +122,10 @@ function openDirect(viewerId: string, targetId: string): IdResult {
 }
 
 // A new one-to-one chat from a handle.
-export async function startConversation(handle: string): Promise<IdResult> {
+export async function startConversation(
+  handle: string,
+  proof?: string
+): Promise<{ ok: true; id: string } | { ok: false; error: string; proofRequired?: boolean }> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to send messages." }
   const target = get<{ id: string; bot: number }>(
@@ -130,6 +134,24 @@ export async function startConversation(handle: string): Promise<IdResult> {
   )
   if (!target) return { ok: false, error: "That account doesn't exist." }
   if (target.bot === 1) return { ok: false, error: "Sahayak answers in posts. Mention @sahayak under a post to ask it." }
+  // Opening a conversation that already exists is always allowed. A new one passes the account check and the limit.
+  const existing = get(
+    `SELECT 1 AS found FROM conversations c
+     JOIN conversation_members a ON a.conversation_id = c.id AND a.user_id = ?
+     JOIN conversation_members b ON b.conversation_id = c.id AND b.user_id = ?
+     WHERE c.kind = 'dm' LIMIT 1`,
+    viewer.id,
+    target.id
+  )
+  if (!existing) {
+    const verdict = await gate(viewer.id, proof)
+    if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
+    const fresh = isNewAccount(viewer.id)
+    const limit = consume(`newchat:${viewer.id}`, fresh ? 5 : 30, 60 * 60_000)
+    if (!limit.ok) {
+      return { ok: false, error: `You've started a lot of new conversations. Try again in ${waitLabel(limit.retryAfterSeconds)}.`, proofRequired: false }
+    }
+  }
   const opened = openDirect(viewer.id, target.id)
   if (opened.ok) refresh()
   return opened

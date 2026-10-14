@@ -72,6 +72,8 @@ export async function fillSignup(page, { name, handle, birthday, password, email
 // Sends the sign-up form as it is, with every screen's button turned on so a refused value reaches the server.
 async function sendSignup(page) {
   const create = page.locator("[data-step]:visible").getByRole("button", { name: "Create account", exact: true })
+  // The human check finishes first, as it does for a person waiting on the button. A form sent before it gets a "confirm you're a person" reply.
+  await page.getByText("Checked. You can continue.").first().waitFor({ timeout: TIMEOUT })
   await create.evaluate((element) => (element.disabled = false))
   await acted(page, () => create.click())
 }
@@ -107,6 +109,9 @@ export async function trySignUp(page, fields) {
   await go(page, "/signup", page.locator("input[name=handle]"))
   const { handle, birthday, ...rest } = fields
   await fillSignup(page, { ...rest, handle: randomHandle("form"), birthday: GROWN_UP })
+  // The human check finishes first. Its answer re-renders the form, which would put the form's own values back over the
+  // ones written below, so the values are written only once the check is done.
+  await page.getByText("Checked. You can continue.").first().waitFor({ timeout: TIMEOUT })
   await page.evaluate(
     ({ handle, birthday }) => {
       for (const [name, value] of [

@@ -210,7 +210,8 @@ const SECTIONS: LegalSection[] = [
             remove ads by subscribing to Plus.
           </li>
           <li>
-            <B>To keep the service safe and fair</B>: sign-in protection, moderation, reports and the record of decisions. This is
+            <B>To keep the service safe and fair</B>: sign-in protection, checks for bots and fake accounts, moderation, reports and the
+            record of decisions. This is
             the operator&apos;s legitimate interest, weighed against your rights, and it is why you can appeal.
           </li>
           <li>
@@ -500,6 +501,11 @@ const SECTIONS: LegalSection[] = [
             it receives that post&apos;s question, and the posts it replies to or quotes that the person asking can see. Nothing else is
             sent to it.
           </li>
+          <li>
+            Cloudflare, only if the operator has turned on Cloudflare Turnstile for the human check. Its script runs in your browser, so
+            Cloudflare sees your network address and the page the check is on, and the server checks your answer with Cloudflare. Without
+            Turnstile the check is a puzzle that runs in your browser and sends nothing to a third party.
+          </li>
           <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
           <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
           <li>
@@ -572,6 +578,11 @@ const SECTIONS: LegalSection[] = [
           step between your password and your two-factor code lasts {CHALLENGE_MINUTES} minutes.
         </li>
         <li>The counts that include network addresses last an hour at most, and only in the server&apos;s memory.</li>
+        <li>
+          Where an account was made from, and when it passed a human check, is kept for {RETENTION.signalsDays} days as a keyed hash
+          that cannot be read back to an address. The browser you used is not kept. Puzzle records for the human check are removed a
+          day after they expire.
+        </li>
         <li>A deactivated account keeps its data until you log in again or delete the account.</li>
         <li>If the operator makes backups, a backup still holds what you deleted until that backup is replaced.</li>
       </List>

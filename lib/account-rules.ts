@@ -1,5 +1,6 @@
 // Rules for account settings, sign-up and password reset. Pure functions only, so client components can import them.
 import { MAX_PASSWORD, MIN_PASSWORD, countChars } from "@/lib/rules"
+import { isDisposableEmail } from "@/lib/disposable-domains"
 
 export const MAX_STATUS = 40
 export const MAX_EMAIL = 254
@@ -39,6 +40,9 @@ export function emailProblem(email: string): string | null {
   if (email.length > MAX_EMAIL) return `Email addresses can have up to ${MAX_EMAIL} characters.`
   if (/[\u0000-\u001f\u007f]/.test(email) || !/^[^\s@]+@[^\s@.][^\s@]*\.[^\s@.]+$/.test(email)) {
     return "Enter a full email address, like name@example.com."
+  }
+  if (isDisposableEmail(email.toLowerCase())) {
+    return "Use an email address from a provider that keeps mail for you. Temporary inboxes can't confirm your account."
   }
   return null
 }

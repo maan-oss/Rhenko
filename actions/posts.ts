@@ -12,6 +12,7 @@ import { hidePost } from "@/lib/moderation"
 import { mediaFilesFor, removeFiles, replyPermission, startPollClock, thread } from "@/lib/post-writes"
 import { goLive, screenPost } from "@/lib/screening"
 import { consume, waitLabel } from "@/lib/rate-limit"
+import { gate, isNewAccount } from "@/lib/risk"
 import {
   asReplySetting,
   editWindowMs,
@@ -33,7 +34,9 @@ import {
 } from "@/lib/rules"
 import { saveUpload, type MediaKind } from "@/lib/uploads"
 
-export type CreateResult = { ok: true; id: string; status: "published" | "draft" | "scheduled" } | { ok: false; error: string }
+export type CreateResult =
+  | { ok: true; id: string; status: "published" | "draft" | "scheduled" }
+  | { ok: false; error: string; proofRequired?: boolean }
 export type ToggleResult = { ok: true; active: boolean } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
 export type IdResult = { ok: true; id: string } | { ok: false; error: string }
@@ -41,6 +44,8 @@ export type IdResult = { ok: true; id: string } | { ok: false; error: string }
 // Posting limits: posts and drafts per minute, and photos and videos per hour.
 const POST_LIMIT = 30
 const POST_WINDOW_MS = 60_000
+// Likes, reposts, bookmarks and reports per hour. A person does not reach these; a script does. New accounts get less.
+const HOUR_MS = 60 * 60_000
 const UPLOAD_LIMIT = 60
 const UPLOAD_WINDOW_MS = 60 * 60_000
 
@@ -62,6 +67,11 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   if (!viewer) return { ok: false, error: "Sign in to post." }
   const allowed = consume(`post:${viewer.id}`, POST_LIMIT, POST_WINDOW_MS)
   if (!allowed.ok) return { ok: false, error: `You've posted a lot in the last minute. Try again in ${waitLabel(allowed.retryAfterSeconds)}.` }
+  // A post that goes out, or a reply, passes the account check. A draft is seen only by its author, so it does not.
+  if (formData.get("draft") !== "on") {
+    const verdict = await gate(viewer.id, formData.get("proof"))
+    if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
+  }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
   // A title makes the post an article.
@@ -410,6 +420,8 @@ export async function toggleLike(postId: string): Promise<ToggleResult> {
     refresh()
     return { ok: true, active: false }
   }
+  const likes = consume(`like:${viewer.id}`, isNewAccount(viewer.id) ? 60 : 240, HOUR_MS)
+  if (!likes.ok) return { ok: false, error: `You're liking posts too fast. Try again in ${waitLabel(likes.retryAfterSeconds)}.` }
   run("INSERT OR IGNORE INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
   notify(author, viewer.id, "like", postId)
   refresh()
@@ -430,6 +442,8 @@ export async function toggleRepost(postId: string): Promise<ToggleResult> {
     refresh()
     return { ok: true, active: false }
   }
+  const reposts = consume(`repost:${viewer.id}`, isNewAccount(viewer.id) ? 30 : 120, HOUR_MS)
+  if (!reposts.ok) return { ok: false, error: `You're reposting too fast. Try again in ${waitLabel(reposts.retryAfterSeconds)}.` }
   run("INSERT OR IGNORE INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
   notify(author, viewer.id, "repost", postId)
   refresh()
@@ -447,6 +461,8 @@ export async function toggleBookmark(postId: string): Promise<ToggleResult> {
     refresh()
     return { ok: true, active: false }
   }
+  const marks = consume(`bookmark:${viewer.id}`, isNewAccount(viewer.id) ? 60 : 300, HOUR_MS)
+  if (!marks.ok) return { ok: false, error: `You're bookmarking posts too fast. Try again in ${waitLabel(marks.retryAfterSeconds)}.` }
   run("INSERT OR IGNORE INTO bookmarks (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
   refresh()
   return { ok: true, active: true }
@@ -564,6 +580,9 @@ export async function reportPost(postId: string, reason: string): Promise<VoidRe
   if (!viewer) return { ok: false, error: "Sign in to report posts." }
   if (!isId(postId) || !postAuthor(postId)) return { ok: false, error: "That post was deleted." }
   if (!(REPORT_REASONS as readonly string[]).includes(reason)) return { ok: false, error: "Pick a reason." }
+  // Reports are how posts get taken down, so each account can send only so many an hour.
+  const reportLimit = consume(`report:${viewer.id}`, isNewAccount(viewer.id) ? 5 : 20, HOUR_MS)
+  if (!reportLimit.ok) return { ok: false, error: `You've sent a lot of reports. Try again in ${waitLabel(reportLimit.retryAfterSeconds)}.` }
   const reportId = newId()
   run(
     "INSERT INTO reports (id, reporter_id, post_id, user_id, reason, created_at) VALUES (?, ?, ?, NULL, ?, ?)",

@@ -11,8 +11,15 @@ import { MINIMUM_AGE } from "@/lib/legal"
 import { ageFrom, MAX_BIO, MAX_LOCATION, validateHandle, validateName, validateWebsite } from "@/lib/rules"
 import { checkTopic, MAX_FOLLOWED_TOPICS, PEOPLE_PAGE, type PersonEntry } from "@/lib/social-rules"
 import { removeUpload, saveUpload } from "@/lib/uploads"
+import { consume, waitLabel } from "@/lib/rate-limit"
+import { gate, isNewAccount } from "@/lib/risk"
 
-export type FollowResult = { ok: true; state: "following" | "requested" | "none" } | { ok: false; error: string }
+export type FollowResult =
+  | { ok: true; state: "following" | "requested" | "none" }
+  | { ok: false; error: string; proofRequired?: boolean }
+
+const FOLLOW_HOUR = 60 * 60 * 1000
+const FOLLOW_DAY = 24 * FOLLOW_HOUR
 export type ProfileState = { ok?: boolean; error?: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
 export type TopicResult = { ok: true; following: boolean } | { ok: false; error: string }
@@ -59,7 +66,7 @@ function dropPostBell(subscriberId: string, authorId: string) {
 // Follows a public account at once. A protected account gets a request it must accept. Pressing again while requested
 // withdraws the request. A button that knows what the person asked for sends it as `want`, so a page that has gone stale
 // can't flip the opposite way: asking to follow someone you already follow just confirms it. Without `want` it flips.
-export async function toggleFollow(handle: string, want?: "follow" | "unfollow"): Promise<FollowResult> {
+export async function toggleFollow(handle: string, want?: "follow" | "unfollow", proof?: string): Promise<FollowResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow people." }
   if (want !== undefined && want !== "follow" && want !== "unfollow") return { ok: false, error: "Choose follow or unfollow." }
@@ -94,6 +101,18 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow")
   if (want === "unfollow") return { ok: true, state: "none" }
   if (target.deactivated) return { ok: false, error: "That account no longer exists." }
   if (blockedEitherWay(viewer.id, target.id)) return { ok: false, error: "You can't follow this account." }
+
+  // Following is what fake accounts do in bulk, so it passes the account check and the limits below. New accounts have smaller ones.
+  const verdict = await gate(viewer.id, proof)
+  if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
+  const fresh = isNewAccount(viewer.id)
+  const hour = consume(`follow:${viewer.id}`, fresh ? 20 : 60, FOLLOW_HOUR)
+  if (!hour.ok) {
+    const why = fresh ? "New accounts can follow fewer people at first. " : ""
+    return { ok: false, error: `You're following people too fast. ${why}Try again in ${waitLabel(hour.retryAfterSeconds)}.` }
+  }
+  const day = consume(`followday:${viewer.id}`, fresh ? 40 : 300, FOLLOW_DAY)
+  if (!day.ok) return { ok: false, error: `You've reached today's limit for following people. Try again in ${waitLabel(day.retryAfterSeconds)}.` }
 
   if (target.protected === 1) {
     run("INSERT OR IGNORE INTO follow_requests (requester_id, target_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())

@@ -8,6 +8,7 @@ import { startConversation } from "@/actions/messages"
 import { toggleBlock, toggleMute, togglePostNotifications } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { FollowButton, type FollowState } from "@/components/app/follow-button"
+import { useProofGate } from "@/components/app/proof-dialog"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
@@ -16,20 +17,29 @@ import { cn } from "@/lib/utils"
 export function MessageButton({ handle }: { handle: string }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const proof = useProofGate()
 
-  function message() {
+  function message(answer?: string) {
     startTransition(async () => {
-      const result = await startConversation(handle)
-      if (!result.ok) toast.error(result.error)
-      else router.push(`/messages/${result.id}`)
+      const result = await startConversation(handle, answer)
+      if (!result.ok) {
+        if (result.proofRequired) {
+          proof.askForProof((passed) => message(passed))
+          return
+        }
+        toast.error(result.error)
+      } else router.push(`/messages/${result.id}`)
     })
   }
 
   return (
-    <Button type="button" variant="outline" disabled={pending} onClick={message} className="h-9 w-fit rounded-full px-4">
-      <Mail className="size-4" />
-      Message
-    </Button>
+    <>
+      <Button type="button" variant="outline" disabled={pending} onClick={() => message()} className="h-9 w-fit rounded-full px-4">
+        <Mail className="size-4" />
+        Message
+      </Button>
+      {proof.dialog}
+    </>
   )
 }
 

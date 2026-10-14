@@ -36,6 +36,7 @@ import { closeAllVisitors, closeBrowser, launchBrowser } from "./lib/browser.mjs
 import { area, check, fail, guard, summary } from "./lib/harness.mjs"
 import { configureNoise, noiseTally } from "./lib/watch.mjs"
 import * as auth from "./auth.mjs"
+import * as bots from "./bots.mjs"
 import * as posts from "./posts.mjs"
 import * as ranking from "./ranking.mjs"
 import * as feed from "./feed.mjs"
@@ -93,6 +94,7 @@ const IGNORED_NOISE = [
 // The areas, in the order they run. Each file exports run().
 const AREAS = [
   ["auth", auth],
+  ["bots", bots],
   ["posts", posts],
   ["ranking", ranking],
   ["feed", feed],

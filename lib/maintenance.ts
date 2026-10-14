@@ -79,6 +79,9 @@ function keepWithinRetention(now: number): void {
   run("DELETE FROM legal_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
   run("DELETE FROM moderation_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
   run("DELETE FROM sahayak_jobs WHERE finished_at IS NOT NULL AND finished_at < ?", now - RETENTION.sahayakDays * DAY)
+  run("DELETE FROM account_signals WHERE created_at < ?", now - RETENTION.signalsDays * DAY)
+  // A human-check puzzle is only useful until it expires; a day later it is removed.
+  run("DELETE FROM proof_challenges WHERE expires_at < ?", now - DAY)
 }
 
 // Tells everyone who voted in a poll that it has ended, once.

@@ -191,6 +191,31 @@ const SECTIONS: LegalSection[] = [
     ),
   },
   {
+    id: "accounts",
+    title: "How accounts are checked",
+    body: (
+      <List>
+        <li>
+          Sign-up, sign-in, password resets, and new follows, messages and posts from an account that looks automated ask for a human
+          check first. The check is a puzzle that takes a moment in the browser, or Cloudflare Turnstile where the operator uses it.
+        </li>
+        <li>
+          Signs that an account looks automated include how new it is, whether its email is confirmed, an empty profile, a handle that
+          ends in many digits, very fast following, liking, reposting or starting conversations, and reports from other people.
+        </li>
+        <li>
+          An account made from one network with others is a weak sign on its own, because many people share an address. It can add to
+          a score but never restricts an account alone.
+        </li>
+        <li>
+          An account with many signs is held back from following, starting conversations and posting for a while. The hold lifts as its
+          activity settles.
+        </li>
+        <li>Sahayak, the AI account, is not checked this way.</li>
+      </List>
+    ),
+  },
+  {
     id: "feeds",
     title: "How the feeds are ordered",
     body: (

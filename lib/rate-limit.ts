@@ -27,6 +27,12 @@ export function consume(key: string, limit: number, windowMs: number, now = Date
   return { ok: true }
 }
 
+// Whether `limit` attempts are already counted under `key` in the current window. Counts nothing.
+export function reached(key: string, limit: number, now = Date.now()): boolean {
+  const current = table().get(key)
+  return current !== undefined && current.resetAt > now && current.count >= limit
+}
+
 // Drops windows that have ended, so the table stays small.
 export function sweepLimits(now = Date.now()): void {
   const limits = table()
