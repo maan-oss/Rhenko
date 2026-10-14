@@ -17,6 +17,7 @@ import {
   type ResetRequestState,
 } from "@/actions/auth"
 import { DateField } from "@/components/app/date-field"
+import { OnboardingSteps } from "@/components/app/onboarding-steps"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
@@ -336,6 +337,8 @@ function LoginForm() {
 // Every field stays in the form the whole time, so the sign-up action gets all of them. A screen that is not
 // showing is hidden, not removed, and the Continue button only moves on when that screen is valid.
 const SIGNUP_LAST = 2
+// The three sign-up screens, then the profile screen in setup: four dots in all, the same on every onboarding screen.
+const SIGNUP_STEPS_TOTAL = 4
 
 function SignupForm() {
   const [state, formAction] = useActionState(signup, {} as AuthState)
@@ -396,18 +399,17 @@ function SignupForm() {
     }
   }
 
-  const shownFor = (index: number) => (step === index ? undefined : true)
+  // The screens share one grid cell, so the form is as tall as its tallest screen. A screen that is not showing is
+  // invisible, not removed, so the page does not move when the step changes. Only the screen showing settles in.
+  const screen = (index: number) => cn("col-start-1 row-start-1 flex flex-col gap-7", step === index ? "settle" : "invisible")
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <div className="flex items-center gap-1.5" aria-hidden="true">
-        {[0, 1, 2].map((index) => (
-          <span key={index} className={cn("h-1 flex-1 rounded-full transition-colors duration-500", index <= step ? "bg-foreground" : "bg-border")} />
-        ))}
-      </div>
+      <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} />
 
       <form ref={formRef} action={formAction} onSubmit={onSubmit} className="flex w-full flex-col gap-8" noValidate>
-        <section data-step={0} hidden={shownFor(0)} className="settle flex flex-col gap-7">
+        <div className="grid">
+        <section data-step={0} className={screen(0)}>
           <div className="flex flex-col gap-2">
             <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Create your account</h1>
             <p className="text-[15px] leading-relaxed text-muted-foreground">Start with a name and a handle.</p>
@@ -430,7 +432,7 @@ function SignupForm() {
           </div>
         </section>
 
-        <section data-step={1} hidden={shownFor(1)} className="settle flex flex-col gap-7">
+        <section data-step={1} className={screen(1)}>
           <div className="flex flex-col gap-2">
             <h1 className="text-[30px] leading-tight font-semibold tracking-tight">When were you born?</h1>
             <p className="text-[15px] leading-relaxed text-muted-foreground">Only you can see this.</p>
@@ -464,7 +466,7 @@ function SignupForm() {
           </div>
         </section>
 
-        <section data-step={2} hidden={shownFor(2)} className="settle flex flex-col gap-7">
+        <section data-step={2} className={screen(2)}>
           <div className="flex flex-col gap-2">
             <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Set a password</h1>
             <p className="text-[15px] leading-relaxed text-muted-foreground">Use one you do not use anywhere else.</p>
@@ -501,11 +503,13 @@ function SignupForm() {
           </label>
           <div className="flex flex-col gap-3">
             {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
-            {step === SIGNUP_LAST ? <ProofCheck key={check.key} onReady={check.onReady} /> : null}
+            {step === SIGNUP_LAST ? <ProofCheck key={check.key} quiet onReady={check.onReady} /> : null}
             <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
             <BackButton onClick={() => setStep(1)} />
           </div>
         </section>
+
+        </div>
 
         {/* Outside the screens, so a refused sign-up shows its reason on whichever screen it sends the person back to. */}
         <ErrorText message={state.error} />

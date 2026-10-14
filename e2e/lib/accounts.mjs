@@ -69,11 +69,20 @@ export async function fillSignup(page, { name, handle, birthday, password, email
   if (agree) await page.locator("input[name=agree]").check()
 }
 
+// The human check finishes before the form is sent, as it does for a person waiting on the button. The button turns on
+// only once the check has an answer and the screen is valid. A form sent before that gets a "confirm you're a person" reply.
+export async function waitForCheck(page) {
+  await page.waitForFunction(
+    () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Create account" && !button.disabled),
+    null,
+    { timeout: TIMEOUT }
+  )
+}
+
 // Sends the sign-up form as it is, with every screen's button turned on so a refused value reaches the server.
 async function sendSignup(page) {
   const create = page.locator("[data-step]:visible").getByRole("button", { name: "Create account", exact: true })
-  // The human check finishes first, as it does for a person waiting on the button. A form sent before it gets a "confirm you're a person" reply.
-  await page.getByText("Checked. You can continue.").first().waitFor({ timeout: TIMEOUT })
+  await waitForCheck(page)
   await create.evaluate((element) => (element.disabled = false))
   await acted(page, () => create.click())
 }
@@ -111,7 +120,7 @@ export async function trySignUp(page, fields) {
   await fillSignup(page, { ...rest, handle: randomHandle("form"), birthday: GROWN_UP })
   // The human check finishes first. Its answer re-renders the form, which would put the form's own values back over the
   // ones written below, so the values are written only once the check is done.
-  await page.getByText("Checked. You can continue.").first().waitFor({ timeout: TIMEOUT })
+  await waitForCheck(page)
   await page.evaluate(
     ({ handle, birthday }) => {
       for (const [name, value] of [

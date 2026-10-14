@@ -150,7 +150,7 @@ async function signUpRules() {
     const result = await trySignUp(page, { ...adult, password: "abcd1234" })
     assert.equal(result.ok, true, `sign-up of an 18 year old failed: ${result.error}`)
     assert.equal(result.step, "welcome", "a new account did not open the setup steps")
-    await page.getByRole("heading", { name: "Where are you?" }).waitFor()
+    await page.getByRole("heading", { name: "Set up your profile" }).waitFor()
   })
 
   await check("the date picker shows the date that was chosen", async () => {

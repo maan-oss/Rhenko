@@ -3,7 +3,7 @@
 // once it has passed the check it is not asked again straight away.
 import { area, assert, guard } from "./lib/harness.mjs"
 import { BASE, PASSWORD, TIMEOUT, randomHandle } from "./lib/env.mjs"
-import { GROWN_UP, createUser, fillSignup, signUp } from "./lib/accounts.mjs"
+import { GROWN_UP, createUser, fillSignup, signUp, waitForCheck } from "./lib/accounts.mjs"
 import { newVisitor } from "./lib/browser.mjs"
 import { openProfile } from "./lib/posts.mjs"
 import { query } from "./lib/db.mjs"
@@ -28,7 +28,7 @@ async function honeypotRefused() {
     const field = document.querySelector('input[name="website"]')
     if (field) field.value = "https://example.test"
   })
-  await page.getByText("Checked. You can continue.").first().waitFor({ timeout: TIMEOUT })
+  await waitForCheck(page)
   await page.locator("[data-step]:visible").getByRole("button", { name: "Create account", exact: true }).click()
   await page.locator('form [role="alert"]:visible', { hasText: UNSENT }).waitFor({ timeout: TIMEOUT })
   assert.equal(new URL(page.url()).pathname, "/signup", "the refused sign-up should stay on the sign-up page")

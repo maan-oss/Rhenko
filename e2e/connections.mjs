@@ -1,4 +1,4 @@
-// Connections: the setup steps after sign-up, Connect with its groups and reasons, Not now, the Message link, the languages
+// Connections: the setup after sign-up, Connect with its groups and reasons, Not now, the Message link, the languages
 // on a profile (never the town), the Settings that keep them, the data export, the setup prompt on Home, the phone layout
 // of the steps, the pages that explain it, and translation of a post in another language.
 //
@@ -40,33 +40,26 @@ async function pickLanguage(page, name, tab) {
   await search.fill("")
 }
 
-// Walks the four setup steps and finishes on Home. A step given no values is skipped, so a check can cover skipping too.
-async function setUp(page, { city, country = "AU", speak = [], learn = [], topics = [] }) {
-  await page.getByRole("heading", { name: "Where are you?" }).waitFor()
+// Where you are and your languages are set in Settings, where they are changed later too. A value not given is left alone.
+async function setConnections(page, { city, country = "AU", speak = [], learn = [] }) {
+  await go(page, "/settings/connections", page.locator("#where-area"))
   if (city) {
-    await ready(page.locator("#where-country"))
     await page.locator("#where-country").selectOption(country)
     await page.locator("#where-area").fill(city)
-    await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
-  } else {
-    await page.getByRole("button", { name: "Skip for now", exact: true }).click()
+    await acted(page, () => page.getByRole("button", { name: "Save where you are", exact: true }).click())
   }
-
-  await page.getByRole("heading", { name: "What do you speak?" }).waitFor()
   if (speak.length > 0 || learn.length > 0) {
-    await ready(page.locator("#language-search"))
     for (const name of speak) await pickLanguage(page, name, "I speak")
     for (const name of learn) await pickLanguage(page, name, "I'm learning")
-    await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
-  } else {
-    await page.getByRole("button", { name: "Skip for now", exact: true }).click()
+    await acted(page, () => page.getByRole("button", { name: "Save languages", exact: true }).click())
   }
+}
 
-  await page.getByRole("heading", { name: "What are you into?" }).waitFor()
+// Finishes the profile screen after sign-up and opens Home. Topics are picked on the screen, as a person would pick them.
+async function setUp(page, { city, country = "AU", speak = [], learn = [], topics = [] }) {
+  if (city || speak.length > 0 || learn.length > 0) await setConnections(page, { city, country, speak, learn })
+  await go(page, "/welcome", page.getByRole("heading", { name: "Set up your profile" }))
   for (const tag of topics) await acted(page, () => page.getByRole("button", { name: `#${tag}`, exact: true }).click())
-  await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
-
-  await page.getByRole("heading", { name: "Meet people" }).waitFor()
   await acted(page, () => page.getByRole("button", { name: "Open Rhenko", exact: true }).click())
   await page.waitForURL((url) => url.pathname === "/", { timeout: TIMEOUT })
   await homeComposer(page).waitFor()
@@ -87,11 +80,11 @@ export async function run() {
 
 async function connectionsFlow() {
   const ana = await newAccount("ana", { stay: true })
-  await check("sign-up opens the setup steps", async () => {
-    assert.equal(new URL(ana.page.url()).pathname, "/welcome", "sign-up did not open the setup steps")
-    await ana.page.locator('[role="progressbar"][aria-valuenow="1"]').waitFor()
+  await check("sign-up opens the profile screen, the last of four steps", async () => {
+    assert.equal(new URL(ana.page.url()).pathname, "/welcome", "sign-up did not open the setup screen")
+    await ana.page.locator('[role="progressbar"][aria-valuenow="4"]').waitFor()
   })
-  await check("the setup steps save where you are and your languages, and Open Rhenko opens Home", async () => {
+  await check("Settings keep where you are and your languages, and Open Rhenko opens Home", async () => {
     await setUp(ana.page, { city: TOWN, speak: ["English"], learn: ["French"] })
     assert.equal(await gone(ana.page.getByRole("region", { name: SETUP_BANNER })), 0, "the setup prompt is still on Home after setup")
   })
