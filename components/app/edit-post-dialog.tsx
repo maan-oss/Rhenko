@@ -21,6 +21,7 @@ export function EditPostDialog({
   title,
   media,
   windowMs,
+  reply = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -29,13 +30,14 @@ export function EditPostDialog({
   title: string
   media: MediaItem[]
   windowMs: number
+  reply?: boolean
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
         <DialogTitle className="text-lg font-semibold">Edit post</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          You can edit a post for {Math.round(windowMs / 60_000)} minutes after it&apos;s posted.
+          You can edit {reply ? "a reply" : "a post"} for {Math.round(windowMs / 60_000)} minutes after it&apos;s posted.
         </DialogDescription>
         <EditForm postId={postId} body={body} title={title} media={media} onDone={() => onOpenChange(false)} />
       </DialogContent>

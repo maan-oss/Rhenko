@@ -266,14 +266,17 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
     title: string
     edited_at: number | null
     removed_at: number | null
-  }>("SELECT author_id, created_at, is_draft, publish_at, body, title, edited_at, removed_at FROM posts WHERE id = ?", postId)
+    reply_to_id: string | null
+  }>("SELECT author_id, created_at, is_draft, publish_at, body, title, edited_at, removed_at, reply_to_id FROM posts WHERE id = ?", postId)
   if (!post) return { ok: false, error: "That post was deleted." }
   if (post.removed_at !== null) return { ok: false, error: POST_UNAVAILABLE }
   if (post.author_id !== viewer.id) return { ok: false, error: "You can only edit your own posts." }
   if (post.is_draft === 1 || post.publish_at !== null) return { ok: false, error: "Publish this post before editing it." }
-  const window = editWindowMs(viewer.plus)
+  const reply = post.reply_to_id !== null
+  const window = editWindowMs(viewer.plus, reply)
   if (Date.now() - post.created_at > window) {
-    return { ok: false, error: `Posts can be edited for ${Math.round(window / 60_000)} minutes after they're posted.` }
+    const minutes = Math.round(window / 60_000)
+    return { ok: false, error: reply ? `Replies can be edited for ${minutes} minutes after they're posted.` : `Posts can be edited for ${minutes} minutes after they're posted.` }
   }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()

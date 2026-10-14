@@ -144,10 +144,13 @@ export const POLL_MAX_OPTIONS = 4
 export const MAX_POLL_OPTION = 25
 // Poll lengths in minutes: 5 minutes, 30 minutes, 1, 6, 24, 72 hours, 7 days.
 export const POLL_DURATIONS = [5, 30, 60, 360, 1440, 4320, 10080] as const
-// Posts can be edited for an hour. Plus extends that to a day. Only the edit window differs, never reach or ranking.
+// Posts can be edited for an hour. Plus extends that to a day. Replies can be edited for five minutes, for everyone, so a
+// reply can be fixed soon after it goes out. Only the edit window differs, never reach or ranking.
 export const EDIT_WINDOW_MS = 60 * 60 * 1000
 export const PLUS_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000
-export function editWindowMs(plus: boolean): number {
+export const REPLY_EDIT_WINDOW_MS = 5 * 60 * 1000
+export function editWindowMs(plus: boolean, reply = false): number {
+  if (reply) return REPLY_EDIT_WINDOW_MS
   return plus ? PLUS_EDIT_WINDOW_MS : EDIT_WINDOW_MS
 }
 export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000

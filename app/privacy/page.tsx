@@ -10,6 +10,7 @@ import {
 } from "@/lib/legal"
 import {
   EDIT_WINDOW_MS,
+  REPLY_EDIT_WINDOW_MS,
   MAX_IMAGE_BYTES,
   MAX_IMAGES,
   MAX_VIDEO_BYTES,
@@ -28,6 +29,7 @@ export const metadata: Metadata = {
 // TERMS_VERSION in lib/legal.ts change together whenever this text changes.
 
 const EDIT_MINUTES = EDIT_WINDOW_MS / 60_000
+const REPLY_EDIT_MINUTES = REPLY_EDIT_WINDOW_MS / 60_000
 const VISIT_HOURS = PROFILE_VISIT_WINDOW_MS / 3_600_000
 const IMAGE_MB = MAX_IMAGE_BYTES / (1024 * 1024)
 const VIDEO_MB = MAX_VIDEO_BYTES / (1024 * 1024)
@@ -105,7 +107,7 @@ const SECTIONS: LegalSection[] = [
           <li>
             <B>Posts and activity.</B> Your posts and replies, including drafts and scheduled posts, your polls and votes, likes,
             reposts, bookmarks and their folders, highlights, lists, followed topics, and the community notes you write or rate.
-            A post can be edited for {EDIT_MINUTES} minutes after it goes out, and each earlier version is kept.
+            A post can be edited for {EDIT_MINUTES} minutes after it goes out, a reply for {REPLY_EDIT_MINUTES} minutes, and each earlier version is kept.
           </li>
           <li>
             <B>People.</B> Who you follow, follow requests, the accounts you block or mute, the accounts whose new posts you are

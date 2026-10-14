@@ -114,7 +114,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Feeds load older posts as you scroll, with a "Show more" button as a fallback.
 - Reply, quote, repost, like, bookmark, share, pin to your profile, and highlight.
 - Undo: a new post can be taken back for 10 seconds, from the toast that confirms it.
-- Edit a post for 60 minutes after it's published. The "Edited" mark opens the post's edit history.
+- Edit a post for 60 minutes after it's published (a Plus account gets 24 hours), and a reply for 5 minutes. The "Edited" mark opens the post's edit history.
 - Hide a reply to your own post. Hidden replies disappear for everyone except the reply's writer and the post's author.
 - Community notes: signed-in people can add one note to a post. It is shown once at least two people rate it helpful, and more of them than not.
 - Share → Copy embed code gives a blockquote snippet for other sites.

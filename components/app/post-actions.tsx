@@ -210,7 +210,7 @@ export function PostActions(props: Props) {
         ...(editable
           ? [
               <DropdownMenuItem key="edit" className={MENU_ITEM_PHONE} onClick={() => setEditOpen(true)}>
-                <Pencil className="size-4" /> Edit post
+                <Pencil className="size-4" /> {isRoot ? "Edit post" : "Edit reply"}
               </DropdownMenuItem>,
             ]
           : []),
@@ -396,7 +396,7 @@ export function PostActions(props: Props) {
       </Dialog>
 
       {!isOwn && tippable ? <TipDialog open={tipOpen} onOpenChange={setTipOpen} postId={postId} handle={author.handle} /> : null}
-      {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} title={props.title} media={media} windowMs={editWindowMs} /> : null}
+      {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} title={props.title} media={media} windowMs={editWindowMs} reply={!isRoot} /> : null}
 
       <ShareSheet
         open={shareOpen}
