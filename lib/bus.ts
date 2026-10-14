@@ -1,14 +1,30 @@
+import { randomUUID } from "node:crypto"
 import { EventEmitter } from "node:events"
+import { all, get, run, transaction } from "@/lib/db"
+import { WORKER_ID } from "@/lib/worker"
 
-// In-process event bus. Server actions publish here and the /api/events
-// stream forwards events to each user's open tabs. Single-server only: an app
-// running on several instances would need a shared broker.
-type Globals = { __rhenkoBus?: EventEmitter }
+// The event bus. Server actions publish an event for the people it concerns, and the /api/events stream of each open tab
+// receives it. Several server processes serve one port, so a tab may be connected to any of them. A published event is
+// written to the events table. Every process reads the events it has not passed on yet and hands them to the tabs it
+// holds. A stream is recorded in the database too, so any process can tell whether a person has a tab open anywhere.
+
+// How often a process reads new events. A tab hears of an event within about this long of it being published.
+const POLL_MS = 150
+// A process checks in on its streams this often. A stream its process has not checked in on for STREAM_STALE_MS is gone.
+const CHECK_IN_MS = 10_000
+const STREAM_STALE_MS = 60_000
+// Events are kept this long. Every process has read them well before then.
+const EVENT_KEEP_MS = 60_000
+const READ_BATCH = 500
+
+type Poller = { cursor: number; checkedInAt: number; timer: ReturnType<typeof setInterval> }
+type Globals = { __rhenkoBus?: EventEmitter; __rhenkoBusPoller?: Poller }
 const globals = globalThis as unknown as Globals
 
-const bus: EventEmitter = globals.__rhenkoBus ?? new EventEmitter()
-bus.setMaxListeners(0)
-globals.__rhenkoBus = bus
+// Tabs held by this process, by person. Filled from the events table as they are read.
+const local: EventEmitter = globals.__rhenkoBus ?? new EventEmitter()
+local.setMaxListeners(0)
+globals.__rhenkoBus = local
 
 // Plain fields only: events travel to the browser as JSON.
 export type EventPerson = { id: string; name: string; handle: string; avatarFile: string | null }
@@ -100,17 +116,97 @@ export type RealtimeEvent =
   // A post from someone the person follows. The Following feed shows a pill for it. Nothing reloads.
   | { type: "posts"; postId: string }
 
+// Sends an event to the open tabs of each person in `userIds`. People with no tab open anywhere get nothing written.
 export function publish(userIds: string[], event: RealtimeEvent): void {
-  for (const id of new Set(userIds)) bus.emit(`user:${id}`, event)
+  const ids = [...new Set(userIds)]
+  if (ids.length === 0) return
+  const open = all<{ user_id: string }>(
+    `SELECT DISTINCT user_id FROM streams WHERE seen_at > ? AND user_id IN (${ids.map(() => "?").join(", ")})`,
+    Date.now() - STREAM_STALE_MS,
+    ...ids
+  )
+  if (open.length === 0) return
+  const payload = JSON.stringify(event)
+  const now = Date.now()
+  transaction(() => {
+    for (const row of open) run("INSERT INTO events (user_id, payload, created_at) VALUES (?, ?, ?)", row.user_id, payload, now)
+  })
 }
 
+// Starts a stream for a person in this process. The returned function ends it.
 export function subscribe(userId: string, listener: (event: RealtimeEvent) => void): () => void {
   const key = `user:${userId}`
-  bus.on(key, listener)
-  return () => bus.off(key, listener)
+  const streamId = randomUUID()
+  run("INSERT INTO streams (id, user_id, worker, seen_at) VALUES (?, ?, ?, ?)", streamId, userId, WORKER_ID, Date.now())
+  local.on(key, listener)
+  startPoller()
+  let open = true
+  return () => {
+    if (!open) return
+    open = false
+    local.off(key, listener)
+    run("DELETE FROM streams WHERE id = ?", streamId)
+  }
 }
 
-// How many event streams a person has open right now. Zero means nothing of theirs can ring.
+// How many event streams a person has open right now, in any process. Zero means nothing of theirs can ring.
 export function listenerCount(userId: string): number {
-  return bus.listenerCount(`user:${userId}`)
+  return get<{ n: number }>("SELECT COUNT(*) AS n FROM streams WHERE user_id = ? AND seen_at > ?", userId, Date.now() - STREAM_STALE_MS)?.n ?? 0
+}
+
+// Starts the loop that hands events to this process's tabs. It begins after the newest event, so a tab never receives
+// events from before it connected.
+function startPoller(): void {
+  if (globals.__rhenkoBusPoller) return
+  const latest = get<{ id: number }>("SELECT COALESCE(MAX(id), 0) AS id FROM events")
+  const poller: Poller = {
+    cursor: latest?.id ?? 0,
+    checkedInAt: Date.now(),
+    timer: setInterval(() => {
+      try {
+        pollOnce()
+      } catch (error) {
+        console.error("[bus] reading events failed", error)
+      }
+    }, POLL_MS),
+  }
+  poller.timer.unref?.()
+  globals.__rhenkoBusPoller = poller
+}
+
+function pollOnce(): void {
+  const poller = globals.__rhenkoBusPoller
+  if (!poller) return
+  for (;;) {
+    const rows = all<{ id: number; user_id: string; payload: string }>(
+      "SELECT id, user_id, payload FROM events WHERE id > ? ORDER BY id LIMIT ?",
+      poller.cursor,
+      READ_BATCH
+    )
+    for (const row of rows) {
+      poller.cursor = row.id
+      const key = `user:${row.user_id}`
+      if (local.listenerCount(key) === 0) continue
+      const event = JSON.parse(row.payload) as RealtimeEvent
+      for (const listener of local.listeners(key)) {
+        try {
+          ;(listener as (event: RealtimeEvent) => void)(event)
+        } catch (error) {
+          console.error("[bus] a stream failed to take an event", error)
+        }
+      }
+    }
+    if (rows.length < READ_BATCH) break
+  }
+  const now = Date.now()
+  if (now - poller.checkedInAt >= CHECK_IN_MS) {
+    poller.checkedInAt = now
+    run("UPDATE streams SET seen_at = ? WHERE worker = ?", now, WORKER_ID)
+  }
+}
+
+// Removes streams whose process stopped checking in, and events everyone has read. Runs from the maintenance pass.
+export function sweepBus(now = Date.now()): void {
+  run("DELETE FROM streams WHERE seen_at <= ?", now - STREAM_STALE_MS)
+  run("DELETE FROM events WHERE created_at <= ?", now - EVENT_KEEP_MS)
 }
