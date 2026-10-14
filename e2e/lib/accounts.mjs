@@ -116,22 +116,24 @@ function isoDate({ year, month, day }) {
 // changed in the form's own fields before it is sent, which is how a value the page refuses reaches the server.
 export async function trySignUp(page, fields) {
   await go(page, "/signup", page.locator("input[name=handle]"))
-  const { handle, birthday, ...rest } = fields
-  await fillSignup(page, { ...rest, handle: randomHandle("form"), birthday: GROWN_UP })
+  const { handle, birthday, password, ...rest } = fields
+  // The form is filled with a valid password, so its button turns on. The password under test is written in below.
+  await fillSignup(page, { ...rest, password: PASSWORD, handle: randomHandle("form"), birthday: GROWN_UP })
   // The human check finishes first. Its answer re-renders the form, which would put the form's own values back over the
   // ones written below, so the values are written only once the check is done.
   await waitForCheck(page)
   await page.evaluate(
-    ({ handle, birthday }) => {
+    ({ handle, birthday, password }) => {
       for (const [name, value] of [
         ["handle", handle],
         ["birthday", birthday],
+        ["password", password],
       ]) {
         const input = document.querySelector(`[name="${name}"]`)
         if (input) input.value = value
       }
     },
-    { handle: handle ?? "", birthday: birthday ? isoDate(birthday) : "" }
+    { handle: handle ?? "", birthday: birthday ? isoDate(birthday) : "", password: password ?? PASSWORD }
   )
   await sendSignup(page)
   return settleAuth(page)

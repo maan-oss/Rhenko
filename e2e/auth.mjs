@@ -157,7 +157,11 @@ async function signUpRules() {
     const fresh = await newVisitor({ label: "picker" })
     try {
       await go(fresh.page, "/signup", fresh.page.locator("input[name=handle]"))
-      await fillSignup(fresh.page, validFields({ birthday: { year: 2001, month: 1, day: 28 } }))
+      await fresh.page.locator("input[name=name]").fill("Picker")
+      await fresh.page.locator("input[name=handle]").fill(randomHandle("picker"))
+      await fresh.page.locator("[data-step]:visible").getByRole("button", { name: "Continue", exact: true }).click()
+      // Read while the birthday screen is still showing: the next screen hides it.
+      await pickBirthday(fresh.page, { year: 2001, month: 1, day: 28 })
       const shown = (await fresh.page.locator("#field-birthday").innerText()).trim()
       assert.equal(shown, readableDate({ year: 2001, month: 1, day: 28 }))
       const hidden = await fresh.page.locator("input[name=birthday]").inputValue()
