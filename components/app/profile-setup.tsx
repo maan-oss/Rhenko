@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { Camera, Check, MapPin } from "lucide-react"
-import { finishSetup } from "@/actions/connections"
+import { finishSetup, saveWhere } from "@/actions/connections"
 import { setTopicFollow, updateProfile } from "@/actions/social"
 import { Avatar } from "@/components/app/avatar"
+import { WhereFields, type WhereValue } from "@/components/app/connection-fields"
 import { OnboardingSteps } from "@/components/app/onboarding-steps"
 import { RhenkoR } from "@/components/brand/symbol"
 import { MAX_BIO, MAX_LOCATION, MAX_NAME } from "@/lib/rules"
@@ -24,6 +25,7 @@ export type ProfileStart = {
   avatarFile: string | null
   bannerFile: string | null
   topics: string[]
+  where: WhereValue
 }
 
 // Topics a new account can follow. Each is a plain hashtag, the same as one written in a post.
@@ -49,6 +51,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
   const [name, setName] = useState(initial.name)
   const [bio, setBio] = useState(initial.bio)
   const [location, setLocation] = useState(initial.location)
+  const [where, setWhere] = useState(initial.where)
   const [topics, setTopics] = useState(() => new Set(initial.topics))
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [bannerUrl, setBannerUrl] = useState<string | null>(null)
@@ -78,6 +81,8 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
     startTransition(async () => {
       const saved = await updateProfile({}, formData)
       if (saved.error) return setError(saved.error)
+      const placed = await saveWhere(where)
+      if (!placed.ok) return setError(placed.error)
       const finished = await finishSetup("done")
       if (!finished.ok) return setError(finished.error)
       router.push("/")
@@ -207,7 +212,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
                   maxLength={MAX_LOCATION}
                   value={location}
                   onChange={(event) => setLocation(event.target.value)}
-                  placeholder="Add where you are"
+                  placeholder="Add a location"
                   className={cn(INLINE, "min-w-0 flex-1 text-[14px] text-foreground")}
                 />
               </label>
@@ -218,6 +223,16 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
         <input ref={avatarInput} type="file" name="avatar" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, setAvatarUrl)} />
         <input ref={bannerInput} type="file" name="banner" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, setBannerUrl)} />
         <input type="hidden" name="website" value={initial.website} />
+
+        <section aria-labelledby="where-title" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 id="where-title" className="text-[15px] font-semibold">
+              Where are you?
+            </h2>
+            <p className="text-[13px] text-muted-foreground">Your city or town. Never your street.</p>
+          </div>
+          <WhereFields value={where} onChange={setWhere} />
+        </section>
 
         <section aria-labelledby="interests-title" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">

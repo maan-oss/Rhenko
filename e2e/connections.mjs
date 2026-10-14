@@ -40,25 +40,24 @@ async function pickLanguage(page, name, tab) {
   await search.fill("")
 }
 
-// Where you are and your languages are set in Settings, where they are changed later too. A value not given is left alone.
-async function setConnections(page, { city, country = "AU", speak = [], learn = [] }) {
-  await go(page, "/settings/connections", page.locator("#where-area"))
-  if (city) {
-    await page.locator("#where-country").selectOption(country)
-    await page.locator("#where-area").fill(city)
-    await acted(page, () => page.getByRole("button", { name: "Save where you are", exact: true }).click())
-  }
-  if (speak.length > 0 || learn.length > 0) {
-    for (const name of speak) await pickLanguage(page, name, "I speak")
-    for (const name of learn) await pickLanguage(page, name, "I'm learning")
-    await acted(page, () => page.getByRole("button", { name: "Save languages", exact: true }).click())
-  }
+// Languages are set in Settings, where they are changed later too. Onboarding does not ask for them.
+async function setLanguages(page, { speak = [], learn = [] }) {
+  await go(page, "/settings/connections", page.getByRole("button", { name: "Save languages", exact: true }))
+  for (const name of speak) await pickLanguage(page, name, "I speak")
+  for (const name of learn) await pickLanguage(page, name, "I'm learning")
+  await acted(page, () => page.getByRole("button", { name: "Save languages", exact: true }).click())
 }
 
-// Finishes the profile screen after sign-up and opens Home. Topics are picked on the screen, as a person would pick them.
+// Finishes the profile screen after sign-up and opens Home. The city is entered there, and topics are picked there, as a
+// person would pick them. Languages are set in Settings first, when a check gives any.
 async function setUp(page, { city, country = "AU", speak = [], learn = [], topics = [] }) {
-  if (city || speak.length > 0 || learn.length > 0) await setConnections(page, { city, country, speak, learn })
+  if (speak.length > 0 || learn.length > 0) await setLanguages(page, { speak, learn })
   await go(page, "/welcome", page.getByRole("heading", { name: "Set up your profile" }))
+  if (city) {
+    await ready(page.locator("#where-country"))
+    await page.locator("#where-country").selectOption(country)
+    await page.locator("#where-area").fill(city)
+  }
   for (const tag of topics) await acted(page, () => page.getByRole("button", { name: `#${tag}`, exact: true }).click())
   await acted(page, () => page.getByRole("button", { name: "Open Rhenko", exact: true }).click())
   await page.waitForURL((url) => url.pathname === "/", { timeout: TIMEOUT })
@@ -84,7 +83,7 @@ async function connectionsFlow() {
     assert.equal(new URL(ana.page.url()).pathname, "/welcome", "sign-up did not open the setup screen")
     await ana.page.locator('[role="progressbar"][aria-valuenow="4"]').waitFor()
   })
-  await check("Settings keep where you are and your languages, and Open Rhenko opens Home", async () => {
+  await check("Open Rhenko opens Home with no setup prompt left", async () => {
     await setUp(ana.page, { city: TOWN, speak: ["English"], learn: ["French"] })
     assert.equal(await gone(ana.page.getByRole("region", { name: SETUP_BANNER })), 0, "the setup prompt is still on Home after setup")
   })
@@ -148,7 +147,7 @@ async function connectionsFlow() {
     }
   )
 
-  await check("Settings keep where you are and your languages after a reload", async () => {
+  await check("the city from the profile screen and the languages are kept after a reload", async () => {
     await go(ana.page, "/settings/connections", ana.page.locator("#where-area"))
     assert.equal(await ana.page.locator("#where-area").inputValue(), TOWN, "the town was not kept")
     await ready(ana.page.locator("#language-partners"))

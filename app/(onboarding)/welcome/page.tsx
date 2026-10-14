@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
 import { all, get } from "@/lib/db"
+import { settingsFor } from "@/lib/connections"
 import { TERMS_VERSION } from "@/lib/legal"
 import { ProfileSetup } from "@/components/app/profile-setup"
 
@@ -36,6 +37,7 @@ async function WelcomeBody() {
   }>("SELECT name, handle, bio, location, website, avatar_file, banner_file FROM users WHERE id = ?", viewer.id)
   if (!profile) redirect("/login")
   const topics = all<{ tag: string }>("SELECT tag FROM topic_follows WHERE user_id = ? ORDER BY created_at", viewer.id).map((row) => row.tag)
+  const settings = settingsFor(viewer.id)
   return (
     <ProfileSetup
       initial={{
@@ -47,6 +49,7 @@ async function WelcomeBody() {
         avatarFile: profile.avatar_file,
         bannerFile: profile.banner_file,
         topics,
+        where: { country: settings.country, area: settings.area, suggestNearby: settings.suggestNearby },
       }}
     />
   )
