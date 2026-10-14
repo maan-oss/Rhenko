@@ -957,6 +957,11 @@ CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
    CREATE INDEX IF NOT EXISTS account_signals_network ON account_signals (kind, ip_hash, created_at);
    CREATE INDEX IF NOT EXISTS account_signals_browser ON account_signals (ua_hash, created_at);
    CREATE INDEX IF NOT EXISTS account_signals_user ON account_signals (user_id);`,
+  // Scheduled posts. The publish check runs on every feed request and asks for rows that have a publish time, so the index
+  // holds only those rows rather than every post in the table.
+  `
+CREATE INDEX IF NOT EXISTS posts_publish_due ON posts (publish_at) WHERE publish_at IS NOT NULL;
+`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

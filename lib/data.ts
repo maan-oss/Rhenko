@@ -644,8 +644,11 @@ const AFFINITY_MS = 30 * 24 * 60 * 60 * 1000
 const TOPIC_TAGS = 40
 const EXPLORE_MS = 24 * 60 * 60 * 1000
 const RANKED_TTL_MS = 10 * 60 * 1000
-const RANKED_KEEP = 300
+const RANKED_KEEP = 600
+// A refresh of For you within this window reuses the viewer's latest ranking instead of running the queries again.
+const RANKED_REUSE_MS = 60 * 1000
 const rankedCache = new Map<string, { made: number; list: Candidate[] }>()
+const latestRanking = new Map<string, { at: number; made: number }>()
 
 type CandidatePost = {
   post_id: string
@@ -918,12 +921,28 @@ function ownRecentPosts(viewerId: string, now: number): CandidatePost[] {
   )
 }
 
+// The snapshot time a first page ranks at. The viewer's latest ranking is reused while it is under a minute old, so a
+// refresh costs one small query rather than the whole ranking. The cursor carries the time, so the pages still agree.
+function snapshotFor(viewerId: string, now: number): number {
+  const latest = latestRanking.get(viewerId)
+  if (latest && now - latest.made < RANKED_REUSE_MS) return latest.at
+  latestRanking.delete(viewerId)
+  latestRanking.set(viewerId, { at: now, made: now })
+  if (latestRanking.size > RANKED_KEEP) {
+    const oldest = latestRanking.keys().next().value
+    if (oldest !== undefined) latestRanking.delete(oldest)
+  }
+  return now
+}
+
 function forYouPage(viewerId: string, cursor: string | undefined, limit: number): Page<FeedItem> {
   const resume = parseRankedCursor(cursor)
-  const at = resume?.at ?? Date.now()
+  const now = Date.now()
+  const at = resume?.at ?? snapshotFor(viewerId, now)
   const offset = resume?.offset ?? 0
   const hidden = hiddenPosts(viewerId)
-  const own = ownRecentPosts(viewerId, at).filter((post) => !hidden.has(post.post_id))
+  // A first page looks up the viewer's own new posts up to now, so they show at once even when the ranking is reused.
+  const own = ownRecentPosts(viewerId, resume ? at : now).filter((post) => !hidden.has(post.post_id))
   const ownIds = new Set(own.map((post) => post.post_id))
   const ranked = rankedFor(viewerId, at).filter((c) => !hidden.has(c.postId) && !ownIds.has(c.postId))
   const slice = ranked.slice(offset, offset + limit)
@@ -1536,23 +1555,6 @@ export function whoToFollow(viewerId: string, limit = 3): UserCard[] {
   ).map(toCard)
 }
 
-// Followers or following for one account, newest first.
-export function peopleOf(kind: "followers" | "following", userId: string, viewerId: string, limit = 200): UserCard[] {
-  const join = kind === "followers" ? "f.follower_id = u.id AND f.followee_id = ?" : "f.followee_id = u.id AND f.follower_id = ?"
-  return all<CardRow>(
-    `${CARD_SQL}
-     JOIN follows f ON ${join}
-     WHERE ${NOT_HIDDEN}
-     ORDER BY f.created_at DESC LIMIT ?`,
-    viewerId,
-    viewerId,
-    userId,
-    viewerId,
-    viewerId,
-    limit
-  ).map(toCard)
-}
-
 export type PeopleOfPage = { users: UserCard[]; next: number | null }
 
 // Followers or following for one account, newest follow first, one page at a time. `beforeAt` is the `next` of the
@@ -1708,10 +1710,6 @@ export function unreadNotificationCount(viewerId: string): number {
       viewerId
     )?.c ?? 0
   )
-}
-
-export function pendingFollowRequestCount(viewerId: string): number {
-  return get<{ c: number }>("SELECT COUNT(*) AS c FROM follow_requests WHERE target_id = ?", viewerId)?.c ?? 0
 }
 
 // `departed` marks someone who has left a direct conversation (a declined request, say). They are still named there,
@@ -2173,18 +2171,6 @@ export function mutedUsers(viewerId: string): MiniUser[] {
 
 export function mutedWords(viewerId: string): string[] {
   return all<{ word: string }>("SELECT word FROM muted_words WHERE user_id = ? ORDER BY created_at DESC", viewerId).map((r) => r.word)
-}
-
-export function highlightCount(userId: string): number {
-  return get<{ c: number }>("SELECT COUNT(*) AS c FROM highlights WHERE user_id = ?", userId)?.c ?? 0
-}
-
-export function getMiniUserByHandle(handle: string): MiniUser | null {
-  const row = get<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number }>(
-    "SELECT id, handle, name, avatar_file, verified FROM users WHERE handle = ? COLLATE NOCASE",
-    handle
-  )
-  return row ? { id: row.id, handle: row.handle, name: row.name, avatarFile: row.avatar_file, verified: row.verified === 1 } : null
 }
 
 // Accounts to offer while someone types an @mention. Deactivated accounts and accounts blocked either way are left out.
