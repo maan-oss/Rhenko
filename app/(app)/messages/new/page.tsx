@@ -5,6 +5,9 @@ import { NewChatForm, NewGroupForm } from "@/components/app/new-message-forms"
 
 type SearchParams = Promise<{ with?: string | string[] }>
 
+// The search is read before anything streams, so a bad or missing value is handled the same way every time.
+export const instant = false
+
 // `?with=handle` comes from a Message button on a suggestion. Only a handle-shaped value is used.
 export default async function NewMessagePage({ searchParams }: { searchParams: SearchParams }) {
   const raw = (await searchParams).with
