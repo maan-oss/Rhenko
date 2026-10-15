@@ -1,11 +1,13 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
+import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent, type KeyboardEvent } from "react"
 import { useFormStatus } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, AudioLines, ImagePlus, Mic, X } from "lucide-react"
+import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
-import { MAX_DM, MAX_VOICE_SECONDS } from "@/lib/rules"
+import { shrinkPhoto } from "@/components/app/photo-crop"
+import { MAX_DM, MAX_IMAGE_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
@@ -195,6 +197,23 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
     setPhotoUrl(file ? URL.createObjectURL(file) : null)
   }
 
+  // A photo over the upload limit is made smaller before it is sent, so a phone photo is never refused for its size.
+  async function pickPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const picked = event.currentTarget.files?.[0]
+    if (!picked || picked.type === "image/gif" || picked.size <= MAX_IMAGE_BYTES) return attachPhoto(picked)
+    try {
+      const smaller = await shrinkPhoto(picked)
+      const transfer = new DataTransfer()
+      transfer.items.add(smaller)
+      event.currentTarget.files = transfer.files
+      attachPhoto(smaller)
+    } catch {
+      toast.error("That picture could not be made small enough to send.")
+      event.currentTarget.value = ""
+      attachPhoto(undefined)
+    }
+  }
+
   function removePhoto() {
     if (imageRef.current) imageRef.current.value = ""
     attachPhoto(undefined)
@@ -381,7 +400,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
             onChange={(event) => {
               // A photo goes out alone, so a voice message that was recorded is dropped.
               setVoice(null)
-              attachPhoto(event.currentTarget.files?.[0])
+              void pickPhoto(event)
             }}
           />
         </label>

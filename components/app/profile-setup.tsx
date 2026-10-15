@@ -6,6 +6,7 @@ import { Camera } from "lucide-react"
 import { updateProfile } from "@/actions/social"
 import { Avatar } from "@/components/app/avatar"
 import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
+import { PhotoCrop } from "@/components/app/photo-crop"
 import { ProfileBanner } from "@/components/app/profile-banner"
 import { MAX_BIO, MAX_NAME } from "@/lib/rules"
 import { cn } from "@/lib/utils"
@@ -41,6 +42,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const avatarInput = useRef<HTMLInputElement>(null)
   const bannerInput = useRef<HTMLInputElement>(null)
+  const [cropping, setCropping] = useState<{ kind: "avatar" | "banner"; file: File } | null>(null)
 
   // A picked photo shows at once, and the file itself goes with the form. Each preview is released when it is replaced.
   useEffect(() => () => {
@@ -50,9 +52,22 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
     if (bannerUrl) URL.revokeObjectURL(bannerUrl)
   }, [bannerUrl])
 
-  function pickPhoto(event: ChangeEvent<HTMLInputElement>, show: (url: string) => void) {
+  // A picked photo opens the framing dialog first. Only the framed part is kept, and it goes with the form.
+  function pickPhoto(event: ChangeEvent<HTMLInputElement>, kind: "avatar" | "banner") {
     const file = event.target.files?.[0]
-    if (file) show(URL.createObjectURL(file))
+    event.target.value = ""
+    if (file) setCropping({ kind, file })
+  }
+
+  function keepCrop(kind: "avatar" | "banner", picture: File) {
+    const input = kind === "avatar" ? avatarInput.current : bannerInput.current
+    const transfer = new DataTransfer()
+    transfer.items.add(picture)
+    if (input) input.files = transfer.files
+    const url = URL.createObjectURL(picture)
+    if (kind === "avatar") setAvatarUrl(url)
+    else setBannerUrl(url)
+    setCropping(null)
   }
 
   // Saves the profile, then opens About you. A refused value stays on screen with the reason.
@@ -95,7 +110,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
             </button>
           </ProfileBanner>
 
-          <div className="flex flex-col gap-4 px-2">
+          <div className="flex flex-col gap-4">
             <button
               type="button"
               onClick={() => avatarInput.current?.click()}
@@ -135,8 +150,18 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
           </div>
         </div>
 
-        <input ref={avatarInput} type="file" name="avatar" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, setAvatarUrl)} />
-        <input ref={bannerInput} type="file" name="banner" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, setBannerUrl)} />
+        <input ref={avatarInput} type="file" name="avatar" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, "avatar")} />
+        <input ref={bannerInput} type="file" name="banner" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, "banner")} />
+        {cropping ? (
+          <PhotoCrop
+            key={`${cropping.kind}-${cropping.file.name}-${cropping.file.size}`}
+            file={cropping.file}
+            title={cropping.kind === "avatar" ? "Position your photo" : "Position your banner"}
+            aspect={cropping.kind === "avatar" ? 1 : 3}
+            onCancel={() => setCropping(null)}
+            onApply={(picture) => keepCrop(cropping.kind, picture)}
+          />
+        ) : null}
 
         {error ? (
           <p role="alert" className="settle rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[14px] leading-snug text-destructive">

@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { motion } from "motion/react"
-import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
+import { PhotoCrop, type Ratio } from "@/components/app/photo-crop"
 import { useProofGate } from "@/components/app/proof-dialog"
 import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
 import type { StickerPick } from "@/components/app/sticker-tray"
@@ -73,6 +73,29 @@ type Attachment = {
   // The selected text sticker is being edited in place.
   editing: boolean
 }
+
+function makeAttachment(file: File, kind: "image" | "video"): Attachment {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    file,
+    kind,
+    alt: "",
+    altOpen: false,
+    aspect: null,
+    stickers: [],
+    stickerOpen: false,
+    selected: null,
+    editing: false,
+  }
+}
+
+// The shapes a picture can be framed in. Original keeps the picture's own shape.
+const FRAME_RATIOS: Ratio[] = [
+  { label: "Original", value: null },
+  { label: "Square", value: 1 },
+  { label: "4:5", value: 4 / 5 },
+  { label: "16:9", value: 16 / 9 },
+]
 
 // The choices for a selected text sticker, in the order the panel shows them.
 const FONT_OPTIONS: { value: (typeof TEXT_FONTS)[number]; name: string }[] = [
@@ -237,29 +260,6 @@ function ToolButton({
   )
 }
 
-function CountRing({ progress, over }: { progress: number; over: boolean }) {
-  const radius = 9
-  const circumference = 2 * Math.PI * radius
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-      <circle cx={11} cy={11} r={radius} fill="none" strokeWidth={2} className="stroke-border" />
-      <motion.circle
-        cx={11}
-        cy={11}
-        r={radius}
-        fill="none"
-        strokeWidth={2}
-        strokeDasharray={circumference}
-        transform="rotate(-90 11 11)"
-        className={over ? "stroke-destructive" : "stroke-foreground"}
-        animate={{ strokeDashoffset: circumference * (1 - progress) }}
-        initial={false}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-      />
-    </svg>
-  )
-}
-
 const PANEL_BUTTON =
   "h-9 rounded-full border border-border px-3 font-semibold transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-50"
 
@@ -353,7 +353,7 @@ function MediaTile({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-muted">
+      <div className="relative overflow-hidden rounded-2xl bg-muted">
         {url === null ? (
           <div className="aspect-video w-full" aria-hidden="true" />
         ) : video ? (
@@ -387,7 +387,7 @@ function MediaTile({
           type="button"
           onClick={onRemove}
           aria-label="Remove media"
-          className="glass absolute top-2 right-2 grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 sm:size-8"
+          className="absolute top-2 right-2 grid size-10 place-items-center rounded-full bg-background/85 text-foreground transition-colors duration-200 hover:bg-transparent sm:size-8"
         >
           <X className="size-4" />
         </button>
@@ -560,6 +560,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [circleChoice, setCircleChoice] = useState("")
   const [caret, setCaret] = useState(0)
   const [media, setMedia] = useState<Attachment[]>([])
+  // Pictures waiting to be framed, one at a time. The first one is the dialog on screen.
+  const [framing, setFraming] = useState<File[]>([])
   // The photo whose sticker tray is open. The tray sits outside the form, so its events never reach the form's handlers.
   const [trayFor, setTrayFor] = useState<string | null>(null)
   const [poll, setPoll] = useState(false)
@@ -654,6 +656,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     if (!list || list.length === 0) return
     const picked = Array.from(list)
     const next: Attachment[] = [...media]
+    // Pictures (other than animated GIFs) are framed in a dialog first, which also makes them small enough to send.
+    const queued: File[] = []
     for (const file of picked) {
       const isVideo = file.type.startsWith("video/")
       const isImage = file.type.startsWith("image/")
@@ -680,34 +684,41 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           toast.error("A post can have one video and nothing else.")
           continue
         }
-      } else {
+      } else if (file.type === "image/gif") {
+        // A GIF moves, so it is sent as it is. It has to fit the upload limit on its own.
         if (file.size > MAX_IMAGE_BYTES) {
-          toast.error("Images can be up to 4 MB.")
+          toast.error("Animated GIFs can be up to 4 MB.")
           continue
         }
         if (next.some((m) => m.kind === "video")) {
           toast.error("A post can have one video and nothing else.")
           continue
         }
-        if (next.length >= MAX_IMAGES) {
+        if (next.length + framing.length >= MAX_IMAGES) {
           toast.error(`Add up to ${MAX_IMAGES} images.`)
           continue
         }
+      } else {
+        if (next.some((m) => m.kind === "video")) {
+          toast.error("A post can have one video and nothing else.")
+          continue
+        }
+        if (next.length + framing.length + queued.length >= MAX_IMAGES) {
+          toast.error(`Add up to ${MAX_IMAGES} images.`)
+          continue
+        }
+        queued.push(file)
+        continue
       }
-      next.push({
-        key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        file,
-        kind: isVideo ? "video" : "image",
-        alt: "",
-        altOpen: false,
-        aspect: null,
-        stickers: [],
-        stickerOpen: false,
-        selected: null,
-        editing: false,
-      })
+      next.push(makeAttachment(file, isVideo ? "video" : "image"))
     }
     setMedia(next)
+    if (queued.length > 0) setFraming((current) => [...current, ...queued])
+  }
+
+  // A framed picture joins the post once the person has chosen the part to keep.
+  function addFramed(picture: File) {
+    setMedia((current) => (current.length >= MAX_IMAGES ? current : [...current, makeAttachment(picture, "image")]))
   }
 
   function removeMedia(key: string) {
@@ -960,9 +971,9 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     publish(body)
   }
 
-  // The count and, on a new post, the reply picker sit in the corner, beside the first line of text.
-  const showCount = count > 0
-  const showCorner = showCount || !isReply
+  // On a new post, the reply picker sits in the corner beside the first line of text. There is no character count:
+  // a post can be as long as the limit allows, and going over it stops the post with a clear message.
+  const showCorner = !isReply
 
   return (
     <>
@@ -1003,21 +1014,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             />
             {showCorner ? (
               <div className="flex h-8 shrink-0 items-center gap-2">
-                {showCount ? (
-                  <span className="flex items-center gap-1.5">
-                    {remaining <= 20 ? (
-                      <>
-                        <span aria-hidden="true" className={cn("text-sm tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>
-                          {remaining}
-                        </span>
-                        <span role="status" className="sr-only">
-                          {over ? `${-remaining} ${pluralize(-remaining, "character")} over the limit` : `${remaining} ${pluralize(remaining, "character")} left`}
-                        </span>
-                      </>
-                    ) : null}
-                    <CountRing progress={Math.min(count / limit, 1)} over={over} />
-                  </span>
-                ) : null}
                 {!isReply ? (
                   <div className={REPLY_PICKER_PHONE}>
                     <ReplyPicker value={replySetting} onChange={setReplySetting} />
@@ -1054,6 +1050,22 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {framing[0] ? (
+            <PhotoCrop
+              key={`${framing[0].name}-${framing[0].size}-${framing.length}`}
+              file={framing[0]}
+              title="Frame your photo"
+              aspect={null}
+              ratios={FRAME_RATIOS}
+              busyLabel="Preparing…"
+              onCancel={() => setFraming((current) => current.slice(1))}
+              onApply={(picture) => {
+                addFramed(picture)
+                setFraming((current) => current.slice(1))
+              }}
+            />
           ) : null}
 
           {media.length > 0 ? (
@@ -1235,6 +1247,11 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               </select>
             </label>
           ) : null}
+          {over ? (
+            <p role="alert" className="text-sm text-destructive">
+              {`${-remaining} ${pluralize(-remaining, "character")} over the limit. Shorten the post to share it.`}
+            </p>
+          ) : null}
           <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
             <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
               <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
@@ -1248,19 +1265,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             >
               <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>
-            {!isReply && !quoteOfId && !threading && !poll && !scheduling ? (
-              <ToolButton
-                label={article ? "Turn off article" : "Write an article"}
-                hint="Articles can't have polls, threads, replies or quotes"
-                pressed={article}
-                onClick={() => {
-                  setArticle((value) => !value)
-                  setTitle("")
-                }}
-              >
-                <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-              </ToolButton>
-            ) : null}
             {!isReply ? (
               <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
                 <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
