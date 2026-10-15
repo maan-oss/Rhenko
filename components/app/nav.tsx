@@ -222,7 +222,11 @@ export function MobileTabBar({
                   className="relative grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
                 >
                   {isActive ? <TabFill layoutId="mobile-dock-pill" /> : null}
-                  <Icon className={cn("relative size-[22px]", isActive ? "text-background" : "text-foreground/80")} strokeWidth={isActive ? 2.2 : 1.75} aria-hidden="true" />
+                  <Icon
+                    className={cn("relative size-[22px]", isActive ? "fill-current text-background" : "text-foreground/80")}
+                    strokeWidth={isActive ? 2.2 : 1.75}
+                    aria-hidden="true"
+                  />
                   {badge && badge > 0 ? (
                     <span className="metal absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold">
                       {badge > 9 ? "9+" : badge}

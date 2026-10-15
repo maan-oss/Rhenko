@@ -128,7 +128,7 @@ function SidebarNav({
 }
 
 function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boolean; collapsed: boolean }) {
-  const { href, label, Icon, badge = 0, filled } = item
+  const { href, label, Icon, badge = 0 } = item
   return (
     <li className="relative">
       <Link
@@ -140,7 +140,7 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
           <Icon
             className={cn("size-[22px] text-foreground transition-transform duration-300 group-hover:scale-110", EASE)}
             strokeWidth={active ? 2.2 : 1.75}
-            fill={active && filled ? "currentColor" : "none"}
+            fill={active ? "currentColor" : "none"}
             aria-hidden="true"
           />
           {collapsed && badge > 0 ? (
@@ -156,13 +156,7 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
                 collapsed ? "-translate-x-4 opacity-0" : "translate-x-0 opacity-100"
               )}
             >
-              <span className={cn("relative pb-0.5", active ? "font-semibold" : "font-medium")}>
-                {label}
-                <span
-                  aria-hidden="true"
-                  className={cn("absolute inset-x-0 bottom-0 h-[1.5px] origin-left scale-x-0 rounded-full bg-foreground transition-transform duration-300 group-hover:scale-x-100", EASE)}
-                />
-              </span>
+              <span className={cn(active ? "font-semibold" : "font-medium")}>{label}</span>
               {badge > 0 ? <CountPill count={badge} /> : null}
             </span>
           </span>

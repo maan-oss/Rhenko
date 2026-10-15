@@ -8,6 +8,9 @@ import { Bookmark, FileText, LogOut, MoreHorizontal, Pencil, Plus, Settings, Use
 import { logout, switchAccount } from "@/actions/auth"
 import { Avatar } from "@/components/app/avatar"
 import { BottomSheet } from "@/components/app/bottom-sheet"
+import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import type { AccountSummary } from "@/lib/auth"
 import { useIsDesktop } from "@/lib/use-media"
 import { cn } from "@/lib/utils"
@@ -231,12 +234,14 @@ export function AccountSwitcher({ accounts }: { accounts: AccountSummary[] }) {
   )
 }
 
-// Logs out the account you are signed in as. Another remembered account takes over if there is one.
+// Logs out the account you are signed in as, after asking. Another remembered account takes over if there is one.
 export function LogoutButton({ className }: { className?: string }) {
+  const [asking, setAsking] = useState(false)
   return (
-    <form action={logout}>
+    <>
       <button
-        type="submit"
+        type="button"
+        onClick={() => setAsking(true)}
         aria-label="Log out"
         title="Log out"
         className={cn(
@@ -246,6 +251,22 @@ export function LogoutButton({ className }: { className?: string }) {
       >
         <LogOut className="size-[19px]" strokeWidth={1.8} aria-hidden="true" />
       </button>
-    </form>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent className={cn("sm:max-w-sm", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
+          <DialogTitle className="text-base font-semibold">Log out of Rhenko?</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">You will need to sign in again to see your feed and messages.</DialogDescription>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setAsking(false)} className="h-10 rounded-full px-4">
+              Cancel
+            </Button>
+            <form action={logout}>
+              <Button type="submit" className="h-10 rounded-full px-4">
+                Log out
+              </Button>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

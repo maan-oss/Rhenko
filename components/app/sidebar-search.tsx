@@ -63,7 +63,8 @@ export function SidebarSearch({ recent, collapsed, onExpand }: Props) {
   const open = focused && !collapsed
   const query = text.trim()
   const matches = query ? recent.filter((item) => item.toLowerCase().includes(query.toLowerCase())) : recent
-  const shown = matches.slice(0, 6)
+  // Three is the most recent searches the panel shows, with or without a query typed.
+  const shown = matches.slice(0, 3)
 
   function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
     if (event.key === "Escape") {
