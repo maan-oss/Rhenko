@@ -167,10 +167,17 @@ function previewOf(body: string, media: string | null, hasPost: boolean): string
 }
 
 // Writes a message and marks it read for its sender. Every member gets a refresh.
-function insertMessage(conversationId: string, senderId: string, body: string, mediaFile: string | null, postId: string | null): void {
+function insertMessage(
+  conversationId: string,
+  senderId: string,
+  body: string,
+  mediaFile: string | null,
+  postId: string | null,
+  replyToId: string | null
+): void {
   const now = Date.now()
   run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     newId(),
     conversationId,
     senderId,
@@ -178,7 +185,8 @@ function insertMessage(conversationId: string, senderId: string, body: string, m
     mediaFile,
     postId,
     now,
-    languageOf(body)
+    languageOf(body),
+    replyToId
   )
   run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
@@ -476,6 +484,17 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   }
   if (postId && !sendablePost(postId, viewer.id)) return { error: POST_UNAVAILABLE }
 
+  // A reply has to point at a live message in this same chat. A call record or a deleted message can't be answered.
+  const replyToId = asId(formData.get("replyTo"))
+  if (replyToId) {
+    const target = get<{ id: string }>(
+      "SELECT id FROM chat_messages WHERE id = ? AND conversation_id = ? AND call_status IS NULL AND deleted_at IS NULL",
+      replyToId,
+      conversationId
+    )
+    if (!target) return { error: "That message can't be replied to anymore." }
+  }
+
   const slowDown =
     tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.") ??
     (hasImage || hasVoice ? tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of photos.") : null)
@@ -486,7 +505,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
 
   const mediaFile = upload?.ok ? upload.name : null
   try {
-    insertMessage(conversationId, viewer.id, body, mediaFile, postId)
+    insertMessage(conversationId, viewer.id, body, mediaFile, postId, replyToId)
   } catch (error) {
     removeUpload(mediaFile)
     throw error
@@ -536,7 +555,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
       failed.push({ handle: target.handle, error: "Accept their request before you send anything." })
       continue
     }
-    insertMessage(opened.id, viewer.id, clean, null, id)
+    insertMessage(opened.id, viewer.id, clean, null, id, null)
     announceMessage(opened.id, viewer.id, previewOf(clean, null, true))
     sent.push({ handle: target.handle, conversationId: opened.id })
   }

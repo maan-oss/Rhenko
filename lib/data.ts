@@ -1968,6 +1968,8 @@ export type MessageView = {
   postUnavailable: boolean
   // A call that ended, was missed or declined. Calls sit in the thread like messages.
   call: { outcome: CallOutcome; seconds: number; kind: "dm" | "group"; people: number } | null
+  // The message this one answers, when that message is in the same chat. `deleted` means it was taken back since.
+  replyTo: { id: string; senderName: string; snippet: string; deleted: boolean } | null
   createdAt: number
   seen: boolean
   reactions: { emoji: string; count: number; mine: boolean }[]
@@ -1988,12 +1990,34 @@ type MessageRow = {
   call_people: number
   sender_name: string
   sender_handle: string
+  reply_to_id: string | null
+  reply_id: string | null
+  reply_body: string | null
+  reply_media: string | null
+  reply_post: string | null
+  reply_deleted: number | null
+  reply_sender_name: string | null
 }
 
+// The original message is joined in the same chat only, so a reply can never quote something from another conversation.
 const MESSAGE_SELECT = `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
-       u.name AS sender_name, u.handle AS sender_handle
-     FROM chat_messages m JOIN users u ON u.id = m.sender_id
+       u.name AS sender_name, u.handle AS sender_handle,
+       m.reply_to_id, rm.id AS reply_id, rm.body AS reply_body, rm.media_file AS reply_media, rm.post_id AS reply_post,
+       rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name
+     FROM chat_messages m
+     JOIN users u ON u.id = m.sender_id
+     LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id
+     LEFT JOIN users ru ON ru.id = rm.sender_id
      WHERE m.conversation_id = ?`
+
+// A short line for a quoted message: its text, or what it was instead.
+function replySnippet(body: string, media: string | null, post: string | null): string {
+  const text = body.replace(/\s+/g, " ").trim()
+  if (text) return [...text].length > 140 ? `${[...text].slice(0, 139).join("")}…` : text
+  if (media) return isVoiceFile(media) ? "Voice message" : "Photo"
+  if (post) return "Shared a post"
+  return "Message"
+}
 
 // The latest messages in a conversation, oldest first. Empty for anyone who may not read it.
 export function conversationMessages(conversationId: string, viewerId: string, limit = 200): MessageView[] {
@@ -2046,6 +2070,15 @@ function toMessageViews(rows: MessageRow[], conversationId: string, viewerId: st
     const others = readers.filter((m) => m.user_id !== r.sender_id)
     const seen = r.sender_id === viewerId && others.length > 0 && others.every((m) => m.last_read_at >= r.created_at)
     const post = r.post_id && !r.deleted_at ? posts.get(r.post_id) ?? null : null
+    const replyTo =
+      r.reply_to_id && r.reply_id
+        ? {
+            id: r.reply_id,
+            senderName: r.reply_sender_name ?? "Someone",
+            snippet: r.reply_deleted ? "" : replySnippet(r.reply_body ?? "", r.reply_media, r.reply_post),
+            deleted: r.reply_deleted !== null,
+          }
+        : null
     return {
       id: r.id,
       senderId: r.sender_id,
@@ -2061,6 +2094,7 @@ function toMessageViews(rows: MessageRow[], conversationId: string, viewerId: st
       call: r.call_status
         ? { outcome: r.call_status, seconds: r.call_seconds, kind: r.call_kind, people: r.call_people }
         : null,
+      replyTo: r.deleted_at ? null : replyTo,
       createdAt: r.created_at,
       seen,
       reactions: reactions.get(r.id) ?? [],

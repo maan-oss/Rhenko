@@ -1007,6 +1007,8 @@ CREATE TABLE IF NOT EXISTS leases (
   expires_at INTEGER NOT NULL
 );
 `,
+  // A message can answer another message in the same chat. Deleting the original keeps the reply.
+  `ALTER TABLE chat_messages ADD COLUMN reply_to_id TEXT REFERENCES chat_messages (id) ON DELETE SET NULL;`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

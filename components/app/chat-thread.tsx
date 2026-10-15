@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, SmilePlus, Trash2, Users } from "lucide-react"
+import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -152,6 +152,7 @@ export function ChatThread({
         return (
           <MessageRow
             key={message.id}
+            conversationId={conversationId}
             message={message}
             showSeen={message.id === lastOwn?.id && message.seen}
             // Messages from the same sender in quick succession stack into one run.
@@ -212,13 +213,35 @@ function CallEvent({ message }: { message: MessageView }) {
   )
 }
 
+// What a message reads as when it is quoted: its words, or what it was instead.
+function previewOf(message: MessageView): string {
+  if (message.body) return message.body
+  if (message.mediaFile) return isVoiceFile(message.mediaFile) ? "Voice message" : "Photo"
+  if (message.post) return "Shared a post"
+  return ""
+}
+
+// Scrolls to a message on screen and lights it for a moment. Reduced motion gets the jump without the flash.
+function jumpTo(id: string) {
+  const row = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`)
+  if (!row) {
+    toast("That message is further up. Load earlier messages to see it.")
+    return
+  }
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  row.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" })
+  if (!reduced) row.animate([{ backgroundColor: "color-mix(in oklab, var(--dusk) 22%, transparent)" }, { backgroundColor: "transparent" }], { duration: 1400 })
+}
+
 function MessageRow({
+  conversationId,
   message,
   showSeen,
   showName,
   joinsPrev,
   joinsNext,
 }: {
+  conversationId: string
   message: MessageView
   showSeen: boolean
   showName: boolean
@@ -226,7 +249,24 @@ function MessageRow({
   joinsNext: boolean
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Hover does not exist on a phone, so a tap on the bubble shows its actions instead.
+  const [revealed, setRevealed] = useState(false)
   const [pending, startTransition] = useTransition()
+
+  function toggleOnTouch() {
+    if (message.deleted) return
+    if (window.matchMedia("(pointer: coarse)").matches) setRevealed((open) => !open)
+  }
+
+  // Hands the message to the composer, which shows who is being answered and takes the focus.
+  function startReply() {
+    setRevealed(false)
+    window.dispatchEvent(
+      new CustomEvent("rhenko:reply-to", {
+        detail: { conversationId, id: message.id, name: message.mine ? "yourself" : message.senderName, snippet: previewOf(message) },
+      })
+    )
+  }
 
   function react(emoji: string) {
     setPickerOpen(false)
@@ -246,6 +286,7 @@ function MessageRow({
       {showName ? <span className="text-xs text-muted-foreground">{message.senderName}</span> : null}
       <div className={cn("flex items-end gap-2", message.mine && "flex-row-reverse")}>
         <div
+          onClick={toggleOnTouch}
           className={cn(
             "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
             // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
@@ -258,6 +299,21 @@ function MessageRow({
             <span>This message was deleted.</span>
           ) : (
             <>
+              {message.replyTo ? (
+                <button
+                  type="button"
+                  onClick={() => jumpTo(message.replyTo?.id ?? "")}
+                  className={cn(
+                    "block w-full rounded-xl border-l-2 px-2.5 py-1.5 text-left text-[13px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    message.mine ? "border-background/70 bg-background/15 text-background" : "border-dusk bg-background text-foreground"
+                  )}
+                >
+                  <span className="block truncate font-semibold">{message.replyTo.senderName}</span>
+                  <span className={cn("block truncate", message.mine ? "text-background/80" : "text-muted-foreground")}>
+                    {message.replyTo.deleted ? "This message was deleted." : message.replyTo.snippet}
+                  </span>
+                </button>
+              ) : null}
               {message.mediaFile && isVoiceFile(message.mediaFile) ? (
                 <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
               ) : message.mediaFile ? (
@@ -292,7 +348,10 @@ function MessageRow({
         </div>
 
         {!message.deleted ? (
-          <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", pickerOpen && "opacity-100")}>
+          <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed) && "opacity-100")}>
+            <button type="button" aria-label="Reply" title="Reply" onClick={startReply} className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
+              <Reply className="size-4" />
+            </button>
             <button
               type="button"
               aria-label="React"

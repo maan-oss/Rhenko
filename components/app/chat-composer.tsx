@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useFormStatus } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, AudioLines, ImagePlus, Mic } from "lucide-react"
+import { ArrowUp, AudioLines, ImagePlus, Mic, X } from "lucide-react"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { MAX_DM, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
@@ -53,6 +53,9 @@ function joinSpoken(base: string, spoken: string): string {
   return base.endsWith(" ") ? base + spoken : `${base} ${spoken}`
 }
 
+// The message a reply answers, as the thread hands it over.
+type ReplyTarget = { id: string; name: string; snippet: string }
+
 function SendButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus()
   return (
@@ -92,6 +95,10 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   const formRef = useRef<HTMLFormElement>(null)
   const lastSignal = useRef(0)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
+  const textRef = useRef<HTMLTextAreaElement>(null)
+  const imageRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState("")
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<Recognition | null>(null)
@@ -117,7 +124,9 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
     if (state.sent) {
       setText("")
       setFileName(null)
+      setPhotoUrl(null)
       setVoice(null)
+      setReplyTo(null)
     }
   }
   useEffect(() => {
@@ -149,6 +158,24 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
     input.files = transfer.files
   }, [voice])
 
+  // The photo's preview is released when it changes or the composer goes away.
+  useEffect(() => {
+    if (!photoUrl) return
+    return () => URL.revokeObjectURL(photoUrl)
+  }, [photoUrl])
+
+  // A reply starts from a message in the thread. The composer shows who is answered and takes the focus.
+  useEffect(() => {
+    function onReply(event: Event) {
+      const detail = (event as CustomEvent<ReplyTarget & { conversationId: string }>).detail
+      if (detail.conversationId !== conversationId) return
+      setReplyTo({ id: detail.id, name: detail.name, snippet: detail.snippet })
+      textRef.current?.focus()
+    }
+    window.addEventListener("rhenko:reply-to", onReply)
+    return () => window.removeEventListener("rhenko:reply-to", onReply)
+  }, [conversationId])
+
   // The elapsed time shown while recording.
   useEffect(() => {
     if (recording === null) return
@@ -163,7 +190,22 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
     void signalTyping(conversationId)
   }
 
+  function attachPhoto(file: File | undefined) {
+    setFileName(file?.name ?? null)
+    setPhotoUrl(file ? URL.createObjectURL(file) : null)
+  }
+
+  function removePhoto() {
+    if (imageRef.current) imageRef.current.value = ""
+    attachPhoto(undefined)
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // Escape lets go of the reply first, so the text is kept.
+    if (event.key === "Escape" && replyTo) {
+      setReplyTo(null)
+      return
+    }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       if (canSend) formRef.current?.requestSubmit()
@@ -172,6 +214,8 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
 
   async function startRecording() {
     setVoiceProblem(null)
+    // A voice message goes out alone, so a photo that was picked is taken off first.
+    removePhoto()
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -255,7 +299,38 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           {state.error || voiceProblem}
         </p>
       ) : null}
-      {fileName ? <p className="truncate px-[72px] pt-2 text-xs text-muted-foreground lg:px-4">Photo: {fileName}</p> : null}
+      {photoUrl ? (
+        <div className="flex items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photoUrl} alt="Photo to send" className="size-14 shrink-0 rounded-xl object-cover" />
+          <span className="min-w-0 truncate text-muted-foreground">{fileName}</span>
+          <button type="button" onClick={removePhoto} className="ml-auto shrink-0 rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+            Remove
+          </button>
+        </div>
+      ) : null}
+      {replyTo ? (
+        <div className="flex items-center gap-3 border-l-2 border-dusk px-[72px] pt-2 text-sm lg:px-4">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold text-dusk">Replying to {replyTo.name}</p>
+            <p className="truncate text-muted-foreground">{replyTo.snippet || "Message"}</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Cancel reply"
+            title="Cancel reply"
+            onClick={() => setReplyTo(null)}
+            className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+      {text.length > MAX_DM * 0.9 ? (
+        <p className="px-[72px] pt-1 text-right text-xs tabular-nums text-muted-foreground lg:px-4" aria-live="polite">
+          {[...text].length} / {MAX_DM}
+        </p>
+      ) : null}
       {recording !== null ? (
         <div role="status" className="flex items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
           <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-destructive" />
@@ -282,10 +357,14 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         ref={formRef}
         action={action}
         onSubmit={() => stopDictation()}
-        onReset={() => setFileName(null)}
+        onReset={() => {
+          setFileName(null)
+          setPhotoUrl(null)
+        }}
         className="flex items-center gap-2 pt-3 pr-3 pb-6 pl-[72px] lg:pt-2.5 lg:pb-3 lg:pl-3"
       >
         <input type="hidden" name="conversationId" value={conversationId} />
+        <input type="hidden" name="replyTo" value={replyTo?.id ?? ""} />
         <input ref={voiceInputRef} type="file" name="voice" accept="audio/webm,audio/mp4,audio/ogg" className="sr-only" tabIndex={-1} aria-hidden="true" />
         <label
           className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-dusk transition-colors hover:bg-muted"
@@ -294,16 +373,22 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           <ImagePlus className="size-[20px]" aria-hidden="true" />
           <span className="sr-only">Add a photo</span>
           <input
+            ref={imageRef}
             type="file"
             name="image"
             accept={IMAGE_ACCEPT}
             className="sr-only"
-            onChange={(event) => setFileName(event.currentTarget.files?.[0]?.name ?? null)}
+            onChange={(event) => {
+              // A photo goes out alone, so a voice message that was recorded is dropped.
+              setVoice(null)
+              attachPhoto(event.currentTarget.files?.[0])
+            }}
           />
         </label>
 
         <div className="relative flex min-w-0 flex-1 items-center rounded-[22px] border border-input bg-background transition-colors focus-within:border-foreground/50">
           <textarea
+            ref={textRef}
             name="body"
             rows={1}
             maxLength={MAX_DM}
