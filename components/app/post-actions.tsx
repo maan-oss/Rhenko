@@ -352,7 +352,7 @@ export function PostActions(props: Props) {
           onClick={onBookmark}
           aria-pressed={bookmarkState}
           aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
-          className={cn(BUTTON, "relative z-10", bookmarkState && "text-dusk")}
+          className={cn(BUTTON, "relative z-10", bookmarkState && "text-amber-400 [&_svg]:fill-current")}
         >
           <BookmarkIcon size={18} className="transition-none" />
         </button>

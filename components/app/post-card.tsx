@@ -13,10 +13,9 @@ import { TranslateControl } from "@/components/app/translate-control"
 import { LinkCard } from "@/components/app/link-card"
 import { LocalTime, RelativeTime } from "@/components/app/time-text"
 import { ViewBeacon } from "@/components/app/view-beacon"
-import { NumberTicker } from "@/components/ui/number-ticker"
 import type { MiniUser, PollOption, PostCore, PostView } from "@/lib/data"
 import type { Viewer } from "@/lib/auth"
-import { fullTimestamp, pluralize } from "@/lib/format"
+import { fullTimestamp } from "@/lib/format"
 import { editWindowMs } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
@@ -227,37 +226,20 @@ export function PostCard({
                 <LocalTime at={post.createdAt} variant="full" />
                 {post.editedAt ? (
                   <>
-                    {" · Edited "}
+                    {" Edited "}
                     <LocalTime at={post.editedAt} variant="full" />
                   </>
                 ) : null}
               </p>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                <p>
-                  <NumberTicker value={post.views} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">{pluralize(post.views, "View")}</span>
-                </p>
-                <p>
-                  <NumberTicker value={post.reposts} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">{pluralize(post.reposts, "Repost", "Reposts")}</span>
-                </p>
-                <p>
-                  <NumberTicker value={post.quotes} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">{pluralize(post.quotes, "Quote", "Quotes")}</span>
-                </p>
-                <p>
-                  <NumberTicker value={post.likes} className="font-semibold text-foreground" />{" "}
-                  <span className="text-muted-foreground">{pluralize(post.likes, "Like", "Likes")}</span>
-                </p>
-                {isOwn ? (
-                  <Link
-                    href={`${statusHref}/analytics`}
-                    className="relative z-10 inline-flex items-center font-semibold text-foreground underline underline-offset-4 hover:text-dusk max-sm:min-h-10"
-                  >
-                    Post analytics
-                  </Link>
-                ) : null}
-              </div>
+              {/* The counts are already on the action row below, so the owner's analytics link is the only extra here. */}
+              {isOwn ? (
+                <Link
+                  href={`${statusHref}/analytics`}
+                  className="relative z-10 inline-flex w-fit items-center font-semibold text-foreground underline underline-offset-4 hover:text-dusk max-sm:min-h-10"
+                >
+                  Post analytics
+                </Link>
+              ) : null}
             </div>
           ) : null}
           {pending ? (

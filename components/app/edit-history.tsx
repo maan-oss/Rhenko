@@ -39,7 +39,7 @@ export function EditHistory({ postId }: { postId: string }) {
         onClick={() => openHistory(true)}
         className="relative z-10 text-[13px] text-muted-foreground transition-colors hover:text-dusk hover:underline max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-3"
       >
-        · Edited
+        Edited
       </button>
       <Dialog open={open} onOpenChange={openHistory}>
         <DialogContent className={cn("sm:max-w-lg", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
