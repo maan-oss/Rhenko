@@ -1083,6 +1083,11 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                     aria-label={`Choice ${index + 1}`}
                     className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-[15px] outline-none transition-colors focus:border-foreground"
                   />
+                  {[...option].length >= MAX_POLL_OPTION - 5 ? (
+                    <span aria-hidden="true" className={cn("w-9 shrink-0 text-right text-xs tabular-nums", [...option].length >= MAX_POLL_OPTION ? "text-destructive" : "text-muted-foreground")}>
+                      {[...option].length}/{MAX_POLL_OPTION}
+                    </span>
+                  ) : null}
                   {pollOptions.length > POLL_MIN_OPTIONS ? (
                     <button
                       type="button"

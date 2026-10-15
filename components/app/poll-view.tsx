@@ -2,6 +2,7 @@
 
 import { useOptimistic, useSyncExternalStore, useTransition } from "react"
 import { motion } from "motion/react"
+import { Check } from "lucide-react"
 import { toast } from "sonner"
 import { votePoll } from "@/actions/posts"
 import type { PollView as PollData } from "@/lib/data"
@@ -51,6 +52,9 @@ export function PollView({ postId, poll }: { postId: string; poll: PollData }) {
   const [pending, startTransition] = useTransition()
   const showResults = myVote !== null || ended
   const total = poll.total + (myVote !== null && poll.myOptionId === null ? 1 : 0)
+  // Votes as the viewer sees them, with their own vote counted. The leader is only marked once the results are showing.
+  const counts = poll.options.map((option) => option.votes + (myVote === option.id && poll.myOptionId === null ? 1 : 0))
+  const top = Math.max(0, ...counts)
 
   function vote(optionId: string) {
     if (showResults || pending) return
@@ -62,11 +66,12 @@ export function PollView({ postId, poll }: { postId: string; poll: PollData }) {
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-2" role="group" aria-label="Poll">
-      {poll.options.map((option) => {
-        const votes = option.votes + (myVote === option.id && poll.myOptionId === null ? 1 : 0)
+    <div className="mt-3 flex flex-col gap-2" role="group" aria-label={showResults ? "Poll results" : "Poll. Choose one option."}>
+      {poll.options.map((option, index) => {
+        const votes = counts[index]
         const percent = total > 0 ? Math.round((votes / total) * 100) : 0
         const chosen = myVote === option.id
+        const leading = showResults && top > 0 && votes === top
         if (!showResults) {
           return (
             <button
@@ -89,18 +94,26 @@ export function PollView({ postId, poll }: { postId: string; poll: PollData }) {
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             />
             <div className="relative flex h-11 items-center justify-between gap-3 px-4 text-[15px]">
-              <span className={cn("truncate", chosen && "font-semibold")}>
-                {option.label}
-                {chosen ? <span className="sr-only"> (your vote)</span> : null}
+              <span className={cn("flex min-w-0 items-center gap-2", (chosen || leading) && "font-semibold")}>
+                <span className="truncate">{option.label}</span>
+                {chosen ? <Check className="size-4 shrink-0" strokeWidth={2.4} aria-hidden="true" /> : null}
+                {chosen ? <span className="sr-only">(your vote)</span> : null}
               </span>
-              <span className="shrink-0 font-semibold tabular-nums">{percent}%</span>
+              <span className={cn("shrink-0 tabular-nums", leading ? "font-bold" : "font-semibold")}>{percent}%</span>
             </div>
           </div>
         )
       })}
       <p className="text-[13px] text-muted-foreground">
         {total.toLocaleString("en-US")} {total === 1 ? "vote" : "votes"}
-        {now > 0 ? ` · ${timeLeft(poll.endsAt, now)}` : ""}
+        {now > 0 ? (
+          <>
+            {" · "}
+            <time dateTime={new Date(poll.endsAt).toISOString()} title={`Ends ${new Date(poll.endsAt).toLocaleString()}`}>
+              {timeLeft(poll.endsAt, now)}
+            </time>
+          </>
+        ) : null}
       </p>
     </div>
   )
