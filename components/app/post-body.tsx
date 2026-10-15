@@ -67,27 +67,27 @@ function plain(text: string, ctx: Context): ReactNode[] {
 function renderToken(token: string, key: number): ReactNode {
   if (token.startsWith("http")) {
     return (
-      <a key={key} href={token} target="_blank" rel="noopener noreferrer nofollow" className="relative z-10 break-all text-dusk underline underline-offset-4">
+      <a key={key} href={token} target="_blank" rel="noopener noreferrer nofollow" className="relative z-10 break-all text-foreground underline underline-offset-4">
         {token}
       </a>
     )
   }
   if (token.startsWith("@")) {
     return (
-      <Link key={key} href={`/${token.slice(1)}`} className="relative z-10 font-medium text-dusk hover:underline">
+      <Link key={key} href={`/${token.slice(1)}`} className="relative z-10 font-medium text-foreground hover:underline">
         {token}
       </Link>
     )
   }
   if (token.startsWith("$")) {
     return (
-      <Link key={key} href={`/search?q=${encodeURIComponent(token)}`} className="relative z-10 font-medium text-dusk hover:underline">
+      <Link key={key} href={`/search?q=${encodeURIComponent(token)}`} className="relative z-10 font-medium text-foreground hover:underline">
         {token}
       </Link>
     )
   }
   return (
-    <Link key={key} href={`/topics/${encodeURIComponent(token.slice(1).toLowerCase())}`} className="relative z-10 text-dusk hover:underline">
+    <Link key={key} href={`/topics/${encodeURIComponent(token.slice(1).toLowerCase())}`} className="relative z-10 text-foreground hover:underline">
       {token}
     </Link>
   )

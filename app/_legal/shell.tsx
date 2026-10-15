@@ -12,7 +12,7 @@ export type LegalSection = { id: string; title: string; body: ReactNode }
 // every legal page says it is a draft.
 const LEGAL_DRAFT = process.env.RHENKO_LEGAL_REVIEWED !== "1"
 
-const LINK = "font-semibold text-dusk underline underline-offset-4"
+const LINK = "font-semibold text-foreground underline underline-offset-4"
 const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 export function TextLink({ href, children }: { href: string; children: ReactNode }) {

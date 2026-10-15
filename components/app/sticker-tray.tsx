@@ -25,9 +25,8 @@ export type StickerPick =
 const LOOK_SWATCH: Record<TextLook, string> = {
   light: "bg-white text-black ring-1 ring-border",
   dark: "bg-black text-white",
-  dusk: "bg-dusk text-white",
 }
-const LOOK_NAME: Record<TextLook, string> = { light: "Light", dark: "Dark", dusk: "Dusk" }
+const LOOK_NAME: Record<TextLook, string> = { light: "Light", dark: "Dark" }
 
 // Chooses a sticker to put on a photo: an emoji from the set, a short line of text in one of three looks, or a hashtag. The
 // composer places it; this only picks it.
@@ -41,7 +40,7 @@ export function StickerTray({
   onPick: (pick: StickerPick) => void
 }) {
   const [words, setWords] = useState("")
-  const [look, setLook] = useState<TextLook>("dusk")
+  const [look, setLook] = useState<TextLook>("dark")
   const [tagInput, setTagInput] = useState("")
   const hintId = useId()
   const text = tidyText(words)

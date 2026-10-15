@@ -45,7 +45,7 @@ async function operator(): Promise<{ name: string | null; email: string | null }
 function Email({ address }: { address: string }) {
   if (!EMAIL.test(address)) return <strong className="font-semibold">{address}</strong>
   return (
-    <a href={`mailto:${address}`} className="font-semibold text-dusk underline underline-offset-4">
+    <a href={`mailto:${address}`} className="font-semibold text-foreground underline underline-offset-4">
       {address}
     </a>
   )

@@ -331,7 +331,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
       {replyTo ? (
         <div className="flex items-center gap-3 border-l-2 border-dusk px-[72px] pt-2 text-sm lg:px-4">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold text-dusk">Replying to {replyTo.name}</p>
+            <p className="truncate font-semibold text-foreground">Replying to {replyTo.name}</p>
             <p className="truncate text-muted-foreground">{replyTo.snippet || "Message"}</p>
           </div>
           <button
@@ -386,7 +386,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         <input type="hidden" name="replyTo" value={replyTo?.id ?? ""} />
         <input ref={voiceInputRef} type="file" name="voice" accept="audio/webm,audio/mp4,audio/ogg" className="sr-only" tabIndex={-1} aria-hidden="true" />
         <label
-          className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-dusk transition-colors hover:bg-muted"
+          className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
           title={fileName ? `Photo: ${fileName}` : "Add a photo"}
         >
           <ImagePlus className="size-[20px]" aria-hidden="true" />
@@ -440,7 +440,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               onClick={() => void startRecording()}
               aria-label="Record a voice message"
               title="Record a voice message"
-              className="relative mr-1 grid size-9 shrink-0 place-items-center rounded-full text-dusk transition-colors hover:bg-muted"
+              className="relative mr-1 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
             >
               <AudioLines className="size-[18px]" strokeWidth={2} aria-hidden="true" />
             </button>
@@ -470,7 +470,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               <span
                 className={cn(
                   "relative grid size-9 place-items-center rounded-full transition-colors duration-200",
-                  listening ? "bg-dusk text-background" : "text-dusk hover:bg-muted"
+                  listening ? "bg-dusk text-background" : "text-foreground hover:bg-muted"
                 )}
               >
                 <Mic className="size-[18px]" strokeWidth={2} aria-hidden="true" />

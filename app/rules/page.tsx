@@ -89,7 +89,7 @@ const SECTIONS: LegalSection[] = [
         </P>
         <List>
           <li>
-            <B>Verified</B> (a dusk check) is given by the operator to accounts it has confirmed. Paying does not give it, and it cannot be
+            <B>Verified</B> (a check mark) is given by the operator to accounts it has confirmed. Paying does not give it, and it cannot be
             bought.
           </li>
           <li>

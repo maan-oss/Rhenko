@@ -109,7 +109,7 @@ export function ProfileActions({
               aria-pressed={notifying}
               disabled={pending}
               onClick={togglePosts}
-              className={cn("rounded-full", notifying && "border-dusk text-dusk")}
+              className={cn("rounded-full", notifying && "border-foreground text-foreground")}
             >
               {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
             </Button>

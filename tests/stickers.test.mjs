@@ -30,7 +30,7 @@ const text = (over = {}) => ({
   kind: "text",
   text: "hello",
   font: "sans",
-  color: "dusk",
+  color: "black",
   background: "solid",
   x: 0.5,
   y: 0.5,
@@ -109,7 +109,8 @@ test("text stickers keep their words, with spaces tidied, up to the length limit
 
 test("a text sticker's font, colour and background must each be one of its choices", () => {
   for (const font of ["sans", "serif", "mono"]) assert.ok(parseStickerSet(set([text({ font })])), font)
-  for (const color of ["white", "black", "dusk", "yellow"]) assert.ok(parseStickerSet(set([text({ color })])), color)
+  for (const color of ["white", "black", "yellow"]) assert.ok(parseStickerSet(set([text({ color })])), color)
+  assert.equal(parseStickerSet(set([text({ color: "dusk" })])) === null, false, "a retired dusk colour still reads, as black")
   for (const background of ["solid", "outline", "none"]) assert.ok(parseStickerSet(set([text({ background })])), background)
   assert.equal(parseStickerSet(set([text({ font: "comic" })])), null)
   assert.equal(parseStickerSet(set([text({ color: "red" })])), null)
@@ -125,7 +126,7 @@ test("a text sticker that names some of its look fields must name all of them", 
 test("a sticker saved in the old style is read as the look it was drawn with", () => {
   const [light] = parseStickerSet(set([legacy("light")])).items
   const [dark] = parseStickerSet(set([legacy("dark")])).items
-  const [dusk] = parseStickerSet(set([legacy("dusk")])).items
+  const [retired] = parseStickerSet(set([legacy("dusk")])).items
   assert.deepEqual(
     { font: light.font, color: light.color, background: light.background },
     { font: "sans", color: "white", background: "solid" },
@@ -137,9 +138,9 @@ test("a sticker saved in the old style is read as the look it was drawn with", (
     "dark is white text on a black box"
   )
   assert.deepEqual(
-    { font: dusk.font, color: dusk.color, background: dusk.background },
-    { font: "sans", color: "dusk", background: "solid" },
-    "dusk is white text on a dusk box"
+    { font: retired.font, color: retired.color, background: retired.background },
+    { font: "sans", color: "black", background: "solid" },
+    "the retired dusk look reads as dark: white text on a black box"
   )
 })
 

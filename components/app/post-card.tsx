@@ -152,18 +152,18 @@ export function PostCard({
           <Avatar user={post.author} size={40} />
         </ProfileLink>
         <div className="min-w-0 flex-1">
-          <header className="flex flex-wrap items-baseline gap-x-2 leading-tight">
+          <header className="flex min-w-0 items-baseline gap-x-2 leading-tight">
             <ProfileLink
               handle={post.author.handle}
-              className="relative z-10 inline-flex max-w-full items-center font-semibold hover:underline max-sm:after:absolute max-sm:after:-inset-x-1 max-sm:after:-inset-y-2.5"
+              className="relative z-10 inline-flex max-w-full min-w-0 shrink items-center font-semibold hover:underline max-sm:after:absolute max-sm:after:-inset-x-1 max-sm:after:-inset-y-2.5"
             >
               <span className="truncate">{post.author.name}</span>
               {post.author.verified ? <VerifiedBadge className="ml-1 shrink-0" /> : null}
               {post.author.paidVerified ? <SubscriberBadge className="ml-1 shrink-0" /> : null}
               {post.author.bot ? <AiLabel /> : null}
             </ProfileLink>
-            <span className="truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
-            <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="text-[15px] text-muted-foreground">
+            <span className="min-w-0 truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
+            <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="shrink-0 text-[15px] whitespace-nowrap text-muted-foreground">
               <Link href={statusHref} className="transition-colors after:absolute after:inset-0 hover:text-foreground">
                 <RelativeTime at={post.createdAt} />
               </Link>
@@ -173,7 +173,7 @@ export function PostCard({
           {post.replyToHandle && !detail && post.replyToId !== threadOf ? (
             <p className="text-[13px] text-muted-foreground">
               Replying to{" "}
-              <Link href={`/${post.replyToHandle}`} className="relative z-10 text-dusk hover:underline">
+              <Link href={`/${post.replyToHandle}`} className="relative z-10 text-foreground hover:underline">
                 @{post.replyToHandle}
               </Link>
             </p>
@@ -183,7 +183,7 @@ export function PostCard({
               <CircleDot className="size-3.5" aria-hidden="true" />
               <span>
                 In{" "}
-                <Link href={`/circles/${post.circle.slug}`} className="relative z-10 font-semibold text-dusk hover:underline">
+                <Link href={`/circles/${post.circle.slug}`} className="relative z-10 font-semibold text-foreground hover:underline">
                   {post.circle.name}
                 </Link>
               </span>
@@ -204,7 +204,7 @@ export function PostCard({
           ) : null}
           {post.preview && post.media.length === 0 && !post.quotedUnavailable && !post.quoted ? <LinkCard preview={post.preview} /> : null}
           {post.threadId && !detail ? (
-            <Link href={`/${post.author.handle}/status/${post.threadId}`} className="relative z-10 mt-1 inline-block text-[13px] text-dusk hover:underline">
+            <Link href={`/${post.author.handle}/status/${post.threadId}`} className="relative z-10 mt-1 inline-block text-[13px] text-foreground hover:underline">
               Show this thread
             </Link>
           ) : null}
@@ -235,7 +235,7 @@ export function PostCard({
               {isOwn ? (
                 <Link
                   href={`${statusHref}/analytics`}
-                  className="relative z-10 inline-flex w-fit items-center font-semibold text-foreground underline underline-offset-4 hover:text-dusk max-sm:min-h-10"
+                  className="relative z-10 inline-flex w-fit items-center font-semibold text-foreground underline underline-offset-4 hover:text-foreground max-sm:min-h-10"
                 >
                   Post analytics
                 </Link>

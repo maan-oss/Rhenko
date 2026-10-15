@@ -19,7 +19,7 @@ export function ProfileBanner({
 }) {
   const photo = src ?? (file ? `/media/${file}?w=1280` : null)
   return (
-    <div className={cn("relative overflow-hidden rounded-3xl border border-border bg-muted text-dusk", className)}>
+    <div className={cn("relative overflow-hidden rounded-3xl border border-border bg-muted text-muted-foreground", className)}>
       {photo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photo} alt="" decoding="async" className="size-full object-cover" />

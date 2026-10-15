@@ -245,7 +245,7 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
 
 export function RevokeSessionButton({ tokenHash, current }: { tokenHash: string; current: boolean }) {
   const [pending, startTransition] = useTransition()
-  if (current) return <span className="text-sm font-semibold text-dusk">This device</span>
+  if (current) return <span className="text-sm font-semibold text-foreground">This device</span>
   return (
     <Button
       type="button"

@@ -28,7 +28,7 @@ export function RecentSearches({ queries }: { queries: string[] }) {
               await clearSearches()
             })
           }
-          className="text-sm text-dusk hover:underline"
+          className="text-sm text-foreground hover:underline"
         >
           Clear all
         </button>

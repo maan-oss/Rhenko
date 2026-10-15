@@ -31,7 +31,7 @@ export default async function NewMessagePage({ searchParams }: { searchParams: S
         <NewGroupForm />
       </section>
       <div className="px-4 pb-6">
-        <Link href="/messages" className="inline-flex items-center gap-2 text-sm font-semibold text-dusk hover:underline">
+        <Link href="/messages" className="inline-flex items-center gap-2 text-sm font-semibold text-foreground hover:underline">
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to messages
         </Link>

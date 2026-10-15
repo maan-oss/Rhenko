@@ -106,7 +106,6 @@ const FONT_OPTIONS: { value: (typeof TEXT_FONTS)[number]; name: string }[] = [
 const COLOR_OPTIONS: { value: (typeof TEXT_COLORS)[number]; name: string }[] = [
   { value: "white", name: "White" },
   { value: "black", name: "Black" },
-  { value: "dusk", name: "Dusk" },
   { value: "yellow", name: "Yellow" },
 ]
 const BACKGROUND_OPTIONS: { value: (typeof TEXT_BACKGROUNDS)[number]; name: string }[] = [

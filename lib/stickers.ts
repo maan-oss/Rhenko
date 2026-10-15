@@ -79,7 +79,7 @@ export const EMOJI_STICKERS: readonly { code: string; name: string }[] = [
 // text is black or white, whichever reads on that fill. An outline sticker is text in its colour with an edge in the
 // opposite colour. A plain sticker is text in its colour on the photo, with a shadow.
 export const TEXT_FONTS = ["sans", "serif", "mono"] as const
-export const TEXT_COLORS = ["white", "black", "dusk", "yellow"] as const
+export const TEXT_COLORS = ["white", "black", "yellow"] as const
 export const TEXT_BACKGROUNDS = ["solid", "outline", "none"] as const
 export type TextFont = (typeof TEXT_FONTS)[number]
 export type TextColor = (typeof TEXT_COLORS)[number]
@@ -87,13 +87,16 @@ export type TextBackground = (typeof TEXT_BACKGROUNDS)[number]
 
 // The three looks the tray offers as presets. A sticker saved before fonts, colours and backgrounds existed carries one of
 // these names in its style field, and is read as the look it was drawn with.
-export const TEXT_LOOKS = ["light", "dark", "dusk"] as const
+export const TEXT_LOOKS = ["light", "dark"] as const
 export type TextLook = (typeof TEXT_LOOKS)[number]
 export const TEXT_LOOK_FIELDS: Record<TextLook, { font: TextFont; color: TextColor; background: TextBackground }> = {
   light: { font: "sans", color: "white", background: "solid" }, // black text on a white box
   dark: { font: "sans", color: "black", background: "solid" }, // white text on a black box
-  dusk: { font: "sans", color: "dusk", background: "solid" }, // white text on a dusk box
 }
+
+// Dusk was a blue text colour and look that has been removed. A sticker saved with it reads as the nearest neutral one.
+const RETIRED_COLOR = "dusk"
+const RETIRED_LOOK = "dusk"
 
 export type Placement = { x: number; y: number; size: number; rotate: number }
 export type EmojiSticker = Placement & { kind: "emoji"; code: string }
@@ -180,11 +183,12 @@ export function clampPlacement(raw: Record<string, unknown>): Placement | null {
 // that names any of the three must name all of them, each one from its list.
 function textLook(raw: Record<string, unknown>): Pick<TextSticker, "font" | "color" | "background"> | null {
   if (raw.font === undefined && raw.color === undefined && raw.background === undefined) {
+    if (raw.style === RETIRED_LOOK) return { ...TEXT_LOOK_FIELDS.dark }
     const look = oneOf(TEXT_LOOKS, raw.style)
     return look === null ? null : { ...TEXT_LOOK_FIELDS[look] }
   }
   const font = oneOf(TEXT_FONTS, raw.font)
-  const color = oneOf(TEXT_COLORS, raw.color)
+  const color = raw.color === RETIRED_COLOR ? "black" : oneOf(TEXT_COLORS, raw.color)
   const background = oneOf(TEXT_BACKGROUNDS, raw.background)
   if (font === null || color === null || background === null) return null
   return { font, color, background }

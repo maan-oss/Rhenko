@@ -78,7 +78,7 @@ function NoteItem({ note, signedIn }: { note: NoteView; signedIn: boolean }) {
         <span
           className={cn(
             "ml-auto rounded-full px-2 py-0.5 text-xs font-semibold",
-            note.shown ? "bg-dusk/15 text-dusk" : "bg-muted text-muted-foreground"
+            note.shown ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground"
           )}
         >
           {note.shown ? "Shown" : "Needs more ratings"}
@@ -136,7 +136,7 @@ function RatingButton({
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] tabular-nums transition-colors disabled:opacity-60",
-        active ? "border-dusk bg-dusk/10 text-dusk" : "border-border text-muted-foreground hover:bg-muted"
+        active ? "border-foreground bg-foreground/5 text-foreground" : "border-border text-muted-foreground hover:bg-muted"
       )}
     >
       <Icon className="size-3.5" />

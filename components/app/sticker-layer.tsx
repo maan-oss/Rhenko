@@ -52,14 +52,12 @@ const PILL = "block rounded-[0.5em] px-[0.45em] py-[0.2em] leading-tight font-se
 const FILL: Record<TextColor, string> = {
   white: "bg-white text-black",
   black: "bg-black text-white",
-  dusk: "bg-dusk text-white",
   yellow: "bg-yellow-300 text-black",
 }
 // Outline and plain stickers are text in the colour itself.
 const INK: Record<TextColor, string> = {
   white: "text-white",
   black: "text-black",
-  dusk: "text-dusk",
   yellow: "text-yellow-300",
 }
 
@@ -96,7 +94,7 @@ function StickerBody({ sticker, linkHashtags }: { sticker: Sticker; linkHashtags
   }
   if (sticker.kind === "hashtag") {
     const label = `#${sticker.tag}`
-    const className = cn(PILL, "shadow-md font-sans", FILL.dusk)
+    const className = cn(PILL, "shadow-md font-sans bg-foreground text-background")
     if (!linkHashtags) return <span className={className}>{label}</span>
     return (
       <Link href={topicHref(sticker.tag)} className={cn(className, "pointer-events-auto hover:underline")}>

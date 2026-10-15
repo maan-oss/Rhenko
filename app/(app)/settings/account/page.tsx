@@ -71,7 +71,7 @@ async function AccountBody() {
         <p className="text-[15px] text-muted-foreground">
           This permanently removes your profile, your posts and the replies under them, the messages you sent, and your
           photos and videos. It can&apos;t be undone.{" "}
-          <a href="#your-data" className="font-semibold text-dusk underline underline-offset-4">
+          <a href="#your-data" className="font-semibold text-foreground underline underline-offset-4">
             Download your data first
           </a>{" "}
           if you want a copy.

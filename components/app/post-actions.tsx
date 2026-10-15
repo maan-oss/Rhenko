@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { BookmarkIcon, HeartIcon, MessageCircleIcon } from "lucide-animated"
 import { Ban, Coins, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
@@ -60,7 +60,7 @@ type Props = {
 // the bookmark, share and more controls stay together at its right. When the counts get long, those three drop to a line
 // of their own, so nothing overflows.
 const BUTTON =
-  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-colors duration-200 hover:bg-dusk/10 hover:text-dusk focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
+  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
 
 const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
@@ -117,6 +117,7 @@ export function PostActions(props: Props) {
   } = props
   const router = useRouter()
   const [, startTransition] = useTransition()
+  const reduceMotion = useReducedMotion()
   const [likeState, setLikeState] = useOptimistic({ active: liked, count: likes })
   const [repostState, setRepostState] = useOptimistic({ active: reposted, count: reposts })
   const [bookmarkState, setBookmarkState] = useOptimistic(bookmarked)
@@ -318,7 +319,16 @@ export function PostActions(props: Props) {
           aria-label={likeState.active ? `Unlike, ${likeState.count} ${pluralize(likeState.count, "like")}` : `Like, ${likeState.count} ${pluralize(likeState.count, "like")}`}
           className={cn(BUTTON, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
         >
-          <HeartIcon size={18} className="transition-none" />
+          {/* A like pops the heart out and fills it. The pop replays on each like, and an unlike just clears it. */}
+          <motion.span
+            key={likeState.active ? "liked" : "unliked"}
+            initial={likeState.active && !reduceMotion ? { scale: 0.55 } : false}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 520, damping: 13 }}
+            className="inline-flex"
+          >
+            <HeartIcon size={18} className={cn("transition-none", likeState.active && "fill-current")} />
+          </motion.span>
           <Count value={likeState.count} />
         </button>
 
