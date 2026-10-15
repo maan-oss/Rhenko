@@ -48,8 +48,18 @@ export async function writePost(page, text) {
 }
 
 // Attaches picture files to a composer.
+// Attaches files to a composer. Each photo opens the framing step first, so it is kept as framed ("Use this") before
+// the caller carries on. Videos and files that do not open it are left alone.
 export async function attach(form, files) {
   await form.locator("input[type=file]").setInputFiles(files)
+  const framing = form.page().getByRole("dialog", { name: "Frame your photo" })
+  const count = Array.isArray(files) ? files.length : 1
+  for (let i = 0; i < count; i++) {
+    const open = await framing.first().waitFor({ state: "visible", timeout: 4000 }).then(() => true, () => false)
+    if (!open) break
+    await framing.first().getByRole("button", { name: "Use this", exact: true }).click()
+    await framing.first().waitFor({ state: "detached" })
+  }
 }
 
 export async function addAlt(form, text) {

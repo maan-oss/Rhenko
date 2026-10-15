@@ -64,7 +64,7 @@ async function postFlows({ phone }) {
     await typeIn(form, "x".repeat(25001))
     const send = form.getByRole("button", { name: "Post", exact: true })
     assert.equal(await send.isDisabled(), true, "the Post button is enabled with 25,001 characters")
-    await form.getByText("-1", { exact: true }).first().waitFor()
+    await form.getByText(/1 character over the limit/).first().waitFor()
     await typeIn(form, "x".repeat(25000))
     assert.equal(await send.isDisabled(), false, "the Post button is disabled with exactly 25,000 characters")
     await typeIn(form, "")
@@ -204,11 +204,14 @@ async function postFlows({ phone }) {
   await check(`${where}: a file that only pretends to be a picture is refused`, async () => {
     await openHome(author.page)
     const form = homeComposer(author.page)
-    await attach(form, makeFakePng(`fake-${where}.png`))
-    await typeIn(form, uniq("Fake picture"))
-    await acted(author.page, () => form.getByRole("button", { name: "Post", exact: true }).click())
-    await toastText(author.page, /not a valid image/i)
-    await form.getByRole("button", { name: "Remove media" }).click()
+    // The browser cannot read the file, so framing refuses it before it is sent. The refusal stays on screen and the
+    // post gets no picture.
+    await form.locator("input[type=file]").setInputFiles(makeFakePng(`fake-${where}.png`))
+    const framing = author.page.getByRole("dialog", { name: "Frame your photo" })
+    await framing.getByText("That picture could not be read.").waitFor()
+    await framing.getByRole("button", { name: "Close", exact: true }).click()
+    await framing.waitFor({ state: "detached" })
+    assert.equal(await form.locator("img[alt='Selected image']").count(), 0, "a picture that could not be read was attached")
     await typeIn(form, "")
   })
 

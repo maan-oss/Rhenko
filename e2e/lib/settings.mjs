@@ -7,6 +7,7 @@ import { acted, go, ready, toastText } from "./ui.mjs"
 export const SECTIONS = [
   { title: "Appearance", path: "/settings/appearance", ready: (page) => page.getByRole("radiogroup", { name: "Theme" }) },
   { title: "Account", path: "/settings/account", ready: (page) => page.locator("#account-status") },
+  { title: "About you", path: "/settings/about", ready: (page) => page.locator("input[name=location]") },
   { title: "Connections and languages", path: "/settings/connections", ready: (page) => page.locator("#where-area") },
   { title: "Security", path: "/settings/security", ready: (page) => page.locator("input[name=current]") },
   { title: "Privacy and safety", path: "/settings/privacy", ready: (page) => page.getByRole("switch", { name: "Protect my posts" }) },

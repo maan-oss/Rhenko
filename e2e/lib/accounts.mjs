@@ -176,12 +176,16 @@ export async function openMenu(page) {
   return menu
 }
 
-// The Log out button: in the sidebar on a computer, in the left panel on a phone.
+// The Log out button: in the sidebar on a computer, in the left panel on a phone. It asks for a confirmation first.
 export async function signOut(user) {
   const { page } = user
   await go(page, "/", page.locator("textarea[aria-label='Post text']"))
   const scope = user.phone ? await openMenu(page) : page
   await scope.getByRole("button", { name: "Log out", exact: true }).click()
+  // Logging out asks first. The confirmation is its own dialog with the same button name.
+  const asking = page.getByRole("dialog", { name: "Log out of Rhenko?" })
+  await asking.waitFor({ timeout: TIMEOUT })
+  await asking.getByRole("button", { name: "Log out", exact: true }).click()
   await page.waitForURL((url) => url.pathname === "/login", { timeout: TIMEOUT })
 }
 
