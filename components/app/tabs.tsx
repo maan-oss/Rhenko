@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
@@ -17,9 +17,17 @@ export type TabItem = {
 // The one motion for the active tab. The fill slides from the old tab to the new one.
 export const TAB_FILL = { type: "spring", stiffness: 520, damping: 42 } as const
 
-// The active tab is a solid fill in the text colour: black on a light page, white on a dark one.
+// The active tab is a solid fill in the text colour: black on a light page, white on a dark one. A profile can theme its
+// tabs from its banner (see BannerTabTheme), which sets the fill and the text on it through two variables.
 export function TabFill({ layoutId }: { layoutId: string }) {
-  return <motion.span layoutId={layoutId} className="absolute inset-0 rounded-full bg-foreground" transition={TAB_FILL} />
+  return (
+    <motion.span
+      layoutId={layoutId}
+      className="absolute inset-0 rounded-full"
+      style={{ backgroundColor: "var(--tab-fill, var(--foreground))" }}
+      transition={TAB_FILL}
+    />
+  )
 }
 
 function TabBadge({ count }: { count: number }) {
@@ -47,28 +55,38 @@ function TabName({ open, children }: { open: boolean; children: ReactNode }) {
   )
 }
 
+// The tab the person has just pressed. The fill moves on the press, before the page has loaded, and the page follows. The
+// press is dropped once the page shows that tab, or if the page still shows the tab it started from.
+export function usePressedTab(items: TabItem[]): { current: string | null; press: (href: string) => void } {
+  const served = items.find((item) => item.active)?.href ?? null
+  const [pressed, setPressed] = useState<{ from: string | null; to: string } | null>(null)
+  const current = pressed && pressed.from === served ? pressed.to : served
+  return { current, press: (href) => setPressed({ from: served, to: href }) }
+}
+
 // One tab. The active tab shows its icon and its name in the fill. Every other tab is only its icon, in a smaller
 // circle with no space for a name. The name stays on the link as aria-label, so it is never lost to a screen reader.
-function TabLink({ item, fill }: { item: TabItem; fill: string }) {
+function TabLink({ item, active, fill, onPress }: { item: TabItem; active: boolean; fill: string; onPress: () => void }) {
   return (
     <Link
       href={item.href}
       scroll={false}
       title={item.label}
       aria-label={item.label}
-      aria-current={item.active ? "page" : undefined}
+      aria-current={active ? "page" : undefined}
+      onClick={onPress}
       className={cn(
         "relative inline-flex h-10 shrink-0 items-center rounded-full transition-colors duration-200 sm:h-9",
-        item.active ? "px-4 text-background" : "w-10 justify-center text-muted-foreground hover:bg-foreground/5 hover:text-foreground sm:w-9"
+        active ? "px-4 text-[var(--tab-ink,var(--background))]" : "w-10 justify-center text-muted-foreground hover:bg-foreground/5 hover:text-foreground sm:w-9"
       )}
     >
-      {item.active ? <TabFill layoutId={fill} /> : null}
+      {active ? <TabFill layoutId={fill} /> : null}
       <span className="relative grid size-[18px] shrink-0 place-items-center [&>svg]:size-[18px]">
         {item.icon}
         {item.badge ? <TabBadge count={item.badge} /> : null}
       </span>
       <span className="relative inline-flex">
-        <TabName open={item.active}>{item.label}</TabName>
+        <TabName open={active}>{item.label}</TabName>
       </span>
     </Link>
   )
@@ -77,10 +95,11 @@ function TabLink({ item, fill }: { item: TabItem; fill: string }) {
 // A segmented control in a glass pill, used at the top of a page.
 export function TabLinks({ items, label = "Sections", className }: { items: TabItem[]; label?: string; className?: string }) {
   const id = useId()
+  const { current, press } = usePressedTab(items)
   return (
     <nav aria-label={label} className={cn("glass inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none]", className)}>
       {items.map((item) => (
-        <TabLink key={item.href} item={item} fill={`${id}-fill`} />
+        <TabLink key={item.href} item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} />
       ))}
     </nav>
   )
@@ -89,11 +108,12 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
 // A full-width row of tabs with a rule under it, used on a profile. Same behaviour as TabLinks.
 export function IconTabs({ items, label = "Sections" }: { items: TabItem[]; label?: string }) {
   const id = useId()
+  const { current, press } = usePressedTab(items)
   return (
     <nav aria-label={label} className="flex w-full items-center justify-between overflow-x-auto border-b border-border px-2 [scrollbar-width:none]">
       {items.map((item) => (
         <div key={item.href} className="flex h-12 shrink-0 items-center">
-          <TabLink item={item} fill={`${id}-fill`} />
+          <TabLink item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} />
         </div>
       ))}
     </nav>

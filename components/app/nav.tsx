@@ -83,8 +83,13 @@ export function MobileTabBar({
   const [navWidth, setNavWidth] = useState(0)
   const conversationRef = useRef(conversation)
   const items = buildItems(notifications, messages).filter((item) => item.mobile)
+  // The section the person has just pressed. The fill moves on the press, before the page has loaded, and the page follows.
+  // It is dropped once the page shows that section, or if the page still shows the section it started from.
+  const served = items.find((item) => item.active(path))?.href ?? null
+  const [pressed, setPressed] = useState<{ from: string | null; to: string } | null>(null)
+  const currentHref = pressed && pressed.from === served ? pressed.to : served
   // The section that stays visible when the dock folds. Anything outside the dock falls back to Home.
-  const visibleHref = items.find((item) => item.active(path))?.href ?? "/"
+  const visibleHref = currentHref ?? "/"
 
   useEffect(() => {
     conversationRef.current = conversation
@@ -204,8 +209,8 @@ export function MobileTabBar({
             !navWidth && "w-[calc(100%-72px)]"
           )}
         >
-          {items.map(({ href, label, Icon, badge, active }) => {
-            const isActive = active(path)
+          {items.map(({ href, label, Icon, badge }) => {
+            const isActive = href === currentHref
             const hidden = folded && href !== visibleHref
             return (
               <motion.li
@@ -219,6 +224,7 @@ export function MobileTabBar({
                   href={href}
                   aria-label={label}
                   aria-current={isActive ? "page" : undefined}
+                  onClick={() => setPressed({ from: served, to: href })}
                   className="relative grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
                 >
                   {isActive ? <TabFill layoutId="mobile-dock-pill" /> : null}

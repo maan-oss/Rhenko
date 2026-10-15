@@ -18,6 +18,7 @@ import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { AiLabel, LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { IconTabs, TabLinks } from "@/components/app/tabs"
+import { BannerTabTheme } from "@/components/app/tab-theme"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
@@ -114,7 +115,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-36 sm:h-52" />
       </div>
 
-      <div className="relative z-10 flex items-end justify-between gap-3 px-7">
+      <div className="relative z-10 flex items-end justify-between gap-3 px-4">
         <div className="-mt-12 rounded-full bg-background p-1.5">
           <Avatar user={profile} size={96} />
         </div>
@@ -136,7 +137,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 px-7 pt-4 pb-4">
+      <div className="flex flex-col gap-4 px-4 pt-4 pb-4">
         <div className="flex flex-col gap-1.5">
           <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[26px] leading-tight font-semibold tracking-tight sm:text-3xl">
             {profile.name}
@@ -165,15 +166,17 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         {isSelf ? null : <MessageButton handle={profile.handle} />}
       </div>
 
-      <IconTabs
-        label="Profile sections"
-        items={sections.map((t) => ({
-          href: t === "posts" ? base : `${base}?tab=${t}`,
-          label: SECTION_LABEL[t],
-          icon: SECTION_ICON[t],
-          active: t === section,
-        }))}
-      />
+      <BannerTabTheme src={profile.bannerFile ? `/media/${profile.bannerFile}?w=640` : null}>
+        <IconTabs
+          label="Profile sections"
+          items={sections.map((t) => ({
+            href: t === "posts" ? base : `${base}?tab=${t}`,
+            label: SECTION_LABEL[t],
+            icon: SECTION_ICON[t],
+            active: t === section,
+          }))}
+        />
+      </BannerTabTheme>
 
       {section === "posts" ? (
         <div className="px-4 pt-3">
