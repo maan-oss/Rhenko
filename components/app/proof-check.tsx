@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
-import { Check, LoaderCircle } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { requestProof } from "@/actions/proof"
 import { solvePuzzle } from "@/lib/proof-solve"
 
@@ -31,8 +31,9 @@ function loadTurnstile(): Promise<Turnstile> {
   })
 }
 
-// A quiet check says nothing while it runs or once it passes. It shows a message only when it fails, and it takes no room
-// on the page unless Cloudflare needs its box there.
+// A quiet check says nothing while it runs or once it passes. Otherwise it shows a spinner while it runs and a message only
+// when it fails. Once it passes it says nothing: the form's button simply becomes available. It takes no room on the page
+// unless Cloudflare needs its box there.
 export function ProofCheck({ onReady, quiet = false }: { onReady: (proof: string | null) => void; quiet?: boolean }) {
   const [state, setState] = useState<"checking" | "done" | "failed">("checking")
   const [message, setMessage] = useState("")
@@ -92,20 +93,16 @@ export function ProofCheck({ onReady, quiet = false }: { onReady: (proof: string
     }
   }, [attempt])
 
-  // Nothing to show: the check runs out of sight and the form's button waits for it.
+  // Nothing to show: the check runs out of sight and the form's button waits for it. Once it passes there is nothing to say.
   if (quiet && state !== "failed" && !boxed) return null
-  const showStatus = !quiet || state === "failed"
+  const showStatus = state !== "done"
 
   return (
     <div className="flex flex-col gap-2">
       {showStatus ? (
         <div role="status" aria-live="polite" className="flex items-center gap-2.5 text-[13px] text-muted-foreground">
-          {state === "done" ? (
-            <Check className="size-4 shrink-0 text-foreground" aria-hidden />
-          ) : state === "checking" ? (
-            <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
-          ) : null}
-          <span>{state === "done" ? "Checked. You can continue." : state === "checking" ? "Checking that you're a person…" : message}</span>
+          {state === "checking" ? <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden /> : null}
+          <span>{state === "checking" ? "Checking that you're a person…" : message}</span>
           {state === "failed" ? (
             <button
               type="button"

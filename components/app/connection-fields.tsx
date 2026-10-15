@@ -10,10 +10,10 @@ import { cn } from "@/lib/utils"
 // The fields for where someone is and what they speak. Used by sign-up setup and by Settings, so both read the same.
 
 export const FIELD =
-  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
+  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground"
 
 export const SMALL_FIELD =
-  "h-11 w-full min-w-0 rounded-xl border border-border bg-card px-3.5 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
+  "h-11 w-full min-w-0 rounded-xl border border-border bg-card px-3.5 text-base outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground"
 
 export function Label({ htmlFor, children, aside }: { htmlFor?: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (

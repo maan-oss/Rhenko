@@ -23,11 +23,11 @@ import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
-// One field shape everywhere. Focus turns the border ink and adds a dusk halo; an error turns the border red.
+// One field shape everywhere. Focus turns the border ink; an error turns the border red. No glow around the field.
 // Inputs are 16px so phones do not zoom in when they are tapped.
 const FIELD =
-  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
-const FIELD_ERROR = "border-destructive hover:border-destructive focus:border-destructive focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--destructive)_18%,transparent)]"
+  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground"
+const FIELD_ERROR = "border-destructive hover:border-destructive focus:border-destructive"
 
 const LINK = "font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground"
 
@@ -174,7 +174,7 @@ function HandleField({
       <div
         className={cn(
           FIELD,
-          "flex items-center gap-1 px-4 focus-within:border-foreground focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]",
+          "flex items-center gap-1 px-4 focus-within:border-foreground",
           problem && FIELD_ERROR
         )}
       >
@@ -199,23 +199,17 @@ function HandleField({
   )
 }
 
-// The one primary action on a screen. It is disabled until the screen can be sent, and it shows a dot while it works.
+// The one primary action on a screen. It is disabled until the screen can be sent. While it works it says what it is doing.
 function SubmitButton({ label, pendingLabel, disabled }: { label: string; pendingLabel: string; disabled?: boolean }) {
   const { pending } = useFormStatus()
   return (
     <button
       type="submit"
       disabled={pending || disabled}
+      aria-busy={pending || undefined}
       className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
     >
-      {pending ? (
-        <span className="flex items-center gap-2.5">
-          <span className="size-1.5 animate-pulse rounded-full bg-current" aria-hidden="true" />
-          {pendingLabel}
-        </span>
-      ) : (
-        label
-      )}
+      {pending ? pendingLabel : label}
     </button>
   )
 }
@@ -229,11 +223,11 @@ function ErrorText({ message }: { message?: string }) {
   )
 }
 
-// The rule as a line that ticks itself once it is met.
+// The rule as a line that ticks itself once it is met. Met is ink, not colour, so the text stays the same tone as the page.
 function Rule({ met, children }: { met: boolean; children: ReactNode }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 transition-colors duration-200", met ? "text-dusk" : "text-muted-foreground")}>
-      <span className={cn("grid size-4 place-items-center rounded-full border transition-colors duration-200", met ? "border-dusk bg-dusk text-background" : "border-border")}>
+    <span className={cn("inline-flex items-center gap-1.5 transition-colors duration-200", met ? "text-foreground" : "text-muted-foreground")}>
+      <span className={cn("grid size-4 place-items-center rounded-full border transition-colors duration-200", met ? "border-foreground bg-foreground text-background" : "border-border")}>
         {met ? <Check className="size-3" strokeWidth={3} aria-hidden="true" /> : null}
       </span>
       {children}
