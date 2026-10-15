@@ -10,11 +10,24 @@ export function emptyActionClass(kind: "primary" | "secondary"): string {
   )
 }
 
-export function EmptyState({ title, body, children, className }: { title: string; body: string; children?: ReactNode; className?: string }) {
+// The large version is for Home, where an empty feed is the first thing a new person sees.
+export function EmptyState({
+  title,
+  body,
+  children,
+  className,
+  large = false,
+}: {
+  title: string
+  body: string
+  children?: ReactNode
+  className?: string
+  large?: boolean
+}) {
   return (
-    <div className={cn("flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center", className)}>
-      <p className="max-w-full text-lg font-semibold [overflow-wrap:anywhere]">{title}</p>
-      <p className="max-w-sm text-[15px] text-muted-foreground [overflow-wrap:anywhere]">{body}</p>
+    <div className={cn("flex flex-col items-center gap-1.5 px-6 text-center", large ? "pt-20 pb-20" : "pt-14 pb-16", className)}>
+      <p className={cn("max-w-full font-semibold [overflow-wrap:anywhere]", large ? "text-[26px] leading-tight tracking-tight" : "text-lg")}>{title}</p>
+      <p className={cn("max-w-sm text-muted-foreground [overflow-wrap:anywhere]", large ? "text-base leading-relaxed" : "text-[15px]")}>{body}</p>
       {children ? <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-2">{children}</div> : null}
     </div>
   )

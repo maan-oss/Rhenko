@@ -67,12 +67,9 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         next={page.next}
         spec={spec}
         viewer={viewer}
+        largeEmpty
         emptyTitle={following ? "Nothing from people you follow yet" : "No posts yet"}
-        emptyBody={
-          following
-            ? "When people you follow post, their posts show up here."
-            : "Write a post, or follow people and their posts will fill this page."
-        }
+        emptyBody={following ? "When the people you follow post, it shows up here." : "Write the first one, or follow a few people to fill this page."}
         emptyAction={empty ? following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty viewerId={viewer.id} /> : undefined}
       />
     </>
