@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
-import { topicFollowing } from "@/lib/data"
+import { topicFollowing, topicSummary } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { topicFromParam } from "@/lib/social-rules"
+import { formatCount, pluralize } from "@/lib/format"
 import { ComposeAction } from "@/components/app/compose-action"
 import { FeedList } from "@/components/app/feed-list"
 import { PageHeader } from "@/components/app/page-header"
@@ -21,9 +22,27 @@ export default async function TopicPage({ params }: { params: Params }) {
   const clean = checked.tag
   const spec: FeedSpec = { kind: "topic", tag: clean }
   const page = feedFor(spec, viewer.id)
+  const summary = topicSummary(clean)
   return (
     <>
       <PageHeader title={`#${clean}`} backHref="/explore" actions={<TopicFollowButton tag={clean} following={topicFollowing(viewer.id, clean)} />} />
+      <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
+        {summary.postsThisWeek > 0 ? (
+          <>
+            <span className="font-semibold text-foreground tabular-nums">{formatCount(summary.postsThisWeek)}</span>{" "}
+            {pluralize(summary.postsThisWeek, "post", "posts")} this week
+          </>
+        ) : (
+          "No posts this week"
+        )}
+        {summary.followers > 0 ? (
+          <>
+            <span aria-hidden="true"> · </span>
+            <span className="font-semibold text-foreground tabular-nums">{formatCount(summary.followers)}</span>{" "}
+            {pluralize(summary.followers, "person follows", "people follow")} this topic
+          </>
+        ) : null}
+      </p>
       <FeedList
         items={page.items}
         next={page.next}

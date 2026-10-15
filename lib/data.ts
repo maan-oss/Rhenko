@@ -2179,6 +2179,24 @@ export function bookmarkFolders(viewerId: string): { id: string; name: string; c
   )
 }
 
+// How active a topic is: posts that used it in the last week (the same posts trending counts), and how many people follow
+// it. Counted on request for one tag, so it is always exact rather than a sample.
+export function topicSummary(tag: string): { postsThisWeek: number; followers: number } {
+  const clean = normalizeTag(tag)
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+  const rows = all<{ body: string }>(
+    `SELECT p.body FROM posts p JOIN users u ON u.id = p.author_id
+     WHERE p.created_at > ? AND ${LIVE} AND u.deactivated_at IS NULL AND instr(lower(p.body), ?) > 0
+       AND NOT EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND c.access = 'closed')
+     ORDER BY p.created_at DESC LIMIT 2000`,
+    weekAgo,
+    `#${clean}`
+  )
+  const postsThisWeek = rows.filter((row) => extractHashtags(row.body).includes(clean)).length
+  const followers = get<{ n: number }>("SELECT COUNT(*) AS n FROM topic_follows WHERE tag = ?", clean)?.n ?? 0
+  return { postsThisWeek, followers }
+}
+
 export function topicFollowing(viewerId: string, tag: string): boolean {
   return get("SELECT 1 AS found FROM topic_follows WHERE user_id = ? AND tag = ?", viewerId, normalizeTag(tag)) !== undefined
 }
