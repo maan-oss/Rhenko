@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
-import { logout } from "@/actions/auth"
+import { SettingsLogout } from "@/components/app/account-menu"
 import { PageHeader } from "@/components/app/page-header"
 
 // Settings is a list of sections. Each section is its own page, so no page is one long scroll.
@@ -67,14 +67,9 @@ export default function SettingsPage() {
           </li>
         </ul>
       </nav>
-      <form action={logout} className="px-4 pt-6 pb-10">
-        <button
-          type="submit"
-          className="flex h-14 w-full items-center justify-center rounded-full border border-border text-[16px] font-semibold transition-colors duration-200 hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
-        >
-          Log out
-        </button>
-      </form>
+      <div className="px-4 pt-6 pb-10">
+        <SettingsLogout />
+      </div>
     </>
   )
 }

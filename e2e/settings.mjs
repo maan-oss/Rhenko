@@ -317,6 +317,10 @@ async function settingsPages({ phone }) {
   await check(`${where}: the Log out button on the Settings page ends the session`, async () => {
     await go(page, "/settings", page.getByRole("navigation", { name: "Settings sections" }))
     await page.locator("main").getByRole("button", { name: "Log out", exact: true }).click()
+    // It asks first, the same as the sidebar button, and the dialog's own Log out button ends the session.
+    const asking = page.getByRole("dialog", { name: "Log out of Rhenko?" })
+    await asking.waitFor()
+    await asking.getByRole("button", { name: "Log out", exact: true }).click()
     await page.waitForURL((url) => url.pathname === "/login")
     await page.goto("/settings")
     await page.waitForURL((url) => url.pathname === "/login")

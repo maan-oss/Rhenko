@@ -251,22 +251,45 @@ export function LogoutButton({ className }: { className?: string }) {
       >
         <LogOut className="size-[19px]" strokeWidth={1.8} aria-hidden="true" />
       </button>
-      <Dialog open={asking} onOpenChange={setAsking}>
-        <DialogContent className={cn("sm:max-w-sm", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
-          <DialogTitle className="text-base font-semibold">Log out of Rhenko?</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">You will need to sign in again to see your feed and messages.</DialogDescription>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => setAsking(false)} className="h-10 rounded-full px-4">
-              Cancel
-            </Button>
-            <form action={logout}>
-              <Button type="submit" className="h-10 rounded-full px-4">
-                Log out
-              </Button>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <LogoutDialog open={asking} onOpenChange={setAsking} />
     </>
+  )
+}
+
+// The Log out button at the foot of Settings. It asks first, the same as the sidebar button.
+export function SettingsLogout() {
+  const [asking, setAsking] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAsking(true)}
+        className="flex h-14 w-full items-center justify-center rounded-full border border-border text-[16px] font-semibold transition-colors duration-200 hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
+      >
+        Log out
+      </button>
+      <LogoutDialog open={asking} onOpenChange={setAsking} />
+    </>
+  )
+}
+
+function LogoutDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={cn("sm:max-w-sm", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
+        <DialogTitle className="text-base font-semibold">Log out of Rhenko?</DialogTitle>
+        <DialogDescription className="text-sm text-muted-foreground">You will need to sign in again to see your feed and messages.</DialogDescription>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="h-10 rounded-full px-4">
+            Cancel
+          </Button>
+          <form action={logout}>
+            <Button type="submit" className="h-10 rounded-full px-4">
+              Log out
+            </Button>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
