@@ -1,7 +1,7 @@
 // Direct messages and group chats: requests, accepting and declining, sending text and photos, reactions, sharing a post,
 // deleting a message, muting a conversation, creating a group, renaming it, adding and removing people, and leaving.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
+import { RUN_ID, TIMEOUT, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import {
   chatBox,
@@ -105,7 +105,7 @@ async function directFlow({ phone }) {
 
   await check(`${where}: a photo can be sent and loads for both people`, async () => {
     await sender.page.locator("input[name=image]").setInputFiles(makePng(`chat-${where}.png`, { seed: 5 }))
-    await sender.page.getByText(/^Photo: /).waitFor()
+    await sender.page.getByAltText("Photo to send").waitFor()
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
     for (const person of [sender, receiver]) {
       await person.page.locator('main img[alt="Shared photo"]').first().waitFor()
@@ -201,9 +201,13 @@ async function directFlow({ phone }) {
     const row = receiver.page.locator("main").getByRole("link").filter({ hasText: sender.name }).filter({ hasText: ping }).first()
     await row.waitFor()
     await row.getByLabel("1 unread message").waitFor()
+    // Opening the thread marks it read. The check waits for the server to confirm that before leaving the page, so a
+    // navigation can't cancel the mark on the way out.
+    const marked = receiver.page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes(`/messages/${convId}`), { timeout: TIMEOUT })
     await row.click()
     await receiver.page.waitForURL((url) => url.pathname === `/messages/${convId}`)
     await threadText(receiver.page, ping).waitFor()
+    await marked
     await openMessages(receiver.page)
     const read = receiver.page.locator("main").getByRole("link").filter({ hasText: sender.name }).first()
     await read.waitFor()
@@ -407,7 +411,15 @@ async function requestsFlow() {
     await asker.page.locator("#chat-handle").fill(`@${target.handle}`)
     await acted(asker.page, () => asker.page.getByRole("button", { name: "Next", exact: true }).click())
     convId = await waitForConversation(asker.page)
+    // The bubble shows before the server saves the message, so wait for the save before the other person looks.
+    // Typing also posts to this conversation, so the wait is for the send itself: the POST that carries the note.
+    const saved = asker.page.waitForResponse(
+      (r) => r.request().method() === "POST" && r.url().includes(`/messages/${convId}`) && (r.request().postData() ?? "").includes(note),
+      { timeout: TIMEOUT }
+    )
+    saved.catch(() => {})
     await sendChat(asker.page, note)
+    await saved
     await openMessages(target.page, "requests")
     await target.page.locator("main").getByRole("link").filter({ hasText: asker.name }).filter({ hasText: note }).first().waitFor()
   })

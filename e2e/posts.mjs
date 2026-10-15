@@ -30,7 +30,7 @@ import {
 } from "./lib/posts.mjs"
 import { idleOnSettings, recordBanners, sawBanner } from "./lib/live.mjs"
 import { follow } from "./lib/people.mjs"
-import { acted, bodyText, go, toastText } from "./lib/ui.mjs"
+import { acted, bodyText, go, ready, toastText } from "./lib/ui.mjs"
 
 function uniq(label) {
   return `${label} ${RUN_ID}${randomWord(4)}`
@@ -427,6 +427,8 @@ async function postFlows({ phone }) {
     await toastText(reader.page, /Saved to bookmarks/)
     await go(reader.page, "/bookmarks", reader.page.locator("main"))
     const saved = await waitForPost(reader.page, plain)
+    // The page is hydrated before its buttons are: a click that lands first does nothing, so wait for this one.
+    await ready(bookmarkButton(saved))
     await acted(reader.page, () => bookmarkButton(saved).click())
     await toastText(reader.page, /Removed from bookmarks/)
     await reader.page.reload()
