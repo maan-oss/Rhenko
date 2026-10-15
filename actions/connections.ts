@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { getViewer } from "@/lib/auth"
 import { get } from "@/lib/db"
 import { isLanguageCode, isSpeakLevel, type SpeakLevel } from "@/lib/languages"
-import { areaProblem, isCountryCode } from "@/lib/places"
+import { areaProblem, isCountryCode, regionProblem } from "@/lib/places"
 import {
   clearDismissals,
   dismissConnection,
@@ -21,17 +21,18 @@ function refresh() {
   revalidatePath("/", "layout")
 }
 
-// Where someone is. The country is needed with an area, so people can be matched on the same city in the same country.
-export async function saveWhere(input: { country: string; area: string; suggestNearby: boolean }): Promise<ConnectionResult> {
+// Where someone is. The country is needed with a city or region, so people can be matched on the same city in the same country.
+export async function saveWhere(input: { country: string; area: string; region: string; suggestNearby: boolean }): Promise<ConnectionResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to set where you are." }
   const country = typeof input.country === "string" ? input.country : ""
   const area = typeof input.area === "string" ? input.area : ""
-  const problem = areaProblem(area)
+  const region = typeof input.region === "string" ? input.region : ""
+  const problem = areaProblem(area) ?? regionProblem(region)
   if (problem) return { ok: false, error: problem }
   if (country !== "" && !isCountryCode(country)) return { ok: false, error: "Choose a country from the list." }
-  if (area.trim() !== "" && country === "") return { ok: false, error: "Choose your country as well." }
-  storeWhere(viewer.id, { country, area, suggestNearby: input.suggestNearby === true })
+  if ((area.trim() !== "" || region.trim() !== "") && country === "") return { ok: false, error: "Choose your country as well." }
+  storeWhere(viewer.id, { country, area, region, suggestNearby: input.suggestNearby === true })
   refresh()
   return { ok: true }
 }

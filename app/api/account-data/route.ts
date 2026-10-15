@@ -239,6 +239,7 @@ function collect(userId: string, media: Map<string, Media>) {
           country: settings.country || null,
           countryName: settings.countryName,
           cityOrTown: settings.area || null,
+          region: settings.region || null,
         },
         suggestNearby: settings.suggestNearby,
         suggestLanguagePartners: settings.suggestLanguage,

@@ -48,20 +48,25 @@ async function setLanguages(page, { speak = [], learn = [] }) {
   await acted(page, () => page.getByRole("button", { name: "Save languages", exact: true }).click())
 }
 
-// Finishes the two setup screens after sign-up and opens Home. Continue on the profile saves it and moves on to About you.
-// The city is entered there, and topics are picked there, as a person would pick them. Languages are set in Settings
-// first, when a check gives any.
-async function setUp(page, { city, country = "AU", speak = [], learn = [], topics = [] }) {
+// Finishes the setup screens after sign-up and opens Home. Continue on the profile moves on to Where you are, where the
+// country is picked from its popup and the city and region are typed in. Continue there moves on to What you're into,
+// where topics are picked. Languages are set in Settings first, when a check gives any.
+async function setUp(page, { city, region = "", country = "Australia", speak = [], learn = [], topics = [] }) {
   if (speak.length > 0 || learn.length > 0) await setLanguages(page, { speak, learn })
   await go(page, "/welcome", page.getByRole("heading", { name: "Set up your profile" }))
   await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
-  await page.waitForURL((url) => url.pathname === "/welcome/about", { timeout: TIMEOUT })
-  await page.getByRole("heading", { name: "About you", exact: true }).waitFor()
+  await page.waitForURL((url) => url.pathname === "/welcome/location", { timeout: TIMEOUT })
+  await page.getByRole("heading", { name: "Where you are", exact: true }).waitFor()
   if (city) {
     await ready(page.locator("#where-country"))
-    await page.locator("#where-country").selectOption(country)
+    await page.locator("#where-country").click()
+    await page.getByRole("dialog").getByRole("button", { name: country, exact: true }).click()
     await page.locator("#where-area").fill(city)
+    if (region) await page.locator("#where-region").fill(region)
   }
+  await acted(page, () => page.getByRole("button", { name: "Continue", exact: true }).click())
+  await page.waitForURL((url) => url.pathname === "/welcome/interests", { timeout: TIMEOUT })
+  await page.getByRole("heading", { name: "What you're into", exact: true }).waitFor()
   for (const tag of topics) await acted(page, () => page.getByRole("button", { name: `#${tag}`, exact: true }).click())
   await acted(page, () => page.getByRole("button", { name: "Open Rhenko", exact: true }).click())
   await page.waitForURL((url) => url.pathname === "/", { timeout: TIMEOUT })
@@ -83,9 +88,9 @@ export async function run() {
 
 async function connectionsFlow() {
   const ana = await newAccount("ana", { stay: true })
-  await check("sign-up opens the profile screen, the last of four steps", async () => {
+  await check("sign-up opens the profile screen, the fourth of six steps", async () => {
     assert.equal(new URL(ana.page.url()).pathname, "/welcome", "sign-up did not open the setup screen")
-    await ana.page.locator('[role="progressbar"][aria-valuenow="4"]').waitFor()
+    await ana.page.locator('[role="progressbar"][aria-valuenow="4"][aria-valuemax="6"]').waitFor()
   })
   await check("Open Rhenko opens Home with no setup prompt left", async () => {
     await setUp(ana.page, { city: TOWN, speak: ["English"], learn: ["French"] })

@@ -78,7 +78,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
     startTransition(async () => {
       const saved = await updateProfile({}, formData)
       if (saved.error) return setError(saved.error)
-      router.push("/welcome/about")
+      router.push("/welcome/location")
     })
   }
 

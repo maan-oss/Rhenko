@@ -116,6 +116,22 @@ export function cleanArea(area: string): string {
   return area.trim().replace(/\s+/g, " ")
 }
 
+// The state, province or region a city is in. It is shown with the city and never used to match people.
+export const REGION_MAX = 40
+
+export function regionProblem(region: string): string | null {
+  const text = region.trim().replace(/\s+/g, " ")
+  if (text === "") return null
+  if ([...text].length > REGION_MAX) return `Up to ${REGION_MAX} characters.`
+  if (!/\p{L}/u.test(text)) return "Use the name of your state or region."
+  if (/\d/.test(text)) return "Use the name of your state or region, without numbers."
+  return null
+}
+
+export function cleanRegion(region: string): string {
+  return region.trim().replace(/\s+/g, " ")
+}
+
 // The comparison form of an area, so "Brisbane", "brisbane " and "Brisbane" are the same place. Accents are dropped
 // and punctuation becomes a space, so "Saint-Denis" and "Saint Denis" match too.
 export function areaKey(area: string): string {

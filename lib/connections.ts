@@ -10,7 +10,7 @@
 // the facts above are used.
 import { all, get, run, transaction } from "@/lib/db"
 import { languageName, type SpeakLevel } from "@/lib/languages"
-import { areaKey, cleanArea, countryName } from "@/lib/places"
+import { areaKey, cleanArea, cleanRegion, countryName } from "@/lib/places"
 import { GROUP_ORDER, GROUP_TEXT, rankConnections, reasonsOf, type Candidate, type Group, type Me } from "@/lib/connection-rank"
 import { extractHashtags } from "@/lib/rules"
 import { RETENTION } from "@/lib/legal"
@@ -29,6 +29,7 @@ export type Settings = {
   country: string
   countryName: string | null
   area: string
+  region: string
   suggestNearby: boolean
   suggestLanguage: boolean
   speak: { code: string; level: SpeakLevel }[]
@@ -39,6 +40,7 @@ export type Settings = {
 type SettingsRow = {
   country: string
   area: string
+  region: string
   suggest_nearby: number
   suggest_language: number
   onboarding: string
@@ -50,7 +52,7 @@ function onboardingOf(value: string): Onboarding {
 
 export function settingsFor(userId: string): Settings {
   const row = get<SettingsRow>(
-    "SELECT country, area, suggest_nearby, suggest_language, onboarding FROM users WHERE id = ?",
+    "SELECT country, area, region, suggest_nearby, suggest_language, onboarding FROM users WHERE id = ?",
     userId
   )
   const languages = all<{ code: string; kind: string; level: string }>(
@@ -61,6 +63,7 @@ export function settingsFor(userId: string): Settings {
     country: row?.country ?? "",
     countryName: row?.country ? countryName(row.country) : null,
     area: row?.area ?? "",
+    region: row?.region ?? "",
     suggestNearby: (row?.suggest_nearby ?? 1) === 1,
     suggestLanguage: (row?.suggest_language ?? 1) === 1,
     speak: languages
@@ -71,15 +74,18 @@ export function settingsFor(userId: string): Settings {
   }
 }
 
-// Saves where someone is. The caller has checked the country and the area. An empty area clears it, and the nearby
-// switch then has nothing to match on.
-export function saveWhere(userId: string, where: { country: string; area: string; suggestNearby: boolean }): void {
+// Saves where someone is. The caller has checked the country, the city and the region. With no city or region the country
+// is cleared too, and the nearby switch then has nothing to match on.
+export function saveWhere(userId: string, where: { country: string; area: string; region: string; suggestNearby: boolean }): void {
   const area = cleanArea(where.area)
+  const region = cleanRegion(where.region)
+  const empty = area === "" && region === ""
   run(
-    "UPDATE users SET country = ?, area = ?, area_key = ?, suggest_nearby = ? WHERE id = ?",
-    area === "" ? "" : where.country,
+    "UPDATE users SET country = ?, area = ?, area_key = ?, region = ?, suggest_nearby = ? WHERE id = ?",
+    empty ? "" : where.country,
     area,
     area === "" ? "" : areaKey(area),
+    region,
     where.suggestNearby ? 1 : 0,
     userId
   )

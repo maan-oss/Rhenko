@@ -1009,6 +1009,8 @@ CREATE TABLE IF NOT EXISTS leases (
 `,
   // A message can answer another message in the same chat. Deleting the original keeps the reply.
   `ALTER TABLE chat_messages ADD COLUMN reply_to_id TEXT REFERENCES chat_messages (id) ON DELETE SET NULL;`,
+  // The state, province or region a city is in. Shown with the city; it is not used to match people.
+  `ALTER TABLE users ADD COLUMN region TEXT NOT NULL DEFAULT '';`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

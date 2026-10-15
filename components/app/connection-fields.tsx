@@ -1,10 +1,12 @@
 "use client"
 
 import { useId, useMemo, useState } from "react"
-import { Check } from "lucide-react"
+import { Check, ChevronDown } from "lucide-react"
+import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { TabFill } from "@/components/app/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { COMMON_LANGUAGE_CODES, LANGUAGES, SPEAK_LEVELS, type SpeakLevel } from "@/lib/languages"
-import { AREA_MAX, COUNTRIES } from "@/lib/places"
+import { AREA_MAX, COUNTRIES, REGION_MAX } from "@/lib/places"
 import { cn } from "@/lib/utils"
 
 // The fields for where someone is and what they speak. Used by sign-up setup and by Settings, so both read the same.
@@ -70,48 +72,112 @@ export function SwitchRow({
   )
 }
 
-export type WhereValue = { country: string; area: string; suggestNearby: boolean }
+export type WhereValue = { country: string; area: string; region: string; suggestNearby: boolean }
 
+// The country, chosen from a popup with a search box. The popup closes as soon as a country is picked.
+function CountryPicker({ id, value, onChange }: { id: string; value: string; onChange: (code: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const name = COUNTRIES.find((country) => country.code === value)?.name ?? null
+  const shown = useMemo(() => {
+    const text = query.trim().toLowerCase()
+    return text === "" ? COUNTRIES : COUNTRIES.filter((country) => country.name.toLowerCase().includes(text))
+  }, [query])
+  return (
+    <>
+      <button
+        id={id}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => {
+          setQuery("")
+          setOpen(true)
+        }}
+        className={cn(FIELD, "flex items-center justify-between gap-3 text-left")}
+      >
+        <span className={cn("truncate", name === null && "text-muted-foreground/70")}>{name ?? "Choose a country"}</span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.9} aria-hidden="true" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className={cn("sm:max-w-md", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
+          <DialogTitle className="text-base font-semibold">Choose a country</DialogTitle>
+          <DialogDescription className="sr-only">Type to narrow the list, then pick your country.</DialogDescription>
+          <input
+            type="search"
+            aria-label="Search countries"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            autoComplete="off"
+            className={SMALL_FIELD}
+          />
+          <ul aria-label="Countries" className="-mx-2 flex max-h-[52dvh] flex-col overflow-y-auto">
+            {shown.map((country) => {
+              const chosen = country.code === value
+              return (
+                <li key={country.code}>
+                  <button
+                    type="button"
+                    aria-pressed={chosen}
+                    onClick={() => {
+                      onChange(country.code)
+                      setOpen(false)
+                    }}
+                    className="flex h-11 w-full items-center justify-between gap-3 rounded-xl px-3 text-left text-[15px] transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="truncate">{country.name}</span>
+                    {chosen ? <Check className="size-4 shrink-0" strokeWidth={2.2} aria-hidden="true" /> : null}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          {shown.length === 0 ? <p className="px-3 py-2 text-sm text-muted-foreground">No country matches that.</p> : null}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// Where someone is for suggestions: the country from a popup, then the city and the state or region it sits in.
 export function WhereFields({ value, onChange }: { value: WhereValue; onChange: (next: WhereValue) => void }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <Label htmlFor="where-country">Country</Label>
-        <div className="relative">
-          <select
-            id="where-country"
-            value={value.country}
-            onChange={(event) => onChange({ ...value, country: event.target.value })}
-            className={cn(FIELD, "appearance-none pr-10")}
-          >
-            <option value="">Choose a country</option>
-            {COUNTRIES.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-          <svg aria-hidden="true" viewBox="0 0 12 12" className="pointer-events-none absolute top-1/2 right-4 size-3 -translate-y-1/2 text-muted-foreground">
-            <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
+        <CountryPicker id="where-country" value={value.country} onChange={(country) => onChange({ ...value, country })} />
       </div>
-      <div className="flex flex-col gap-2">
-        <Label
-          htmlFor="where-area"
-          aside={value.area.length >= AREA_MAX - 6 ? <span className="text-[13px] tabular-nums text-muted-foreground">{value.area.length}/{AREA_MAX}</span> : null}
-        >
-          City or town
-        </Label>
-        <input
-          id="where-area"
-          value={value.area}
-          maxLength={AREA_MAX}
-          autoComplete="address-level2"
-          placeholder="Brisbane"
-          onChange={(event) => onChange({ ...value, area: event.target.value })}
-          className={FIELD}
-        />
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor="where-area"
+            aside={value.area.length >= AREA_MAX - 6 ? <span className="text-[13px] tabular-nums text-muted-foreground">{value.area.length}/{AREA_MAX}</span> : null}
+          >
+            City or town
+          </Label>
+          <input
+            id="where-area"
+            value={value.area}
+            maxLength={AREA_MAX}
+            autoComplete="address-level2"
+            placeholder="Brisbane"
+            onChange={(event) => onChange({ ...value, area: event.target.value })}
+            className={FIELD}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="where-region">State or region</Label>
+          <input
+            id="where-region"
+            value={value.region}
+            maxLength={REGION_MAX}
+            autoComplete="address-level1"
+            placeholder="Queensland"
+            onChange={(event) => onChange({ ...value, region: event.target.value })}
+            className={FIELD}
+          />
+        </div>
       </div>
       <SwitchRow
         id="where-nearby"

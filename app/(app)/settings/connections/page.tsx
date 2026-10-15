@@ -29,7 +29,7 @@ async function ConnectionsBody() {
       </div>
       <ConnectionSettings
         initial={{
-          where: { country: settings.country, area: settings.area, suggestNearby: settings.suggestNearby },
+          where: { country: settings.country, area: settings.area, region: settings.region, suggestNearby: settings.suggestNearby },
           languages: { speak: settings.speak, learn: settings.learn, suggestLanguage: settings.suggestLanguage },
         }}
         dismissed={dismissedCount(viewer.id)}
