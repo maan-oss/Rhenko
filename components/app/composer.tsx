@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { CalendarClock, CircleDot, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
@@ -1264,6 +1264,19 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             >
               <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>
+            {!isReply && !quoteOfId && !threading && !poll && !scheduling ? (
+              <ToolButton
+                label={article ? "Turn off article" : "Write an article"}
+                hint="Articles can't have polls, threads, replies or quotes"
+                pressed={article}
+                onClick={() => {
+                  setArticle((value) => !value)
+                  setTitle("")
+                }}
+              >
+                <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+              </ToolButton>
+            ) : null}
             {!isReply ? (
               <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
                 <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
