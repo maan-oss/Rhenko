@@ -55,6 +55,16 @@ export default async function AnalyticsPage() {
         )}
       </section>
 
+      <div className="px-4 pt-8">
+        <a
+          href="/analytics/export"
+          download
+          className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
+        >
+          Download last 28 days as CSV
+        </a>
+      </div>
+
       <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
         A view counts once per person for each post, when the post scrolls into view. A profile visit counts each person once every six hours. A new follower
         counts the day they followed. Your own views and visits are never counted. Days run from midnight to midnight UTC.
