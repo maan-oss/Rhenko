@@ -46,6 +46,7 @@ function Tile({
     <div className={cn("relative z-10 overflow-hidden rounded-2xl border border-border bg-muted", className)}>
       <button
         type="button"
+        data-media-open=""
         onClick={() => onOpen(item)}
         aria-label={item.alt ? `Open image: ${item.alt}` : "Open image"}
         className="block size-full overflow-hidden"

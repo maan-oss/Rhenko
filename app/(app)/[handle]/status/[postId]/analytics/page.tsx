@@ -24,13 +24,21 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
 
   const statusHref = `/${stats.handle}/status/${stats.id}`
 
-  // The five ways people respond, each with its own count. The bars compare them with one another.
+  // The five ways people respond, each with its own count.
   const actions = [
     { label: "Likes", count: stats.likes },
     { label: "Reposts", count: stats.reposts },
     { label: "Quotes", count: stats.quotes },
     { label: "Replies", count: stats.replies },
     { label: "Bookmarks", count: stats.bookmarks },
+  ]
+  // What people opened from the post. Each click is counted once, whatever it was for.
+  const clickRows = [
+    { label: "Link clicks", count: stats.clicks.link },
+    { label: "Profile clicks", count: stats.clicks.profile },
+    { label: "Detail expands", count: stats.clicks.detail },
+    { label: "Photo clicks", count: stats.clicks.photo },
+    { label: "Hashtag clicks", count: stats.clicks.hashtag },
   ]
 
   return (
@@ -77,9 +85,24 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
         </ul>
       </section>
 
+      <section aria-labelledby="clicks" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">
+        <h2 id="clicks" className="pb-2 text-base font-semibold">
+          Clicks
+        </h2>
+        <ul className="flex flex-col">
+          {clickRows.map((row) => (
+            <li key={row.label} className="flex items-baseline justify-between gap-3 border-t border-border py-3.5 text-[15px] first:border-t-0">
+              <span>{row.label}</span>
+              <span className="font-semibold tabular-nums">{exact(row.count)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
-        A view counts once per person, when the post scrolls into view. Your own views are never counted. Engagement is the likes, reposts, quotes, replies and
-        bookmarks the post has received, divided by its views. Days run from midnight to midnight UTC.
+        A view counts once per person, when the post scrolls into view. Your own views and clicks are never counted. Engagement is the likes, reposts, quotes, replies and
+        bookmarks the post has received, divided by its views. A click counts each time someone opens a link, a profile, the post, a photo or a
+        hashtag from it. Days run from midnight to midnight UTC.
       </p>
     </>
   )

@@ -9,7 +9,7 @@ export async function GET() {
 
   const now = Date.now()
   const rows = [
-    "post_id,posted_at,text,views,likes,reposts,quotes,replies,bookmarks,engagement_rate",
+    "post_id,posted_at,text,views,likes,reposts,quotes,replies,bookmarks,engagement_rate,link_clicks,profile_clicks,detail_clicks,photo_clicks,hashtag_clicks",
     ...ownPostRows(viewer.id).map((post) =>
       [
         post.id,
@@ -22,6 +22,11 @@ export async function GET() {
         post.replies,
         post.bookmarks,
         post.engagementRate ?? "",
+        post.clicks.link,
+        post.clicks.profile,
+        post.clicks.detail,
+        post.clicks.photo,
+        post.clicks.hashtag,
       ].join(",")
     ),
   ]

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowDown, ArrowUp } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { ownPostRows, type OwnPostRow } from "@/lib/data"
+import { totalClicks } from "@/lib/post-clicks"
 import { pluralize } from "@/lib/format"
 import { exact } from "@/components/app/analytics-bits"
 import { ComposeAction } from "@/components/app/compose-action"
@@ -20,6 +21,7 @@ const COUNTS = [
   { key: "quotes", label: "Quotes" },
   { key: "replies", label: "Replies" },
   { key: "bookmarks", label: "Bookmarks" },
+  { key: "clicks", label: "Clicks" },
   { key: "engagement", label: "Engagement" },
 ] as const
 
@@ -29,6 +31,7 @@ type Direction = "asc" | "desc"
 
 function valueOf(row: OwnPostRow, key: SortKey): number {
   if (key === "date") return row.createdAt
+  if (key === "clicks") return totalClicks(row.clicks)
   if (key === "engagement") return row.engagementRate ?? -1
   return row[key]
 }
@@ -127,6 +130,7 @@ export default async function PostsAnalyticsPage({
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.quotes)}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.replies)}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.bookmarks)}</td>
+                  <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(totalClicks(row.clicks))}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">
                     {row.engagementRate === null ? "–" : `${exact(row.engagementRate)}%`}
                   </td>
@@ -145,7 +149,8 @@ export default async function PostsAnalyticsPage({
 
       <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
         Views and actions are counted for all time, the same way as on each post&apos;s page. Engagement is the likes, reposts, quotes, replies and
-        bookmarks, divided by views. A post with no views has no engagement rate.
+        bookmarks, divided by views. A post with no views has no engagement rate. Clicks count each time someone opens a link, a profile, the post, a
+        photo or a hashtag from it.
       </p>
     </>
   )

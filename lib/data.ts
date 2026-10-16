@@ -1,4 +1,5 @@
 import { all, get, type Param } from "@/lib/db"
+import { clickCountsByPost, clickCountsFor, emptyClickCounts, type ClickCounts } from "@/lib/post-clicks"
 import {
   asReplySetting,
   extractHashtags,
@@ -2433,6 +2434,8 @@ export type OwnPostRow = {
   bookmarks: number
   // Same rule as the post page: actions per view, as a percentage. Null when nobody has viewed the post.
   engagementRate: number | null
+  // Clicks by kind, all time, like the other counts.
+  clicks: ClickCounts
 }
 
 // Every live post the account has written, newest first, with the counts the post page shows. Views and actions are
@@ -2462,6 +2465,7 @@ export function ownPostRows(authorId: string): OwnPostRow[] {
     authorId
   )
 
+  const clicks = clickCountsByPost(authorId)
   return rows.map((row) => {
     const actions = row.likes + row.reposts + row.quotes + row.replies + row.bookmarks
     return {
@@ -2475,6 +2479,7 @@ export function ownPostRows(authorId: string): OwnPostRow[] {
       replies: row.replies,
       bookmarks: row.bookmarks,
       engagementRate: row.views > 0 ? Math.round((actions / row.views) * 1000) / 10 : null,
+      clicks: clicks.get(row.id) ?? emptyClickCounts(),
     }
   })
 }
@@ -2492,6 +2497,8 @@ export type PostAnalyticsView = {
   bookmarks: number
   // Actions on the post per view, as a percentage. Null when nobody has viewed it yet.
   engagementRate: number | null
+  // Clicks by kind, all time.
+  clicks: ClickCounts
   days: { label: string; views: number }[]
 }
 
@@ -2545,6 +2552,7 @@ export function postAnalytics(postId: string, viewerId: string, now = Date.now()
     replies,
     bookmarks,
     engagementRate: views > 0 ? Math.round((actions / views) * 1000) / 10 : null,
+    clicks: clickCountsFor(postId),
     days,
   }
 }

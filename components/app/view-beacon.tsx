@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react"
 import { recordDwell } from "@/actions/feed"
 import { recordViews } from "@/actions/posts"
+import type { ClickKind } from "@/lib/post-clicks"
 
 // Two things are measured as a post reaches the screen, for the person looking at it.
 // A view counts once per person, when the post's top edge is on screen (recordViews).
 // Dwell is how long at least half of the post is on screen, added up (recordDwell). The feed ranks on it.
 // Ids and times are batched, so a long feed sends a few requests rather than one per post. A batch the server never received
 // is taken back out of `seen`, so those views count the next time the post reaches the screen.
+// Clicks on the card are counted by kind as well (clickKind), so the author can see what people open.
 const seen = new Set<string>()
 const queue = new Set<string>()
 let timer: number | undefined
@@ -110,6 +112,30 @@ function readingNow(entry: IntersectionObserverEntry): boolean {
   return root !== null && entry.intersectionRect.height >= root.height / 2
 }
 
+// What a click on the card was for. A link inside a quoted post belongs to that post, so it is not counted here. A link to the
+// page the person is already on is not a new click on anything, so it is not counted either.
+function clickKind(event: MouseEvent, card: Element): ClickKind | null {
+  if (!(event.target instanceof Element)) return null
+  if (event.target.closest("[data-media-open]")) return "photo"
+  const anchor = event.target.closest("a[href]")
+  if (!(anchor instanceof HTMLAnchorElement) || anchor.closest("article") !== card) return null
+  const href = anchor.getAttribute("href") ?? ""
+  if (/^https?:\/\//.test(href)) return "link"
+  if (href.startsWith("/topics/") || href.startsWith("/search?q=")) return "hashtag"
+  if (anchor.pathname === window.location.pathname) return null
+  if (/^\/[^/]+\/status\/[^/]+$/.test(anchor.pathname)) return "detail"
+  if (/^\/[^/]+$/.test(anchor.pathname)) return "profile"
+  return null
+}
+
+// Sent as a beacon, so the click still counts when it takes the person off the page.
+function reportClick(postId: string, kind: ClickKind) {
+  const body = new Blob([JSON.stringify({ postId, kind })], { type: "application/json" })
+  if (typeof navigator.sendBeacon !== "function" || !navigator.sendBeacon("/api/post-clicks", body)) {
+    void fetch("/api/post-clicks", { method: "POST", body, keepalive: true, credentials: "same-origin" }).catch(() => {})
+  }
+}
+
 export function ViewBeacon({ postId }: { postId: string }) {
   const ref = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -138,9 +164,15 @@ export function ViewBeacon({ postId }: { postId: string }) {
       { threshold: [0, 0.25, 0.5, 0.75, 1] }
     )
     reading.observe(card)
+    const onClick = (event: MouseEvent) => {
+      const kind = clickKind(event, card)
+      if (kind) reportClick(postId, kind)
+    }
+    card.addEventListener("click", onClick)
     return () => {
       views.disconnect()
       reading.disconnect()
+      card.removeEventListener("click", onClick)
       stopDwell(postId)
     }
   }, [postId])

@@ -1011,6 +1011,13 @@ CREATE TABLE IF NOT EXISTS leases (
   `ALTER TABLE chat_messages ADD COLUMN reply_to_id TEXT REFERENCES chat_messages (id) ON DELETE SET NULL;`,
   // The state, province or region a city is in. Shown with the city; it is not used to match people.
   `ALTER TABLE users ADD COLUMN region TEXT NOT NULL DEFAULT '';`,
+  // Clicks on a post, by what was clicked. Only counts are kept: nothing says who clicked.
+  `CREATE TABLE IF NOT EXISTS post_clicks (
+    post_id TEXT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS post_clicks_post ON post_clicks (post_id, kind);`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }
