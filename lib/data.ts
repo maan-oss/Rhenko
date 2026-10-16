@@ -2421,6 +2421,64 @@ export function mentionsVerifiedOnly(userId: string): boolean {
   return get<{ mentions_verified_only: number }>("SELECT mentions_verified_only FROM users WHERE id = ?", userId)?.mentions_verified_only === 1
 }
 
+export type OwnPostRow = {
+  id: string
+  body: string
+  createdAt: number
+  views: number
+  likes: number
+  reposts: number
+  quotes: number
+  replies: number
+  bookmarks: number
+  // Same rule as the post page: actions per view, as a percentage. Null when nobody has viewed the post.
+  engagementRate: number | null
+}
+
+// Every live post the account has written, newest first, with the counts the post page shows. Views and actions are
+// all time, as they are on the post page, so a row and its post page always agree.
+export function ownPostRows(authorId: string): OwnPostRow[] {
+  const rows = all<{
+    id: string
+    body: string
+    created_at: number
+    views: number
+    likes: number
+    reposts: number
+    quotes: number
+    replies: number
+    bookmarks: number
+  }>(
+    `SELECT p.id, p.body, p.created_at,
+       (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id) AS views,
+       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS likes,
+       (SELECT COUNT(*) FROM reposts r WHERE r.post_id = p.id) AS reposts,
+       (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id = p.id AND q.is_draft = 0 AND q.publish_at IS NULL) AS quotes,
+       (SELECT COUNT(*) FROM posts c WHERE c.reply_to_id = p.id AND c.is_draft = 0 AND c.publish_at IS NULL) AS replies,
+       (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id) AS bookmarks
+     FROM posts p
+     WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL
+     ORDER BY p.created_at DESC, p.id DESC`,
+    authorId
+  )
+
+  return rows.map((row) => {
+    const actions = row.likes + row.reposts + row.quotes + row.replies + row.bookmarks
+    return {
+      id: row.id,
+      body: row.body,
+      createdAt: row.created_at,
+      views: row.views,
+      likes: row.likes,
+      reposts: row.reposts,
+      quotes: row.quotes,
+      replies: row.replies,
+      bookmarks: row.bookmarks,
+      engagementRate: row.views > 0 ? Math.round((actions / row.views) * 1000) / 10 : null,
+    }
+  })
+}
+
 export type PostAnalyticsView = {
   id: string
   handle: string

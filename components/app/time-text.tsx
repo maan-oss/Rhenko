@@ -46,7 +46,7 @@ export function LocalTime({
   className,
 }: {
   at: number
-  variant: "clock" | "full"
+  variant: "clock" | "day" | "full"
   className?: string
 }) {
   const label = useSyncExternalStore(
@@ -54,7 +54,9 @@ export function LocalTime({
     () =>
       variant === "clock"
         ? new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-        : fullTimestamp(at),
+        : variant === "day"
+          ? new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+          : fullTimestamp(at),
     () => ""
   )
   return (
