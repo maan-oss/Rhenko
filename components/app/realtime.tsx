@@ -1,19 +1,36 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import type { RealtimeEvent } from "@/lib/bus"
 import { attachCalls, receiveCallEvent, receiveHello } from "@/lib/call-engine"
+import { useRefreshCounts } from "@/components/app/live-counts"
 
 // After the stream is refused (a sign-in that ended), it is tried again this much later.
 const RETRY_MS = 15_000
 
-// Keeps the open page current. Messages and notifications refresh the route. Typing, banners and new posts go to the page
-// through window events. Call steps go straight to the call engine, which keeps a call going across page changes. The stream
-// belongs to one account: switching accounts opens a new one.
+// The feeds show posts, not notifications or messages. A notification on them moves the badge and nothing else, so the
+// feed is not rendered again for it.
+const FEED_PATHS = ["/", "/explore", "/search", "/topics", "/bookmarks", "/circles", "/lists"]
+
+function onFeed(path: string): boolean {
+  return FEED_PATHS.some((feed) => (feed === "/" ? path === "/" : path === feed || path.startsWith(`${feed}/`)))
+}
+
+// Keeps the open page current. A notification refreshes the page unless it is a feed; a message refreshes the messages
+// pages. The badges move in both cases. Typing, banners and new posts go to the page through window events. Call steps
+// go straight to the call engine, which keeps a call going across page changes. The stream belongs to one account:
+// switching accounts opens a new one.
 export function Realtime({ viewerId }: { viewerId: string }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const path = useRef(pathname)
+  const refreshCounts = useRefreshCounts()
   const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    path.current = pathname
+  }, [pathname])
 
   useEffect(() => {
     if (typeof EventSource === "undefined") return
@@ -49,6 +66,14 @@ export function Realtime({ viewerId }: { viewerId: string }) {
         case "posts":
           window.dispatchEvent(new CustomEvent("rhenko:posts", { detail: event }))
           return
+        case "notification":
+          refreshCounts()
+          if (!onFeed(path.current)) refresh()
+          return
+        case "message":
+          refreshCounts()
+          if (path.current.startsWith("/messages")) refresh()
+          return
         default:
           refresh()
       }
@@ -71,6 +96,6 @@ export function Realtime({ viewerId }: { viewerId: string }) {
       window.removeEventListener("pageshow", onShow)
       source.close()
     }
-  }, [router, viewerId, attempt])
+  }, [router, viewerId, attempt, refreshCounts])
   return null
 }

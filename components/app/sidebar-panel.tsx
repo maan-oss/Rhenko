@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
+import { useLiveCounts } from "@/components/app/live-counts"
 import { SidebarFooter } from "@/components/app/sidebar-footer"
 import { SidebarSearch } from "@/components/app/sidebar-search"
 import { RhenkoSymbol } from "@/components/brand/symbol"
@@ -114,7 +115,9 @@ function SidebarNav({
   messages: number
   collapsed: boolean
 }) {
-  const items = buildItems(notifications, messages)
+  // The live counts when the app shell provides them, otherwise the numbers the server gave.
+  const live = useLiveCounts()
+  const items = buildItems(live?.notifications ?? notifications, live?.messages ?? messages)
   const current = items.find((item) => item.active(path))?.href
   return (
     <nav aria-label="Main">

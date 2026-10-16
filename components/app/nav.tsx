@@ -9,6 +9,7 @@ import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { TabFill } from "@/components/app/tabs"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
+import { useLiveCounts } from "@/components/app/live-counts"
 import type { AccountSummary } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
@@ -82,7 +83,11 @@ export function MobileTabBar({
   const navRef = useRef<HTMLElement>(null)
   const [navWidth, setNavWidth] = useState(0)
   const conversationRef = useRef(conversation)
-  const items = buildItems(notifications, messages).filter((item) => item.mobile)
+  // The live counts when the app shell provides them, otherwise the numbers the server gave.
+  const live = useLiveCounts()
+  const unreadNotifications = live?.notifications ?? notifications
+  const unreadMessages = live?.messages ?? messages
+  const items = buildItems(unreadNotifications, unreadMessages).filter((item) => item.mobile)
   // The section the person has just pressed. The fill moves on the press, before the page has loaded, and the page follows.
   // It is dropped once the page shows that section, or if the page still shows the section it started from.
   const served = items.find((item) => item.active(path))?.href ?? null
@@ -281,8 +286,8 @@ export function MobileTabBar({
         viewer={viewer}
         accounts={accounts}
         path={path}
-        notifications={notifications}
-        messages={messages}
+        notifications={unreadNotifications}
+        messages={unreadMessages}
       />
     </>
   )

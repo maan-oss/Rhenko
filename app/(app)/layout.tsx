@@ -6,10 +6,12 @@ import { MobileNav, Sidebar } from "@/components/app/sidebar"
 import { RightRail } from "@/components/app/right-rail"
 import { BannerHost } from "@/components/app/banner-host"
 import { CallSurface } from "@/components/app/call-surface"
+import { LiveCountsProvider } from "@/components/app/live-counts"
 import { Realtime } from "@/components/app/realtime"
 import { Shortcuts } from "@/components/app/shortcuts"
 import { ServiceWorkerRegister } from "@/components/app/sw-register"
 import { ViewerLanguages } from "@/components/app/viewer-languages"
+import { unreadMessageCount, unreadNotificationCount } from "@/lib/data"
 import { translationOn } from "@/lib/translate"
 
 // The app shell waits for the viewer and the rail before the first byte, so a page's
@@ -21,17 +23,23 @@ export const instant = false
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await getViewer()
   if (viewer && viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
+  // The badge numbers. A new object on each render, so the badges take the numbers the server now has.
+  const counts = viewer
+    ? { notifications: unreadNotificationCount(viewer.id), messages: unreadMessageCount(viewer.id) }
+    : { notifications: 0, messages: 0 }
   return (
     <ViewerLanguages speaks={viewer?.speaks ?? []} translate={translationOn()}>
-      <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
-        <Sidebar />
-        <main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
-        <RightRail />
-        <MobileNav />
-        <LiveMounts />
-        <BannerHost />
-        <ServiceWorkerRegister />
-      </div>
+      <LiveCountsProvider initial={counts}>
+        <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
+          <Sidebar />
+          <main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
+          <RightRail />
+          <MobileNav />
+          <LiveMounts />
+          <BannerHost />
+          <ServiceWorkerRegister />
+        </div>
+      </LiveCountsProvider>
     </ViewerLanguages>
   )
 }
