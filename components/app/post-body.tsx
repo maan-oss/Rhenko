@@ -67,7 +67,7 @@ function plain(text: string, ctx: Context): ReactNode[] {
 function renderToken(token: string, key: number): ReactNode {
   if (token.startsWith("http")) {
     return (
-      <a key={key} href={token} target="_blank" rel="noopener noreferrer nofollow" className="relative z-10 break-all text-foreground underline underline-offset-4">
+      <a key={key} href={token} target="_blank" rel="noopener noreferrer nofollow" className="relative z-10 break-words text-foreground underline underline-offset-4">
         {token}
       </a>
     )

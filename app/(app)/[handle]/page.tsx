@@ -119,7 +119,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         <div className="-mt-12 rounded-full bg-background p-1.5">
           <Avatar user={profile} size={96} />
         </div>
-        <div className="flex items-center gap-2 pb-1">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 pb-1">
           {isSelf ? (
             <>
               <Link
@@ -127,7 +127,8 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
                 className="glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
               >
                 <BarChart3 className="size-4" />
-                Analytics
+                {/* On the narrowest phones the name goes, and the icon keeps its name for screen readers. */}
+                <span className="max-[389px]:sr-only">Analytics</span>
               </Link>
               <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
             </>

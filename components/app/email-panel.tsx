@@ -95,7 +95,7 @@ export function EmailPanel({ email, verified, pending, ready, codeNeed }: Props)
       {email ? (
         <div className="flex flex-col gap-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="min-w-0 text-[15px] font-semibold break-all">{email}</span>
+            <span className="min-w-0 text-[15px] font-semibold break-words">{email}</span>
             <span
               className={cn(
                 "shrink-0 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold",

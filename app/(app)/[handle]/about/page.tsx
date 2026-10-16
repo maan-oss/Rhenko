@@ -48,7 +48,7 @@ export default async function AboutPage({ params }: { params: Params }) {
     {
       label: "Website",
       value: profile.website ? (
-        <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-foreground underline underline-offset-4 hover:opacity-80">
+        <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow" className="break-words text-foreground underline underline-offset-4 hover:opacity-80">
           {hostOf(profile.website)}
         </a>
       ) : null,
