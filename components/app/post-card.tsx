@@ -203,6 +203,12 @@ export function PostCard({
               </div>
             </>
           ) : null}
+          {post.madeWithAi ? (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[12px] text-muted-foreground">
+              <Sparkles className="size-3" aria-hidden="true" />
+              Made with AI
+            </p>
+          ) : null}
           {post.preview && post.media.length === 0 && !post.quotedUnavailable && !post.quoted ? <LinkCard preview={post.preview} /> : null}
           {post.threadId && !detail ? (
             <Link href={`/${post.author.handle}/status/${post.threadId}`} className="relative z-10 mt-1 inline-block text-[13px] text-foreground hover:underline">

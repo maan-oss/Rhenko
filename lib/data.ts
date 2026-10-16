@@ -11,6 +11,7 @@ import {
   RECENT_SEARCH_LIMIT,
   SAVED_SEARCH_LIMIT,
   replyAllowed,
+  type NotificationTab,
   type ReplySetting,
 } from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
@@ -59,6 +60,8 @@ export type PostCore = {
   isDraft: boolean
   media: MediaItem[]
   sensitive: boolean
+  // The author said the post was made with AI. A label only: nothing checks it.
+  madeWithAi: boolean
   replyToId: string | null
   replyToHandle: string | null
   threadId: string | null
@@ -118,6 +121,7 @@ type PostRow = {
   publish_at: number | null
   is_draft: number
   sensitive: number
+  made_with_ai: number
   reply_to_id: string | null
   thread_id: string | null
   quote_of_id: string | null
@@ -334,7 +338,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
   if (ids.length === 0) return result
   const marks = ids.map(() => "?").join(",")
   const rows = all<PostRow>(
-    `SELECT p.id, p.body, p.title, p.lang, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.reply_to_id, p.quote_of_id,
+    `SELECT p.id, p.body, p.title, p.lang, p.created_at, p.edited_at, p.publish_at, p.is_draft, p.sensitive, p.made_with_ai, p.reply_to_id, p.quote_of_id,
        p.reply_setting, p.thread_id, c.slug AS circle_slug, c.name AS circle_name,
        (SELECT pu.handle FROM posts pp JOIN users pu ON pu.id = pp.author_id WHERE pp.id = p.reply_to_id) AS reply_to_handle,
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
@@ -412,6 +416,7 @@ function fetchCores(ids: string[], viewerId: string): Map<string, PostCore> {
       isDraft: r.is_draft === 1,
       media: media.get(r.id) ?? [],
       sensitive: r.sensitive === 1,
+      madeWithAi: r.made_with_ai === 1,
       replyToId: r.reply_to_id,
       replyToHandle: r.thread_id === null ? r.reply_to_handle : null,
       threadId: r.thread_id,
@@ -1691,18 +1696,24 @@ export type NotificationPage = { items: NotificationView[]; next: number | null 
 // page). A post's text is included only when the recipient can see that post; otherwise `post` is null.
 export function notificationsPage(
   viewerId: string,
-  filter: "all" | "mentions",
+  filter: NotificationTab,
   beforeAt: number | null,
   limit = NOTIFICATION_PAGE_SIZE
 ): NotificationPage {
   const kinds = filter === "mentions" ? "AND n.kind IN ('mention', 'reply', 'quote')" : ""
+  // Priority: only accounts the viewer picked and still follows. Its one parameter comes after the viewer's.
+  const priority =
+    filter === "priority"
+      ? "AND n.actor_id IN (SELECT pa.account_id FROM priority_accounts pa JOIN follows f ON f.follower_id = pa.user_id AND f.followee_id = pa.account_id WHERE pa.user_id = ?)"
+      : ""
   const select = `SELECT n.id, n.kind, n.created_at, n.read, n.post_id, pst.body AS post_body,
        u.id AS actor_id, u.handle AS actor_handle, u.name AS actor_name, u.avatar_file AS actor_avatar, u.verified AS actor_verified
      FROM notifications n
      JOIN users u ON u.id = n.actor_id
      LEFT JOIN posts pst ON pst.id = n.post_id
-     WHERE ${SHOWN_NOTIFICATION} ${kinds}`
-  const { rows, next } = pageBefore<NotificationRow>(select, [viewerId], "n.created_at", "n.id", (r) => r.created_at, beforeAt, limit)
+     WHERE ${SHOWN_NOTIFICATION} ${kinds} ${priority}`
+  const params: Param[] = filter === "priority" ? [viewerId, viewerId] : [viewerId]
+  const { rows, next } = pageBefore<NotificationRow>(select, params, "n.created_at", "n.id", (r) => r.created_at, beforeAt, limit)
   const visible = visiblePostIds(
     rows.flatMap((r) => (r.post_id ? [r.post_id] : [])),
     viewerId

@@ -91,6 +91,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const pollOptions = formData.getAll("pollOption").map((v) => String(v).trim()).filter((v) => v.length > 0)
   const pollMinutes = Number(formData.get("pollMinutes") ?? 0)
   const sensitive = formData.get("sensitive") === "on"
+  const madeWithAi = formData.get("madeWithAi") === "on"
   const draft = formData.get("draft") === "on"
   const scheduleRaw = text(formData.get("scheduleAt"))
   const scheduleAt = scheduleRaw && !draft ? Number(scheduleRaw) : null
@@ -203,8 +204,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   try {
     transaction(() => {
       run(
-        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id, title)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id, title, made_with_ai)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         viewer.id,
         body,
@@ -218,7 +219,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         threadId,
         languageOf(body),
         community,
-        title
+        title,
+        madeWithAi ? 1 : 0
       )
       saved.forEach((media, position) => {
         run(

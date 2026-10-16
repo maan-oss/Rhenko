@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { RelativeTime } from "@/components/app/time-text"
 import type { NotificationKind, NotificationPage, NotificationView } from "@/lib/data"
+import type { NotificationTab } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 import { loadMoreNotifications } from "./actions"
 
@@ -22,7 +23,16 @@ const COPY: Record<NotificationKind, { text: string; Icon: LucideIcon }> = {
   post: { text: "posted", Icon: BellRing },
 }
 
-type Props = { initial: NotificationPage; tab: "all" | "mentions"; viewerHandle: string }
+const EMPTY: Record<NotificationTab, { title: string; body: string }> = {
+  all: { title: "Nothing here yet", body: "Likes, replies, reposts and follows from other people show up here." },
+  mentions: { title: "No mentions yet", body: "Likes, replies, reposts and follows from other people show up here." },
+  priority: {
+    title: "Nothing from priority accounts yet",
+    body: "Pick accounts in Settings, under Notifications. Their likes, replies, posts and follows show up here.",
+  },
+}
+
+type Props = { initial: NotificationPage; tab: NotificationTab; viewerHandle: string }
 
 // Notifications, newest first. "Show more" at the end, or scrolling close to it, loads the next 40 older ones.
 export function NotificationList({ initial, tab, viewerHandle }: Props) {
@@ -80,10 +90,11 @@ export function NotificationList({ initial, tab, viewerHandle }: Props) {
   }, [next, loadMore])
 
   if (items.length === 0 && next === null) {
+    const empty = EMPTY[tab]
     return (
       <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
-        <p className="text-lg font-semibold">{tab === "mentions" ? "No mentions yet" : "Nothing here yet"}</p>
-        <p className="max-w-sm text-muted-foreground">Likes, replies, reposts and follows from other people show up here.</p>
+        <p className="text-lg font-semibold">{empty.title}</p>
+        <p className="max-w-sm text-muted-foreground">{empty.body}</p>
       </div>
     )
   }

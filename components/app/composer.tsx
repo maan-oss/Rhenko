@@ -573,6 +573,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [pollMinutes, setPollMinutes] = useState<number>(POLL_DEFAULT_MINUTES)
   const [replySetting, setReplySetting] = useState<ReplySetting>("everyone")
   const [sensitive, setSensitive] = useState(false)
+  const [madeWithAi, setMadeWithAi] = useState(false)
   const [scheduling, setScheduling] = useState(false)
   const [schedule, setSchedule] = useState<Schedule>({ date: "", time: "09:00", min: "", max: "" })
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -842,6 +843,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     if (inCircle && !replyToId) body.set("circle", inCircle)
     if (!isReply) body.set("replySetting", replySetting)
     if (media.length > 0 && sensitive) body.set("sensitive", "on")
+    if (madeWithAi) body.set("madeWithAi", "on")
     if (draft) body.set("draft", "on")
     else if (at !== null) body.set("scheduleAt", String(at))
     return body
@@ -857,6 +859,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     setArticle(false)
     setTitle("")
     setSensitive(false)
+    setMadeWithAi(false)
     setReplySetting("everyone")
     setScheduling(false)
     setExtra([])
@@ -1152,6 +1155,18 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               </button>
             </div>
           ) : null}
+
+          {/* Whether the post was made with AI. It is shown as a label on the post. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={madeWithAi}
+              onClick={() => setMadeWithAi((value) => !value)}
+              className={cn(PILL, madeWithAi ? "metal" : "glass text-foreground hover:bg-foreground/5")}
+            >
+              Made with AI
+            </button>
+          </div>
 
           {scheduling ? (
             <div className="glass flex flex-wrap items-center gap-2 rounded-[22px] p-3 text-sm">

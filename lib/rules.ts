@@ -231,6 +231,12 @@ export const CALL_CANDIDATE_MAX = 1_000
 export const BANNER_PREVIEW_MAX = 140
 // Notifications load this many at a time; "Show more" brings the next page.
 export const NOTIFICATION_PAGE_SIZE = 40
+// The tabs of notifications. Priority shows only the accounts the viewer picked.
+export const NOTIFICATION_TABS = ["all", "mentions", "priority"] as const
+export type NotificationTab = (typeof NOTIFICATION_TABS)[number]
+export function isNotificationTab(value: unknown): value is NotificationTab {
+  return typeof value === "string" && (NOTIFICATION_TABS as readonly string[]).includes(value)
+}
 
 export function validatePoll(options: string[], minutes: number): string | null {
   if (options.length < POLL_MIN_OPTIONS || options.length > POLL_MAX_OPTIONS) {

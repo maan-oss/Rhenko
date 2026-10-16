@@ -1,9 +1,9 @@
 import { Suspense } from "react"
-import { AtSign, Bell } from "lucide-react"
+import { AtSign, Bell, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { followRequestsFor, notificationsPage } from "@/lib/data"
 import { firstParam } from "@/lib/params"
-import { NOTIFICATION_PAGE_SIZE } from "@/lib/rules"
+import { isNotificationTab, NOTIFICATION_PAGE_SIZE, type NotificationTab } from "@/lib/rules"
 import { FollowRequestRow } from "@/components/app/follow-request-row"
 import { NotificationsMarker } from "@/components/app/notifications-marker"
 import { PageHeader } from "@/components/app/page-header"
@@ -22,7 +22,8 @@ export default function NotificationsPage({ searchParams }: { searchParams: Sear
 
 async function NotificationsBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  const tab = firstParam((await searchParams).tab) === "mentions" ? "mentions" : "all"
+  const requested = firstParam((await searchParams).tab)
+  const tab: NotificationTab = isNotificationTab(requested) ? requested : "all"
   const page = notificationsPage(viewer.id, tab, null, NOTIFICATION_PAGE_SIZE)
   const requests = tab === "all" ? followRequestsFor(viewer.id) : []
 
@@ -34,6 +35,7 @@ async function NotificationsBody({ searchParams }: { searchParams: SearchParams 
           items={[
             { href: "/notifications", label: "All", icon: <Bell />, active: tab === "all" },
             { href: "/notifications?tab=mentions", label: "Mentions", icon: <AtSign />, active: tab === "mentions" },
+            { href: "/notifications?tab=priority", label: "Priority", icon: <Star />, active: tab === "priority" },
           ]}
         />
       </div>

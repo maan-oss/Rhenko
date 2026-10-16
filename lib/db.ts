@@ -1026,6 +1026,15 @@ CREATE TABLE IF NOT EXISTS leases (
     created_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, tag)
   );`,
+  // The author says the post was made with AI. The label is shown on the post; nothing checks it.
+  `ALTER TABLE posts ADD COLUMN made_with_ai INTEGER NOT NULL DEFAULT 0;`,
+  // Accounts whose activity the viewer wants in the Priority tab of notifications. Only accounts still followed count.
+  `CREATE TABLE IF NOT EXISTS priority_accounts (
+    user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, account_id)
+  );`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

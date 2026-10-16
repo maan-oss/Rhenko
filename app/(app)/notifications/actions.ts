@@ -2,7 +2,7 @@
 
 import { getViewer } from "@/lib/auth"
 import { notificationsPage, type NotificationView } from "@/lib/data"
-import { NOTIFICATION_PAGE_SIZE } from "@/lib/rules"
+import { isNotificationTab, NOTIFICATION_PAGE_SIZE } from "@/lib/rules"
 
 export type MoreNotifications = { ok: true; items: NotificationView[]; next: number | null } | { ok: false; error: string }
 
@@ -11,7 +11,7 @@ export type MoreNotifications = { ok: true; items: NotificationView[]; next: num
 export async function loadMoreNotifications(tab: string, before: number): Promise<MoreNotifications> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in to see your notifications." }
-  if (tab !== "all" && tab !== "mentions") return { ok: false, error: "Open All or Mentions, then try again." }
+  if (!isNotificationTab(tab)) return { ok: false, error: "Open All, Mentions or Priority, then try again." }
   if (typeof before !== "number" || !Number.isFinite(before) || before <= 0) {
     return { ok: false, error: "Reload the page to see older notifications." }
   }

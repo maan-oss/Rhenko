@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
@@ -178,6 +178,17 @@ function Carousel({ media, onOpen }: { media: MediaItem[]; onOpen: (item: MediaI
 export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; sensitive?: boolean }) {
   const [revealed, setRevealed] = useState(!sensitive)
   const [open, setOpen] = useState<MediaItem | null>(null)
+  const openIndex = open ? media.findIndex((item) => item.id === open.id) : -1
+  // With the lightbox open, the arrow keys step through the photos of the post.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "ArrowLeft" && openIndex > 0) setOpen(media[openIndex - 1])
+      else if (event.key === "ArrowRight" && openIndex < media.length - 1) setOpen(media[openIndex + 1])
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, openIndex, media])
   if (media.length === 0) return null
 
   const single = media.length === 1
@@ -211,7 +222,7 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
 
       <Dialog open={open !== null} onOpenChange={(value) => !value && setOpen(null)}>
         <DialogContent className="max-w-[min(92vw,960px)] border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-[min(92vw,960px)]" showCloseButton>
-          <DialogTitle className="sr-only">Image</DialogTitle>
+          <DialogTitle className="sr-only">{media.length > 1 && openIndex >= 0 ? `Image ${openIndex + 1} of ${media.length}` : "Image"}</DialogTitle>
           {open ? (
             // The box is the size of the photo itself, so the stickers line up with it exactly.
             <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl">
@@ -219,6 +230,31 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
               <img src={`/media/${open.file}`} alt={open.alt} className="block h-auto max-h-[85dvh] max-w-full" />
               {open.stickers ? <StickerLayer set={open.stickers} linkHashtags /> : null}
             </div>
+          ) : null}
+          {media.length > 1 && openIndex > 0 ? (
+            <button
+              type="button"
+              onClick={() => setOpen(media[openIndex - 1])}
+              aria-label="Previous photo"
+              className="absolute top-1/2 left-2 z-30 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+          ) : null}
+          {media.length > 1 && openIndex >= 0 && openIndex < media.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => setOpen(media[openIndex + 1])}
+              aria-label="Next photo"
+              className="absolute top-1/2 right-2 z-30 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          ) : null}
+          {media.length > 1 && openIndex >= 0 ? (
+            <p className="text-center text-xs font-semibold tabular-nums text-white/90">
+              {openIndex + 1} / {media.length}
+            </p>
           ) : null}
           {open?.alt ? <p className="rounded-lg bg-background/90 px-3 py-2 text-sm text-foreground">{open.alt}</p> : null}
         </DialogContent>
