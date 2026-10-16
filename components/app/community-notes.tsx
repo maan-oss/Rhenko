@@ -21,11 +21,11 @@ export function CommunityNotes({ postId, notes, signedIn }: { postId: string; no
   // No notes yet: one line, so the replies are the next thing on the page. The form opens only when asked for.
   if (notes.length === 0) {
     return (
-      <section id="notes" aria-label="Community notes" className="flex flex-col gap-3 border-b border-border px-4 py-3 scroll-mt-16">
+      <section id="notes" aria-label="Community notes" className="flex flex-col gap-2 border-b border-border px-4 py-2.5 scroll-mt-16">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">No community notes on this post yet.</p>
+          <p className="text-[13px] text-muted-foreground">No community notes on this post yet.</p>
           {signedIn && !writing ? (
-            <Button type="button" variant="outline" onClick={() => setWriting(true)} className="h-9 shrink-0 rounded-full px-4 font-semibold">
+            <Button type="button" variant="outline" onClick={() => setWriting(true)} className="h-8 shrink-0 rounded-full px-3.5 text-[13px] font-semibold">
               Write a note
             </Button>
           ) : null}

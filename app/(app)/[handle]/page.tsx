@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth"
 import { canSeePost, getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
-import { pluralize } from "@/lib/format"
+import { formatCount, pluralize } from "@/lib/format"
 import { Avatar } from "@/components/app/avatar"
 import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
@@ -101,7 +101,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
 
   return (
     <>
-      <PageHeader title={profile.name} backHref="/" />
+      <PageHeader title={profile.name} subtitle={`${formatCount(profile.posts)} ${pluralize(profile.posts, "post")}`} backHref="/" />
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
 
       {/* The banner runs edge to edge under the header, as on X. The avatar sits over its lower edge. */}

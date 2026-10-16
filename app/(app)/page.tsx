@@ -57,7 +57,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const active = pin ? pin.id : topic ? `topic:${topic}` : mode
   return (
     <>
-      <PageHeader title="Home" hideTitleOnPhone lead={<MenuButton viewer={viewer} />}>
+      <PageHeader title="Home" hideTitle lead={<MenuButton viewer={viewer} />}>
         <TabLinks
           label="Home sections"
           items={[

@@ -14,6 +14,7 @@ export function PageHeader({
   actions,
   tabs,
   hideTitleOnPhone = false,
+  hideTitle = false,
   children,
 }: {
   title: string
@@ -24,11 +25,13 @@ export function PageHeader({
   tabs?: ReactNode
   // On a phone the title can give way to something else in the lead (the menu button, for one). It stays for screen readers.
   hideTitleOnPhone?: boolean
+  // The title is for screen readers only, and on a computer the row above the tabs collapses to nothing. Used where the tabs are the header.
+  hideTitle?: boolean
   children?: ReactNode
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className="flex h-14 items-center gap-3 px-4">
+      <div className={cn("flex h-14 items-center gap-3 px-4", hideTitle && "lg:h-0")}>
         {backHref ? (
           // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
           <Link
@@ -45,7 +48,8 @@ export function PageHeader({
             className={cn(
               "text-[18px] leading-tight font-semibold tracking-tight",
               tabs ? "shrink-0" : "truncate",
-              hideTitleOnPhone && "sr-only lg:not-sr-only"
+              (hideTitleOnPhone || hideTitle) && "sr-only",
+              hideTitleOnPhone && !hideTitle && "lg:not-sr-only"
             )}
           >
             {title}
