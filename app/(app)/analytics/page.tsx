@@ -13,7 +13,6 @@ import { PageHeader } from "@/components/app/page-header"
 export default async function AnalyticsPage() {
   const viewer = await requireViewer()
   const stats = analyticsFor(viewer.id, viewer.handle)
-  const topViews = Math.max(1, ...stats.topPosts.map((post) => post.views))
 
   return (
     <>
@@ -41,12 +40,12 @@ export default async function AnalyticsPage() {
                   className="flex flex-col gap-2.5 px-4 py-3.5 transition-colors duration-200 hover:bg-muted/50 active:bg-muted"
                 >
                   <p className="line-clamp-2 text-[15px] leading-snug break-words">{post.body || "Post without text"}</p>
-                  <div className="flex items-center gap-3">
-                    <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                      <div className="h-full rounded-full bg-dusk" style={{ width: `${Math.max(4, Math.round((post.views / topViews) * 100))}%` }} />
-                    </div>
-                    <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">
-                      {exact(post.views)} {pluralize(post.views, "view")} · {exact(post.likes)} {pluralize(post.likes, "like")}
+                  <div className="flex items-baseline gap-4 text-[13px] tabular-nums">
+                    <span className="text-muted-foreground">
+                      <span className="font-semibold text-foreground">{exact(post.views)}</span> {pluralize(post.views, "view")}
+                    </span>
+                    <span className="text-muted-foreground">
+                      <span className="font-semibold text-foreground">{exact(post.likes)}</span> {pluralize(post.likes, "like")}
                     </span>
                   </div>
                 </Link>

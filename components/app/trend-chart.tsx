@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { exact } from "@/components/app/analytics-bits"
 import { pluralize } from "@/lib/format"
@@ -67,6 +67,8 @@ export function TrendChart({
   const [width, setWidth] = useState(0)
   const [active, setActive] = useState<number | null>(null)
   const reduce = useReducedMotion()
+  // The gradient needs an id that is unique on the page and safe inside url(#...).
+  const fadeId = `fade${useId().replace(/[^a-zA-Z0-9]/g, "")}`
 
   const count = points.length
   const peakIndex = points.reduce((best, point, index) => (point.value > points[best].value ? index : best), 0)
@@ -168,15 +170,20 @@ export function TrendChart({
         className="relative touch-pan-y cursor-crosshair rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-dusk/50"
         style={{ height: HEIGHT }}
       >
-        <svg width={width} height={HEIGHT} className="block overflow-visible" aria-hidden="true">
+        <svg width={width} height={HEIGHT} className="block overflow-visible text-foreground" aria-hidden="true">
+          <defs>
+            <linearGradient id={fadeId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stopColor="currentColor" stopOpacity={0.12} />
+              <stop offset="1" stopColor="currentColor" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <line x1={0} x2={width} y1={yAt(top / 2)} y2={yAt(top / 2)} strokeDasharray="3 5" className="stroke-border" />
           <line x1={0} x2={width} y1={baseY} y2={baseY} className="stroke-border" />
           {area ? (
             <motion.path
               key={`area-${drawKey}`}
               d={area}
-              fillOpacity={0.14}
-              className="fill-dusk"
+              fill={`url(#${fadeId})`}
               initial={reduce ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.7, delay: 0.1, ease: EASE }}
@@ -190,7 +197,7 @@ export function TrendChart({
               strokeWidth={2.25}
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="stroke-dusk"
+              className="stroke-foreground"
               initial={reduce ? false : { pathLength: 0 }}
               animate={{ pathLength: 1 }}
               transition={{ duration: 0.9, ease: EASE }}
@@ -198,11 +205,11 @@ export function TrendChart({
           ) : null}
           {hovered !== null ? (
             <>
-              <line x1={coords[hovered].x} x2={coords[hovered].x} y1={TOP} y2={baseY} strokeWidth={1} className="stroke-dusk/40" />
-              <circle cx={coords[hovered].x} cy={coords[hovered].y} r={5} strokeWidth={2} className="fill-background stroke-dusk" />
+              <line x1={coords[hovered].x} x2={coords[hovered].x} y1={TOP} y2={baseY} strokeWidth={1} className="stroke-foreground/25" />
+              <circle cx={coords[hovered].x} cy={coords[hovered].y} r={5} strokeWidth={2} className="fill-background stroke-foreground" />
             </>
           ) : last && last.y < baseY ? (
-            <circle cx={last.x} cy={last.y} r={3.5} className="fill-dusk" />
+            <circle cx={last.x} cy={last.y} r={3.5} className="fill-foreground" />
           ) : null}
         </svg>
       </div>

@@ -97,7 +97,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
                 {shift.text}
               </span>
               <span className="text-muted-foreground">
-                {shift.text === "New" ? `nothing in the ${range} days before` : `vs the ${range} days before`}
+                {shift.text === "New" ? "nothing before" : `vs the ${range} days before`}
               </span>
             </p>
           </div>

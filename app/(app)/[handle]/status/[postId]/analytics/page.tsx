@@ -32,7 +32,6 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
     { label: "Replies", count: stats.replies },
     { label: "Bookmarks", count: stats.bookmarks },
   ]
-  const biggest = Math.max(1, ...actions.map((row) => row.count))
 
   return (
     <>
@@ -70,14 +69,9 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
         </h2>
         <ul className="flex flex-col">
           {actions.map((row) => (
-            <li key={row.label} className="flex flex-col gap-2 border-t border-border py-3.5 first:border-t-0">
-              <div className="flex items-baseline justify-between gap-3 text-[15px]">
-                <span>{row.label}</span>
-                <span className="font-semibold tabular-nums">{exact(row.count)}</span>
-              </div>
-              <div className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                <div className="h-full rounded-full bg-dusk" style={{ width: `${Math.max(row.count > 0 ? 4 : 0, Math.round((row.count / biggest) * 100))}%` }} />
-              </div>
+            <li key={row.label} className="flex items-baseline justify-between gap-3 border-t border-border py-3.5 text-[15px] first:border-t-0">
+              <span>{row.label}</span>
+              <span className="font-semibold tabular-nums">{exact(row.count)}</span>
             </li>
           ))}
         </ul>
