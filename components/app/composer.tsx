@@ -152,10 +152,8 @@ const POLL_DEFAULT_MINUTES = 1440
 const PILL =
   "inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
 const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline-none transition-colors focus:border-foreground sm:h-9"
-// The reply picker and the emoji list are components of their own, so their phone sizes are set from here: 40px buttons, and
-// an emoji list that opens from the toolbar's left edge so it stays on the screen. The picker's trigger is the one button
-// that opens a dialog.
-const REPLY_PICKER_PHONE = "max-sm:[&_button[aria-haspopup=dialog]]:size-10"
+// The emoji list is a component of its own, so its phone sizes are set from here: 40px buttons, and an emoji list that
+// opens from the toolbar's left edge so it stays on the screen.
 const EMOJI_PHONE =
   "max-sm:static max-sm:[&>button]:size-9 max-[429px]:[&>button]:size-8 max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
 // The emoji list opens upward. Near the top of the page there is no room above the toolbar, so it opens downward.
@@ -975,9 +973,9 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     publish(body)
   }
 
-  // On a new post, the reply picker sits in the corner beside the first line of text. There is no character count:
+  // On a new post, the "who can reply" pill sits on its own line under the text, as X sets it. There is no character count:
   // a post can be as long as the limit allows, and going over it stops the post with a clear message.
-  const showCorner = !isReply
+  const showReplyPicker = !isReply
 
   return (
     <>
@@ -1016,15 +1014,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               rows={1}
               className="field-sizing-content min-h-[30px] min-w-0 flex-1 resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground max-sm:min-h-10 max-sm:pt-1.5"
             />
-            {showCorner ? (
-              <div className="flex h-8 shrink-0 items-center gap-2">
-                {!isReply ? (
-                  <div className={REPLY_PICKER_PHONE}>
-                    <ReplyPicker value={replySetting} onChange={setReplySetting} />
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
           {open ? (
             <ul role="listbox" aria-label="Suggestions" className="glass z-30 w-full max-w-sm overflow-hidden rounded-[22px] py-1">
@@ -1267,6 +1256,11 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             <p role="alert" className="text-sm text-destructive">
               {`${-remaining} ${pluralize(-remaining, "character")} over the limit. Shorten the post to share it.`}
             </p>
+          ) : null}
+          {showReplyPicker ? (
+            <div className="relative flex">
+              <ReplyPicker value={replySetting} onChange={setReplySetting} />
+            </div>
           ) : null}
           <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
             <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>

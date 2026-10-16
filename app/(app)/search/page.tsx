@@ -49,8 +49,10 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader title={q ? q : "Search"} backHref="/explore" />
       <SearchField defaultQuery={q} type={type} />
       {q ? (
-        <div className="px-4 pt-3">
+        <>
+          {/* The tabs run the full width of the column, with their rule across it, as X sets them. */}
           <TabLinks
+            label="Search results"
             items={TYPES.map((t) => ({
               href: searchHref(q, t.key),
               label: t.label,
@@ -58,10 +60,10 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
               active: t.key === type,
             }))}
           />
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end px-4 pt-2">
             <SaveSearchButton query={q} saved={saved.includes(q)} />
           </div>
-        </div>
+        </>
       ) : null}
       {q ? (
         <>

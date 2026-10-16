@@ -52,7 +52,9 @@ async function ExploreBody({ searchParams }: { searchParams: SearchParams }) {
 
   return (
     <>
-      <PageHeader title="Explore">
+      {/* The search comes first, as on X. The tabs below it are the header that stays on screen while the page scrolls. */}
+      <SearchField defaultQuery="" />
+      <PageHeader title="Explore" hideTitleOnDesktop>
         <TabLinks
           label="Explore sections"
           items={[
@@ -93,8 +95,7 @@ function PostsTab({
   const empty = page.items.length === 0 && !page.next
   return (
     <>
-      <div className="flex items-center gap-2 px-4 py-3">
-        <SearchField defaultQuery="" className="min-w-0 flex-1" />
+      <div className="flex items-center justify-end gap-2 px-4 py-3">
         <RankingButton href={sortHref} sort={sort} />
         <MediaSwitch href={mediaHref} checked={media} />
       </div>
@@ -155,7 +156,6 @@ function TrendingTab() {
   const tags = trendingTags(TRENDING_LIMIT)
   return (
     <>
-      <SearchField defaultQuery="" />
       {tags.length === 0 ? (
         <EmptyState title="Nothing is trending yet" body="Topics are the hashtags people use in posts during the last 7 days. Use one in a post and it starts the list.">
           <ComposeAction>Write a post</ComposeAction>

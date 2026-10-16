@@ -15,6 +15,7 @@ export function PageHeader({
   tabs,
   hideTitleOnPhone = false,
   hideTitle = false,
+  hideTitleOnDesktop = false,
   children,
 }: {
   title: string
@@ -27,11 +28,13 @@ export function PageHeader({
   hideTitleOnPhone?: boolean
   // The title is for screen readers only, and on a computer the row above the tabs collapses to nothing. Used where the tabs are the header.
   hideTitle?: boolean
+  // Like hideTitle, but only on a computer. A phone keeps the title row, so the page still has a name at the top.
+  hideTitleOnDesktop?: boolean
   children?: ReactNode
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className={cn("flex h-14 items-center gap-3 px-4", hideTitle && "lg:h-0")}>
+      <div className={cn("flex h-14 items-center gap-3 px-4", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
         {backHref ? (
           // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
           <Link
@@ -49,7 +52,8 @@ export function PageHeader({
               "text-[18px] leading-tight font-semibold tracking-tight",
               tabs ? "shrink-0" : "truncate",
               (hideTitleOnPhone || hideTitle) && "sr-only",
-              hideTitleOnPhone && !hideTitle && "lg:not-sr-only"
+              hideTitleOnPhone && !hideTitle && "lg:not-sr-only",
+              hideTitleOnDesktop && "lg:sr-only"
             )}
           >
             {title}

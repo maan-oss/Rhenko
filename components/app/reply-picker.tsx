@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { AtSign, Check, Globe, Users, type LucideIcon } from "lucide-react"
+import { AtSign, Check, ChevronDown, Globe, Users, type LucideIcon } from "lucide-react"
 import { BottomSheet } from "@/components/app/bottom-sheet"
 import { REPLY_SETTINGS, type ReplySetting } from "@/lib/rules"
 import { useIsDesktop } from "@/lib/use-media"
 
 const EASE = [0.22, 1, 0.36, 1] as const
 
-const OPTIONS: Record<ReplySetting, { title: string; Icon: LucideIcon }> = {
-  everyone: { title: "Everyone", Icon: Globe },
-  following: { title: "Accounts you follow", Icon: Users },
-  mentioned: { title: "Only accounts you mention", Icon: AtSign },
+// `title` names the choice in the list. `pill` is what the composer says, in X's words.
+const OPTIONS: Record<ReplySetting, { title: string; pill: string; Icon: LucideIcon }> = {
+  everyone: { title: "Everyone", pill: "Everyone can reply", Icon: Globe },
+  following: { title: "Accounts you follow", pill: "Accounts you follow can reply", Icon: Users },
+  mentioned: { title: "Only accounts you mention", pill: "Only accounts you mention can reply", Icon: AtSign },
 }
 
 // The choices as a list, the way X shows them: an icon, the label, and a check on the one in use.
@@ -45,8 +46,8 @@ function ReplyList({ value, onPick }: { value: ReplySetting; onPick: (next: Repl
   )
 }
 
-// A small icon in the corner of the composer shows the current choice. Tapping it opens the list: on a computer it
-// drops over the text, on a phone it rises as a sheet titled "Who can reply?".
+// A pill under the composer's text says who can reply. Tapping it opens the list: on a computer it drops below the pill,
+// on a phone it rises as a sheet titled "Who can reply?".
 export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange: (next: ReplySetting) => void }) {
   const desktop = useIsDesktop()
   const [open, setOpen] = useState(false)
@@ -77,17 +78,17 @@ export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange
 
   return (
     <div ref={rootRef} className="relative">
-      {/* Icon only, so it sits in the corner of the composer without taking a line from the text. */}
       <button
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Who can reply: ${current.title}`}
-        title={`Who can reply: ${current.title}`}
         onClick={() => setOpen((value) => !value)}
-        className="glass grid size-10 place-items-center rounded-full text-foreground sm:size-8 transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-semibold whitespace-nowrap text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring max-sm:h-9"
       >
-        <current.Icon className="size-[16px]" strokeWidth={2} aria-hidden="true" />
+        <current.Icon className="size-[15px] shrink-0" strokeWidth={2} aria-hidden="true" />
+        {current.pill}
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={2} aria-hidden="true" />
       </button>
 
       {desktop ? (
@@ -101,8 +102,8 @@ export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: -4 }}
               transition={{ duration: 0.22, ease: EASE }}
-              style={{ transformOrigin: "top right" }}
-              className="absolute top-full right-0 z-40 mt-2 w-[300px] rounded-[24px] border border-border bg-popover p-2 text-popover-foreground shadow-[0_28px_70px_-20px_rgba(0,0,0,0.45)]"
+              style={{ transformOrigin: "top left" }}
+              className="absolute top-full left-0 z-40 mt-2 w-[300px] rounded-[24px] border border-border bg-popover p-2 text-popover-foreground shadow-[0_28px_70px_-20px_rgba(0,0,0,0.45)]"
             >
               <p className="px-3.5 pt-2 pb-1.5 text-[13px] font-semibold text-muted-foreground">Who can reply?</p>
               <ReplyList value={value} onPick={pick} />
