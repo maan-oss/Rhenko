@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { createPost, undoPost } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
-import { PhotoCrop, type Ratio } from "@/components/app/photo-crop"
+import type { Ratio } from "@/components/app/photo-crop"
 import { useProofGate } from "@/components/app/proof-dialog"
 import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
 import type { StickerPick } from "@/components/app/sticker-tray"
@@ -115,6 +115,8 @@ const BACKGROUND_OPTIONS: { value: (typeof TEXT_BACKGROUNDS)[number]; name: stri
 ]
 
 const StickerTray = dynamic(() => import("@/components/app/sticker-tray").then((module) => module.StickerTray), { ssr: false, loading: () => null })
+// The photo framing dialog opens only after a photo is picked, so its code waits for that.
+const PhotoCrop = dynamic(() => import("@/components/app/photo-crop").then((module) => module.PhotoCrop), { ssr: false, loading: () => null })
 
 type MediaPatch = Partial<Attachment> | ((current: Attachment) => Partial<Attachment>)
 
