@@ -5,10 +5,11 @@ import { skipSetup } from "@/actions/connections"
 // and in Settings.
 export function SetupBanner() {
   return (
-    <section aria-label="Set up your connections" className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section aria-label="Set up your connections" className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:py-4">
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="text-[15px] font-semibold">Find people who are a good fit</p>
-        <p className="text-[14px] leading-relaxed text-muted-foreground">
+        {/* On a phone the line under the title goes, so the banner is one row and the feed starts sooner. */}
+        <p className="hidden text-[14px] leading-relaxed text-muted-foreground sm:block">
           Add your city and languages. About a minute, and every step can be skipped.
         </p>
       </div>

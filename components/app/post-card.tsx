@@ -106,7 +106,8 @@ export function PostCard({
   // eslint-disable-next-line react-hooks/purity
   const editable = isOwn && !pending && Date.now() - post.createdAt < editWindow
   return (
-    <article className={cn("relative border-b border-border px-4 pt-3 pb-2 transition-colors", !detail && "hover:bg-secondary/60")}>
+    // In a feed, a post that is off screen is skipped for layout and paint until it comes near the screen.
+    <article className={cn("relative border-b border-border px-4 pt-3 pb-2 transition-colors", !detail && "hover:bg-secondary/60 [content-visibility:auto] [contain-intrinsic-size:auto_240px]")}>
       {pending || isOwn ? null : <ViewBeacon postId={post.id} />}
       {threadLine ? <span aria-hidden="true" className="absolute top-14 bottom-[-13px] left-[35px] z-0 w-0.5 rounded-full bg-border" /> : null}
       {pending ? (

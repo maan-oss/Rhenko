@@ -2,7 +2,6 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { BlurFade } from "@/components/ui/blur-fade"
 import { EmptyState } from "@/components/app/empty-state"
 import { MoveBookmark } from "@/components/app/move-bookmark"
 import { PostCard } from "@/components/app/post-card"
@@ -10,9 +9,6 @@ import { isAdItem, type FeedEntry } from "@/lib/ad-rules"
 import { AdCard } from "@/components/app/ad-card"
 import type { FeedSpec } from "@/lib/feeds"
 import type { Viewer } from "@/lib/auth"
-
-// How many items a feed draws without the entrance fade: enough to fill a phone's first screen.
-const FIRST_SCREEN = 3
 
 // The post a feed entry shows, or null for an ad.
 function postIdOf(item: FeedEntry): string | null {
@@ -180,14 +176,9 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
             {folders ? <MoveBookmark postId={item.post.id} folderId={item.folderId} folders={folders} /> : null}
           </>
         )
-        // The first posts are the first screen. They are drawn with the page. A fade on them would start hidden in the
-        // HTML and wait for the script to run, which delays the moment the page has something to show.
-        if (index < FIRST_SCREEN) return <Fragment key={item.key}>{body}</Fragment>
-        return (
-          <BlurFade key={item.key} delay={Math.min(index, 6) * 0.03}>
-            {body}
-          </BlurFade>
-        )
+        // Posts are drawn as they arrive. No per-post entrance animation: it started every post hidden and blurred, which
+        // costs a filter and an observer per post and makes long feeds stutter on a phone.
+        return <Fragment key={item.key}>{body}</Fragment>
       })}
       {next ? (
         <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-8">
