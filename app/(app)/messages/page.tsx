@@ -31,8 +31,10 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
     <>
       <PageHeader
         title="Messages"
+        hideTitleOnPhone
         tabs={
           <TabLinks
+            names
             label="Messages sections"
             items={[
               { href: "/messages", label: "Chats", icon: <MessageCircle />, active: tab === "messages" },

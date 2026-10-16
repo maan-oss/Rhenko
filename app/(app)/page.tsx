@@ -44,9 +44,10 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader
         title="Home"
         hideTitleOnPhone
-        lead={<MenuButton />}
+        lead={<MenuButton viewer={viewer} />}
         tabs={
           <TabLinks
+            names
             items={[
               { href: "/", label: "For you", icon: <Sparkles />, active: !following },
               { href: "/?tab=following", label: "Following", icon: <Users />, active: following },

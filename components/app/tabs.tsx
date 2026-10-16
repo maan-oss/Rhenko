@@ -66,7 +66,7 @@ export function usePressedTab(items: TabItem[]): { current: string | null; press
 
 // One tab. The active tab shows its icon and its name in the fill. Every other tab is only its icon, in a smaller
 // circle with no space for a name. The name stays on the link as aria-label, so it is never lost to a screen reader.
-function TabLink({ item, active, fill, onPress }: { item: TabItem; active: boolean; fill: string; onPress: () => void }) {
+function TabLink({ item, active, fill, onPress, names }: { item: TabItem; active: boolean; fill: string; onPress: () => void; names: boolean }) {
   return (
     <Link
       href={item.href}
@@ -77,7 +77,7 @@ function TabLink({ item, active, fill, onPress }: { item: TabItem; active: boole
       onClick={onPress}
       className={cn(
         "relative inline-flex h-10 shrink-0 items-center rounded-full transition-colors duration-200 sm:h-9",
-        active ? "px-4 text-[var(--tab-ink,var(--background))]" : "w-10 justify-center text-muted-foreground hover:bg-foreground/5 hover:text-foreground sm:w-9"
+        active ? "px-4 text-[var(--tab-ink,var(--background))]" : names ? "px-3.5 text-muted-foreground hover:bg-foreground/5 hover:text-foreground" : "w-10 justify-center text-muted-foreground hover:bg-foreground/5 hover:text-foreground sm:w-9"
       )}
     >
       {active ? <TabFill layoutId={fill} /> : null}
@@ -86,20 +86,21 @@ function TabLink({ item, active, fill, onPress }: { item: TabItem; active: boole
         {item.badge ? <TabBadge count={item.badge} /> : null}
       </span>
       <span className="relative inline-flex">
-        <TabName open={active}>{item.label}</TabName>
+        <TabName open={active || names}>{item.label}</TabName>
       </span>
     </Link>
   )
 }
 
 // A segmented control in a glass pill, used at the top of a page.
-export function TabLinks({ items, label = "Sections", className }: { items: TabItem[]; label?: string; className?: string }) {
+// With names, every tab shows its name, not only the active one. Use it where the icons alone are not clear enough.
+export function TabLinks({ items, label = "Sections", className, names = false }: { items: TabItem[]; label?: string; className?: string; names?: boolean }) {
   const id = useId()
   const { current, press } = usePressedTab(items)
   return (
     <nav aria-label={label} className={cn("glass inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none]", className)}>
       {items.map((item) => (
-        <TabLink key={item.href} item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} />
+        <TabLink key={item.href} item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} names={names} />
       ))}
     </nav>
   )
@@ -113,7 +114,7 @@ export function IconTabs({ items, label = "Sections" }: { items: TabItem[]; labe
     <nav aria-label={label} className="flex w-full items-center justify-between overflow-x-auto border-b border-border px-2 [scrollbar-width:none]">
       {items.map((item) => (
         <div key={item.href} className="flex h-12 shrink-0 items-center">
-          <TabLink item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} />
+          <TabLink item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} names={false} />
         </div>
       ))}
     </nav>
