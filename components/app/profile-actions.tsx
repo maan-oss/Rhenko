@@ -50,12 +50,15 @@ export function ProfileActions({
   blocked,
   muted,
   notifying,
+  from,
 }: {
   handle: string
   state: FollowState
   blocked: boolean
   muted: boolean
   notifying: boolean
+  // The post the profile was opened from, if any. A follow made here is credited to it.
+  from?: string
 }) {
   const [pending, startTransition] = useTransition()
   const [confirmingBlock, setConfirmingBlock] = useState(false)
@@ -114,7 +117,7 @@ export function ProfileActions({
               {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
             </Button>
           ) : null}
-          <FollowButton handle={handle} state={state} />
+          <FollowButton handle={handle} state={state} from={from} />
         </>
       )}
       <DropdownMenu>

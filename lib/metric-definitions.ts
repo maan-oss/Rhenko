@@ -4,6 +4,7 @@ export const DEFINITIONS = {
   views: "Times people saw the post, with each person counted once. Your own views are never counted.",
   visits: "Times people opened your profile. Each person counts once every six hours. Your own visits are never counted.",
   follows: "People who followed you on each day shown.",
+  followsFromPost: "People who followed you after opening your profile from this post. Only follows that still stand count.",
   likes: "People who liked the post, all time.",
   reposts: "Times the post was reposted, all time.",
   quotes: "Posts that quote this one, all time.",

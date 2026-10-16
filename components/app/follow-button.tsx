@@ -12,7 +12,7 @@ export type FollowState = "following" | "requested" | "none"
 // Follow, Requested (for protected accounts) or Following. Press again to undo.
 // The page tells the button where to start. After a press it shows what the server says happened, and it takes the
 // page's word again whenever the page sends a different state.
-export function FollowButton({ handle, state, className }: { handle: string; state: FollowState; className?: string }) {
+export function FollowButton({ handle, state, className, from }: { handle: string; state: FollowState; className?: string; from?: string }) {
   const [shown, setShown] = useState(state)
   const fromPage = `${handle}:${state}`
   const [seen, setSeen] = useState(fromPage)
@@ -30,7 +30,7 @@ export function FollowButton({ handle, state, className }: { handle: string; sta
     // Backing out can only end one way, so it shows at once. Following ends as a follow or as a request, so it waits for the server.
     if (want === "unfollow") setShown("none")
     startTransition(async () => {
-      const result = await toggleFollow(handle, want, answer)
+      const result = await toggleFollow(handle, want, answer, from)
       if (!result.ok) {
         setShown(before)
         if (result.proofRequired) {

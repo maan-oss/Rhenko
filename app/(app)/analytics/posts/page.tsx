@@ -22,6 +22,7 @@ const COUNTS = [
   { key: "quotes", label: "Quotes" },
   { key: "replies", label: "Replies" },
   { key: "bookmarks", label: "Bookmarks" },
+  { key: "follows", label: "Follows" },
   { key: "clicks", label: "Clicks" },
   { key: "engagement", label: "Engagement" },
 ] as const
@@ -38,6 +39,7 @@ const COLUMN_TEXT: Record<SortKey, string> = {
   quotes: DEFINITIONS.quotes,
   replies: DEFINITIONS.replies,
   bookmarks: DEFINITIONS.bookmarks,
+  follows: DEFINITIONS.followsFromPost,
   clicks: DEFINITIONS.clicks,
   engagement: DEFINITIONS.engagement,
 }
@@ -145,6 +147,7 @@ export default async function PostsAnalyticsPage({
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.quotes)}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.replies)}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.bookmarks)}</td>
+                  <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(row.follows)}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">{exact(totalClicks(row.clicks))}</td>
                   <td className="px-1 py-3 text-right align-top transition-colors duration-200 group-hover:bg-muted">
                     {row.engagementRate === null ? "–" : `${exact(row.engagementRate)}%`}

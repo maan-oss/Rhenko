@@ -1,13 +1,15 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { ChevronRight, Newspaper, TrendingUp } from "lucide-react"
+import { ChevronRight, Newspaper, TrendingUp, Users } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
-import { trendingTags } from "@/lib/data"
+import { starterPacks, trendingTags } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { formatCount } from "@/lib/format"
+import { listOwnersVisibleTo } from "@/lib/people-state"
 import { firstParam } from "@/lib/params"
 import { ComposeAction } from "@/components/app/compose-action"
 import { EmptyState, emptyActionClass } from "@/components/app/empty-state"
+import { PackList } from "@/components/app/pack-list"
 import { PageHeader } from "@/components/app/page-header"
 import { FeedList } from "@/components/app/feed-list"
 import { MediaSwitch, RankingButton } from "@/components/app/explore-controls"
@@ -18,6 +20,8 @@ type SearchParams = Promise<{ tab?: string | string[]; sort?: string | string[];
 
 // How many topics the Trending tab lists.
 const TRENDING_LIMIT = 30
+// How many starter packs the Packs tab lists.
+const PACKS_LIMIT = 30
 
 export default function ExplorePage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -32,7 +36,9 @@ export default function ExplorePage({ searchParams }: { searchParams: SearchPara
 async function ExploreBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const params = await searchParams
-  const trending = firstParam(params.tab) === "trending"
+  const requestedTab = firstParam(params.tab)
+  const trending = requestedTab === "trending"
+  const packs = requestedTab === "packs"
   const sort = firstParam(params.sort) === "latest" ? "latest" : "top"
   const media = firstParam(params.media) === "1"
 
@@ -53,11 +59,14 @@ async function ExploreBody({ searchParams }: { searchParams: SearchParams }) {
             items={[
               { href: "/explore", label: "Posts", icon: <Newspaper />, active: !trending },
               { href: "/explore?tab=trending", label: "Trending", icon: <TrendingUp />, active: trending },
+              { href: "/explore?tab=packs", label: "Packs", icon: <Users />, active: packs },
             ]}
           />
         }
       />
-      {trending ? (
+      {packs ? (
+        <PacksTab viewerId={viewer.id} />
+      ) : trending ? (
         <TrendingTab />
       ) : (
         <PostsTab viewer={viewer} sort={sort} media={media} sortHref={href({ sort: sort === "top" ? "latest" : "top", media })} mediaHref={href({ sort, media: !media })} allHref={href({ sort, media: false })} />
@@ -112,6 +121,34 @@ function PostsTab({
           ) : undefined
         }
       />
+    </>
+  )
+}
+
+// Starter packs: lists of people published by the people who made them. Owners who have blocked the viewer stay hidden.
+function PacksTab({ viewerId }: { viewerId: string }) {
+  const found = starterPacks(viewerId, PACKS_LIMIT)
+  const visible = listOwnersVisibleTo(viewerId, found.map((pack) => pack.owner.id))
+  const shown = found.filter((pack) => visible.has(pack.owner.id))
+  if (shown.length === 0) {
+    return (
+      <EmptyState
+        title="No starter packs yet"
+        body="Make a public list, add people to it, then publish it as a starter pack. It shows up here."
+      >
+        <Link href="/lists" className={emptyActionClass("secondary")}>
+          Your lists
+        </Link>
+      </EmptyState>
+    )
+  }
+  return (
+    <>
+      <p className="px-4 pt-4 pb-2 text-[15px] text-muted-foreground">Follow everyone in a pack at once, or open it to see who is in it.</p>
+      <PackList packs={shown} />
+      <Link href="/packs" className="block px-4 py-4 text-[15px] font-semibold hover:underline">
+        All starter packs
+      </Link>
     </>
   )
 }

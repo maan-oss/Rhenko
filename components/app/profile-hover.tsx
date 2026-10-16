@@ -93,13 +93,17 @@ export function ProfileLink({
   handle,
   className,
   label,
+  from,
   children,
 }: {
   handle: string
   className?: string
   label?: string
+  // The post this link sits on, so a follow made on the profile is credited to it.
+  from?: string
   children: ReactNode
 }) {
+  const href = from ? `/${handle}?from=${encodeURIComponent(from)}` : `/${handle}`
   const [hoverable, setHoverable] = useState(false)
   useEffect(() => {
     const query = window.matchMedia("(hover: hover) and (pointer: fine)")
@@ -111,14 +115,14 @@ export function ProfileLink({
 
   if (!hoverable) {
     return (
-      <Link href={`/${handle}`} className={className} aria-label={label}>
+      <Link href={href} className={className} aria-label={label}>
         {children}
       </Link>
     )
   }
   return (
     <PreviewCard.Root>
-      <PreviewCard.Trigger delay={350} closeDelay={150} render={<Link href={`/${handle}`} className={className} aria-label={label} />}>
+      <PreviewCard.Trigger delay={350} closeDelay={150} render={<Link href={href} className={className} aria-label={label} />}>
         {children}
       </PreviewCard.Trigger>
       <PreviewCard.Portal>

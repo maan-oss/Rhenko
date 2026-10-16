@@ -21,7 +21,8 @@ import { normalizeTag } from "@/lib/rules"
 // A feed is described by plain data so the same spec can render on the server
 // and be fetched by the client for infinite scroll.
 export type FeedSpec =
-  | { kind: "home"; mode: "for-you" | "following" }
+  // For you can be narrowed to one topic the viewer follows. Following ignores the topic.
+  | { kind: "home"; mode: "for-you" | "following"; topic?: string }
   | { kind: "profile"; tab: ProfileTab; handle: string }
   | { kind: "bookmarks"; folder?: string }
   | { kind: "list"; listId: string }
@@ -38,8 +39,11 @@ export function parseSpec(input: unknown): FeedSpec | null {
   if (!input || typeof input !== "object") return null
   const spec = input as Record<string, unknown>
   switch (spec.kind) {
-    case "home":
-      return spec.mode === "following" || spec.mode === "for-you" ? { kind: "home", mode: spec.mode } : null
+    case "home": {
+      if (spec.mode !== "following" && spec.mode !== "for-you") return null
+      if (spec.topic === undefined) return { kind: "home", mode: spec.mode }
+      return isString(spec.topic) ? { kind: "home", mode: spec.mode, topic: normalizeTag(spec.topic) } : null
+    }
     case "profile":
       if (!isString(spec.handle) || !PROFILE_TABS.includes(spec.tab as ProfileTab)) return null
       return { kind: "profile", tab: spec.tab as ProfileTab, handle: spec.handle }
@@ -70,7 +74,7 @@ export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): Feed
   publishDue()
   switch (spec.kind) {
     case "home":
-      return withAds(homeFeed(spec.mode, viewerId, cursor), viewerId)
+      return withAds(homeFeed(spec.mode, viewerId, cursor, undefined, spec.topic), viewerId)
     case "profile": {
       const user = get<{ id: string; protected: number; deactivated_at: number | null }>(
         "SELECT id, protected, deactivated_at FROM users WHERE handle = ? COLLATE NOCASE",

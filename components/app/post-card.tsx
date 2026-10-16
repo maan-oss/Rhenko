@@ -149,13 +149,14 @@ export function PostCard({
         </p>
       ) : null}
       <div className="flex gap-3">
-        <ProfileLink handle={post.author.handle} className="relative z-10 shrink-0" label={`${post.author.name} profile`}>
+        <ProfileLink handle={post.author.handle} from={post.id} className="relative z-10 shrink-0" label={`${post.author.name} profile`}>
           <Avatar user={post.author} size={40} />
         </ProfileLink>
         <div className="min-w-0 flex-1">
           <header className="flex min-w-0 items-baseline gap-x-2 leading-tight">
             <ProfileLink
               handle={post.author.handle}
+              from={post.id}
               className="relative z-10 inline-flex max-w-full min-w-0 shrink items-center font-semibold hover:underline max-sm:after:absolute max-sm:after:-inset-x-1 max-sm:after:-inset-y-2.5"
             >
               <span className="truncate">{post.author.name}</span>

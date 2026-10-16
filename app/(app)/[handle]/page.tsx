@@ -22,7 +22,7 @@ import { BannerTabTheme } from "@/components/app/tab-theme"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
-type SearchParams = Promise<{ tab?: string | string[] }>
+type SearchParams = Promise<{ tab?: string | string[]; from?: string | string[] }>
 
 // Every feed a profile can show. Highlights is one of them, but it lives inside the Posts section.
 const FEEDS: ProfileTab[] = ["posts", "highlights", "replies", "media", "reposts", "likes"]
@@ -98,6 +98,10 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   const pinned =
     tab === "posts" && !locked && profile.pinnedPostId && canSeePost(profile.pinnedPostId, viewer.id) ? getPost(profile.pinnedPostId, viewer.id) : null
   const followState: FollowState = rel.following ? "following" : rel.requested ? "requested" : "none"
+  // A profile opened from one of this account's posts credits a follow to that post. The post must be theirs and visible
+  // to the viewer; anything else is ignored, and the follow still happens.
+  const fromParam = firstParam((await searchParams).from)
+  const fromPost = fromParam && !isSelf && canSeePost(fromParam, viewer.id) && getPost(fromParam, viewer.id)?.author.id === profile.id ? fromParam : undefined
   const base = `/${profile.handle}`
   const sections = SECTIONS.filter((t) => t !== "likes" || isSelf)
 
@@ -133,7 +137,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
               <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
             </>
           ) : (
-            <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} />
+            <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} from={fromPost} />
           )}
         </div>
       </div>

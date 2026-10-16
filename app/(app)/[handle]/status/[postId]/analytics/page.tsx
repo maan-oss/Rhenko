@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
 import { postAnalytics } from "@/lib/data"
 import { pluralize } from "@/lib/format"
+import { DEFINITIONS } from "@/lib/metric-definitions"
 import { exact } from "@/components/app/analytics-bits"
 import { PageHeader } from "@/components/app/page-header"
 import { TrendChart } from "@/components/app/trend-chart"
@@ -83,6 +84,17 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="follows" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">
+        <h2 id="follows" className="pb-2 text-base font-semibold">
+          Follows
+        </h2>
+        <p className="flex items-baseline justify-between gap-3 border-t border-border py-3.5 text-[15px]">
+          <span>Followed you from this post</span>
+          <span className="font-semibold tabular-nums">{exact(stats.follows)}</span>
+        </p>
+        <p className="pt-1 text-sm text-muted-foreground">{DEFINITIONS.followsFromPost}</p>
       </section>
 
       <section aria-labelledby="clicks" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">

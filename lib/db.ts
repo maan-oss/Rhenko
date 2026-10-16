@@ -1045,6 +1045,16 @@ CREATE TABLE IF NOT EXISTS leases (
     created_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, list_id)
   );`,
+  // A follow that began on a post: the viewer opened the author's profile from that post and followed them there. Only the
+  // post's own author can be followed this way. The count on the post is of follows that still stand.
+  `CREATE TABLE IF NOT EXISTS follow_sources (
+    follower_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    followee_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    post_id TEXT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (follower_id, followee_id)
+  );
+  CREATE INDEX IF NOT EXISTS follow_sources_post ON follow_sources (post_id);`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

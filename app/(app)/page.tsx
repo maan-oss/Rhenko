@@ -5,10 +5,12 @@ import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { circlesFor } from "@/lib/circles"
 import { suggestionsFor, topPeople } from "@/lib/connections"
-import { whoToFollow } from "@/lib/data"
+import { followedTopics, whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
-import { firstParam } from "@/lib/params"
+import { normalizeTag } from "@/lib/rules"
+import { snoozedTopics } from "@/lib/topic-snoozes"
 import { pinnedTimelines } from "@/lib/timelines"
+import { firstParam } from "@/lib/params"
 import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
 import { emptyActionClass } from "@/components/app/empty-state"
@@ -21,8 +23,12 @@ import { FeedList } from "@/components/app/feed-list"
 import { FeedSkeleton } from "@/components/app/feed-skeleton"
 import { FollowButton } from "@/components/app/follow-button"
 import { SetupBanner } from "@/components/app/setup-banner"
+import { TopicChips } from "@/components/app/topic-chips"
 
-type SearchParams = Promise<{ tab?: string | string[] }>
+type SearchParams = Promise<{ tab?: string | string[]; topic?: string | string[] }>
+
+// Most topic chips shown above For you.
+const TOPIC_CHIPS = 12
 
 export default function HomePage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -34,16 +40,22 @@ export default function HomePage({ searchParams }: { searchParams: SearchParams 
 
 async function Home({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  const tab = firstParam((await searchParams).tab)
+  const params = await searchParams
+  const tab = firstParam(params.tab)
   // A pinned list is a tab of its own. Only a list the viewer has pinned opens here, whatever the address says.
   const pins = pinnedTimelines(viewer.id)
   const pin = pins.find((item) => item.id === tab) ?? null
   const mode = tab === "following" ? "following" : "for-you"
-  const spec: FeedSpec = pin ? { kind: "list", listId: pin.id } : { kind: "home", mode }
+  // For you can be narrowed to a topic the viewer follows and has not snoozed. Anything else in the address is ignored.
+  const snoozed = snoozedTopics(viewer.id, await clock())
+  const chips = followedTopics(viewer.id).filter((tag) => !snoozed.has(tag)).slice(0, TOPIC_CHIPS)
+  const asked = firstParam(params.topic)
+  const topic = mode === "for-you" && !pin && asked && chips.includes(normalizeTag(asked)) ? normalizeTag(asked) : undefined
+  const spec: FeedSpec = pin ? { kind: "list", listId: pin.id } : { kind: "home", mode, topic }
   const page = feedFor(spec, viewer.id)
   const following = !pin && mode === "following"
   const empty = page.items.length === 0 && !page.next
-  const active = pin ? pin.id : mode
+  const active = pin ? pin.id : topic ? `topic:${topic}` : mode
   return (
     <>
       <PageHeader
@@ -68,6 +80,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         id="compose"
         circles={circlesFor(viewer.id).map((circle) => ({ id: circle.id, name: circle.name }))}
       />
+      {mode === "for-you" && !pin && chips.length > 0 ? <TopicChips topics={chips} active={topic ?? null} /> : null}
       <FeedList
         key={active}
         items={page.items}
@@ -75,15 +88,19 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         spec={spec}
         viewer={viewer}
         largeEmpty
-        emptyTitle={pin ? "Nothing in this timeline yet" : following ? "Nothing from people you follow yet" : "No posts yet"}
+        emptyTitle={
+          pin ? "Nothing in this timeline yet" : topic ? `No posts about #${topic} yet` : following ? "Nothing from people you follow yet" : "No posts yet"
+        }
         emptyBody={
           pin
             ? "Posts from the people on this list show up here as they write them."
+            : topic
+              ? "Posts that use this topic show up here as people write them."
             : following
               ? "When the people you follow post, it shows up here."
               : "Write the first one, or follow a few people to fill this page."
         }
-        emptyAction={empty && !pin ? (following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty viewerId={viewer.id} />) : undefined}
+        emptyAction={empty && !pin && !topic ? (following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty viewerId={viewer.id} />) : undefined}
       />
     </>
   )

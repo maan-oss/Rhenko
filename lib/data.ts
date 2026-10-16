@@ -905,12 +905,45 @@ function rankedFor(viewerId: string, at: number): Candidate[] {
   const hit = rankedCache.get(cacheKey)
   if (hit && Date.now() - hit.made < RANKED_TTL_MS) return hit.list
   const list = rankCandidates(viewerId, at)
+  keepRanking(cacheKey, list)
+  return list
+}
+
+function keepRanking(cacheKey: string, list: Candidate[]): void {
   rankedCache.set(cacheKey, { made: Date.now(), list })
   if (rankedCache.size > RANKED_KEEP) {
     const oldest = rankedCache.keys().next().value
     if (oldest !== undefined) rankedCache.delete(oldest)
   }
+}
+
+// The ranked posts that use one topic. The ranking is shared, so only the topic's posts are kept from it. Scrolling asks
+// for every page, so the narrowed list is kept with the ranking, and forgetRanking clears it too.
+function rankedTopicFor(viewerId: string, at: number, topic: string): Candidate[] {
+  const cacheKey = `${viewerId}|${at}|#${topic}`
+  const hit = rankedCache.get(cacheKey)
+  if (hit && Date.now() - hit.made < RANKED_TTL_MS) return hit.list
+  const base = rankedFor(viewerId, at)
+  const bodies = bodiesOf(base.map((c) => c.postId))
+  const list = base.filter((c) => {
+    const body = bodies.get(c.postId)
+    return body !== undefined && extractHashtags(body).includes(topic)
+  })
+  keepRanking(cacheKey, list)
   return list
+}
+
+// The bodies of these posts, by id. Chunked, so a long ranking is still a few queries.
+function bodiesOf(postIds: string[]): Map<string, string> {
+  const found = new Map<string, string>()
+  for (let i = 0; i < postIds.length; i += 500) {
+    const chunk = postIds.slice(i, i + 500)
+    const marks = chunk.map(() => "?").join(", ")
+    for (const row of all<{ id: string; body: string }>(`SELECT id, body FROM posts WHERE id IN (${marks})`, ...chunk)) {
+      found.set(row.id, row.body)
+    }
+  }
+  return found
 }
 
 function parseRankedCursor(cursor: string | undefined): { at: number; offset: number } | null {
@@ -955,16 +988,18 @@ function snapshotFor(viewerId: string, now: number): number {
   return now
 }
 
-function forYouPage(viewerId: string, cursor: string | undefined, limit: number): Page<FeedItem> {
+function forYouPage(viewerId: string, cursor: string | undefined, limit: number, topic?: string): Page<FeedItem> {
   const resume = parseRankedCursor(cursor)
   const now = Date.now()
   const at = resume?.at ?? snapshotFor(viewerId, now)
   const offset = resume?.offset ?? 0
   const hidden = hiddenPosts(viewerId)
+  const usesTopic = (body: string) => topic === undefined || extractHashtags(body).includes(topic)
   // A first page looks up the viewer's own new posts up to now, so they show at once even when the ranking is reused.
-  const own = ownRecentPosts(viewerId, resume ? at : now).filter((post) => !hidden.has(post.post_id))
+  const own = ownRecentPosts(viewerId, resume ? at : now).filter((post) => !hidden.has(post.post_id) && usesTopic(post.body))
   const ownIds = new Set(own.map((post) => post.post_id))
-  const ranked = rankedFor(viewerId, at).filter((c) => !hidden.has(c.postId) && !ownIds.has(c.postId))
+  const pool = topic === undefined ? rankedFor(viewerId, at) : rankedTopicFor(viewerId, at, topic)
+  const ranked = pool.filter((c) => !hidden.has(c.postId) && !ownIds.has(c.postId))
   const slice = ranked.slice(offset, offset + limit)
   recordImpressions(
     viewerId,
@@ -990,7 +1025,7 @@ function forYouPage(viewerId: string, cursor: string | undefined, limit: number)
 
 // Following: the viewer's own posts, posts and reposts from accounts they follow, and
 // posts that use a hashtag they follow. Every row still passes the feed's visibility rules.
-export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor?: string, limit = 25): Page<FeedItem> {
+export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor?: string, limit = 25, topic?: string): Page<FeedItem> {
   const vis = visibilityClause(viewerId)
   // A post arm: `where` is the arm's own condition, placed before the visibility rules.
   const postArm = (where: string, params: Param[]): Arm => ({
@@ -1015,7 +1050,7 @@ export function homeFeed(mode: "for-you" | "following", viewerId: string, cursor
     reposter: "r.user_id",
   })
 
-  if (mode === "for-you") return forYouPage(viewerId, cursor, limit)
+  if (mode === "for-you") return forYouPage(viewerId, cursor, limit, topic)
 
   const tags = new Set(followedTopics(viewerId))
   const arms: Arm[] = [
@@ -2469,6 +2504,8 @@ export type OwnPostRow = {
   quotes: number
   replies: number
   bookmarks: number
+  // Follows that began on this post and still stand. Not an action, so it stays out of the engagement rate.
+  follows: number
   // Same rule as the post page: actions per view, as a percentage. Null when nobody has viewed the post.
   engagementRate: number | null
   // Clicks by kind, all time, like the other counts.
@@ -2488,6 +2525,7 @@ export function ownPostRows(authorId: string): OwnPostRow[] {
     quotes: number
     replies: number
     bookmarks: number
+    follows: number
   }>(
     `SELECT p.id, p.body, p.created_at,
        (SELECT COUNT(*) FROM post_views v WHERE v.post_id = p.id AND v.viewer_id <> p.author_id) AS views,
@@ -2495,7 +2533,8 @@ export function ownPostRows(authorId: string): OwnPostRow[] {
        (SELECT COUNT(*) FROM reposts r WHERE r.post_id = p.id) AS reposts,
        (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id = p.id AND q.is_draft = 0 AND q.publish_at IS NULL) AS quotes,
        (SELECT COUNT(*) FROM posts c WHERE c.reply_to_id = p.id AND c.is_draft = 0 AND c.publish_at IS NULL) AS replies,
-       (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id) AS bookmarks
+       (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id) AS bookmarks,
+       (SELECT COUNT(*) FROM follow_sources fs JOIN follows f ON f.follower_id = fs.follower_id AND f.followee_id = fs.followee_id WHERE fs.post_id = p.id) AS follows
      FROM posts p
      WHERE p.author_id = ? AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL
      ORDER BY p.created_at DESC, p.id DESC`,
@@ -2515,6 +2554,7 @@ export function ownPostRows(authorId: string): OwnPostRow[] {
       quotes: row.quotes,
       replies: row.replies,
       bookmarks: row.bookmarks,
+      follows: row.follows,
       engagementRate: row.views > 0 ? Math.round((actions / row.views) * 1000) / 10 : null,
       clicks: clicks.get(row.id) ?? emptyClickCounts(),
     }
@@ -2532,11 +2572,23 @@ export type PostAnalyticsView = {
   quotes: number
   replies: number
   bookmarks: number
+  // Follows that began on this post and still stand. Only the count is shown, never who followed.
+  follows: number
   // Actions on the post per view, as a percentage. Null when nobody has viewed it yet.
   engagementRate: number | null
   // Clicks by kind, all time.
   clicks: ClickCounts
   days: { label: string; views: number }[]
+}
+
+// Follows that began on a post and still stand. Only the count leaves here, never the people.
+export function followsFromPost(postId: string): number {
+  return (
+    get<{ c: number }>(
+      "SELECT COUNT(*) AS c FROM follow_sources fs JOIN follows f ON f.follower_id = fs.follower_id AND f.followee_id = fs.followee_id WHERE fs.post_id = ?",
+      postId
+    )?.c ?? 0
+  )
 }
 
 // Analytics for one of the viewer's own posts. Anyone else gets null, so the page looks missing.
@@ -2557,6 +2609,7 @@ export function postAnalytics(postId: string, viewerId: string, now = Date.now()
   const quotes = count("SELECT COUNT(*) AS c FROM posts WHERE quote_of_id = ? AND is_draft = 0 AND publish_at IS NULL", postId)
   const replies = count("SELECT COUNT(*) AS c FROM posts WHERE reply_to_id = ? AND is_draft = 0 AND publish_at IS NULL", postId)
   const bookmarks = count("SELECT COUNT(*) AS c FROM bookmarks WHERE post_id = ?", postId)
+  const follows = followsFromPost(postId)
 
   const today = Math.floor(now / DAY_MS)
   const viewDays = all<{ day: number; c: number }>(
@@ -2588,6 +2641,7 @@ export function postAnalytics(postId: string, viewerId: string, now = Date.now()
     quotes,
     replies,
     bookmarks,
+    follows,
     engagementRate: views > 0 ? Math.round((actions / views) * 1000) / 10 : null,
     clicks: clickCountsFor(postId),
     days,

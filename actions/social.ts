@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { getAgreedViewer } from "@/lib/auth"
 import { hangUpFor } from "@/lib/call-state"
 import { get, run, transaction } from "@/lib/db"
-import { getProfileByHandle, peopleOfPage } from "@/lib/data"
+import { getProfileByHandle, peopleOfPage, visiblePostIds } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { withRequested } from "@/lib/people-state"
 import { MINIMUM_AGE } from "@/lib/legal"
@@ -63,10 +63,26 @@ function dropPostBell(subscriberId: string, authorId: string) {
   run("DELETE FROM post_subscriptions WHERE user_id = ? AND author_id = ?", subscriberId, authorId)
 }
 
+// A follow that began on one of the account's own posts. The post must be theirs, and the viewer must be able to see it,
+// so the attribution can't be put on someone else's post. Anything else is ignored, and the follow stands regardless.
+function recordFollowSource(viewerId: string, authorId: string, postId: string | undefined, now: number) {
+  if (typeof postId !== "string" || postId.length === 0 || postId.length > 64) return
+  const post = get("SELECT 1 AS found FROM posts WHERE id = ? AND author_id = ? AND is_draft = 0 AND publish_at IS NULL AND removed_at IS NULL", postId, authorId)
+  if (!post || !visiblePostIds([postId], viewerId).has(postId)) return
+  run(
+    `INSERT INTO follow_sources (follower_id, followee_id, post_id, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (follower_id, followee_id) DO UPDATE SET post_id = excluded.post_id, created_at = excluded.created_at`,
+    viewerId,
+    authorId,
+    postId,
+    now
+  )
+}
+
 // Follows a public account at once. A protected account gets a request it must accept. Pressing again while requested
 // withdraws the request. A button that knows what the person asked for sends it as `want`, so a page that has gone stale
 // can't flip the opposite way: asking to follow someone you already follow just confirms it. Without `want` it flips.
-export async function toggleFollow(handle: string, want?: "follow" | "unfollow", proof?: string): Promise<FollowResult> {
+export async function toggleFollow(handle: string, want?: "follow" | "unfollow", proof?: string, from?: string): Promise<FollowResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow people." }
   if (want !== undefined && want !== "follow" && want !== "unfollow") return { ok: false, error: "Choose follow or unfollow." }
@@ -80,6 +96,7 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
     if (want === "follow") return { ok: true, state: "following" }
     transaction(() => {
       run("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
+      run("DELETE FROM follow_sources WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
       dropPostBell(viewer.id, target.id)
       run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow'", viewer.id, target.id)
     })
@@ -121,7 +138,9 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
     return { ok: true, state: "requested" }
   }
 
-  run("INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
+  const now = Date.now()
+  run("INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, now)
+  recordFollowSource(viewer.id, target.id, from, now)
   notify(target.id, viewer.id, "follow", null)
   refresh()
   return { ok: true, state: "following" }
@@ -164,6 +183,7 @@ export async function removeFollower(handle: string): Promise<VoidResult> {
   if (!follower) return { ok: false, error: "That account no longer exists." }
   transaction(() => {
     run("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?", follower.id, viewer.id)
+    run("DELETE FROM follow_sources WHERE follower_id = ? AND followee_id = ?", follower.id, viewer.id)
     dropPostBell(follower.id, viewer.id)
   })
   refresh()
@@ -194,6 +214,7 @@ export async function toggleBlock(handle: string, want?: boolean): Promise<VoidR
     run("INSERT OR IGNORE INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
     // Blocking cuts every follow, request, post bell and list follow in both directions.
     run("DELETE FROM follows WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)", viewer.id, target.id, target.id, viewer.id)
+    run("DELETE FROM follow_sources WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)", viewer.id, target.id, target.id, viewer.id)
     run("DELETE FROM follow_requests WHERE (requester_id = ? AND target_id = ?) OR (requester_id = ? AND target_id = ?)", viewer.id, target.id, target.id, viewer.id)
     dropPostBell(viewer.id, target.id)
     dropPostBell(target.id, viewer.id)
