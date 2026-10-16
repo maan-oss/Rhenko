@@ -8,14 +8,15 @@ import { TAB_FILL } from "@/components/app/tabs"
 import { TrendChart } from "@/components/app/trend-chart"
 import { pluralize } from "@/lib/format"
 import type { AnalyticsDay } from "@/lib/data"
+import { DEFINITIONS } from "@/lib/metric-definitions"
 import { cn } from "@/lib/utils"
 
-type Measure = { label: string; unit: string; pick: (day: AnalyticsDay) => number }
+type Measure = { label: string; unit: string; pick: (day: AnalyticsDay) => number; definition: string }
 
 const MEASURES: Measure[] = [
-  { label: "Post views", unit: "view", pick: (day) => day.views },
-  { label: "Profile visits", unit: "visit", pick: (day) => day.visits },
-  { label: "New followers", unit: "new follower", pick: (day) => day.follows },
+  { label: "Post views", unit: "view", pick: (day) => day.views, definition: DEFINITIONS.views },
+  { label: "Profile visits", unit: "visit", pick: (day) => day.visits, definition: DEFINITIONS.visits },
+  { label: "New followers", unit: "new follower", pick: (day) => day.follows, definition: DEFINITIONS.follows },
 ]
 
 const RANGES = [7, 14, 28] as const
@@ -63,6 +64,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
               key={item.label}
               type="button"
               aria-pressed={isSelected}
+              title={item.definition}
               onClick={() => setMeasureIndex(index)}
               className="group relative flex min-w-0 flex-col gap-2.5 rounded-2xl px-2.5 py-3 text-left outline-none transition-transform duration-150 select-none active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-dusk/50"
             >
@@ -128,6 +130,8 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
           unit={measure.unit}
           empty={`No ${measure.label.toLowerCase()} in the last ${range} days yet.`}
         />
+
+        <p className="text-sm leading-relaxed text-muted-foreground">{measure.definition}</p>
 
         <p className="text-sm text-muted-foreground tabular-nums">
           {exact(followers)} {pluralize(followers, "follower")} in total

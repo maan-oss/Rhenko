@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { ownPostRows, type OwnPostRow } from "@/lib/data"
 import { totalClicks } from "@/lib/post-clicks"
+import { DEFINITIONS } from "@/lib/metric-definitions"
 import { pluralize } from "@/lib/format"
 import { exact } from "@/components/app/analytics-bits"
 import { ComposeAction } from "@/components/app/compose-action"
@@ -27,6 +28,19 @@ const COUNTS = [
 
 type SortKey = "date" | (typeof COUNTS)[number]["key"]
 const SORT_KEYS: SortKey[] = ["date", ...COUNTS.map((column) => column.key)]
+
+// What each column counts. A header shows its line on hover, and the list under the table gives all of them.
+const COLUMN_TEXT: Record<SortKey, string> = {
+  date: "The post and the day it was posted. Sorting by it lists the newest or the oldest first.",
+  views: DEFINITIONS.views,
+  likes: DEFINITIONS.likes,
+  reposts: DEFINITIONS.reposts,
+  quotes: DEFINITIONS.quotes,
+  replies: DEFINITIONS.replies,
+  bookmarks: DEFINITIONS.bookmarks,
+  clicks: DEFINITIONS.clicks,
+  engagement: DEFINITIONS.engagement,
+}
 type Direction = "asc" | "desc"
 
 function valueOf(row: OwnPostRow, key: SortKey): number {
@@ -59,6 +73,7 @@ function header(key: SortKey, label: string, current: SortKey, direction: Direct
     >
       <Link
         href={`/analytics/posts?sort=${key}&dir=${next}`}
+        title={COLUMN_TEXT[key]}
         className={`inline-flex items-center gap-1 rounded-md outline-none transition-colors duration-200 hover:text-foreground focus-visible:ring-2 focus-visible:ring-dusk/50 ${active ? "text-foreground" : ""}`}
       >
         {label}
@@ -147,11 +162,14 @@ export default async function PostsAnalyticsPage({
         </p>
       ) : null}
 
-      <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
-        Views and actions are counted for all time, the same way as on each post&apos;s page. Engagement is the likes, reposts, quotes, replies and
-        bookmarks, divided by views. A post with no views has no engagement rate. Clicks count each time someone opens a link, a profile, the post, a
-        photo or a hashtag from it.
-      </p>
+      <dl className="flex flex-col gap-4 px-4 pt-8 pb-8 text-sm">
+        {SORT_KEYS.map((key) => (
+          <div key={key}>
+            <dt className="font-semibold">{key === "date" ? "Post" : COUNTS.find((column) => column.key === key)?.label}</dt>
+            <dd className="mt-0.5 leading-relaxed text-muted-foreground">{COLUMN_TEXT[key]}</dd>
+          </div>
+        ))}
+      </dl>
     </>
   )
 }
