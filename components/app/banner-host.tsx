@@ -119,7 +119,7 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
       >
         <span className="relative shrink-0">
           <Avatar user={banner.from} size={44} />
-          <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-dusk text-background ring-[2.5px] ring-popover">
+          <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-foreground text-background ring-[2.5px] ring-popover">
             <Icon className="size-[12px]" strokeWidth={2.4} aria-hidden="true" />
           </span>
         </span>
@@ -136,7 +136,7 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
         aria-hidden="true"
         onAnimationEnd={onDismiss}
         style={{ animation: `banner-drain ${LIFETIME_MS}ms linear forwards` }}
-        className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-dusk/70 group-focus-within:[animation-play-state:paused] group-hover:[animation-play-state:paused]"
+        className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-foreground/70 group-focus-within:[animation-play-state:paused] group-hover:[animation-play-state:paused]"
       />
     </motion.div>
   )
@@ -177,7 +177,7 @@ function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void 
         >
           <span className="relative shrink-0">
             {first ? <Avatar user={first} size={44} /> : null}
-            <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-dusk text-background ring-[2.5px] ring-popover">
+            <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-foreground text-background ring-[2.5px] ring-popover">
               <Phone className="size-[12px]" strokeWidth={2.4} aria-hidden="true" />
             </span>
           </span>

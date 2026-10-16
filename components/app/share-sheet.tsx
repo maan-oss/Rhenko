@@ -273,7 +273,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
                     aria-hidden="true"
                     className={cn(
                       "grid size-6 shrink-0 place-items-center rounded-full border transition-colors duration-200",
-                      picked ? "border-dusk bg-dusk text-background" : "border-input"
+                      picked ? "border-foreground bg-foreground text-background" : "border-input"
                     )}
                   >
                     {picked ? <Check className="size-3.5" strokeWidth={3} /> : null}
@@ -303,7 +303,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
           type="button"
           onClick={send}
           disabled={selected.length === 0 || sending}
-          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-dusk text-[15px] font-semibold text-background transition-[opacity,transform] duration-200 hover:opacity-90 active:scale-[0.99] disabled:opacity-35"
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground text-[15px] font-semibold text-background transition-[opacity,transform] duration-200 hover:opacity-90 active:scale-[0.99] disabled:opacity-35"
         >
           <Send className="size-[17px]" strokeWidth={2.2} aria-hidden="true" />
           {sending ? "Sending…" : label}
@@ -349,7 +349,7 @@ function SentView({ sent, onDone }: { sent: Sent; onDone: () => void }) {
         initial={{ scale: 0.4, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", stiffness: 420, damping: 20 }}
-        className="grid size-16 place-items-center rounded-full bg-dusk text-background"
+        className="grid size-16 place-items-center rounded-full bg-foreground text-background"
       >
         <Check className="size-8" strokeWidth={2.4} aria-hidden="true" />
       </motion.span>
@@ -367,7 +367,7 @@ function SentView({ sent, onDone }: { sent: Sent; onDone: () => void }) {
         <Link
           href={sent.conversationId ? `/messages/${sent.conversationId}` : "/messages"}
           onClick={onDone}
-          className="grid h-12 flex-1 place-items-center rounded-full bg-dusk text-[15px] font-semibold text-background transition-opacity hover:opacity-90"
+          className="grid h-12 flex-1 place-items-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity hover:opacity-90"
         >
           {sent.conversationId ? "Open chat" : "Open messages"}
         </Link>

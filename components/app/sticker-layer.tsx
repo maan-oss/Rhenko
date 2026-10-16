@@ -210,7 +210,7 @@ function TextEditor({
         }
       }}
       style={{ ...look.style, fontSize: "inherit", width: `${Math.max(value.length, 4)}ch` }}
-      className={cn(look.className, FONT_CLASS[sticker.font], "outline-2 outline-offset-2 outline-solid outline-dusk")}
+      className={cn(look.className, FONT_CLASS[sticker.font], "outline-2 outline-offset-2 outline-solid outline-foreground")}
     />
   )
 }
@@ -477,8 +477,8 @@ export function StickerEditLayer({
                   className={cn(
                     "block touch-none cursor-grab rounded-[0.5em] bg-transparent p-0 select-none active:cursor-grabbing",
                     isSelected
-                      ? "outline-1 outline-offset-2 outline-dashed outline-dusk"
-                      : "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dusk"
+                      ? "outline-1 outline-offset-2 outline-dashed outline-foreground"
+                      : "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                   )}
                 >
                   <StickerBody sticker={sticker} linkHashtags={false} />
@@ -487,8 +487,8 @@ export function StickerEditLayer({
             </div>
           )
         })}
-        {guide.x ? <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-dusk" /> : null}
-        {guide.y ? <div aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-dusk" /> : null}
+        {guide.x ? <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-foreground/50" /> : null}
+        {guide.y ? <div aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-foreground/50" /> : null}
       </div>
       {moving ? (
         <div

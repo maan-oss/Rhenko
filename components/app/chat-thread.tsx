@@ -230,7 +230,7 @@ function jumpTo(id: string) {
   }
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
   row.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" })
-  if (!reduced) row.animate([{ backgroundColor: "color-mix(in oklab, var(--dusk) 22%, transparent)" }, { backgroundColor: "transparent" }], { duration: 1400 })
+  if (!reduced) row.animate([{ backgroundColor: "color-mix(in oklab, var(--foreground) 10%, transparent)" }, { backgroundColor: "transparent" }], { duration: 1400 })
 }
 
 function MessageRow({
@@ -305,7 +305,7 @@ function MessageRow({
                   onClick={() => jumpTo(message.replyTo?.id ?? "")}
                   className={cn(
                     "block w-full rounded-xl border-l-2 px-2.5 py-1.5 text-left text-[13px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    message.mine ? "border-background/70 bg-background/15 text-background" : "border-dusk bg-background text-foreground"
+                    message.mine ? "border-background/70 bg-background/15 text-background" : "border-foreground/40 bg-background text-foreground"
                   )}
                 >
                   <span className="block truncate font-semibold">{message.replyTo.senderName}</span>

@@ -189,7 +189,7 @@ function Pulse({ active, children }: { active: boolean; children: ReactNode }) {
             <motion.span
               key={ring}
               aria-hidden="true"
-              className="absolute inset-0 rounded-full border-2 border-dusk/35"
+              className="absolute inset-0 rounded-full border-2 border-foreground/35"
               animate={{ scale: [1, 1.5], opacity: [0.7, 0] }}
               transition={{ duration: 2.2, repeat: Infinity, delay: ring * 1.1, ease: "easeOut" }}
             />
@@ -327,7 +327,7 @@ function Control({
           big ? "size-[76px]" : "size-14",
           tone === "plain" && "bg-muted text-foreground hover:bg-foreground/10",
           tone === "muted" && "bg-foreground text-background",
-          tone === "accept" && "bg-dusk text-background hover:opacity-90",
+          tone === "accept" && "bg-foreground text-background hover:opacity-90",
           tone === "end" && "bg-destructive text-destructive-foreground hover:opacity-90"
         )}
       >

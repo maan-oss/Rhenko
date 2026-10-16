@@ -33,7 +33,7 @@ export function TabFill({ layoutId }: { layoutId: string }) {
 function TabBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
-    <span className="absolute -top-1 -right-1.5 grid min-w-4 place-items-center rounded-full bg-dusk px-1 text-[10px] leading-4 font-semibold text-background">
+    <span className="absolute -top-1 -right-1.5 grid min-w-4 place-items-center rounded-full bg-foreground px-1 text-[10px] leading-4 font-semibold text-background">
       {count > 99 ? "99+" : count}
     </span>
   )

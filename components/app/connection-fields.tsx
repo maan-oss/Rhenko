@@ -287,14 +287,14 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
                     inTab
                       ? "border-foreground bg-foreground text-background"
                       : inOther
-                        ? "border-dusk/60 text-foreground hover:bg-foreground/5"
+                        ? "border-foreground/60 text-foreground hover:bg-foreground/5"
                         : "border-border hover:border-foreground/30 hover:bg-foreground/5"
                   )}
                 >
                   {inTab ? <Check className="size-3.5" strokeWidth={3} aria-hidden="true" /> : null}
                   <span>{language.name}</span>
                   {native ? <span className={cn("text-[13px]", inTab ? "text-background/70" : "text-muted-foreground")}>{language.native}</span> : null}
-                  {inOther ? <span aria-hidden="true" className="size-1.5 rounded-full bg-dusk" /> : null}
+                  {inOther ? <span aria-hidden="true" className="size-1.5 rounded-full bg-foreground" /> : null}
                 </button>
               </li>
             )

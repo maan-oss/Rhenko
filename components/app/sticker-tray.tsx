@@ -103,7 +103,7 @@ export function StickerTray({
                 className={cn(
                   "h-9 flex-1 rounded-full text-[13px] font-semibold transition-shadow duration-200",
                   LOOK_SWATCH[name],
-                  look === name && "ring-2 ring-dusk ring-offset-2 ring-offset-background"
+                  look === name && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
                 )}
               >
                 {LOOK_NAME[name]}

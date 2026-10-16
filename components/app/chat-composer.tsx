@@ -66,7 +66,7 @@ function SendButton({ disabled }: { disabled: boolean }) {
       disabled={pending || disabled}
       aria-label={pending ? "Sending" : "Send"}
       title="Send"
-      className="grid size-10 shrink-0 place-items-center rounded-full bg-dusk text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.96] disabled:opacity-35"
+      className="grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.96] disabled:opacity-35"
     >
       <ArrowUp className="size-[19px]" strokeWidth={2.3} aria-hidden="true" />
     </button>
@@ -80,7 +80,7 @@ function Waveform() {
       {[0, 1, 2, 3, 4].map((bar) => (
         <motion.span
           key={bar}
-          className="block h-4 w-[3px] rounded-full bg-dusk"
+          className="block h-4 w-[3px] rounded-full bg-foreground"
           style={{ originY: 1 }}
           animate={{ scaleY: [0.3, 1, 0.5, 0.9, 0.35] }}
           transition={{ duration: 1.1, repeat: Infinity, delay: bar * 0.11, ease: "easeInOut" }}
@@ -329,7 +329,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
       {replyTo ? (
-        <div className="flex items-center gap-3 border-l-2 border-dusk px-[72px] pt-2 text-sm lg:px-4">
+        <div className="flex items-center gap-3 border-l-2 border-foreground px-[72px] pt-2 text-sm lg:px-4">
           <div className="min-w-0 flex-1">
             <p className="truncate font-semibold text-foreground">Replying to {replyTo.name}</p>
             <p className="truncate text-muted-foreground">{replyTo.snippet || "Message"}</p>
@@ -358,7 +358,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           <button type="button" onClick={() => finishRecording(true)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
             Discard
           </button>
-          <button type="button" onClick={() => finishRecording(false)} className="rounded-full bg-dusk px-3 py-1 font-semibold text-background">
+          <button type="button" onClick={() => finishRecording(false)} className="rounded-full bg-foreground px-3 py-1 font-semibold text-background">
             Stop
           </button>
         </div>
@@ -459,7 +459,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
                   <motion.span
                     key="ring"
                     aria-hidden="true"
-                    className="absolute inset-0 rounded-full bg-dusk"
+                    className="absolute inset-0 rounded-full bg-foreground"
                     initial={{ scale: 1, opacity: 0.4 }}
                     animate={{ scale: [1, 1.7], opacity: [0.4, 0] }}
                     exit={{ opacity: 0 }}
@@ -470,7 +470,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               <span
                 className={cn(
                   "relative grid size-9 place-items-center rounded-full transition-colors duration-200",
-                  listening ? "bg-dusk text-background" : "text-foreground hover:bg-muted"
+                  listening ? "bg-foreground text-background" : "text-foreground hover:bg-muted"
                 )}
               >
                 <Mic className="size-[18px]" strokeWidth={2} aria-hidden="true" />

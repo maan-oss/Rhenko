@@ -65,7 +65,7 @@ function Tile({
         {pending ? (
           <motion.span
             aria-hidden="true"
-            className="absolute -inset-[4px] rounded-full border-2 border-dusk/40"
+            className="absolute -inset-[4px] rounded-full border-2 border-foreground/40"
             animate={{ opacity: [0.2, 0.9, 0.2] }}
             transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
           />

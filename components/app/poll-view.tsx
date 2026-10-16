@@ -79,7 +79,7 @@ export function PollView({ postId, poll }: { postId: string; poll: PollData }) {
               type="button"
               disabled={pending}
               onClick={() => vote(option.id)}
-              className="relative z-10 h-11 rounded-xl border border-border px-4 text-left text-[15px] font-medium transition-colors hover:border-dusk hover:bg-dusk/5"
+              className="relative z-10 h-11 rounded-xl border border-border px-4 text-left text-[15px] font-medium transition-colors hover:border-foreground/40 hover:bg-foreground/5"
             >
               {option.label}
             </button>
@@ -88,7 +88,7 @@ export function PollView({ postId, poll }: { postId: string; poll: PollData }) {
         return (
           <div key={option.id} className="relative z-10 overflow-hidden rounded-xl border border-border">
             <motion.div
-              className={cn("absolute inset-y-0 left-0", chosen ? "bg-dusk/25" : "bg-muted")}
+              className={cn("absolute inset-y-0 left-0", chosen ? "bg-foreground/15" : "bg-muted")}
               initial={{ width: 0 }}
               animate={{ width: `${percent}%` }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
