@@ -20,7 +20,6 @@
     "@simplewebauthn/server": "^14.0.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
-    "lucide-animated": "^1.0.5",
     "lucide-react": "^1.55.0",
     "motion": "^14.1.0",
     "next": "16.4.0",
