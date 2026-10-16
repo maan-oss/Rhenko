@@ -2344,14 +2344,12 @@ export function searchLists(query: string, viewerId: string, limit = 30): ListSu
 }
 
 // Analytics for an account's own posts and profile. Visits and views are counted per day in UTC.
-export type AnalyticsDay = { label: string; visits: number; views: number }
+// One UTC day: the views of the account's posts, the profile visits, and the new followers that day.
+export type AnalyticsDay = { label: string; visits: number; views: number; follows: number }
 
 export type AnalyticsView = {
-  visits7: number
-  visits28: number
-  views28: number
   followers: number
-  newFollowers28: number
+  // The last 56 days, oldest first. The two most recent 28-day spans are the ones compared on the page.
   days: AnalyticsDay[]
   // The posts seen most in the last 28 days. `views` is each post's view count over those 28 days.
   topPosts: { id: string; handle: string; body: string; views: number; likes: number }[]
@@ -2361,7 +2359,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 export function analyticsFor(userId: string, handle: string, now = Date.now()): AnalyticsView {
   const today = Math.floor(now / DAY_MS)
-  const windowStart = (today - 13) * DAY_MS
+  const windowStart = (today - 55) * DAY_MS
   const count = (sql: string, ...params: Param[]) => get<{ c: number }>(sql, ...params)?.c ?? 0
 
   const visitDays = all<{ day: number; c: number }>(
@@ -2379,13 +2377,21 @@ export function analyticsFor(userId: string, handle: string, now = Date.now()): 
     userId,
     windowStart
   )
+  const followDays = all<{ day: number; c: number }>(
+    `SELECT CAST(created_at / ? AS INTEGER) AS day, COUNT(*) AS c FROM follows
+     WHERE followee_id = ? AND created_at >= ? GROUP BY day`,
+    DAY_MS,
+    userId,
+    windowStart
+  )
   const days: AnalyticsDay[] = []
-  for (let offset = 13; offset >= 0; offset--) {
+  for (let offset = 55; offset >= 0; offset--) {
     const day = today - offset
     days.push({
       label: new Date(day * DAY_MS).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
       visits: visitDays.find((row) => row.day === day)?.c ?? 0,
       views: viewDays.find((row) => row.day === day)?.c ?? 0,
+      follows: followDays.find((row) => row.day === day)?.c ?? 0,
     })
   }
 
@@ -2405,16 +2411,7 @@ export function analyticsFor(userId: string, handle: string, now = Date.now()): 
   ).map((row) => ({ ...row, handle }))
 
   return {
-    visits7: count("SELECT COUNT(*) AS c FROM profile_visits WHERE profile_id = ? AND created_at >= ?", userId, now - 7 * DAY_MS),
-    visits28: count("SELECT COUNT(*) AS c FROM profile_visits WHERE profile_id = ? AND created_at >= ?", userId, now - 28 * DAY_MS),
-    views28: count(
-      `SELECT COUNT(*) AS c FROM post_views v JOIN posts p ON p.id = v.post_id
-       WHERE p.author_id = ? AND v.viewer_id <> p.author_id AND v.created_at >= ?`,
-      userId,
-      now - 28 * DAY_MS
-    ),
     followers: count("SELECT COUNT(*) AS c FROM follows WHERE followee_id = ?", userId),
-    newFollowers28: count("SELECT COUNT(*) AS c FROM follows WHERE followee_id = ? AND created_at >= ?", userId, now - 28 * DAY_MS),
     days,
     topPosts,
   }

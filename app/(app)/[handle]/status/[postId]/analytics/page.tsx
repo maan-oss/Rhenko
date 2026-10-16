@@ -3,8 +3,9 @@ import { notFound, redirect } from "next/navigation"
 import { requireViewer } from "@/lib/auth"
 import { postAnalytics } from "@/lib/data"
 import { pluralize } from "@/lib/format"
-import { DailyChart, StatGrid, exact } from "@/components/app/analytics-bits"
+import { exact } from "@/components/app/analytics-bits"
 import { PageHeader } from "@/components/app/page-header"
+import { TrendChart } from "@/components/app/trend-chart"
 import { LocalTime } from "@/components/app/time-text"
 
 type Params = Promise<{ handle: string; postId: string }>
@@ -22,7 +23,6 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
   if (stats.handle.toLowerCase() !== handle.toLowerCase()) redirect(`/${stats.handle}/status/${stats.id}/analytics`)
 
   const statusHref = `/${stats.handle}/status/${stats.id}`
-  const quiet = stats.views === 0
 
   // The five ways people respond, each with its own count. The bars compare them with one another.
   const actions = [
@@ -38,61 +38,52 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
     <>
       <PageHeader title="Post analytics" backHref={statusHref} />
 
-      <Link href={statusHref} className="flex flex-col gap-1.5 border-b border-border px-4 py-4 transition-colors duration-200 hover:bg-muted/50">
+      <Link href={statusHref} className="flex flex-col gap-1.5 border-b border-border px-4 py-4 transition-colors duration-200 hover:bg-muted/50 active:bg-muted">
         <p className="line-clamp-3 text-[15px] leading-relaxed break-words">{stats.body || "Photo or video post"}</p>
         <span className="text-[13px] text-muted-foreground">
           Posted <LocalTime at={stats.createdAt} variant="full" />
         </span>
       </Link>
 
-      <StatGrid
-        columns={3}
-        items={[
-          { label: "Views", note: "People who saw it", value: exact(stats.views) },
-          { label: "Engagement", note: "Actions per view", value: stats.engagementRate === null ? "—" : `${exact(stats.engagementRate)}%` },
-          { label: "Likes", note: "All time", value: exact(stats.likes) },
-          { label: "Reposts", note: "All time", value: exact(stats.reposts) },
-          { label: "Quotes", note: "All time", value: exact(stats.quotes) },
-          { label: "Replies", note: "All time", value: exact(stats.replies) },
-        ]}
-      />
+      <section aria-labelledby="views" className="flex flex-col gap-4 px-4 pt-5">
+        <div className="flex flex-col gap-2">
+          <h2 id="views" className="sr-only">
+            Views
+          </h2>
+          <p className="text-[44px] leading-none font-semibold tracking-tight tabular-nums">{exact(stats.views)}</p>
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {pluralize(stats.views, "view")} in total ·{" "}
+            {stats.engagementRate === null ? "No engagement yet" : `${exact(stats.engagementRate)}% engagement`}
+          </p>
+        </div>
+        <TrendChart
+          points={stats.days.map((day) => ({ label: day.label, value: day.views }))}
+          caption="Views of this post for each of the last 14 days"
+          unit="view"
+          empty="No one has seen this post yet."
+        />
+      </section>
 
-      <DailyChart
-        id="daily"
-        title="Views, last 14 days"
-        caption="Views of this post for each of the last 14 days"
-        series={[{ label: "Views", unit: "view", bar: "bg-foreground" }]}
-        days={stats.days.map((day) => ({ label: day.label, values: [day.views] }))}
-        note={
-          <>
-            <p className="text-sm text-muted-foreground tabular-nums">
-              {exact(stats.views)} {pluralize(stats.views, "view")} all time
-            </p>
-            {quiet ? <p className="text-sm text-muted-foreground">No one has seen this post yet. Views appear as people scroll past it.</p> : null}
-          </>
-        }
-      />
-
-      <section aria-labelledby="breakdown" className="flex flex-col px-4 py-5">
+      <section aria-labelledby="breakdown" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">
         <h2 id="breakdown" className="pb-2 text-base font-semibold">
           Actions
         </h2>
-        <ul className="flex flex-col divide-y divide-border">
+        <ul className="flex flex-col">
           {actions.map((row) => (
-            <li key={row.label} className="flex flex-col gap-2 py-3">
+            <li key={row.label} className="flex flex-col gap-2 border-t border-border py-3.5 first:border-t-0">
               <div className="flex items-baseline justify-between gap-3 text-[15px]">
                 <span>{row.label}</span>
                 <span className="font-semibold tabular-nums">{exact(row.count)}</span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                <div className="h-full rounded-full bg-foreground" style={{ width: `${Math.round((row.count / biggest) * 100)}%` }} />
+              <div className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                <div className="h-full rounded-full bg-dusk" style={{ width: `${Math.max(row.count > 0 ? 4 : 0, Math.round((row.count / biggest) * 100))}%` }} />
               </div>
             </li>
           ))}
         </ul>
       </section>
 
-      <p className="px-4 pb-8 text-sm text-muted-foreground">
+      <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
         A view counts once per person, when the post scrolls into view. Your own views are never counted. Engagement is the likes, reposts, quotes, replies and
         bookmarks the post has received, divided by its views. Days run from midnight to midnight UTC.
       </p>
