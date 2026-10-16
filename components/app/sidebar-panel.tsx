@@ -143,7 +143,7 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
           <Icon
             className={cn("size-[22px] text-foreground transition-transform duration-300 group-hover:scale-110", EASE)}
             strokeWidth={active ? 2.2 : 1.75}
-            fill={active ? "currentColor" : "none"}
+            fill={active && item.filled ? "currentColor" : "none"}
             aria-hidden="true"
           />
           {collapsed && badge > 0 ? (

@@ -1,5 +1,4 @@
 import { Suspense } from "react"
-import { AtSign, Bell, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { followRequestsFor, notificationsPage } from "@/lib/data"
 import { firstParam } from "@/lib/params"
@@ -29,16 +28,16 @@ async function NotificationsBody({ searchParams }: { searchParams: SearchParams 
 
   return (
     <>
-      <PageHeader title="Notifications" />
-      <div className="px-4 pt-3">
+      <PageHeader title="Notifications">
         <TabLinks
+          label="Notification sections"
           items={[
-            { href: "/notifications", label: "All", icon: <Bell />, active: tab === "all" },
-            { href: "/notifications?tab=mentions", label: "Mentions", icon: <AtSign />, active: tab === "mentions" },
-            { href: "/notifications?tab=priority", label: "Priority", icon: <Star />, active: tab === "priority" },
+            { href: "/notifications", label: "All", active: tab === "all" },
+            { href: "/notifications?tab=mentions", label: "Mentions", active: tab === "mentions" },
+            { href: "/notifications?tab=priority", label: "Priority", active: tab === "priority" },
           ]}
         />
-      </div>
+      </PageHeader>
       <NotificationsMarker />
       {requests.length > 0 ? (
         <section aria-label="Follow requests">

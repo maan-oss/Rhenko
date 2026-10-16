@@ -15,14 +15,11 @@ export function timeAgo(ms: number, now: number = Date.now()): string {
   })
 }
 
+// The time, a dot, then the date, as X writes it on a post: "8:17 PM · Oct 16, 2026".
 export function fullTimestamp(ms: number): string {
-  return new Date(ms).toLocaleString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
+  const time = new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  const day = new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  return `${time} · ${day}`
 }
 
 export function joinedLabel(ms: number): string {

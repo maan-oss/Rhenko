@@ -16,7 +16,7 @@ import { ProfileActions } from "@/components/app/profile-actions"
 import { ProfileBanner } from "@/components/app/profile-banner"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
-import { ProfileTabs } from "@/components/app/profile-tabs"
+import { TabLinks } from "@/components/app/tabs"
 import { AiLabel, LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
@@ -164,7 +164,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
       </div>
 
-      <ProfileTabs
+      <TabLinks
         label="Profile sections"
         items={sections.map((t) => ({
           href: t === "posts" ? base : `${base}?tab=${t}`,

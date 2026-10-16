@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { ChevronRight, MessageCircle, Plus, UserRoundPlus } from "lucide-react"
+import { ChevronRight, Plus } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { conversationSummaries, requestCount } from "@/lib/data"
 import { firstParam } from "@/lib/params"
@@ -32,22 +32,20 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader
         title="Messages"
         hideTitleOnPhone
-        tabs={
-          <TabLinks
-            names
-            label="Messages sections"
-            items={[
-              { href: "/messages", label: "Chats", icon: <MessageCircle />, active: tab === "messages" },
-              { href: "/messages?tab=requests", label: "Requests", icon: <UserRoundPlus />, active: tab === "requests", badge: requests },
-            ]}
-          />
-        }
         actions={
           <Button variant="outline" size="icon" nativeButton={false} render={<Link href="/messages/new" aria-label="New message" />} className="rounded-full">
             <Plus className="size-4" />
           </Button>
         }
-      />
+      >
+        <TabLinks
+          label="Messages sections"
+          items={[
+            { href: "/messages", label: "Chats", active: tab === "messages" },
+            { href: "/messages?tab=requests", label: "Requests", active: tab === "requests", badge: requests },
+          ]}
+        />
+      </PageHeader>
       {tab === "messages" && requests > 0 ? (
         <Link
           href="/messages?tab=requests"

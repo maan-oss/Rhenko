@@ -1,6 +1,5 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { List, Sparkles, Users } from "lucide-react"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { circlesFor } from "@/lib/circles"
@@ -58,21 +57,16 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const active = pin ? pin.id : topic ? `topic:${topic}` : mode
   return (
     <>
-      <PageHeader
-        title="Home"
-        hideTitleOnPhone
-        lead={<MenuButton viewer={viewer} />}
-        tabs={
-          <TabLinks
-            names
-            items={[
-              { href: "/", label: "For you", icon: <Sparkles />, active: !following && !pin },
-              { href: "/?tab=following", label: "Following", icon: <Users />, active: following },
-              ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, icon: <List />, active: pin?.id === item.id })),
-            ]}
-          />
-        }
-      />
+      <PageHeader title="Home" hideTitleOnPhone lead={<MenuButton viewer={viewer} />}>
+        <TabLinks
+          label="Home sections"
+          items={[
+            { href: "/", label: "For you", active: !following && !pin },
+            { href: "/?tab=following", label: "Following", active: following },
+            ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, active: pin?.id === item.id })),
+          ]}
+        />
+      </PageHeader>
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       <Composer
         viewer={viewer}

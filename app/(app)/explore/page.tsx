@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { ChevronRight, Newspaper, TrendingUp, Users } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
 import { starterPacks, trendingTags } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -52,18 +52,16 @@ async function ExploreBody({ searchParams }: { searchParams: SearchParams }) {
 
   return (
     <>
-      <PageHeader
-        title="Explore"
-        tabs={
-          <TabLinks
-            items={[
-              { href: "/explore", label: "Posts", icon: <Newspaper />, active: !trending },
-              { href: "/explore?tab=trending", label: "Trending", icon: <TrendingUp />, active: trending },
-              { href: "/explore?tab=packs", label: "Packs", icon: <Users />, active: packs },
-            ]}
-          />
-        }
-      />
+      <PageHeader title="Explore">
+        <TabLinks
+          label="Explore sections"
+          items={[
+            { href: "/explore", label: "Posts", active: !trending && !packs },
+            { href: "/explore?tab=trending", label: "Trending", active: trending },
+            { href: "/explore?tab=packs", label: "Packs", active: packs },
+          ]}
+        />
+      </PageHeader>
       {packs ? (
         <PacksTab viewerId={viewer.id} />
       ) : trending ? (
