@@ -1,13 +1,13 @@
 "use server"
 
-import { getViewer, newId } from "@/lib/auth"
+import { getAgreedViewer, newId } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { PROFILE_VISIT_WINDOW_MS } from "@/lib/rules"
 
 // Called when someone opens a profile. The same person counts once per window,
 // and the owner's own visits never count.
 export async function recordProfileVisit(profileId: string): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer || viewer.id === profileId) return
   if (!get("SELECT 1 AS found FROM users WHERE id = ?", profileId)) return
   const recent = get(

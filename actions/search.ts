@@ -1,19 +1,19 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { MAX_SEARCH_LENGTH, SAVED_SEARCH_LIMIT } from "@/lib/rules"
 
 export async function forgetSearch(query: string): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return
   run("DELETE FROM recent_searches WHERE user_id = ? AND query = ?", viewer.id, query)
   revalidatePath("/search")
 }
 
 export async function clearSearches(): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return
   run("DELETE FROM recent_searches WHERE user_id = ?", viewer.id)
   revalidatePath("/search")
@@ -23,7 +23,7 @@ export type SavedSearchResult = { ok: true } | { ok: false; error: string }
 
 // Keeps a search in the account's saved searches, until it is removed. Saving the same words twice does nothing.
 export async function saveSearch(query: string): Promise<SavedSearchResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to save a search." }
   const clean = query.trim().slice(0, MAX_SEARCH_LENGTH)
   if (!clean) return { ok: false, error: "Search for something first." }
@@ -38,7 +38,7 @@ export async function saveSearch(query: string): Promise<SavedSearchResult> {
 }
 
 export async function unsaveSearch(query: string): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return
   run("DELETE FROM saved_searches WHERE user_id = ? AND query = ?", viewer.id, query)
   revalidatePath("/search")

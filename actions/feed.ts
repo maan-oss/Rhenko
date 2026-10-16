@@ -1,6 +1,6 @@
 "use server"
 
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { visiblePostIds } from "@/lib/data"
 
@@ -18,7 +18,7 @@ function isId(value: unknown): value is string {
 // Adds time on screen to posts the viewer can see and did not write. Posts the viewer wrote are not counted: the feed does not
 // rank an author's own posts for them.
 export async function recordDwell(entries: { postId: string; ms: number }[]): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer || !Array.isArray(entries)) return
   const totals = new Map<string, number>()
   for (const entry of entries.slice(0, MAX_BATCH)) {
@@ -50,7 +50,7 @@ export async function recordDwell(entries: { postId: string; ms: number }[]): Pr
 
 // "Not interested": the post leaves this viewer's For you and stays out. It does not change what anyone else sees.
 export async function markNotInterested(postId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to change what you see." }
   if (!isId(postId)) return { ok: false, error: "That post was deleted." }
   const post = get<{ author_id: string }>("SELECT author_id FROM posts WHERE id = ?", postId)

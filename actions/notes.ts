@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getViewer, newId } from "@/lib/auth"
+import { getAgreedViewer, newId } from "@/lib/auth"
 import { canSeeLivePost } from "@/lib/data"
 import { get, run } from "@/lib/db"
 import { countChars, MAX_NOTE, POST_UNAVAILABLE } from "@/lib/rules"
@@ -19,7 +19,7 @@ function isId(value: unknown): value is string {
 
 // Anyone who can see a live post can add one community note to it. Readers then rate it.
 export async function addNote(postId: string, formData: FormData): Promise<NoteResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to add a note." }
   if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
@@ -36,7 +36,7 @@ export async function addNote(postId: string, formData: FormData): Promise<NoteR
 
 // Tapping the same rating again takes it back. Rating needs the note's post to be visible to the rater.
 export async function rateNote(noteId: string, helpful: boolean): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to rate notes." }
   if (typeof helpful !== "boolean") return { ok: false, error: "Pick helpful or not helpful." }
   const note = isId(noteId) ? get<{ author_id: string; post_id: string }>("SELECT author_id, post_id FROM community_notes WHERE id = ?", noteId) : undefined
@@ -60,7 +60,7 @@ export async function rateNote(noteId: string, helpful: boolean): Promise<VoidRe
 }
 
 export async function deleteNote(noteId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (isId(noteId)) run("DELETE FROM community_notes WHERE id = ? AND author_id = ?", noteId, viewer.id)
   refresh()

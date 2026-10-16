@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getViewer, newId } from "@/lib/auth"
+import { getAgreedViewer, newId } from "@/lib/auth"
 import { get, run, transaction } from "@/lib/db"
 import { closeCircle, isOwner, memberRole, uniqueSlug } from "@/lib/circles"
 import { blockedEitherWay } from "@/lib/notify"
@@ -57,7 +57,7 @@ function readFields(formData: FormData): Fields | { error: string } {
 }
 
 export async function createCircle(formData: FormData): Promise<CircleResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to start a circle." }
   const allowed = consume(`circle:${viewer.id}`, CREATE_LIMIT, CREATE_WINDOW_MS)
   if (!allowed.ok) {
@@ -93,7 +93,7 @@ export async function createCircle(formData: FormData): Promise<CircleResult> {
 }
 
 export async function updateCircle(circleId: string, formData: FormData): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can change this circle." }
   const fields = readFields(formData)
@@ -119,7 +119,7 @@ export async function updateCircle(circleId: string, formData: FormData): Promis
 // Joining an open circle is immediate. An ask-to-join circle gets a request with the applicant's answer, which the
 // owner reads before deciding. An invite-only circle can't be joined from here: a member adds the person by handle.
 export async function joinCircle(circleId: string, answer?: string): Promise<JoinResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to join circles." }
   const circle = isId(circleId)
     ? get<{ owner_id: string | null; access: CircleAccess; join_question: string }>(
@@ -159,7 +159,7 @@ export async function joinCircle(circleId: string, answer?: string): Promise<Joi
 }
 
 export async function cancelRequest(circleId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId)) return { ok: false, error: "That circle no longer exists." }
   run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, viewer.id)
@@ -169,7 +169,7 @@ export async function cancelRequest(circleId: string): Promise<VoidResult> {
 
 // The owner can't leave, because a circle needs someone to run it. They can delete it instead.
 export async function leaveCircle(circleId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId)) return { ok: false, error: "That circle no longer exists." }
   if (isOwner(circleId, viewer.id)) return { ok: false, error: "The owner can't leave. Delete the circle instead." }
@@ -179,7 +179,7 @@ export async function leaveCircle(circleId: string): Promise<VoidResult> {
 }
 
 export async function decideRequest(circleId: string, userId: string, approve: boolean): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can answer requests." }
   if (!isId(userId)) return { ok: false, error: "That request was already answered." }
@@ -202,7 +202,7 @@ export async function decideRequest(circleId: string, userId: string, approve: b
 }
 
 export async function addCircleMember(circleId: string, handle: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can add people." }
   const clean = typeof handle === "string" ? handle.trim().replace(/^@/, "").slice(0, MAX_HANDLE_INPUT) : ""
@@ -228,7 +228,7 @@ export async function addCircleMember(circleId: string, handle: string): Promise
 }
 
 export async function removeCircleMember(circleId: string, userId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can remove people." }
   if (!isId(userId)) return { ok: false, error: "Choose who to remove." }
@@ -241,7 +241,7 @@ export async function removeCircleMember(circleId: string, userId: string): Prom
 // Deletes the circle. Its posts stay as ordinary posts, unless the circle was closed: those go too, because only its
 // members were ever meant to see them. The confirmation on the page says which.
 export async function deleteCircle(circleId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can delete this circle." }
   const files = transaction(() => {

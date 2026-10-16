@@ -1,7 +1,7 @@
 "use server"
 
 import Stripe from "stripe"
-import { requireViewer } from "@/lib/auth"
+import { requireAgreedViewer } from "@/lib/auth"
 import {
   CURRENCY,
   billingPortalUrl,
@@ -35,7 +35,7 @@ function kindOf(value: unknown): Kind | null {
 }
 
 export async function startSubscription(value: string): Promise<Started> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   const kind = kindOf(value)
   if (!kind) return { ok: false, error: "That subscription does not exist." }
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
@@ -47,7 +47,7 @@ export async function startSubscription(value: string): Promise<Started> {
 }
 
 export async function openBilling(): Promise<Started> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
   try {
     return { ok: true, url: await billingPortalUrl(viewer) }
@@ -57,7 +57,7 @@ export async function openBilling(): Promise<Started> {
 }
 
 export async function withdraw(value: string): Promise<Done> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   const kind = kindOf(value)
   if (!kind) return { ok: false, error: "That subscription does not exist." }
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
@@ -69,7 +69,7 @@ export async function withdraw(value: string): Promise<Done> {
 }
 
 export async function startTip(postId: string, amount: number): Promise<Started> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   if (typeof postId !== "string" || !Number.isInteger(amount)) return { ok: false, error: "That tip is not valid." }
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
   try {
@@ -81,12 +81,12 @@ export async function startTip(postId: string, amount: number): Promise<Started>
 
 // The amounts a person can tip, read from the same configuration the checkout enforces.
 export async function tipOptions(): Promise<{ amounts: number[]; currency: string; feePercent: number }> {
-  await requireViewer()
+  await requireAgreedViewer()
   return { amounts: tipAmounts(), currency: CURRENCY, feePercent: tipFeePercent() }
 }
 
 export async function startPayouts(): Promise<Started> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
   try {
     return { ok: true, url: await payoutOnboardingUrl(viewer) }

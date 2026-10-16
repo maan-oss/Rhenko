@@ -1,6 +1,6 @@
 "use server"
 
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { canSeeLivePost } from "@/lib/data"
 import { get } from "@/lib/db"
 import { detectLanguage } from "@/lib/languages"
@@ -30,7 +30,7 @@ function targetFor(speaks: readonly string[]): string {
 // Translates a post the viewer can see, into the first language they speak. Each translation is kept, so asking again
 // costs nothing and does not call the service.
 export async function translatePost(postId: string): Promise<TranslateResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to translate posts." }
   if (typeof postId !== "string" || postId.length === 0 || postId.length > MAX_ID) return { ok: false, error: "That post can't be found." }
   if (!translationOn()) return { ok: false, error: "Translation isn't set up on this server." }
@@ -59,7 +59,7 @@ export async function translatePost(postId: string): Promise<TranslateResult> {
 
 // The same for a direct message. Only someone in the conversation can see its text.
 export async function translateMessage(messageId: string): Promise<TranslateResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to translate messages." }
   if (typeof messageId !== "string" || messageId.length === 0 || messageId.length > MAX_ID) return { ok: false, error: "That message can't be found." }
   if (!translationOn()) return { ok: false, error: "Translation isn't set up on this server." }

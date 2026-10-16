@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import Stripe from "stripe"
-import { newId, requireViewer } from "@/lib/auth"
+import { newId, requireAgreedViewer } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { AD_CAMPAIGNS_WAITING_MAX, MICRO_PER_CENT, campaignProblem, normalizeTopic } from "@/lib/ad-rules"
 import { CURRENCY, adCreditUrl, paymentsConfigured } from "@/lib/payments"
@@ -13,7 +13,7 @@ const REPORT_REASONS = ["misleading", "prohibited", "political", "other"] as con
 
 // A person reports an ad. Nothing about the report reaches the advertiser; a person reads it in scripts/ads.mjs.
 export async function reportAd(campaignId: string, reason: string, note: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   if (typeof campaignId !== "string" || !/^[0-9a-f-]{36}$/.test(campaignId)) return { ok: false, error: "That ad is not available." }
   if (!(REPORT_REASONS as readonly string[]).includes(reason)) return { ok: false, error: "Choose a reason for the report." }
   const campaign = get("SELECT c.id FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ? AND c.status IN ('active', 'paused', 'ended')", campaignId)
@@ -42,7 +42,7 @@ function text(value: FormDataEntryValue | null, max: number): string {
 
 // Sets up the advertiser's account. Accepting the advertising policy is recorded with the time it was accepted.
 export async function createAdAccount(_previous: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   if (get("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)) return { error: "You already have an advertising account." }
   const business = text(formData.get("business_name"), 80)
   const country = text(formData.get("country"), 2).toUpperCase()
@@ -70,7 +70,7 @@ export async function createAdAccount(_previous: FormState, formData: FormData):
 
 // Sends a campaign to review. It does not run until a person approves it (scripts/ads.mjs), so nothing is shown unreviewed.
 export async function createCampaign(_previous: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   const account = get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
   if (!account) return { error: "Set up an advertising account first." }
   const waiting = get<{ n: number }>("SELECT COUNT(*) AS n FROM ad_campaigns WHERE account_id = ? AND status = 'in_review'", account.id)
@@ -110,7 +110,7 @@ export async function createCampaign(_previous: FormState, formData: FormData): 
 
 // Pauses a running campaign, or starts a paused one again. Ended, rejected and waiting campaigns cannot be changed here.
 export async function setCampaignPaused(campaignId: string, paused: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   const row = get<{ status: string }>(
     "SELECT c.status FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ? AND a.user_id = ?",
     campaignId,
@@ -126,7 +126,7 @@ export async function setCampaignPaused(campaignId: string, paused: boolean): Pr
 
 // Starts a Stripe checkout that adds to the advertising balance. The balance changes only when Stripe confirms the payment.
 export async function startAdCredit(amount: number): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  const viewer = await requireViewer()
+  const viewer = await requireAgreedViewer()
   if (!paymentsConfigured()) return { ok: false, error: "Payments are not set up on this server yet." }
   const account = get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
   if (!account) return { ok: false, error: "Set up an advertising account first." }

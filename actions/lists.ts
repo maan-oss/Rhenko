@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getViewer, newId } from "@/lib/auth"
+import { getAgreedViewer, newId } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { blockedEitherWay } from "@/lib/notify"
 import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME } from "@/lib/rules"
@@ -23,7 +23,7 @@ function ownedList(listId: unknown, userId: string): boolean {
 }
 
 export async function createList(formData: FormData): Promise<ListResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to make a list." }
   const name = String(formData.get("name") ?? "").trim()
   if (!name) return { ok: false, error: "Give the list a name." }
@@ -48,7 +48,7 @@ export async function createList(formData: FormData): Promise<ListResult> {
 }
 
 export async function deleteList(listId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can delete this list." }
   run("DELETE FROM lists WHERE id = ?", listId)
@@ -57,7 +57,7 @@ export async function deleteList(listId: string): Promise<VoidResult> {
 }
 
 export async function addListMember(listId: string, handle: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
   const clean = typeof handle === "string" ? handle.trim().replace(/^@/, "").slice(0, MAX_HANDLE_INPUT) : ""
@@ -77,7 +77,7 @@ export async function addListMember(listId: string, handle: string): Promise<Voi
 }
 
 export async function removeListMember(listId: string, userId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
   if (typeof userId !== "string" || !userId) return { ok: false, error: "Choose who to remove." }
@@ -90,7 +90,7 @@ export async function removeListMember(listId: string, userId: string): Promise<
 // asked for sends it as `want` (true to follow, false to stop), so a stale page can't flip the opposite way. Without
 // `want` it flips.
 export async function toggleListFollow(listId: string, want?: boolean): Promise<FollowListResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow lists." }
   if (typeof listId !== "string") return { ok: false, error: "That list no longer exists." }
   if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose follow or unfollow." }

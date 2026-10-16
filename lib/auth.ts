@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers"
 import { connection } from "next/server"
 import { redirect } from "next/navigation"
 import { db, get, run, transaction, type Param } from "@/lib/db"
+import { TERMS_VERSION } from "@/lib/legal"
 import { consume } from "@/lib/rate-limit"
 import { decryptText, encryptText, isEncrypted, keyedHash } from "@/lib/secrets"
 import {
@@ -587,6 +588,20 @@ export async function getViewer(): Promise<Viewer | null> {
 export async function requireViewer(): Promise<Viewer> {
   const viewer = await getViewer()
   if (!viewer) redirect("/login")
+  return viewer
+}
+
+// The viewer an action may act for: signed in, and agreed to the current Terms and Privacy Policy. The pages already send an
+// account that has not agreed to the agreement screen; this does the same for a request sent straight to an action.
+export async function getAgreedViewer(): Promise<Viewer | null> {
+  const viewer = await getViewer()
+  return viewer && viewer.termsVersion === TERMS_VERSION ? viewer : null
+}
+
+export async function requireAgreedViewer(): Promise<Viewer> {
+  const viewer = await getViewer()
+  if (!viewer) redirect("/login")
+  if (viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
   return viewer
 }
 

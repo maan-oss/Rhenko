@@ -3,7 +3,7 @@
 import { languageOf } from "@/lib/languages"
 import { parseStickerSet, stickerSetJson } from "@/lib/stickers"
 import { revalidatePath } from "next/cache"
-import { getViewer, newId } from "@/lib/auth"
+import { getAgreedViewer, newId } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost, canSeePost, editHistoryFor, visiblePostIds, type EditVersion } from "@/lib/data"
 import { memberRole } from "@/lib/circles"
@@ -63,7 +63,7 @@ function isId(value: unknown): value is string {
 }
 
 export async function createPost(formData: FormData): Promise<CreateResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to post." }
   const allowed = consume(`post:${viewer.id}`, POST_LIMIT, POST_WINDOW_MS)
   if (!allowed.ok) return { ok: false, error: `You've posted a lot in the last minute. Try again in ${waitLabel(allowed.retryAfterSeconds)}.` }
@@ -254,7 +254,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
 
 // Editing is allowed for a short window after a post goes live.
 export async function editPost(postId: string, formData: FormData): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to edit posts." }
   if (!isId(postId)) return { ok: false, error: "That post was deleted." }
   const post = get<{
@@ -333,7 +333,7 @@ function postAuthor(postId: string): string | null {
 }
 
 export async function deletePost(postId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to delete posts." }
   const author = isId(postId) ? postAuthor(postId) : null
   if (!author) return { ok: false, error: "That post was deleted." }
@@ -349,7 +349,7 @@ export async function deletePost(postId: string): Promise<VoidResult> {
 
 // Takes back a post moments after it went out, while the undo window is open.
 export async function undoPost(postId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const post = isId(postId) ? get<{ author_id: string; created_at: number }>("SELECT author_id, created_at FROM posts WHERE id = ?", postId) : undefined
   if (!post || post.author_id !== viewer.id) return { ok: false, error: "That post was deleted." }
@@ -364,7 +364,7 @@ export async function undoPost(postId: string): Promise<VoidResult> {
 // The author of a post can hide replies to it. Hidden replies stay visible to the
 // person who wrote them and to the post's author, and are hidden from everyone else.
 export async function setReplyHidden(replyId: string, hidden: boolean): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const reply = isId(replyId) ? get<{ reply_to_id: string | null }>("SELECT reply_to_id FROM posts WHERE id = ?", replyId) : undefined
   if (!reply?.reply_to_id) return { ok: false, error: "That reply was deleted." }
@@ -379,7 +379,7 @@ export type EditHistoryResult = { ok: true; versions: EditVersion[] } | { ok: fa
 
 // Earlier versions of a post, for anyone who may see it. A draft's or scheduled post's history is its author's only.
 export async function getEditHistory(postId: string): Promise<EditHistoryResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to see edit history." }
   if (!isId(postId) || !canSeePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   const versions = editHistoryFor(postId, viewer.id)
@@ -388,7 +388,7 @@ export async function getEditHistory(postId: string): Promise<EditHistoryResult>
 }
 
 export async function publishNow(postId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to publish." }
   const post = isId(postId)
     ? get<{ author_id: string; body: string; reply_to_id: string | null; quote_of_id: string | null; is_draft: number; publish_at: number | null }>(
@@ -410,7 +410,7 @@ export async function publishNow(postId: string): Promise<VoidResult> {
 }
 
 export async function toggleLike(postId: string): Promise<ToggleResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to like posts." }
   if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   const author = postAuthor(postId)
@@ -432,7 +432,7 @@ export async function toggleLike(postId: string): Promise<ToggleResult> {
 }
 
 export async function toggleRepost(postId: string): Promise<ToggleResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to repost." }
   if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   const author = postAuthor(postId)
@@ -454,7 +454,7 @@ export async function toggleRepost(postId: string): Promise<ToggleResult> {
 }
 
 export async function toggleBookmark(postId: string): Promise<ToggleResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to bookmark posts." }
   if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
 
@@ -472,7 +472,7 @@ export async function toggleBookmark(postId: string): Promise<ToggleResult> {
 }
 
 export async function moveBookmark(postId: string, folderId: string | null): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(postId)) return { ok: false, error: "Bookmark this post first." }
   if (folderId !== null) {
@@ -487,7 +487,7 @@ export async function moveBookmark(postId: string, folderId: string | null): Pro
 }
 
 export async function createFolder(formData: FormData): Promise<IdResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const name = String(formData.get("name") ?? "").trim()
   if (!name) return { ok: false, error: "Name the folder." }
@@ -499,7 +499,7 @@ export async function createFolder(formData: FormData): Promise<IdResult> {
 }
 
 export async function deleteFolder(folderId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (isId(folderId)) run("DELETE FROM bookmark_folders WHERE id = ? AND user_id = ?", folderId, viewer.id)
   refresh()
@@ -508,7 +508,7 @@ export async function deleteFolder(folderId: string): Promise<VoidResult> {
 
 // Pins one of the author's own live posts to their profile, or unpins with null.
 export async function pinPost(postId: string | null): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (postId !== null) {
     const post = isId(postId)
@@ -527,7 +527,7 @@ export async function pinPost(postId: string | null): Promise<VoidResult> {
 }
 
 export async function toggleHighlight(postId: string): Promise<ToggleResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const author = isId(postId) ? postAuthor(postId) : null
   if (!author) return { ok: false, error: "That post was deleted." }
@@ -546,7 +546,7 @@ export async function toggleHighlight(postId: string): Promise<ToggleResult> {
 }
 
 export async function votePoll(postId: string, optionId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to vote." }
   if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   const poll = get<{ ends_at: number }>("SELECT ends_at FROM polls WHERE post_id = ?", postId)
@@ -563,7 +563,7 @@ export async function votePoll(postId: string, optionId: string): Promise<VoidRe
 
 // Counts a view as posts scroll into view: once per person, only for live posts they may see, and never the author's own.
 export async function recordViews(postIds: string[]): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer || !Array.isArray(postIds)) return
   const ids = [...new Set(postIds.filter(isId))].slice(0, 50)
   const now = Date.now()
@@ -579,7 +579,7 @@ export async function recordViews(postIds: string[]): Promise<void> {
 }
 
 export async function reportPost(postId: string, reason: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to report posts." }
   if (!isId(postId) || !postAuthor(postId)) return { ok: false, error: "That post was deleted." }
   if (!(REPORT_REASONS as readonly string[]).includes(reason)) return { ok: false, error: "Pick a reason." }
@@ -608,7 +608,7 @@ export async function reportPost(postId: string, reason: string): Promise<VoidRe
 }
 
 export async function addMutedWord(word: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const clean = typeof word === "string" ? word.trim().replace(/^#/, "").toLowerCase() : ""
   if (!clean) return { ok: false, error: "Enter a word or phrase." }
@@ -619,7 +619,7 @@ export async function addMutedWord(word: string): Promise<VoidResult> {
 }
 
 export async function removeMutedWord(word: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof word === "string") run("DELETE FROM muted_words WHERE user_id = ? AND word = ?", viewer.id, word)
   refresh()

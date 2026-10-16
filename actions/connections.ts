@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { get } from "@/lib/db"
 import { isLanguageCode, isSpeakLevel, type SpeakLevel } from "@/lib/languages"
 import { areaProblem, isCountryCode, regionProblem } from "@/lib/places"
@@ -23,7 +23,7 @@ function refresh() {
 
 // Where someone is. The country is needed with a city or region, so people can be matched on the same city in the same country.
 export async function saveWhere(input: { country: string; area: string; region: string; suggestNearby: boolean }): Promise<ConnectionResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to set where you are." }
   const country = typeof input.country === "string" ? input.country : ""
   const area = typeof input.area === "string" ? input.area : ""
@@ -43,7 +43,7 @@ export async function saveLanguages(input: {
   learn: string[]
   suggestLanguage: boolean
 }): Promise<ConnectionResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to set your languages." }
   if (!Array.isArray(input.speak) || !Array.isArray(input.learn)) return { ok: false, error: "Something went wrong. Try again." }
   const speak: { code: string; level: SpeakLevel }[] = []
@@ -65,7 +65,7 @@ export async function saveLanguages(input: {
 
 // Setup after sign-up is finished or skipped. Either way it does not show again, and the steps stay in Settings.
 export async function finishSetup(value: "done" | "skipped"): Promise<ConnectionResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   setOnboarding(viewer.id, value === "done" ? "done" : "skipped")
   refresh()
@@ -74,7 +74,7 @@ export async function finishSetup(value: "done" | "skipped"): Promise<Connection
 
 // "Not now" on a suggestion. The person is not suggested to this viewer again.
 export async function dismissSuggestion(userId: string): Promise<ConnectionResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof userId !== "string" || userId.length === 0 || userId.length > MAX_ID) return { ok: false, error: "That person can't be found." }
   if (userId === viewer.id) return { ok: false, error: "You can't suggest yourself." }
@@ -86,7 +86,7 @@ export async function dismissSuggestion(userId: string): Promise<ConnectionResul
 
 // Brings back everyone dismissed with "Not now".
 export async function resetDismissed(): Promise<ConnectionResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   clearDismissals(viewer.id)
   refresh()
@@ -95,7 +95,7 @@ export async function resetDismissed(): Promise<ConnectionResult> {
 
 // "Not now" on the setup prompt on Home. Setup stays available from Connect and from Settings.
 export async function skipSetup(): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (viewer) setOnboarding(viewer.id, "skipped")
   refresh()
 }

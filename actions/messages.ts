@@ -2,7 +2,7 @@
 
 import { languageOf } from "@/lib/languages"
 import { revalidatePath } from "next/cache"
-import { getViewer, newId } from "@/lib/auth"
+import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
@@ -126,7 +126,7 @@ export async function startConversation(
   handle: string,
   proof?: string
 ): Promise<{ ok: true; id: string } | { ok: false; error: string; proofRequired?: boolean }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to send messages." }
   const target = get<{ id: string; bot: number }>(
     "SELECT id, bot FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL",
@@ -234,7 +234,7 @@ function sendablePost(postId: string, senderId: string): boolean {
 const POST_UNAVAILABLE = "That post isn't available to share."
 
 export async function createGroup(_prev: ChatState, formData: FormData): Promise<ChatState & { id?: string }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to start a group." }
   const title = String(formData.get("title") ?? "").trim()
   if ([...title].length > MAX_GROUP_TITLE) return { error: `Group names can have up to ${MAX_GROUP_TITLE} characters.` }
@@ -277,7 +277,7 @@ export async function createGroup(_prev: ChatState, formData: FormData): Promise
 
 // Who is in a group and who made it, fresh from the server. The group panel asks for this whenever it opens.
 export async function groupInfo(conversationId: string): Promise<GroupInfo> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const conversation = id ? conversationOf(id) : undefined
@@ -312,7 +312,7 @@ export async function groupInfo(conversationId: string): Promise<GroupInfo> {
 // Adds someone to a group. Someone who follows the person adding them joins at once; anyone else is invited and joins when
 // they accept, and the result says which.
 export async function addToGroup(conversationId: string, handle: string): Promise<VoidResult & { status?: "accepted" | "requested" }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const status = id ? memberStatus(id, viewer.id) : null
@@ -345,7 +345,7 @@ export async function addToGroup(conversationId: string, handle: string): Promis
 
 // Anyone who has joined a group can give it a new name. An empty name clears it.
 export async function renameGroup(conversationId: string, title: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const status = id ? memberStatus(id, viewer.id) : null
@@ -365,7 +365,7 @@ export async function renameGroup(conversationId: string, title: string): Promis
 // Only the person who made a group can remove someone from it. Removing deletes their place in the group, and anyone in
 // the group can add them back. Leaving is a different action, open to every member.
 export async function removeFromGroup(conversationId: string, userId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const status = id ? memberStatus(id, viewer.id) : null
@@ -403,7 +403,7 @@ function directConversationClosed(conversationId: string, viewerId: string): boo
 }
 
 export async function leaveConversation(conversationId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   if (!id || memberStatus(id, viewer.id) === null) return { ok: false, error: "That conversation doesn't exist." }
@@ -435,7 +435,7 @@ export async function leaveConversation(conversationId: string): Promise<VoidRes
 }
 
 export async function acceptConversation(conversationId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   if (!id || memberStatus(id, viewer.id) !== "requested") return { ok: false, error: "That request is gone." }
@@ -451,7 +451,7 @@ export async function declineConversation(conversationId: string): Promise<VoidR
 }
 
 export async function markConversationRead(conversationId: string): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   const id = asId(conversationId)
   if (!viewer || !id) return
   run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", Date.now(), id, viewer.id)
@@ -460,7 +460,7 @@ export async function markConversationRead(conversationId: string): Promise<void
 }
 
 export async function sendMessage(_prev: ChatState, formData: FormData): Promise<ChatState> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to send messages." }
   const conversationId = String(formData.get("conversationId") ?? "")
   const status = memberStatus(conversationId, viewer.id)
@@ -521,7 +521,7 @@ export type ShareResult =
 
 // Sends a post to several people at once, each in their own chat, with an optional note.
 export async function sharePostWith(postId: string, handles: string[], note: string): Promise<ShareResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to send messages." }
   const id = asId(postId)
   if (!id || !sendablePost(id, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
@@ -565,7 +565,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
 
 // The people to offer when sharing: recent chats for an empty search, otherwise accounts that match the search.
 export async function shareRecipients(query: string): Promise<MiniUser[]> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return []
   const clean = typeof query === "string" ? query.trim().replace(/^@/, "").slice(0, 50) : ""
   if (!clean) return recentChatPartners(viewer.id)
@@ -575,7 +575,7 @@ export async function shareRecipients(query: string): Promise<MiniUser[]> {
 // Older messages in a conversation, for the "Load earlier messages" button. Only members get them, and a member only gets
 // what they could already see in the thread.
 export async function loadEarlierMessages(conversationId: string, beforeCreatedAt: number): Promise<MessageView[]> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return []
   const id = asId(conversationId)
   if (!id || memberStatus(id, viewer.id) === null) return []
@@ -585,7 +585,7 @@ export async function loadEarlierMessages(conversationId: string, beforeCreatedA
 
 // Tells the other members who is typing. The thread shows it for a few seconds.
 export async function signalTyping(conversationId: string): Promise<void> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   const id = asId(conversationId)
   if (!viewer || !id || memberStatus(id, viewer.id) !== "accepted") return
   const name = get<{ name: string }>("SELECT name FROM users WHERE id = ?", viewer.id)?.name ?? ""
@@ -594,7 +594,7 @@ export async function signalTyping(conversationId: string): Promise<void> {
 }
 
 export async function toggleReaction(messageId: string, emoji: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!(REACTIONS as readonly string[]).includes(emoji)) return { ok: false, error: "That reaction isn't available." }
   const id = asId(messageId)
@@ -617,7 +617,7 @@ export async function toggleReaction(messageId: string, emoji: string): Promise<
 }
 
 export async function deleteMessage(messageId: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(messageId)
   const message = id
@@ -638,7 +638,7 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
 
 // Muting a conversation keeps its messages but stops them from counting as unread.
 export async function toggleConversationMute(conversationId: string): Promise<VoidResult & { muted?: boolean }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const member = id

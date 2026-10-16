@@ -1,7 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
-import { clientIp, getViewer, newId } from "@/lib/auth"
+import { clientIp, getAgreedViewer, getViewer, newId } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
 import { hidePost } from "@/lib/moderation"
@@ -25,7 +25,7 @@ export async function acceptTerms(_prev: LegalState, formData: FormData): Promis
 
 // The author of a hidden post answers the notice once, within the appeal window.
 export async function appealNotice(_prev: LegalState, formData: FormData): Promise<LegalState> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to appeal." }
   const noticeId = String(formData.get("notice") ?? "")
   const reason = String(formData.get("reason") ?? "").replace(/\r\n/g, "\n").trim()

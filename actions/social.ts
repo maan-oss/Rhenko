@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { hangUpFor } from "@/lib/call-state"
 import { get, run, transaction } from "@/lib/db"
 import { getProfileByHandle, peopleOfPage } from "@/lib/data"
@@ -67,7 +67,7 @@ function dropPostBell(subscriberId: string, authorId: string) {
 // withdraws the request. A button that knows what the person asked for sends it as `want`, so a page that has gone stale
 // can't flip the opposite way: asking to follow someone you already follow just confirms it. Without `want` it flips.
 export async function toggleFollow(handle: string, want?: "follow" | "unfollow", proof?: string): Promise<FollowResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow people." }
   if (want !== undefined && want !== "follow" && want !== "unfollow") return { ok: false, error: "Choose follow or unfollow." }
   const target = accountByHandle(handle)
@@ -128,7 +128,7 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
 }
 
 export async function acceptFollowRequest(requesterHandle: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const requester = activeAccountByHandle(requesterHandle)
   if (!requester) return { ok: false, error: "That account no longer exists. Decline the request to clear it." }
@@ -144,7 +144,7 @@ export async function acceptFollowRequest(requesterHandle: string): Promise<Void
 }
 
 export async function declineFollowRequest(requesterHandle: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   // Deactivated accounts count here too, so a request from one can still be cleared.
   const requester = accountByHandle(requesterHandle)
@@ -158,7 +158,7 @@ export async function declineFollowRequest(requesterHandle: string): Promise<Voi
 }
 
 export async function removeFollower(handle: string): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const follower = accountByHandle(handle)
   if (!follower) return { ok: false, error: "That account no longer exists." }
@@ -173,7 +173,7 @@ export async function removeFollower(handle: string): Promise<VoidResult> {
 // Blocks or unblocks an account. A button that knows what the person asked for sends it as `want` (true to block, false
 // to unblock), so a stale page can't flip the opposite way. Without `want` it flips.
 export async function toggleBlock(handle: string, want?: boolean): Promise<VoidResult & { blocked?: boolean }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose block or unblock." }
   const target = accountByHandle(handle)
@@ -209,7 +209,7 @@ export async function toggleBlock(handle: string, want?: boolean): Promise<VoidR
 
 // Mutes or unmutes an account. `want` works as it does for toggleBlock: true to mute, false to unmute, left out to flip.
 export async function toggleMute(handle: string, want?: boolean): Promise<VoidResult & { muted?: boolean }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose mute or unmute." }
   const target = accountByHandle(handle)
@@ -233,7 +233,7 @@ export async function toggleMute(handle: string, want?: boolean): Promise<VoidRe
 // Follows or unfollows a topic, and says which it is now. Asking for the state you want (not flipping it) means a stale
 // button can't undo what the person meant: following a topic you already follow just confirms it.
 export async function setTopicFollow(tag: string, follow: boolean): Promise<TopicResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow topics." }
   const checked = checkTopic(tag)
   if (!checked.ok) return checked
@@ -257,7 +257,7 @@ export async function setTopicFollow(tag: string, follow: boolean): Promise<Topi
 // The next page of an account's followers or following, newest first. It applies the same rules as the page: a protected
 // account only shows its lists to the owner and to people who follow it.
 export async function loadMorePeople(handle: string, kind: "followers" | "following", before: number): Promise<PeoplePage> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (kind !== "followers" && kind !== "following") return { ok: false, error: "Pick followers or following." }
   if (typeof before !== "number" || !Number.isFinite(before)) return { ok: false, error: "Couldn't load more people. Reload the page and try again." }
@@ -276,7 +276,7 @@ export async function loadMorePeople(handle: string, kind: "followers" | "follow
 // there is nothing left for them to decide; the result says how many.
 // Hides or shows the counts on the viewer's own posts, for everyone except the viewer.
 export async function setHideCounts(hide: boolean): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof hide !== "boolean") return { ok: false, error: "Choose whether counts are hidden." }
   run("UPDATE users SET hide_counts = ? WHERE id = ?", hide ? 1 : 0, viewer.id)
@@ -285,7 +285,7 @@ export async function setHideCounts(hide: boolean): Promise<VoidResult> {
 }
 
 export async function setProtected(protectedAccount: boolean): Promise<VoidResult & { cleared?: number }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof protectedAccount !== "boolean") return { ok: false, error: "Choose whether your posts are protected." }
   let cleared = 0
@@ -302,7 +302,7 @@ export async function setProtected(protectedAccount: boolean): Promise<VoidResul
 }
 
 export async function changeHandle(_prev: ProfileState, formData: FormData): Promise<ProfileState> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in first." }
   const handle = String(formData.get("handle") ?? "").trim()
   const error = validateHandle(handle)
@@ -319,7 +319,7 @@ export async function changeHandle(_prev: ProfileState, formData: FormData): Pro
 }
 
 export async function updateBirthday(_prev: ProfileState, formData: FormData): Promise<ProfileState> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in first." }
   const birthday = String(formData.get("birthday") ?? "").trim()
   const age = ageFrom(birthday)
@@ -331,7 +331,7 @@ export async function updateBirthday(_prev: ProfileState, formData: FormData): P
 }
 
 export async function updateProfile(_prev: ProfileState, formData: FormData): Promise<ProfileState> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to edit your profile." }
 
   const name = String(formData.get("name") ?? "").trim()
@@ -385,7 +385,7 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
 
 // About you: where someone is and their website. Both are shown on the About page, and both can be left empty.
 export async function saveAbout(input: { location: string; website: string }): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to edit your details." }
   const location = typeof input.location === "string" ? input.location.trim() : ""
   const website = typeof input.website === "string" ? input.website.trim() : ""
@@ -399,7 +399,7 @@ export async function saveAbout(input: { location: string; website: string }): P
 
 // Post notifications: an alert for every new post from an account you follow.
 export async function togglePostNotifications(handle: string): Promise<VoidResult & { notifying?: boolean }> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const target = accountByHandle(handle)
   if (!target) return { ok: false, error: "That account no longer exists." }

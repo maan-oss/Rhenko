@@ -1,6 +1,6 @@
 "use server"
 
-import { currentSessionHash, getViewer } from "@/lib/auth"
+import { currentSessionHash, getAgreedViewer } from "@/lib/auth"
 import { all, get } from "@/lib/db"
 import type { CallAction, CallPeerRef, IceCandidateJson } from "@/lib/bus"
 import {
@@ -105,7 +105,7 @@ function actionOf(value: unknown): CallAction | null {
 
 // Rings the other person in a one-to-one chat. Both must have accepted the conversation and neither can be on a call.
 export async function startCall(conversationId: string, deviceId: string, video = false): Promise<StartedCall> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const device = asId(deviceId)
@@ -132,7 +132,7 @@ export async function startCall(conversationId: string, deviceId: string, video 
 
 // Starts a voice call in a group, or joins the one already going there.
 export async function startGroupCall(conversationId: string, deviceId: string): Promise<JoinedCall> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
   const device = asId(deviceId)
@@ -151,7 +151,7 @@ export async function startGroupCall(conversationId: string, deviceId: string): 
 
 // Joins a group call that is going on, from its ring or a Join banner. Only accepted members of the group can.
 export async function joinGroupCall(callId: string, deviceId: string): Promise<JoinedCall> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(callId)
   const device = asId(deviceId)
@@ -168,7 +168,7 @@ export async function joinGroupCall(callId: string, deviceId: string): Promise<J
 // One step of a call from the browser: answering, declining or ending, saying the audio connected, or passing an
 // offer, an answer or a network route to the other side.
 export async function sendCallSignal(callId: string, deviceId: string, action: CallAction): Promise<CallResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(callId)
   const device = asId(deviceId)
@@ -182,7 +182,7 @@ export async function sendCallSignal(callId: string, deviceId: string, action: C
 // when that is because the server restarted.
 export async function callHeartbeat(callId: string, deviceId: string): Promise<BeatResult> {
   const bootId = serverBootId()
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   const id = asId(callId)
   const device = asId(deviceId)
   if (!viewer || !id || !device) return { ok: false, bootId }
