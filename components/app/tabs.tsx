@@ -17,8 +17,7 @@ export type TabItem = {
 // The one motion for the active tab. The fill slides from the old tab to the new one.
 export const TAB_FILL = { type: "spring", stiffness: 520, damping: 42 } as const
 
-// The active tab is a solid fill in the text colour: black on a light page, white on a dark one. A profile can theme its
-// tabs from its banner (see BannerTabTheme), which sets the fill and the text on it through two variables.
+// The active tab is a solid fill in the text colour: black on a light page, white on a dark one.
 export function TabFill({ layoutId }: { layoutId: string }) {
   return (
     <motion.span
@@ -57,7 +56,7 @@ function TabName({ open, children }: { open: boolean; children: ReactNode }) {
 
 // The tab the person has just pressed. The fill moves on the press, before the page has loaded, and the page follows. The
 // press is dropped once the page shows that tab, or if the page still shows the tab it started from.
-export function usePressedTab(items: TabItem[]): { current: string | null; press: (href: string) => void } {
+export function usePressedTab(items: Pick<TabItem, "href" | "active">[]): { current: string | null; press: (href: string) => void } {
   const served = items.find((item) => item.active)?.href ?? null
   const [pressed, setPressed] = useState<{ from: string | null; to: string } | null>(null)
   const current = pressed && pressed.from === served ? pressed.to : served
@@ -101,21 +100,6 @@ export function TabLinks({ items, label = "Sections", className, names = false }
     <nav aria-label={label} className={cn("glass inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none]", className)}>
       {items.map((item) => (
         <TabLink key={item.href} item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} names={names} />
-      ))}
-    </nav>
-  )
-}
-
-// A full-width row of tabs with a rule under it, used on a profile. Same behaviour as TabLinks.
-export function IconTabs({ items, label = "Sections" }: { items: TabItem[]; label?: string }) {
-  const id = useId()
-  const { current, press } = usePressedTab(items)
-  return (
-    <nav aria-label={label} className="flex w-full items-center justify-between overflow-x-auto border-b border-border px-2 [scrollbar-width:none]">
-      {items.map((item) => (
-        <div key={item.href} className="flex h-12 shrink-0 items-center">
-          <TabLink item={item} active={item.href === current} fill={`${id}-fill`} onPress={() => press(item.href)} names={false} />
-        </div>
       ))}
     </nav>
   )

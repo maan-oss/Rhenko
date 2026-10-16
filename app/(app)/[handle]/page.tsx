@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
-import { BarChart3, FileText, Heart, Image as ImageIcon, Lock, MessageCircle, Repeat2, Star } from "lucide-react"
+import { BarChart3, CalendarDays, Lock } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { canSeePost, getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -12,13 +12,12 @@ import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
-import { MessageButton, ProfileActions } from "@/components/app/profile-actions"
+import { ProfileActions } from "@/components/app/profile-actions"
 import { ProfileBanner } from "@/components/app/profile-banner"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
+import { ProfileTabs } from "@/components/app/profile-tabs"
 import { AiLabel, LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
-import { IconTabs, TabLinks } from "@/components/app/tabs"
-import { BannerTabTheme } from "@/components/app/tab-theme"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
@@ -27,7 +26,7 @@ type SearchParams = Promise<{ tab?: string | string[]; from?: string | string[] 
 // Every feed a profile can show. Highlights is one of them, but it lives inside the Posts section.
 const FEEDS: ProfileTab[] = ["posts", "highlights", "replies", "media", "reposts", "likes"]
 
-// The main tab row. Highlights is merged into Posts, so the row has five sections.
+// The tab row. Highlights is merged into Posts, so the row has five sections.
 const SECTIONS: ProfileTab[] = ["posts", "replies", "media", "reposts", "likes"]
 
 const SECTION_OF: Record<ProfileTab, ProfileTab> = {
@@ -46,15 +45,6 @@ const SECTION_LABEL: Record<ProfileTab, string> = {
   media: "Media",
   reposts: "Reposts",
   likes: "Likes",
-}
-
-const SECTION_ICON: Record<ProfileTab, ReactNode> = {
-  posts: <FileText />,
-  highlights: <Star />,
-  replies: <MessageCircle />,
-  media: <ImageIcon />,
-  reposts: <Repeat2 />,
-  likes: <Heart />,
 }
 
 const EMPTY: Record<ProfileTab, [string, string]> = {
@@ -114,25 +104,23 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       <PageHeader title={profile.name} backHref="/" />
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
 
-      {/* The banner is a box of its own. Its edge stays put, and the colour stays inside it. */}
-      <div className="px-4 pt-4">
-        <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-36 sm:h-52" />
-      </div>
+      {/* The banner runs edge to edge under the header, as on X. The avatar sits over its lower edge. */}
+      <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-40 rounded-none border-0 sm:h-52" />
 
       <div className="relative z-10 flex items-end justify-between gap-3 px-4">
-        <div className="-mt-12 rounded-full bg-background p-1.5">
-          <Avatar user={profile} size={96} />
+        <div className="-mt-13 rounded-full bg-background p-1">
+          <Avatar user={profile} size={104} />
         </div>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 pb-1">
+        <div className="flex min-w-0 items-center justify-end gap-2 pb-1">
           {isSelf ? (
             <>
               <Link
                 href="/analytics"
-                className="glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
+                aria-label="Analytics"
+                title="Analytics"
+                className="grid size-9 place-items-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted"
               >
-                <BarChart3 className="size-4" />
-                {/* On the narrowest phones the name goes, and the icon keeps its name for screen readers. */}
-                <span className="max-[389px]:sr-only">Analytics</span>
+                <BarChart3 className="size-4" aria-hidden="true" />
               </Link>
               <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
             </>
@@ -142,57 +130,58 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 px-4 pt-4 pb-4">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[26px] leading-tight font-semibold tracking-tight sm:text-3xl">
+      <div className="flex flex-col gap-3 px-4 pt-3 pb-4">
+        <div className="flex flex-col">
+          <h2 className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xl leading-7 font-bold tracking-tight">
             {profile.name}
             {profile.verified ? <VerifiedBadge /> : null}
             {profile.paidVerified ? <SubscriberBadge /> : null}
             {profile.bot ? <AiLabel /> : null}
             {profile.protected ? <LockedBadge /> : null}
           </h2>
-          <p className="flex flex-wrap items-center gap-2 text-[15px] text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-[15px] leading-5 text-muted-foreground">
             @{profile.handle}
             {rel.followsMe && !isSelf ? (
-              <span className="glass rounded-md px-1.5 py-0.5 text-xs font-medium text-foreground">Follows you</span>
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">Follows you</span>
             ) : null}
           </p>
-          {profile.status ? <p className="glass mt-1 w-fit max-w-full truncate rounded-full px-3 py-1 text-sm">{profile.status}</p> : null}
         </div>
 
         {rel.blockedByMe && !isSelf ? (
           <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
         ) : null}
-        {profile.bio ? <p className="text-[15px] leading-relaxed whitespace-pre-line">{profile.bio}</p> : null}
+        {profile.status ? <p className="text-[15px] leading-6">{profile.status}</p> : null}
+        {profile.bio ? <p className="text-[15px] leading-6 whitespace-pre-line">{profile.bio}</p> : null}
+
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px] text-muted-foreground">
+          <Link href={`${base}/about`} className="inline-flex items-center gap-1.5 hover:underline">
+            <CalendarDays className="size-4" aria-hidden="true" />
+            Joined {String(new Date(profile.createdAt).getFullYear())}
+          </Link>
+        </p>
+
+        <ProfileCounts base={base} following={profile.following} followers={profile.followers} />
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
-
-        <ProfileStrip base={base} following={profile.following} followers={profile.followers} joined={String(new Date(profile.createdAt).getFullYear())} />
-
-        {isSelf ? null : <MessageButton handle={profile.handle} />}
       </div>
 
-      <BannerTabTheme src={profile.bannerFile ? `/media/${profile.bannerFile}?w=640` : null}>
-        <IconTabs
-          label="Profile sections"
-          items={sections.map((t) => ({
-            href: t === "posts" ? base : `${base}?tab=${t}`,
-            label: SECTION_LABEL[t],
-            icon: SECTION_ICON[t],
-            active: t === section,
-          }))}
-        />
-      </BannerTabTheme>
+      <ProfileTabs
+        label="Profile sections"
+        items={sections.map((t) => ({
+          href: t === "posts" ? base : `${base}?tab=${t}`,
+          label: SECTION_LABEL[t],
+          active: t === section,
+        }))}
+      />
 
       {section === "posts" ? (
-        <div className="px-4 pt-3">
-          <TabLinks
-            label="Posts or highlights"
-            items={[
-              { href: base, label: "All posts", icon: SECTION_ICON.posts, active: tab === "posts" },
-              { href: `${base}?tab=highlights`, label: SECTION_LABEL.highlights, icon: SECTION_ICON.highlights, active: tab === "highlights" },
-            ]}
-          />
-        </div>
+        <nav aria-label="Posts or highlights" className="flex gap-2 overflow-x-auto px-4 pt-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <FilterChip href={base} active={tab === "posts"}>
+            All posts
+          </FilterChip>
+          <FilterChip href={`${base}?tab=highlights`} active={tab === "highlights"}>
+            Highlights
+          </FilterChip>
+        </nav>
       ) : null}
 
       {pinned ? <PostCard post={pinned} viewer={viewer} showPinned /> : null}
@@ -220,27 +209,40 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   )
 }
 
-// The long strip under the bio: following, followers, and the About page. One box, three cells, each a link.
-function ProfileStrip({ base, following, followers, joined }: { base: string; following: number; followers: number; joined: string }) {
+// The two switches under the Posts tab. Same chips as For you's topic filter.
+function FilterChip({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
   return (
-    <nav aria-label="Following, followers and about" className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card">
-      <StripCell href={`${base}/following`} value={following} label="Following" />
-      <StripCell href={`${base}/followers`} value={followers} label={pluralize(followers, "Follower")} />
-      <StripCell href={`${base}/about`} label={`Joined ${joined}`}>
-        About
-      </StripCell>
-    </nav>
+    <Link
+      href={href}
+      scroll={false}
+      aria-current={active ? "page" : undefined}
+      className={
+        "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+        (active ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted")
+      }
+    >
+      {children}
+    </Link>
   )
 }
 
-function StripCell({ href, value, label, children }: { href: string; value?: number; label: string; children?: ReactNode }) {
+// Following and followers, as X writes them: the number in bold, its word after it. Each one is a link.
+function ProfileCounts({ base, following, followers }: { base: string; following: number; followers: number }) {
   return (
-    <Link href={href} className="flex min-w-0 flex-col gap-0.5 px-3.5 py-3 transition-colors hover:bg-muted/60 sm:px-5">
-      <span className="truncate text-[17px] leading-tight font-semibold tabular-nums text-foreground">
-        {value !== undefined ? <NumberTicker value={value} /> : children}
-      </span>
-      <span className="truncate text-[13px] text-muted-foreground">{label}</span>
-    </Link>
+    <nav aria-label="Following and followers" className="flex flex-wrap gap-x-5 gap-y-1 text-[15px]">
+      <Link href={`${base}/following`} className="hover:underline">
+        <span className="font-bold text-foreground tabular-nums">
+          <NumberTicker value={following} />
+        </span>{" "}
+        <span className="text-muted-foreground">Following</span>
+      </Link>
+      <Link href={`${base}/followers`} className="hover:underline">
+        <span className="font-bold text-foreground tabular-nums">
+          <NumberTicker value={followers} />
+        </span>{" "}
+        <span className="text-muted-foreground">{pluralize(followers, "Follower")}</span>
+      </Link>
+    </nav>
   )
 }
 

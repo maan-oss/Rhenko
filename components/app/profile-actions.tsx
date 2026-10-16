@@ -13,37 +13,8 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// Opens a direct message with someone. The profile page places it under the mutual followers line.
-export function MessageButton({ handle }: { handle: string }) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const proof = useProofGate()
-
-  function message(answer?: string) {
-    startTransition(async () => {
-      const result = await startConversation(handle, answer)
-      if (!result.ok) {
-        if (result.proofRequired) {
-          proof.askForProof((passed) => message(passed))
-          return
-        }
-        toast.error(result.error)
-      } else router.push(`/messages/${result.id}`)
-    })
-  }
-
-  return (
-    <>
-      <Button type="button" variant="outline" disabled={pending} onClick={() => message()} className="h-9 w-fit rounded-full px-4">
-        <Mail className="size-4" />
-        Message
-      </Button>
-      {proof.dialog}
-    </>
-  )
-}
-
-// Follow, notifications, mute and block for someone else's profile.
+// The row of buttons on someone else's profile, in the order X shows them: post notifications and message as icons, then
+// Follow, then the menu with mute and block. Follow is the one filled button, so it reads first.
 export function ProfileActions({
   handle,
   state,
@@ -60,8 +31,25 @@ export function ProfileActions({
   // The post the profile was opened from, if any. A follow made here is credited to it.
   from?: string
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [messaging, startMessaging] = useTransition()
   const [confirmingBlock, setConfirmingBlock] = useState(false)
+  const proof = useProofGate()
+
+  // Opens a direct message with this account. The server decides whether it may be sent.
+  function message(answer?: string) {
+    startMessaging(async () => {
+      const result = await startConversation(handle, answer)
+      if (!result.ok) {
+        if (result.proofRequired) {
+          proof.askForProof((passed) => message(passed))
+          return
+        }
+        toast.error(result.error)
+      } else router.push(`/messages/${result.id}`)
+    })
+  }
 
   function togglePosts() {
     startTransition(async () => {
@@ -96,7 +84,7 @@ export function ProfileActions({
           disabled={pending}
           onClick={unblock}
           aria-label={`Unblock @${handle}`}
-          className="group h-8 min-w-24 rounded-full px-4 font-semibold text-destructive"
+          className="group h-9 min-w-24 rounded-full px-4 font-semibold text-destructive"
         >
           <span className="group-hover:hidden">Blocked</span>
           <span className="hidden group-hover:inline">Unblock</span>
@@ -112,18 +100,29 @@ export function ProfileActions({
               aria-pressed={notifying}
               disabled={pending}
               onClick={togglePosts}
-              className={cn("rounded-full", notifying && "border-foreground text-foreground")}
+              className={cn("size-9 rounded-full", notifying && "border-foreground text-foreground")}
             >
               {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
             </Button>
           ) : null}
-          <FollowButton handle={handle} state={state} from={from} />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={`Message @${handle}`}
+            disabled={messaging}
+            onClick={() => message()}
+            className="size-9 rounded-full"
+          >
+            <Mail className="size-4" />
+          </Button>
+          <FollowButton handle={handle} state={state} from={from} className="h-9 min-w-24 sm:h-9" />
         </>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="More options"
-          className="glass grid size-8 place-items-center rounded-full text-foreground transition-colors hover:bg-foreground/5"
+          className="grid size-9 place-items-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted"
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
@@ -147,6 +146,7 @@ export function ProfileActions({
         action={() => toggleBlock(handle, true)}
         onDone={() => toast.success(`Blocked @${handle}.`)}
       />
+      {proof.dialog}
     </div>
   )
 }
