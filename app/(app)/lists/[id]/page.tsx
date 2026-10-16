@@ -10,7 +10,16 @@ import { Avatar } from "@/components/app/avatar"
 import { EmptyState } from "@/components/app/empty-state"
 import { FeedList } from "@/components/app/feed-list"
 import { PageHeader } from "@/components/app/page-header"
-import { DeleteListButton, ListFollowButton, ListMemberForm, RemoveMemberButton } from "@/components/app/list-controls"
+import {
+  DeleteListButton,
+  FollowPackButton,
+  ListFollowButton,
+  ListMemberForm,
+  RemoveMemberButton,
+  StarterPackButton,
+  TimelinePinButton,
+} from "@/components/app/list-controls"
+import { isTimelinePinned } from "@/lib/timelines"
 import { TabLinks } from "@/components/app/tabs"
 import { formatCount } from "@/lib/format"
 
@@ -40,6 +49,7 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
   const detail = openList(id, viewer.id)
   if (!detail) notFound()
   const { list, members } = detail
+  const pinned = isTimelinePinned(viewer.id, list.id)
   const tab = firstParam((await searchParams).tab) === "members" ? "members" : "posts"
   const spec: FeedSpec = { kind: "list", listId: list.id }
   const page = tab === "posts" ? feedFor(spec, viewer.id) : null
@@ -58,6 +68,7 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
           <span>
             {formatCount(list.memberCount)} {list.memberCount === 1 ? "member" : "members"}
           </span>
+          {list.starter ? <span>· Starter pack</span> : null}
           <span>· Made by @{list.owner.handle}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -66,6 +77,9 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
           ) : list.private ? null : (
             <ListFollowButton listId={list.id} following={list.followed} />
           )}
+          {list.starter && !list.isOwner ? <FollowPackButton listId={list.id} /> : null}
+          {list.isOwner && !list.private ? <StarterPackButton listId={list.id} starter={list.starter} /> : null}
+          {list.isOwner || list.followed ? <TimelinePinButton listId={list.id} pinned={pinned} /> : null}
         </div>
       </div>
 

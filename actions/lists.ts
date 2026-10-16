@@ -1,10 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { toggleFollow } from "@/actions/social"
 import { getAgreedViewer, newId } from "@/lib/auth"
-import { get, run } from "@/lib/db"
+import { all, get, run } from "@/lib/db"
 import { blockedEitherWay } from "@/lib/notify"
-import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME } from "@/lib/rules"
+import { isTimelinePinned, mayPin, setTimelinePin as storeTimelinePin, timelinePinCount } from "@/lib/timelines"
+import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME, MAX_PACK_FOLLOWS, MAX_TIMELINE_PINS } from "@/lib/rules"
 
 export type ListResult = { ok: true; id: string } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
@@ -111,4 +113,73 @@ export async function toggleListFollow(listId: string, want?: boolean): Promise<
   run("INSERT OR IGNORE INTO list_follows (list_id, user_id, created_at) VALUES (?, ?, ?)", listId, viewer.id, Date.now())
   refresh()
   return { ok: true, following: true }
+}
+
+// Publishes a public list as a starter pack, or takes it back. A pack needs people on it, so it can be found and followed.
+export async function setStarterPack(listId: string, on: boolean): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
+  if (on) {
+    const list = get<{ private: number }>("SELECT private FROM lists WHERE id = ?", listId)
+    if (list?.private === 1) return { ok: false, error: "Only public lists can be starter packs." }
+    const members = get<{ c: number }>("SELECT COUNT(*) AS c FROM list_members WHERE list_id = ?", listId)?.c ?? 0
+    if (members === 0) return { ok: false, error: "Add people to the list before you publish it as a starter pack." }
+  }
+  run("UPDATE lists SET starter = ? WHERE id = ?", on ? 1 : 0, listId)
+  refresh()
+  return { ok: true }
+}
+
+export type FollowPackResult = { ok: true; following: number; total: number; stopped: string | null } | { ok: false; error: string }
+
+// The errors that are about one account, not about the viewer. A pack skips those people and carries on.
+const PER_ACCOUNT_ERROR = [/no longer exists/, /can't follow this account/]
+
+// Follows everyone in a starter pack, up to MAX_PACK_FOLLOWS people. Each follow passes the same checks as following
+// one person. When a check that concerns the viewer runs out, the rest waits, and `stopped` says why.
+export async function followStarterPack(listId: string): Promise<FollowPackResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in to follow people." }
+  if (typeof listId !== "string") return { ok: false, error: "That starter pack no longer exists." }
+  const list = get<{ owner_id: string; starter: number; private: number }>("SELECT owner_id, starter, private FROM lists WHERE id = ?", listId)
+  if (!list || list.starter !== 1 || list.private === 1) return { ok: false, error: "That starter pack no longer exists." }
+  if (blockedEitherWay(viewer.id, list.owner_id)) return { ok: false, error: "You can't follow this starter pack." }
+  const members = all<{ handle: string }>(
+    `SELECT u.handle FROM list_members m JOIN users u ON u.id = m.user_id
+     WHERE m.list_id = ? AND u.id <> ? AND u.deactivated_at IS NULL
+     ORDER BY m.created_at DESC LIMIT ?`,
+    listId,
+    viewer.id,
+    MAX_PACK_FOLLOWS
+  )
+  let following = 0
+  let stopped: string | null = null
+  for (const member of members) {
+    const result = await toggleFollow(member.handle, "follow")
+    if (result.ok) {
+      if (result.state === "following" || result.state === "requested") following++
+      continue
+    }
+    if (!result.proofRequired && PER_ACCOUNT_ERROR.some((pattern) => pattern.test(result.error))) continue
+    stopped = result.error
+    break
+  }
+  return { ok: true, following, total: members.length, stopped }
+}
+
+// Pins a list as a tab on Home, or takes it off. Only lists the viewer can open can be pinned, up to MAX_TIMELINE_PINS.
+export async function setTimelinePin(listId: string, on: boolean): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in to pin lists to Home." }
+  if (typeof listId !== "string") return { ok: false, error: "That list no longer exists." }
+  if (on) {
+    if (!mayPin(listId, viewer.id)) return { ok: false, error: "Follow this list before you pin it to Home." }
+    if (!isTimelinePinned(viewer.id, listId) && timelinePinCount(viewer.id) >= MAX_TIMELINE_PINS) {
+      return { ok: false, error: `Home holds up to ${MAX_TIMELINE_PINS} pinned lists. Unpin one to add another.` }
+    }
+  }
+  storeTimelinePin(viewer.id, listId, on, Date.now())
+  refresh()
+  return { ok: true }
 }

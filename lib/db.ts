@@ -1035,6 +1035,16 @@ CREATE TABLE IF NOT EXISTS leases (
     created_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, account_id)
   );`,
+  // A public list published as a starter pack: it is listed on /packs, and anyone can follow everyone in it at once.
+  `ALTER TABLE lists ADD COLUMN starter INTEGER NOT NULL DEFAULT 0;`,
+  `CREATE INDEX IF NOT EXISTS lists_starter ON lists (created_at) WHERE starter = 1;`,
+  // Lists a viewer pinned as tabs on Home. Each tab shows that list's posts, in the order they were pinned.
+  `CREATE TABLE IF NOT EXISTS timeline_pins (
+    user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    list_id TEXT NOT NULL REFERENCES lists (id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, list_id)
+  );`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

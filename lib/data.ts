@@ -2133,6 +2133,8 @@ export type ListSummary = {
   name: string
   description: string
   private: boolean
+  // Published as a starter pack: listed on /packs, and everyone in it can be followed at once.
+  starter: boolean
   owner: MiniUser
   memberCount: number
   isOwner: boolean
@@ -2145,6 +2147,7 @@ function listRowsWhere(where: string, params: Param[], viewerId: string): ListSu
     name: string
     description: string
     private: number
+    starter: number
     owner_id: string
     owner_handle: string
     owner_name: string
@@ -2153,7 +2156,7 @@ function listRowsWhere(where: string, params: Param[], viewerId: string): ListSu
     member_count: number
     followed: number
   }>(
-    `SELECT l.id, l.name, l.description, l.private, l.owner_id,
+    `SELECT l.id, l.name, l.description, l.private, l.starter, l.owner_id,
        u.handle AS owner_handle, u.name AS owner_name, u.avatar_file AS owner_avatar, u.verified AS owner_verified,
        (SELECT COUNT(*) FROM list_members m WHERE m.list_id = l.id) AS member_count,
        EXISTS(SELECT 1 FROM list_follows f WHERE f.list_id = l.id AND f.user_id = ?) AS followed
@@ -2167,6 +2170,7 @@ function listRowsWhere(where: string, params: Param[], viewerId: string): ListSu
     name: r.name,
     description: r.description,
     private: r.private === 1,
+    starter: r.starter === 1,
     owner: { id: r.owner_id, handle: r.owner_handle, name: r.owner_name, avatarFile: r.owner_avatar, verified: r.owner_verified === 1 },
     memberCount: r.member_count,
     isOwner: r.owner_id === viewerId,
@@ -2183,6 +2187,14 @@ export function listsFor(viewerId: string): { owned: ListSummary[]; followed: Li
       viewerId
     ),
   }
+}
+
+// The public starter packs, most people first. Owners who have blocked the viewer are left out by the caller.
+export function starterPacks(viewerId: string, limit = 60): ListSummary[] {
+  return listRowsWhere("l.starter = 1 AND l.private = 0", [], viewerId)
+    .filter((list) => list.memberCount > 0)
+    .sort((a, b) => b.memberCount - a.memberCount)
+    .slice(0, limit)
 }
 
 export function listDetail(id: string, viewerId: string): { list: ListSummary; members: MiniUser[] } | null {

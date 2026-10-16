@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Sparkles, Users } from "lucide-react"
+import { List, Sparkles, Users } from "lucide-react"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { circlesFor } from "@/lib/circles"
@@ -8,6 +8,7 @@ import { suggestionsFor, topPeople } from "@/lib/connections"
 import { whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
+import { pinnedTimelines } from "@/lib/timelines"
 import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
 import { emptyActionClass } from "@/components/app/empty-state"
@@ -33,12 +34,16 @@ export default function HomePage({ searchParams }: { searchParams: SearchParams 
 
 async function Home({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  const params = await searchParams
-  const mode = firstParam(params.tab) === "following" ? "following" : "for-you"
-  const spec: FeedSpec = { kind: "home", mode }
+  const tab = firstParam((await searchParams).tab)
+  // A pinned list is a tab of its own. Only a list the viewer has pinned opens here, whatever the address says.
+  const pins = pinnedTimelines(viewer.id)
+  const pin = pins.find((item) => item.id === tab) ?? null
+  const mode = tab === "following" ? "following" : "for-you"
+  const spec: FeedSpec = pin ? { kind: "list", listId: pin.id } : { kind: "home", mode }
   const page = feedFor(spec, viewer.id)
-  const following = mode === "following"
+  const following = !pin && mode === "following"
   const empty = page.items.length === 0 && !page.next
+  const active = pin ? pin.id : mode
   return (
     <>
       <PageHeader
@@ -49,8 +54,9 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
           <TabLinks
             names
             items={[
-              { href: "/", label: "For you", icon: <Sparkles />, active: !following },
+              { href: "/", label: "For you", icon: <Sparkles />, active: !following && !pin },
               { href: "/?tab=following", label: "Following", icon: <Users />, active: following },
+              ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, icon: <List />, active: pin?.id === item.id })),
             ]}
           />
         }
@@ -63,15 +69,21 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         circles={circlesFor(viewer.id).map((circle) => ({ id: circle.id, name: circle.name }))}
       />
       <FeedList
-        key={mode}
+        key={active}
         items={page.items}
         next={page.next}
         spec={spec}
         viewer={viewer}
         largeEmpty
-        emptyTitle={following ? "Nothing from people you follow yet" : "No posts yet"}
-        emptyBody={following ? "When the people you follow post, it shows up here." : "Write the first one, or follow a few people to fill this page."}
-        emptyAction={empty ? following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty viewerId={viewer.id} /> : undefined}
+        emptyTitle={pin ? "Nothing in this timeline yet" : following ? "Nothing from people you follow yet" : "No posts yet"}
+        emptyBody={
+          pin
+            ? "Posts from the people on this list show up here as they write them."
+            : following
+              ? "When the people you follow post, it shows up here."
+              : "Write the first one, or follow a few people to fill this page."
+        }
+        emptyAction={empty && !pin ? (following ? <FollowingEmpty viewerId={viewer.id} /> : <ForYouEmpty viewerId={viewer.id} />) : undefined}
       />
     </>
   )

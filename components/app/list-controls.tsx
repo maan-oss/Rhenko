@@ -4,7 +4,17 @@ import { useActionState, useRef, useState, useTransition } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { addListMember, createList, deleteList, removeListMember, toggleListFollow, type ListResult } from "@/actions/lists"
+import {
+  addListMember,
+  createList,
+  deleteList,
+  followStarterPack,
+  removeListMember,
+  setStarterPack,
+  setTimelinePin,
+  toggleListFollow,
+  type ListResult,
+} from "@/actions/lists"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME } from "@/lib/rules"
@@ -177,5 +187,113 @@ export function DeleteListButton({ listId }: { listId: string }) {
         router.push("/lists")
       }}
     />
+  )
+}
+
+// Pins the list as a tab on Home, where its posts show as a timeline of their own.
+export function TimelinePinButton({ listId, pinned }: { listId: string; pinned: boolean }) {
+  const [on, setOn] = useState(pinned)
+  const fromPage = `${listId}:${pinned}`
+  const [seen, setSeen] = useState(fromPage)
+  const [pending, startTransition] = useTransition()
+
+  if (seen !== fromPage) {
+    setSeen(fromPage)
+    setOn(pinned)
+  }
+
+  return (
+    <Button
+      type="button"
+      variant={on ? "outline" : "default"}
+      disabled={pending}
+      aria-busy={pending}
+      aria-pressed={on}
+      className="h-9 rounded-full px-4 font-semibold"
+      onClick={() =>
+        startTransition(async () => {
+          const result = await setTimelinePin(listId, !on)
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+          setOn(!on)
+          toast.success(on ? "Taken off Home." : "Pinned to Home. It's a tab there now.")
+        })
+      }
+    >
+      {on ? "Pinned to Home" : "Pin to Home"}
+    </Button>
+  )
+}
+
+// The owner publishes a public list as a starter pack, or takes it back.
+export function StarterPackButton({ listId, starter }: { listId: string; starter: boolean }) {
+  const [on, setOn] = useState(starter)
+  const fromPage = `${listId}:${starter}`
+  const [seen, setSeen] = useState(fromPage)
+  const [pending, startTransition] = useTransition()
+
+  if (seen !== fromPage) {
+    setSeen(fromPage)
+    setOn(starter)
+  }
+
+  return (
+    <Button
+      type="button"
+      variant={on ? "outline" : "default"}
+      disabled={pending}
+      aria-busy={pending}
+      aria-pressed={on}
+      className="h-9 rounded-full px-4 font-semibold"
+      onClick={() =>
+        startTransition(async () => {
+          const result = await setStarterPack(listId, !on)
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+          setOn(!on)
+          toast.success(on ? "Taken off starter packs." : "Published as a starter pack. People can find it on Starter packs.")
+        })
+      }
+    >
+      {on ? "Unpublish starter pack" : "Publish as starter pack"}
+    </Button>
+  )
+}
+
+// Follows everyone in a starter pack, up to the pack limit. It says how many it followed and why it stopped, if it did.
+export function FollowPackButton({ listId }: { listId: string }) {
+  const [pending, startTransition] = useTransition()
+
+  return (
+    <Button
+      type="button"
+      disabled={pending}
+      aria-busy={pending}
+      className="h-9 rounded-full px-4 font-semibold"
+      onClick={() =>
+        startTransition(async () => {
+          const result = await followStarterPack(listId)
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+          if (result.total === 0) {
+            toast("There's nobody in this pack to follow.")
+            return
+          }
+          if (result.stopped) {
+            toast(`You follow ${result.following} of ${result.total} people in this pack. ${result.stopped}`)
+            return
+          }
+          toast.success(`You follow ${result.following} of ${result.total} people in this pack.`)
+        })
+      }
+    >
+      {pending ? "Following" : "Follow everyone"}
+    </Button>
   )
 }

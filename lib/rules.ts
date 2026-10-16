@@ -193,6 +193,10 @@ export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as c
 
 export const MAX_LIST_NAME = 25
 export const MAX_LIST_DESCRIPTION = 100
+// How many lists can be pinned as tabs on Home.
+export const MAX_TIMELINE_PINS = 5
+// One click on "Follow everyone" follows at most this many people from a starter pack. The follow limits apply on top.
+export const MAX_PACK_FOLLOWS = 100
 
 // Circles. The charter is the circle's own rules, shown before anyone joins.
 export const MAX_CIRCLE_NAME = 50
