@@ -77,7 +77,7 @@ export function DailyChart({
 
       {note}
 
-      <div className="flex h-44 items-end gap-1.5" role="img" aria-label={caption}>
+      <div className="flex h-44 items-end gap-1.5 border-b border-border" role="img" aria-label={caption}>
         {days.map((day) => (
           <div
             key={day.label}
