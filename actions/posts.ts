@@ -420,14 +420,12 @@ export async function toggleLike(postId: string): Promise<ToggleResult> {
   if (existing) {
     run("DELETE FROM likes WHERE user_id = ? AND post_id = ?", viewer.id, postId)
     run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'like'", viewer.id, postId)
-    refresh()
     return { ok: true, active: false }
   }
   const likes = consume(`like:${viewer.id}`, isNewAccount(viewer.id) ? 60 : 240, HOUR_MS)
   if (!likes.ok) return { ok: false, error: `You're liking posts too fast. Try again in ${waitLabel(likes.retryAfterSeconds)}.` }
   run("INSERT OR IGNORE INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
   notify(author, viewer.id, "like", postId)
-  refresh()
   return { ok: true, active: true }
 }
 
@@ -442,14 +440,12 @@ export async function toggleRepost(postId: string): Promise<ToggleResult> {
   if (existing) {
     run("DELETE FROM reposts WHERE user_id = ? AND post_id = ?", viewer.id, postId)
     run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'repost'", viewer.id, postId)
-    refresh()
     return { ok: true, active: false }
   }
   const reposts = consume(`repost:${viewer.id}`, isNewAccount(viewer.id) ? 30 : 120, HOUR_MS)
   if (!reposts.ok) return { ok: false, error: `You're reposting too fast. Try again in ${waitLabel(reposts.retryAfterSeconds)}.` }
   run("INSERT OR IGNORE INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
   notify(author, viewer.id, "repost", postId)
-  refresh()
   return { ok: true, active: true }
 }
 
@@ -461,13 +457,11 @@ export async function toggleBookmark(postId: string): Promise<ToggleResult> {
   const existing = get("SELECT 1 AS found FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
   if (existing) {
     run("DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
-    refresh()
     return { ok: true, active: false }
   }
   const marks = consume(`bookmark:${viewer.id}`, isNewAccount(viewer.id) ? 60 : 300, HOUR_MS)
   if (!marks.ok) return { ok: false, error: `You're bookmarking posts too fast. Try again in ${waitLabel(marks.retryAfterSeconds)}.` }
   run("INSERT OR IGNORE INTO bookmarks (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
-  refresh()
   return { ok: true, active: true }
 }
 

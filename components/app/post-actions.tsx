@@ -4,8 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { BookmarkIcon, HeartIcon, MessageCircleIcon } from "lucide-animated"
-import { Ban, Coins, Eye, EyeOff, Flag, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
+import { Ban, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { markNotInterested } from "@/actions/feed"
 import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
@@ -118,9 +117,22 @@ export function PostActions(props: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const reduceMotion = useReducedMotion()
-  const [likeState, setLikeState] = useOptimistic({ active: liked, count: likes })
-  const [repostState, setRepostState] = useOptimistic({ active: reposted, count: reposts })
-  const [bookmarkState, setBookmarkState] = useOptimistic(bookmarked)
+  // What the server last confirmed, and what the reader sees while a tap is on its way. A tap does not re-render the page
+  // (that would send the whole page back), so the confirmed value lives here. It follows the props when they change.
+  const [likeConfirmed, setLikeConfirmed] = useState({ active: liked, count: likes })
+  const [likeState, setLikeState] = useOptimistic(likeConfirmed)
+  const [repostConfirmed, setRepostConfirmed] = useState({ active: reposted, count: reposts })
+  const [repostState, setRepostState] = useOptimistic(repostConfirmed)
+  const [bookmarkConfirmed, setBookmarkConfirmed] = useState(bookmarked)
+  const [bookmarkState, setBookmarkState] = useOptimistic(bookmarkConfirmed)
+  // The props the confirmed values were taken from. When the server sends new ones, the confirmed values follow.
+  const [fromProps, setFromProps] = useState({ liked, likes, reposted, reposts, bookmarked })
+  if (fromProps.liked !== liked || fromProps.likes !== likes || fromProps.reposted !== reposted || fromProps.reposts !== reposts || fromProps.bookmarked !== bookmarked) {
+    setFromProps({ liked, likes, reposted, reposts, bookmarked })
+    setLikeConfirmed({ active: liked, count: likes })
+    setRepostConfirmed({ active: reposted, count: reposts })
+    setBookmarkConfirmed(bookmarked)
+  }
   const [replyOpen, setReplyOpen] = useState(false)
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -135,19 +147,30 @@ export function PostActions(props: Props) {
   // Why the reply button does nothing for this reader: the same words the server gives when it refuses a reply.
   const replyReason = canReply ? null : replyRefusal(replySetting)
 
+  // A failed tap is not confirmed, so the reader's view falls back to what the server last said once the tap ends.
   function onLike() {
+    const next = { active: !likeState.active, count: likeState.count + (likeState.active ? -1 : 1) }
     startTransition(async () => {
-      setLikeState({ active: !likeState.active, count: likeState.count + (likeState.active ? -1 : 1) })
+      setLikeState(next)
       const result = await toggleLike(postId)
-      if (!result.ok) toast.error(result.error)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      setLikeConfirmed((prev) => ({ active: result.active, count: prev.count + (result.active === prev.active ? 0 : result.active ? 1 : -1) }))
     })
   }
 
   function onRepost() {
+    const next = { active: !repostState.active, count: repostState.count + (repostState.active ? -1 : 1) }
     startTransition(async () => {
-      setRepostState({ active: !repostState.active, count: repostState.count + (repostState.active ? -1 : 1) })
+      setRepostState(next)
       const result = await toggleRepost(postId)
-      if (!result.ok) toast.error(result.error)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      setRepostConfirmed((prev) => ({ active: result.active, count: prev.count + (result.active === prev.active ? 0 : result.active ? 1 : -1) }))
     })
   }
 
@@ -155,8 +178,12 @@ export function PostActions(props: Props) {
     startTransition(async () => {
       setBookmarkState(!bookmarkState)
       const result = await toggleBookmark(postId)
-      if (!result.ok) toast.error(result.error)
-      else toast.success(result.active ? "Saved to bookmarks." : "Removed from bookmarks.")
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      setBookmarkConfirmed(result.active)
+      toast.success(result.active ? "Saved to bookmarks." : "Removed from bookmarks.")
     })
   }
 
@@ -288,7 +315,7 @@ export function PostActions(props: Props) {
           title={replyReason ?? "Reply"}
           className={cn(BUTTON, "group relative z-10", !canReply && "opacity-60")}
         >
-          <MessageCircleIcon size={18} className="transition-none" />
+          <MessageCircle size={18} />
           <Count value={replies} />
         </button>
 
@@ -327,7 +354,7 @@ export function PostActions(props: Props) {
             transition={{ type: "spring", stiffness: 520, damping: 13 }}
             className="inline-flex"
           >
-            <HeartIcon size={18} className={cn("transition-none", likeState.active && "fill-current")} />
+            <Heart size={18} className={cn(likeState.active && "fill-current")} />
           </motion.span>
           <Count value={likeState.count} />
         </button>
@@ -364,7 +391,7 @@ export function PostActions(props: Props) {
           aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
           className={cn(BUTTON, "relative z-10", bookmarkState && "text-amber-400 [&_svg]:fill-current")}
         >
-          <BookmarkIcon size={18} className="transition-none" />
+          <Bookmark size={18} />
         </button>
 
         <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" title="Share" className={cn(BUTTON, "relative z-10")}>
