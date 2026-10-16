@@ -30,7 +30,12 @@ export function PageHeader({
     <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
       <div className="flex h-14 items-center gap-3 px-4">
         {backHref ? (
-          <Link href={backHref} aria-label="Back" className="grid size-10 shrink-0 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5 sm:size-9">
+          // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
+          <Link
+            href={backHref}
+            aria-label="Back"
+            className="-ml-3.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-95 active:bg-foreground/10 sm:-ml-3 sm:-mr-1 sm:size-9"
+          >
             <ArrowLeft className="size-5" />
           </Link>
         ) : null}

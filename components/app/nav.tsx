@@ -100,17 +100,27 @@ export function MobileTabBar({
     conversationRef.current = conversation
   }, [conversation])
 
-  // Scrolling down folds the dock. Scrolling back up opens it, except in a conversation, where the composer owns the bottom.
+  // Scrolling down folds the dock; scrolling up opens it. The distance is added up per direction, so a small wobble never
+  // flickers it. At the top of the page it opens, except in a conversation, where the composer owns the bottom.
   useEffect(() => {
     let last = window.scrollY
+    let travel = 0
     let frame = 0
     function update() {
       frame = 0
       const y = window.scrollY
       const delta = y - last
       last = y
-      if (delta > 6 && y > 80) setFolded(true)
-      else if (delta < -6 && !conversationRef.current) setFolded(false)
+      travel = (travel >= 0) === (delta >= 0) ? travel + delta : delta
+      if (y < 24) {
+        if (!conversationRef.current) setFolded(false)
+      } else if (travel > 28) {
+        setFolded(true)
+        travel = 0
+      } else if (travel < -10 && !conversationRef.current) {
+        setFolded(false)
+        travel = 0
+      }
     }
     function onScroll() {
       if (!frame) frame = requestAnimationFrame(update)
@@ -202,12 +212,7 @@ export function MobileTabBar({
       >
         <motion.ul
           initial={false}
-          animate={{
-            width: folded ? FOLDED_WIDTH : navWidth ? expandedWidth : undefined,
-            x: folded ? -6 : 0,
-            // Folded, the dock drops a little below the edge. In a conversation it stays level with the composer row.
-            y: folded && !conversation ? 12 : 0,
-          }}
+          animate={{ width: folded ? FOLDED_WIDTH : navWidth ? expandedWidth : undefined }}
           transition={SPRING}
           className={cn(
             "glass pointer-events-auto flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5",
@@ -230,7 +235,7 @@ export function MobileTabBar({
                   aria-label={label}
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => setPressed({ from: served, to: href })}
-                  className="relative grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
+                  className="relative grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.9]"
                 >
                   {isActive ? <TabFill layoutId="mobile-dock-pill" /> : null}
                   <Icon
@@ -259,7 +264,7 @@ export function MobileTabBar({
               aria-label="Open menu"
               aria-expanded={open}
               aria-haspopup="dialog"
-              className="grid size-12 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
+              className="grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.9]"
             >
               <Avatar user={viewer} size={32} />
             </button>
