@@ -4,9 +4,11 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { Ban, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
+import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { markNotInterested } from "@/actions/feed"
+import { snoozeForYouTopic } from "@/actions/topic-snoozes"
+import { extractHashtags } from "@/lib/rules"
 import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
 import { toggleBlock, toggleMute } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -281,6 +283,21 @@ export function PostActions(props: Props) {
               </DropdownMenuItem>,
             ]
           : []),
+        ...extractHashtags(props.body)
+          .slice(0, 2)
+          .map((tag) => (
+            <DropdownMenuItem
+              key={`snooze-${tag}`}
+              className={MENU_ITEM_PHONE}
+              onClick={() =>
+                run(() => snoozeForYouTopic(tag), `#${tag} is snoozed. Its posts stay out of For you for 30 days.`, () =>
+                  window.dispatchEvent(new CustomEvent("rhenko:snoozed", { detail: { tag } }))
+                )
+              }
+            >
+              <BellOff className="size-4" /> Snooze #{tag} in For you
+            </DropdownMenuItem>
+          )),
         <DropdownMenuItem
           key="not-interested"
           className={MENU_ITEM_PHONE}

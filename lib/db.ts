@@ -1018,6 +1018,14 @@ CREATE TABLE IF NOT EXISTS leases (
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS post_clicks_post ON post_clicks (post_id, kind);`,
+  // A followed topic snoozed for a while: its posts stay out of For you until the time passes. The topic stays followed.
+  `CREATE TABLE IF NOT EXISTS topic_snoozes (
+    user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    until_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, tag)
+  );`,
 ]
 
 type Globals = { __rhenkoDb?: DatabaseSync }

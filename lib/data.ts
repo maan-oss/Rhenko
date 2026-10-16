@@ -1,5 +1,6 @@
 import { all, get, type Param } from "@/lib/db"
 import { clickCountsByPost, clickCountsFor, emptyClickCounts, type ClickCounts } from "@/lib/post-clicks"
+import { snoozedTopics } from "@/lib/topic-snoozes"
 import {
   asReplySetting,
   extractHashtags,
@@ -697,7 +698,10 @@ type Pooled = { row: CandidatePost; key: string; at: number; reposterId: string 
 function rankCandidates(viewerId: string, at: number): Candidate[] {
   const since = at - RANK_WINDOW_MS
   const vis = visibilityClause(viewerId)
-  const tags = followedTopics(viewerId).slice(0, TOPIC_TAGS)
+  // A snoozed topic stays followed, but its posts are kept out of For you and it is not searched for.
+  const snoozed = snoozedTopics(viewerId, at)
+  const hidden = (body: string) => snoozed.size > 0 && extractHashtags(body).some((tag) => snoozed.has(tag))
+  const tags = followedTopics(viewerId).filter((tag) => !snoozed.has(tag)).slice(0, TOPIC_TAGS)
   const tagSet = new Set(tags)
   const followed = new Set(all<{ followee_id: string }>(FOLLOWING, viewerId).map((r) => r.followee_id))
 
@@ -830,12 +834,14 @@ function rankCandidates(viewerId: string, at: number): Candidate[] {
   const pooled = new Map<string, Pooled>()
   const addPosts = (rows: CandidatePost[], source: Source) => {
     for (const row of rows) {
+      if (hidden(row.body)) continue
       const key = `post:${row.post_id}`
       if (!pooled.has(key)) pooled.set(key, { row, key, at: row.created_at, reposterId: null, source, followed: followed.has(row.author_id) })
     }
   }
   addPosts(followRows, "follow")
   for (const row of repostRows) {
+    if (hidden(row.body)) continue
     const key = `repost:${row.post_id}:${row.reposter_id}`
     if (!pooled.has(key)) pooled.set(key, { row, key, at: row.reposted_at, reposterId: row.reposter_id, source: "repost", followed: true })
   }
@@ -879,6 +885,14 @@ function rankCandidates(viewerId: string, at: number): Candidate[] {
     })
   )
   return rank(candidates, at, FOR_YOU_SIZE, modelWeights())
+}
+
+// Drops a viewer's cached rankings, so a change they just made (a snooze) shows on their next load.
+export function forgetRanking(viewerId: string): void {
+  for (const key of [...rankedCache.keys()]) {
+    if (key.startsWith(`${viewerId}|`)) rankedCache.delete(key)
+  }
+  latestRanking.delete(viewerId)
 }
 
 function rankedFor(viewerId: string, at: number): Candidate[] {
