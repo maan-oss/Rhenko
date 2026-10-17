@@ -30,7 +30,8 @@ async function PrivacyBody() {
             People must send a follow request, and you approve it, before they see your posts. Your profile stays visible.
           </p>
         </div>
-        <ProtectedSwitch initial={viewer.protected} />
+        {/* Read from the database, not the viewer, which is cached for a few seconds per worker: after a change, the switch shows the saved value. */}
+        <ProtectedSwitch initial={(await get<{ prot: number }>("SELECT protected AS prot FROM users WHERE id = ?", viewer.id))?.prot === 1} />
       </section>
       <section className="flex items-start justify-between gap-4 border-b border-border px-4 py-6">
         <div className="flex flex-col gap-1">

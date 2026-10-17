@@ -452,7 +452,8 @@ async function listsFlow({ phone }) {
   })
 
   await check(`${where}: the Lists page shows the list with its member count`, async () => {
-    await go(owner.page, "/lists", owner.page.locator("input[name=name]"))
+    // The create form opens from New list, so the page is ready when that button is there.
+    await go(owner.page, "/lists", owner.page.getByRole("button", { name: "New list" }))
     const row = owner.page.getByRole("link").filter({ hasText: listName }).first()
     await row.waitFor()
     assert.match(await row.innerText(), new RegExp(`1 member\\s*·\\s*by @${owner.handle}`, "i"))

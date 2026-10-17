@@ -877,3 +877,9 @@ begin
 end $$;
 drop trigger if exists events_notify on events;
 create trigger events_notify after insert on events for each row execute function rhenko_notify_event();
+
+-- The Sahayak account, which answers when someone mentions @sahayak. It is an ordinary account row with the bot flag on and
+-- a locked password, so nobody can sign in as it. Running this again changes nothing.
+insert into users (id, handle, name, bio, password_hash, created_at, bot)
+values ('sahayak-bot', 'sahayak', 'Sahayak', 'An AI assistant. Mention @sahayak under a post to ask it a question.', '!locked', (extract(epoch from now()) * 1000)::bigint, 1)
+on conflict do nothing;
