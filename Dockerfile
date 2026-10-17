@@ -7,24 +7,24 @@
 # /app/data holds the server key only when RHENKO_SECRET is not set, so it is a volume. The build needs network access
 # only to install packages; the Sora font is in the repository.
 
-FROM node:22-bookworm-slim AS deps
+FROM node:22.22.0-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:22-bookworm-slim AS prod-deps
+FROM node:22.22.0-bookworm-slim AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:22-bookworm-slim AS build
+FROM node:22.22.0-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build && rm -rf .next/cache
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:22.22.0-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

@@ -20,7 +20,18 @@ PORT=3100 npm start  # serves the built app on http://localhost:3100
 
 For local development, `npm run dev` needs a Postgres database (see `DATABASE_URL` below). Set `RHENKO_STORAGE=local` to keep uploads in `data/uploads/` instead of R2.
 
-Production runs with Docker Compose: Postgres for the data, the app, Caddy for HTTPS, and database backups every six hours, copied to Cloudflare R2. In `.env`, set `RHENKO_DOMAIN` (a domain whose DNS already points at the server), `POSTGRES_PASSWORD`, `RHENKO_SECRET` and the `RHENKO_R2_*` settings, then:
+Production runs with Docker Compose: Postgres for the data, the app, Caddy for HTTPS, and database backups every six hours, copied to Cloudflare R2.
+
+On a new Ubuntu 24.04 server, clone the repository and run the bootstrap script as root. It installs Docker, opens only SSH, HTTP and HTTPS, adds swap, turns on security updates, asks for the domain and the R2 settings, generates the passwords and server key on the server, and starts the stack:
+
+```bash
+git clone https://github.com/maan-oss/Rhenko.git rhenko && cd rhenko
+sudo sh deploy/bootstrap.sh
+```
+
+Point the domain's DNS record at the server before or just after it runs. Caddy gets the HTTPS certificate once the name resolves.
+
+To run the stack by hand instead, set `RHENKO_DOMAIN`, `POSTGRES_PASSWORD`, `RHENKO_SECRET` and the `RHENKO_R2_*` settings in `.env`, then:
 
 ```bash
 cp .env.example .env   # then fill in the settings above

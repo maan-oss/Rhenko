@@ -14,7 +14,7 @@
 
 services:
   db:
-    image: postgres:17-bookworm
+    image: postgres:17.11-bookworm
     restart: unless-stopped
     # Parallel queries share memory through /dev/shm, which Docker sets to 64 MB by default.
     shm_size: 256mb
@@ -78,7 +78,7 @@ services:
       - no-new-privileges:true
 
   caddy:
-    image: caddy:2
+    image: caddy:2.11.7
     restart: unless-stopped
     depends_on:
       - app
@@ -96,7 +96,7 @@ services:
   # Dumps the database every six hours into the backups volume. It runs as root only so that it can create the folder
   # in its volume, and it runs nothing else.
   backup:
-    image: postgres:17-bookworm
+    image: postgres:17.11-bookworm
     restart: unless-stopped
     user: root
     depends_on:
@@ -116,7 +116,7 @@ services:
 
   # Copies the dumps to the R2 bucket every hour, under db-backups/.
   backup-upload:
-    image: rclone/rclone:latest
+    image: rclone/rclone:1.75.2
     restart: unless-stopped
     depends_on:
       - backup

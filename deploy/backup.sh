@@ -20,6 +20,8 @@ dump() {
     echo "database dump failed" >&2
     return 1
   fi
+  # Names are timestamps with no spaces, so listing them with ls is safe here.
+  # shellcheck disable=SC2012
   ls -1t /backups/rhenko-*.dump 2>/dev/null | tail -n +"$((KEEP + 1))" | xargs -r rm -f
 }
 
