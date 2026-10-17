@@ -9,6 +9,11 @@ const openVisitors = new Set()
 
 const FLAGS = [
   "--no-sandbox",
+  // The test machine has no GPU. Without this, the GPU process draws in software and uses about two cores while a test runs.
+  "--disable-gpu",
+  // WebGL is the landing page's grain backdrop, which is decoration only. Drawn in software it made the landing page take
+  // seconds per check, so the suite turns it off and the page shows its flat stand-in. E2E_WEBGL=1 keeps it on.
+  ...(process.env.E2E_WEBGL === "1" ? [] : ["--disable-3d-apis"]),
   // Calls: the microphone prompt answers itself and the devices are fake.
   "--use-fake-ui-for-media-stream",
   "--use-fake-device-for-media-stream",

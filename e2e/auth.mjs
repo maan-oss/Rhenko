@@ -246,7 +246,14 @@ async function signInAndOut({ phone }) {
 
 async function privatePages() {
   const visitor = await newVisitor({ label: "signed-out" })
-  for (const path of ["/", "/explore", "/notifications", "/messages", "/bookmarks", "/lists", "/drafts", "/analytics", "/settings", "/settings/security", "/messages/new"]) {
+  // The home address is the landing page for a visitor, so it stays where it is. Every other page sends them to sign in.
+  await check("signed out, / shows the landing page", async () => {
+    await visitor.page.goto("/")
+    await visitor.page.getByRole("heading", { level: 1 }).first().waitFor({ timeout: TIMEOUT })
+    assert.equal(new URL(visitor.page.url()).pathname, "/", "the landing page redirected away from /")
+    await visitor.page.getByRole("link", { name: "Create an account" }).first().waitFor({ timeout: TIMEOUT })
+  })
+  for (const path of ["/explore", "/notifications", "/messages", "/bookmarks", "/lists", "/drafts", "/analytics", "/settings", "/settings/security", "/messages/new"]) {
     await check(`signed out, ${path} goes to the login page`, async () => {
       await visitor.page.goto(path)
       await visitor.page.waitForURL((url) => url.pathname === "/login", { timeout: TIMEOUT })

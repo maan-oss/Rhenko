@@ -24,7 +24,7 @@ die() {
 [ "$ID" = "ubuntu" ] || die "this script is written for Ubuntu (found: $ID)"
 
 export DEBIAN_FRONTEND=noninteractive
-trap 'stty echo 2>/dev/null || true' EXIT
+trap 'stty echo 2>/dev/null || true; rm -f .env.partial' EXIT
 
 mem_kb=$(awk '/MemTotal/ { print $2 }' /proc/meminfo)
 if [ "$mem_kb" -lt 3500000 ]; then
@@ -69,7 +69,9 @@ apt-get install -y -qq unattended-upgrades >/dev/null
 # 5. Settings. The passwords and the server key are generated on this server and written only to .env.
 if [ ! -f .env ]; then
   umask 077
-  cp .env.example .env
+  # The answers are written to .env.partial and it becomes .env only when every answer is accepted. A refused answer then
+  # leaves nothing behind, so the next run asks again instead of finding a half-written .env.
+  cp .env.example .env.partial
 
   printf 'Domain people will use, for example rhenko.example.com: '
   read -r domain
@@ -99,7 +101,7 @@ if [ ! -f .env ]; then
   echo
   [ -n "$r2_secret" ] || die "the R2 secret access key is empty"
 
-  cat >> .env <<EOF
+  cat >> .env.partial <<EOF
 
 # Written by deploy/bootstrap.sh.
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
@@ -111,7 +113,8 @@ RHENKO_R2_BUCKET=$r2_bucket
 RHENKO_R2_ACCESS_KEY_ID=$r2_key
 RHENKO_R2_SECRET_ACCESS_KEY=$r2_secret
 EOF
-  chmod 600 .env
+  chmod 600 .env.partial
+  mv .env.partial .env
   echo ".env written. The passwords and the server key were generated on this server."
 else
   echo ".env already exists, so it is kept as it is."
