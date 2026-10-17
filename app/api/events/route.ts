@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   let teardown = () => {}
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       let closed = false
       const write = (chunk: string) => {
         if (closed) return
@@ -33,12 +33,12 @@ export async function GET(request: NextRequest) {
       // A dropped stream comes back after two seconds.
       write("retry: 2000\n\n")
       send({ type: "hello", bootId: serverBootId() })
-      const unsubscribe = subscribe(viewer.id, send)
-      for (const event of openingEvents(viewer.id)) send(event)
-      for (const event of takeQueuedBanners(viewer.id)) send(event)
+      const unsubscribe = await subscribe(viewer.id, send)
+      for (const event of await openingEvents(viewer.id)) send(event)
+      for (const event of await takeQueuedBanners(viewer.id)) send(event)
       const ping = setInterval(() => write(": ping\n\n"), PING_MS)
-      const sessionCheck = setInterval(() => {
-        if (!token || !sessionTokenValid(token)) teardown()
+      const sessionCheck = setInterval(async () => {
+        if (!token || !await sessionTokenValid(token)) teardown()
       }, SESSION_CHECK_MS)
       teardown = () => {
         if (closed) return

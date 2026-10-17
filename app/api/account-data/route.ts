@@ -1,11 +1,10 @@
-import fs from "node:fs"
 import { getViewer } from "@/lib/auth"
 import { settingsFor } from "@/lib/connections"
 import { all, get } from "@/lib/db"
 import { languageName } from "@/lib/languages"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { notificationPrefsFor } from "@/lib/settings-data"
-import { uploadPath } from "@/lib/uploads"
+import { readUpload, uploadSize } from "@/lib/uploads"
 import { ZIP_MAX_BYTES, ZIP_MAX_ENTRIES, ZipWriter, zipSize } from "@/lib/zip"
 
 // A copy of the signed-in person's account as a ZIP file: data.json, and a media folder with the files data.json
@@ -13,48 +12,42 @@ import { ZIP_MAX_BYTES, ZIP_MAX_ENTRIES, ZipWriter, zipSize } from "@/lib/zip"
 
 const EXPORTS_PER_HOUR = 5
 
-type Media = { name: string; path: string; size: number }
+type Media = { name: string; size: number }
 
 function iso(ms: number | null): string | null {
   return ms === null ? null : new Date(ms).toISOString()
 }
 
-// Every stored file the export can include, found on disk now. Files that are gone are left out, and data.json
+// Every stored file the export can include, found in storage now. Files that are gone are left out, and data.json
 // shows null where they were.
 async function findMedia(userId: string): Promise<Map<string, Media>> {
-  const profile = get<{ avatar_file: string | null; banner_file: string | null }>(
+  const profile = await get<{ avatar_file: string | null; banner_file: string | null }>(
     "SELECT avatar_file, banner_file FROM users WHERE id = ?",
     userId
   )
-  const postFiles = all<{ file: string }>(
+  const postFiles = (await all<{ file: string }>(
     "SELECT pm.file FROM post_media pm JOIN posts p ON p.id = pm.post_id WHERE p.author_id = ?",
     userId
-  ).map((row) => row.file)
-  const messageFiles = all<{ media_file: string }>(
+  )).map((row) => row.file)
+  const messageFiles = (await all<{ media_file: string }>(
     `SELECT m.media_file FROM chat_messages m
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
      WHERE m.media_file IS NOT NULL AND m.deleted_at IS NULL`,
     userId
-  ).map((row) => row.media_file)
+  )).map((row) => row.media_file)
   const found = new Map<string, Media>()
   for (const name of [profile?.avatar_file ?? null, profile?.banner_file ?? null, ...postFiles, ...messageFiles]) {
     if (!name || found.has(name)) continue
-    const path = uploadPath(name)
-    if (!path) continue
-    try {
-      const stat = await fs.promises.stat(path)
-      if (stat.isFile()) found.set(name, { name, path, size: stat.size })
-    } catch {
-      // The file is gone from disk; data.json shows null for it.
-    }
+    const size = await uploadSize(name)
+    if (size !== null) found.set(name, { name, size })
   }
   return found
 }
 
-function collect(userId: string, media: Map<string, Media>) {
+async function collect(userId: string, media: Map<string, Media>) {
   const file = (name: string | null): string | null => (name && media.has(name) ? `media/${name}` : null)
 
-  const user = get<{
+  const user = await get<{
     handle: string
     name: string
     bio: string
@@ -79,7 +72,7 @@ function collect(userId: string, media: Map<string, Media>) {
   if (!user) return null
 
   // Posts and replies, each with its state, media and poll.
-  const postRows = all<{
+  const postRows = await all<{
     id: string
     body: string
     reply_to_id: string | null
@@ -101,16 +94,16 @@ function collect(userId: string, media: Map<string, Media>) {
      WHERE p.author_id = ? ORDER BY p.created_at DESC`,
     userId
   )
-  const mediaRows = all<{ post_id: string; file: string; kind: string; alt: string }>(
+  const mediaRows = await all<{ post_id: string; file: string; kind: string; alt: string }>(
     `SELECT pm.post_id, pm.file, pm.kind, pm.alt FROM post_media pm JOIN posts p ON p.id = pm.post_id
      WHERE p.author_id = ? ORDER BY pm.post_id, pm.position`,
     userId
   )
-  const pollRows = all<{ post_id: string; ends_at: number }>(
+  const pollRows = await all<{ post_id: string; ends_at: number }>(
     "SELECT pl.post_id, pl.ends_at FROM polls pl JOIN posts p ON p.id = pl.post_id WHERE p.author_id = ?",
     userId
   )
-  const optionRows = all<{ post_id: string; label: string; votes: number }>(
+  const optionRows = await all<{ post_id: string; label: string; votes: number }>(
     `SELECT o.post_id, o.label, (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id = o.id) AS votes
      FROM poll_options o JOIN posts p ON p.id = o.post_id
      WHERE p.author_id = ? ORDER BY o.post_id, o.position`,
@@ -149,33 +142,33 @@ function collect(userId: string, media: Map<string, Media>) {
     }
   }
 
-  const handleRows = (sql: string) =>
-    all<{ handle: string; created_at: number }>(sql, userId).map((row) => ({ handle: row.handle, since: iso(row.created_at) }))
+  const handleRows = async (sql: string) =>
+    (await all<{ handle: string; created_at: number }>(sql, userId)).map((row) => ({ handle: row.handle, since: iso(row.created_at) }))
 
-  const ownedLists = all<{ id: string; name: string; description: string; private: number; created_at: number }>(
+  const ownedLists = await all<{ id: string; name: string; description: string; private: number; created_at: number }>(
     "SELECT id, name, description, private, created_at FROM lists WHERE owner_id = ? ORDER BY created_at DESC",
     userId
   )
-  const listMembers = all<{ list_id: string; handle: string }>(
+  const listMembers = await all<{ list_id: string; handle: string }>(
     `SELECT m.list_id, u.handle FROM list_members m JOIN lists l ON l.id = m.list_id JOIN users u ON u.id = m.user_id
      WHERE l.owner_id = ? ORDER BY m.created_at`,
     userId
   )
 
   // Every conversation the account is in, with all of its messages that weren't deleted.
-  const conversations = all<{ id: string; kind: string; title: string; status: string; joined_at: number }>(
+  const conversations = await all<{ id: string; kind: string; title: string; status: string; joined_at: number }>(
     `SELECT c.id, c.kind, c.title, cm.status, cm.joined_at FROM conversation_members cm
      JOIN conversations c ON c.id = cm.conversation_id
      WHERE cm.user_id = ? ORDER BY c.updated_at DESC`,
     userId
   )
-  const memberRows = all<{ conversation_id: string; handle: string }>(
+  const memberRows = await all<{ conversation_id: string; handle: string }>(
     `SELECT cm.conversation_id, u.handle FROM conversation_members cm JOIN users u ON u.id = cm.user_id
      WHERE cm.conversation_id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?)
      ORDER BY cm.joined_at`,
     userId
   )
-  const messageRows = all<{
+  const messageRows = await all<{
     conversation_id: string
     sender: string
     body: string
@@ -232,8 +225,8 @@ function collect(userId: string, media: Map<string, Media>) {
       banner: file(user.banner_file),
     },
     // Where the person is and the languages they use, for suggestions only. Nobody else sees the city or town.
-    connections: (() => {
-      const settings = settingsFor(userId)
+    connections: await (async () => {
+      const settings = await settingsFor(userId)
       return {
         where: {
           country: settings.country || null,
@@ -248,64 +241,64 @@ function collect(userId: string, media: Map<string, Media>) {
           speak: settings.speak.map((item) => ({ code: item.code, name: languageName(item.code), level: item.level })),
           learn: settings.learn.map((code) => ({ code, name: languageName(code) })),
         },
-        notNow: handleRows(
+        notNow: await handleRows(
           "SELECT u.handle, d.created_at FROM connection_dismissals d JOIN users u ON u.id = d.user_id WHERE d.viewer_id = ? ORDER BY d.created_at DESC"
         ),
       }
     })(),
     posts: postRows.filter((row) => row.reply_to_id === null).map(shapePost),
     replies: postRows.filter((row) => row.reply_to_id !== null).map(shapePost),
-    likes: all<{ post_id: string; author: string; created_at: number }>(
+    likes: (await all<{ post_id: string; author: string; created_at: number }>(
       `SELECT l.post_id, u.handle AS author, l.created_at FROM likes l
        JOIN posts p ON p.id = l.post_id JOIN users u ON u.id = p.author_id
        WHERE l.user_id = ? ORDER BY l.created_at DESC`,
       userId
-    ).map((row) => ({ postId: row.post_id, author: row.author, likedAt: iso(row.created_at) })),
-    reposts: all<{ post_id: string; author: string; created_at: number }>(
+    )).map((row) => ({ postId: row.post_id, author: row.author, likedAt: iso(row.created_at) })),
+    reposts: (await all<{ post_id: string; author: string; created_at: number }>(
       `SELECT r.post_id, u.handle AS author, r.created_at FROM reposts r
        JOIN posts p ON p.id = r.post_id JOIN users u ON u.id = p.author_id
        WHERE r.user_id = ? ORDER BY r.created_at DESC`,
       userId
-    ).map((row) => ({ postId: row.post_id, author: row.author, repostedAt: iso(row.created_at) })),
-    bookmarkFolders: all<{ name: string; created_at: number }>(
+    )).map((row) => ({ postId: row.post_id, author: row.author, repostedAt: iso(row.created_at) })),
+    bookmarkFolders: (await all<{ name: string; created_at: number }>(
       "SELECT name, created_at FROM bookmark_folders WHERE user_id = ? ORDER BY created_at",
       userId
-    ).map((row) => ({ name: row.name, createdAt: iso(row.created_at) })),
-    bookmarks: all<{ post_id: string; author: string; folder: string | null; created_at: number }>(
+    )).map((row) => ({ name: row.name, createdAt: iso(row.created_at) })),
+    bookmarks: (await all<{ post_id: string; author: string; folder: string | null; created_at: number }>(
       `SELECT b.post_id, u.handle AS author, f.name AS folder, b.created_at FROM bookmarks b
        JOIN posts p ON p.id = b.post_id JOIN users u ON u.id = p.author_id
        LEFT JOIN bookmark_folders f ON f.id = b.folder_id
        WHERE b.user_id = ? ORDER BY b.created_at DESC`,
       userId
-    ).map((row) => ({ postId: row.post_id, author: row.author, folder: row.folder, savedAt: iso(row.created_at) })),
-    highlights: all<{ post_id: string; created_at: number }>(
+    )).map((row) => ({ postId: row.post_id, author: row.author, folder: row.folder, savedAt: iso(row.created_at) })),
+    highlights: (await all<{ post_id: string; created_at: number }>(
       "SELECT post_id, created_at FROM highlights WHERE user_id = ? ORDER BY created_at DESC",
       userId
-    ).map((row) => ({ postId: row.post_id, addedAt: iso(row.created_at) })),
-    following: handleRows(
+    )).map((row) => ({ postId: row.post_id, addedAt: iso(row.created_at) })),
+    following: await handleRows(
       "SELECT u.handle, f.created_at FROM follows f JOIN users u ON u.id = f.followee_id WHERE f.follower_id = ? ORDER BY f.created_at DESC"
     ),
-    followers: handleRows(
+    followers: await handleRows(
       "SELECT u.handle, f.created_at FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.followee_id = ? ORDER BY f.created_at DESC"
     ),
     followRequests: {
-      sent: handleRows(
+      sent: await handleRows(
         "SELECT u.handle, r.created_at FROM follow_requests r JOIN users u ON u.id = r.target_id WHERE r.requester_id = ? ORDER BY r.created_at DESC"
       ),
-      received: handleRows(
+      received: await handleRows(
         "SELECT u.handle, r.created_at FROM follow_requests r JOIN users u ON u.id = r.requester_id WHERE r.target_id = ? ORDER BY r.created_at DESC"
       ),
     },
-    blocked: handleRows(
+    blocked: await handleRows(
       "SELECT u.handle, b.created_at FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ? ORDER BY b.created_at DESC"
     ),
-    muted: handleRows(
+    muted: await handleRows(
       "SELECT u.handle, m.created_at FROM mutes m JOIN users u ON u.id = m.muted_id WHERE m.muter_id = ? ORDER BY m.created_at DESC"
     ),
-    mutedWords: all<{ word: string; created_at: number }>(
+    mutedWords: (await all<{ word: string; created_at: number }>(
       "SELECT word, created_at FROM muted_words WHERE user_id = ? ORDER BY created_at DESC",
       userId
-    ).map((row) => ({ word: row.word, since: iso(row.created_at) })),
+    )).map((row) => ({ word: row.word, since: iso(row.created_at) })),
     lists: {
       made: ownedLists.map((list) => ({
         name: list.name,
@@ -314,34 +307,34 @@ function collect(userId: string, media: Map<string, Media>) {
         createdAt: iso(list.created_at),
         members: listMembers.filter((member) => member.list_id === list.id).map((member) => member.handle),
       })),
-      followed: all<{ name: string; owner: string; created_at: number }>(
+      followed: (await all<{ name: string; owner: string; created_at: number }>(
         `SELECT l.name, u.handle AS owner, lf.created_at FROM list_follows lf
          JOIN lists l ON l.id = lf.list_id JOIN users u ON u.id = l.owner_id
          WHERE lf.user_id = ? ORDER BY lf.created_at DESC`,
         userId
-      ).map((row) => ({ name: row.name, owner: row.owner, followedAt: iso(row.created_at) })),
+      )).map((row) => ({ name: row.name, owner: row.owner, followedAt: iso(row.created_at) })),
     },
-    topics: all<{ tag: string; created_at: number }>(
+    topics: (await all<{ tag: string; created_at: number }>(
       "SELECT tag, created_at FROM topic_follows WHERE user_id = ? ORDER BY created_at DESC",
       userId
-    ).map((row) => ({ tag: row.tag, since: iso(row.created_at) })),
-    pollVotes: all<{ post_id: string; label: string; created_at: number }>(
+    )).map((row) => ({ tag: row.tag, since: iso(row.created_at) })),
+    pollVotes: (await all<{ post_id: string; label: string; created_at: number }>(
       `SELECT v.post_id, o.label, v.created_at FROM poll_votes v JOIN poll_options o ON o.id = v.option_id
        WHERE v.user_id = ? ORDER BY v.created_at DESC`,
       userId
-    ).map((row) => ({ postId: row.post_id, choice: row.label, votedAt: iso(row.created_at) })),
-    communityNotes: all<{ post_id: string; body: string; created_at: number }>(
+    )).map((row) => ({ postId: row.post_id, choice: row.label, votedAt: iso(row.created_at) })),
+    communityNotes: (await all<{ post_id: string; body: string; created_at: number }>(
       "SELECT post_id, body, created_at FROM community_notes WHERE author_id = ? ORDER BY created_at DESC",
       userId
-    ).map((row) => ({ postId: row.post_id, text: row.body, writtenAt: iso(row.created_at) })),
+    )).map((row) => ({ postId: row.post_id, text: row.body, writtenAt: iso(row.created_at) })),
     notificationSettings: {
-      ...notificationPrefsFor(userId),
+      ...await notificationPrefsFor(userId),
       mentionsFromVerifiedAccountsOnly: user.mentions_verified_only === 1,
     },
-    recentSearches: all<{ query: string; created_at: number }>(
+    recentSearches: (await all<{ query: string; created_at: number }>(
       "SELECT query, created_at FROM recent_searches WHERE user_id = ? ORDER BY created_at DESC",
       userId
-    ).map((row) => ({ query: row.query, searchedAt: iso(row.created_at) })),
+    )).map((row) => ({ query: row.query, searchedAt: iso(row.created_at) })),
     conversations: conversations.map((conversation) => ({
       kind: conversation.kind === "group" ? "group" : "direct",
       title: conversation.title,
@@ -367,13 +360,9 @@ function archive(json: Uint8Array, media: Media[]): ReadableStream<Uint8Array> {
         }
         while (next < media.length) {
           const item = media[next++]
-          let bytes: Buffer
-          try {
-            bytes = await fs.promises.readFile(item.path)
-          } catch {
-            // Removed after the list was made, so it is left out.
-            continue
-          }
+          const bytes = await readUpload(item.name)
+          // Removed after the list was made, so it is left out.
+          if (!bytes) continue
           for (const chunk of zip.file(`media/${item.name}`, bytes)) controller.enqueue(chunk)
           return
         }
@@ -390,7 +379,7 @@ export async function GET() {
   const viewer = await getViewer()
   if (!viewer) return Response.json({ error: "Sign in to download your data." }, { status: 401 })
 
-  const limit = consume(`export:${viewer.id}`, EXPORTS_PER_HOUR, 60 * 60 * 1000)
+  const limit = await consume(`export:${viewer.id}`, EXPORTS_PER_HOUR, 60 * 60 * 1000)
   if (!limit.ok) {
     return Response.json(
       { error: `You've downloaded your data ${EXPORTS_PER_HOUR} times this hour. Try again in ${waitLabel(limit.retryAfterSeconds)}.` },
@@ -399,7 +388,7 @@ export async function GET() {
   }
 
   const found = await findMedia(viewer.id)
-  const data = collect(viewer.id, found)
+  const data = await collect(viewer.id, found)
   if (!data) return Response.json({ error: "Sign in to download your data." }, { status: 401 })
   const json = Buffer.from(JSON.stringify(data, null, 2), "utf8")
   const media = [...found.values()]

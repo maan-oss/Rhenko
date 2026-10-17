@@ -45,13 +45,13 @@ export async function translateText(text: string, source: string, target: string
 }
 
 // The translation of a post or message into one language, kept from an earlier request.
-export function cachedPostTranslation(postId: string, target: string): { text: string; source: string } | null {
-  return get<{ text: string; source: string }>("SELECT text, source FROM post_translations WHERE post_id = ? AND target = ?", postId, target) ?? null
+export async function cachedPostTranslation(postId: string, target: string): Promise<{ text: string; source: string } | null> {
+  return await get<{ text: string; source: string }>("SELECT text, source FROM post_translations WHERE post_id = ? AND target = ?", postId, target) ?? null
 }
 
-export function keepPostTranslation(postId: string, target: string, source: string, text: string): void {
-  run(
-    "INSERT OR REPLACE INTO post_translations (post_id, target, source, text, created_at) VALUES (?, ?, ?, ?, ?)",
+export async function keepPostTranslation(postId: string, target: string, source: string, text: string): Promise<void> {
+  await run(
+    "INSERT INTO post_translations (post_id, target, source, text, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (post_id, target) DO UPDATE SET source = EXCLUDED.source, text = EXCLUDED.text, created_at = EXCLUDED.created_at",
     postId,
     target,
     source,
@@ -60,13 +60,13 @@ export function keepPostTranslation(postId: string, target: string, source: stri
   )
 }
 
-export function cachedMessageTranslation(messageId: string, target: string): { text: string; source: string } | null {
-  return get<{ text: string; source: string }>("SELECT text, source FROM message_translations WHERE message_id = ? AND target = ?", messageId, target) ?? null
+export async function cachedMessageTranslation(messageId: string, target: string): Promise<{ text: string; source: string } | null> {
+  return await get<{ text: string; source: string }>("SELECT text, source FROM message_translations WHERE message_id = ? AND target = ?", messageId, target) ?? null
 }
 
-export function keepMessageTranslation(messageId: string, target: string, source: string, text: string): void {
-  run(
-    "INSERT OR REPLACE INTO message_translations (message_id, target, source, text, created_at) VALUES (?, ?, ?, ?, ?)",
+export async function keepMessageTranslation(messageId: string, target: string, source: string, text: string): Promise<void> {
+  await run(
+    "INSERT INTO message_translations (message_id, target, source, text, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (message_id, target) DO UPDATE SET source = EXCLUDED.source, text = EXCLUDED.text, created_at = EXCLUDED.created_at",
     messageId,
     target,
     source,
@@ -77,12 +77,12 @@ export function keepMessageTranslation(messageId: string, target: string, source
 
 // Finds the language of posts and messages that were written before the language was recorded. A few at a time, from the
 // background tick, so a large history never holds up the server. A text with no clear language is recorded as "".
-export function recordMissingLanguages(limit = 100): void {
-  const posts = all<{ id: string; body: string }>("SELECT id, body FROM posts WHERE lang IS NULL LIMIT ?", limit)
-  const messages = all<{ id: string; body: string }>("SELECT id, body FROM chat_messages WHERE lang IS NULL LIMIT ?", limit)
+export async function recordMissingLanguages(limit = 100): Promise<void> {
+  const posts = await all<{ id: string; body: string }>("SELECT id, body FROM posts WHERE lang IS NULL LIMIT ?", limit)
+  const messages = await all<{ id: string; body: string }>("SELECT id, body FROM chat_messages WHERE lang IS NULL LIMIT ?", limit)
   if (posts.length === 0 && messages.length === 0) return
-  transaction(() => {
-    for (const post of posts) run("UPDATE posts SET lang = ? WHERE id = ?", detectLanguage(post.body) ?? "", post.id)
-    for (const message of messages) run("UPDATE chat_messages SET lang = ? WHERE id = ?", detectLanguage(message.body) ?? "", message.id)
+  await transaction(async () => {
+    for (const post of posts) await run("UPDATE posts SET lang = ? WHERE id = ?", detectLanguage(post.body) ?? "", post.id)
+    for (const message of messages) await run("UPDATE chat_messages SET lang = ? WHERE id = ?", detectLanguage(message.body) ?? "", message.id)
   })
 }

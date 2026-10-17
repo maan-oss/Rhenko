@@ -50,13 +50,13 @@ function onboardingOf(value: string): Onboarding {
   return value === "pending" || value === "done" ? value : "skipped"
 }
 
-export function settingsFor(userId: string): Settings {
-  const row = get<SettingsRow>(
+export async function settingsFor(userId: string): Promise<Settings> {
+  const row = await get<SettingsRow>(
     "SELECT country, area, region, suggest_nearby, suggest_language, onboarding FROM users WHERE id = ?",
     userId
   )
-  const languages = all<{ code: string; kind: string; level: string }>(
-    "SELECT code, kind, level FROM user_languages WHERE user_id = ? ORDER BY rowid",
+  const languages = await all<{ code: string; kind: string; level: string }>(
+    "SELECT code, kind, level FROM user_languages WHERE user_id = ? ORDER BY seq",
     userId
   )
   return {
@@ -76,11 +76,11 @@ export function settingsFor(userId: string): Settings {
 
 // Saves where someone is. The caller has checked the country, the city and the region. With no city or region the country
 // is cleared too, and the nearby switch then has nothing to match on.
-export function saveWhere(userId: string, where: { country: string; area: string; region: string; suggestNearby: boolean }): void {
+export async function saveWhere(userId: string, where: { country: string; area: string; region: string; suggestNearby: boolean }): Promise<void> {
   const area = cleanArea(where.area)
   const region = cleanRegion(where.region)
   const empty = area === "" && region === ""
-  run(
+  await run(
     "UPDATE users SET country = ?, area = ?, area_key = ?, region = ?, suggest_nearby = ? WHERE id = ?",
     empty ? "" : where.country,
     area,
@@ -93,45 +93,45 @@ export function saveWhere(userId: string, where: { country: string; area: string
 
 // Saves the languages someone speaks (with a level) and is learning, and the language-partner switch. A language is
 // never both: one learned language that is also spoken is dropped from the learning list.
-export function saveLanguages(
+export async function saveLanguages(
   userId: string,
   languages: { speak: { code: string; level: SpeakLevel }[]; learn: string[]; suggestLanguage: boolean }
-): void {
+): Promise<void> {
   const speak = languages.speak.slice(0, MAX_LANGUAGES)
   const spoken = new Set(speak.map((language) => language.code))
   const learn = [...new Set(languages.learn)].filter((code) => !spoken.has(code)).slice(0, MAX_LANGUAGES)
-  transaction(() => {
-    run("DELETE FROM user_languages WHERE user_id = ?", userId)
+  await transaction(async () => {
+    await run("DELETE FROM user_languages WHERE user_id = ?", userId)
     for (const language of speak) {
-      run("INSERT INTO user_languages (user_id, code, kind, level) VALUES (?, ?, 'speak', ?)", userId, language.code, language.level)
+      await run("INSERT INTO user_languages (user_id, code, kind, level) VALUES (?, ?, 'speak', ?)", userId, language.code, language.level)
     }
     for (const code of learn) {
-      run("INSERT INTO user_languages (user_id, code, kind, level) VALUES (?, ?, 'learn', '')", userId, code)
+      await run("INSERT INTO user_languages (user_id, code, kind, level) VALUES (?, ?, 'learn', '')", userId, code)
     }
-    run("UPDATE users SET suggest_language = ? WHERE id = ?", languages.suggestLanguage ? 1 : 0, userId)
+    await run("UPDATE users SET suggest_language = ? WHERE id = ?", languages.suggestLanguage ? 1 : 0, userId)
   })
 }
 
-export function setOnboarding(userId: string, value: "done" | "skipped"): void {
-  run("UPDATE users SET onboarding = ? WHERE id = ?", value, userId)
+export async function setOnboarding(userId: string, value: "done" | "skipped"): Promise<void> {
+  await run("UPDATE users SET onboarding = ? WHERE id = ?", value, userId)
 }
 
 // "Not now" on a suggestion: that person is not suggested to this viewer again.
-export function dismissConnection(viewerId: string, userId: string): void {
-  run("INSERT OR IGNORE INTO connection_dismissals (viewer_id, user_id, created_at) VALUES (?, ?, ?)", viewerId, userId, Date.now())
+export async function dismissConnection(viewerId: string, userId: string): Promise<void> {
+  await run("INSERT INTO connection_dismissals (viewer_id, user_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewerId, userId, Date.now())
 }
 
-export function dismissedCount(viewerId: string): number {
-  return get<{ n: number }>("SELECT COUNT(*) AS n FROM connection_dismissals WHERE viewer_id = ?", viewerId)?.n ?? 0
+export async function dismissedCount(viewerId: string): Promise<number> {
+  return (await get<{ n: number }>("SELECT COUNT(*) AS n FROM connection_dismissals WHERE viewer_id = ?", viewerId))?.n ?? 0
 }
 
-export function clearDismissals(viewerId: string): void {
-  run("DELETE FROM connection_dismissals WHERE viewer_id = ?", viewerId)
+export async function clearDismissals(viewerId: string): Promise<void> {
+  await run("DELETE FROM connection_dismissals WHERE viewer_id = ?", viewerId)
 }
 
 // Dismissals older than the retention period are removed by the background tick.
-export function purgeDismissals(now: number): void {
-  run("DELETE FROM connection_dismissals WHERE created_at < ?", now - RETENTION.dismissedConnectionsDays * DAY)
+export async function purgeDismissals(now: number): Promise<void> {
+  await run("DELETE FROM connection_dismissals WHERE created_at < ?", now - RETENTION.dismissedConnectionsDays * DAY)
 }
 
 export type SuggestedPerson = {
@@ -190,10 +190,10 @@ type CandidateRow = {
 
 // The suggestions for a viewer. When nothing matches yet, the last group holds people to start with: the accounts most
 // people follow. They are never matched to anyone, and their card says so, so a new account always has people to look at.
-export function suggestionsFor(viewerId: string, now: number, perGroup = 6): Suggestions {
-  const matched = matchedFor(viewerId, now, perGroup)
+export async function suggestionsFor(viewerId: string, now: number, perGroup = 6): Promise<Suggestions> {
+  const matched = await matchedFor(viewerId, now, perGroup)
   if (matched.groups.some((group) => group.group !== "starting" && group.people.length > 0)) return matched
-  const starting = startingPeople(viewerId, perGroup)
+  const starting = await startingPeople(viewerId, perGroup)
   return {
     ...matched,
     groups: matched.groups.map((group) => (group.group === "starting" ? { ...group, people: starting } : group)),
@@ -216,8 +216,8 @@ type StartingRow = {
 }
 
 // The accounts most people follow, for a viewer with no matches. The same rules as every suggestion apply.
-function startingPeople(viewerId: string, count: number): SuggestedPerson[] {
-  return all<StartingRow>(
+async function startingPeople(viewerId: string, count: number): Promise<SuggestedPerson[]> {
+  return (await all<StartingRow>(
     `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.bio, u.followers_count
      FROM users u
      WHERE ${EXCLUDED}
@@ -225,7 +225,7 @@ function startingPeople(viewerId: string, count: number): SuggestedPerson[] {
      LIMIT ?`,
     ...excludedParams(viewerId),
     count
-  ).map(
+  )).map(
     (row): SuggestedPerson => ({
       id: row.id,
       handle: row.handle,
@@ -239,8 +239,8 @@ function startingPeople(viewerId: string, count: number): SuggestedPerson[] {
   )
 }
 
-function matchedFor(viewerId: string, now: number, perGroup: number): Suggestions {
-  const viewer = get<{ country: string; area: string; area_key: string; suggest_nearby: number; suggest_language: number }>(
+async function matchedFor(viewerId: string, now: number, perGroup: number): Promise<Suggestions> {
+  const viewer = await get<{ country: string; area: string; area_key: string; suggest_nearby: number; suggest_language: number }>(
     "SELECT country, area, area_key, suggest_nearby, suggest_language FROM users WHERE id = ?",
     viewerId
   )
@@ -251,24 +251,24 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
   }
   if (!viewer) return empty
 
-  const languageRows = all<{ code: string; kind: string }>("SELECT code, kind FROM user_languages WHERE user_id = ?", viewerId)
+  const languageRows = await all<{ code: string; kind: string }>("SELECT code, kind FROM user_languages WHERE user_id = ?", viewerId)
   const languageOn = viewer.suggest_language === 1
   const speaks = languageOn ? languageRows.filter((row) => row.kind === "speak").map((row) => row.code) : []
   const learns = languageOn ? languageRows.filter((row) => row.kind === "learn").map((row) => row.code) : []
   const hasArea = viewer.country !== "" && viewer.area_key !== ""
   const nearbyOn = hasArea && viewer.suggest_nearby === 1
-  const topics = all<{ tag: string }>(
+  const topics = (await all<{ tag: string }>(
     "SELECT tag FROM topic_follows WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
     viewerId,
     MAX_TOPICS
-  ).map((row) => row.tag)
+  )).map((row) => row.tag)
 
   const me: Me = { speaks, learns, area: nearbyOn ? cleanArea(viewer.area) : null, topics }
   const pool = new Set<string>()
 
   // Where people share a city or town. Only people who have turned nearby suggestions on.
   if (nearbyOn) {
-    for (const row of all<{ id: string }>(
+    for (const row of await all<{ id: string }>(
       "SELECT u.id FROM users u WHERE u.country = ? AND u.area_key = ? AND u.suggest_nearby = 1 AND u.id <> ? ORDER BY u.followers_count DESC LIMIT ?",
       viewer.country,
       viewer.area_key,
@@ -282,11 +282,11 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
   // Languages: someone who speaks a language you are learning, or who is learning one you speak. Only people who have
   // turned language suggestions on.
   if (languageOn && (speaks.length > 0 || learns.length > 0)) {
-    for (const row of all<{ id: string }>(
+    for (const row of await all<{ id: string }>(
       `SELECT DISTINCT ul.user_id AS id FROM user_languages ul JOIN users u ON u.id = ul.user_id
        WHERE u.suggest_language = 1 AND u.id <> ? AND (
-         (ul.kind = 'speak' AND ul.code IN (SELECT value FROM json_each(?)))
-         OR (ul.kind = 'learn' AND ul.code IN (SELECT value FROM json_each(?)))
+         (ul.kind = 'speak' AND ul.code IN (SELECT value FROM json_array_elements_text(?::jsonb)))
+         OR (ul.kind = 'learn' AND ul.code IN (SELECT value FROM json_array_elements_text(?::jsonb)))
        ) LIMIT ?`,
       viewerId,
       JSON.stringify([...new Set([...speaks, ...learns])]),
@@ -300,7 +300,7 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
   // Followed by people you follow: how many of your follows follow this person. Deactivated and blocked accounts in
   // between do not count.
   const mutual = new Map<string, number>()
-  for (const row of all<{ id: string; n: number }>(
+  for (const row of await all<{ id: string; n: number }>(
     `SELECT f2.followee_id AS id, COUNT(*) AS n
      FROM follows f1
      JOIN follows f2 ON f2.follower_id = f1.followee_id
@@ -323,8 +323,8 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
   const topicsOf = new Map<string, Set<string>>()
   if (topics.length > 0) {
     const wanted = new Set(topics)
-    const clauses = topics.map(() => "instr(lower(p.body), ?) > 0").join(" OR ")
-    for (const row of all<{ author_id: string; body: string }>(
+    const clauses = topics.map(() => "strpos(lower(p.body), ?) > 0").join(" OR ")
+    for (const row of await all<{ author_id: string; body: string }>(
       `SELECT p.author_id, p.body FROM posts p
        WHERE p.created_at >= ? AND ${LIVE} AND p.author_id <> ? AND (${clauses})
          AND NOT EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND c.access = 'closed')
@@ -345,20 +345,20 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
 
   if (pool.size === 0) return { ...empty, hasArea, hasLanguages: languageRows.length > 0 }
 
-  const people = all<CandidateRow>(
+  const people = await all<CandidateRow>(
     `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.bio, u.followers_count, u.country, u.area_key,
        u.suggest_nearby, u.suggest_language,
        (SELECT MAX(p.created_at) FROM posts p WHERE p.author_id = u.id AND ${LIVE}) AS active_at
      FROM users u
-     WHERE u.id IN (SELECT value FROM json_each(?)) AND ${EXCLUDED}`,
+     WHERE u.id IN (SELECT value FROM json_array_elements_text(?::jsonb)) AND ${EXCLUDED}`,
     JSON.stringify([...pool]),
     ...excludedParams(viewerId)
   )
   if (people.length === 0) return { ...empty, hasArea, hasLanguages: languageRows.length > 0 }
 
   const languagesOf = new Map<string, { speaks: string[]; learns: string[] }>()
-  for (const row of all<{ user_id: string; code: string; kind: string }>(
-    "SELECT user_id, code, kind FROM user_languages WHERE user_id IN (SELECT value FROM json_each(?))",
+  for (const row of await all<{ user_id: string; code: string; kind: string }>(
+    "SELECT user_id, code, kind FROM user_languages WHERE user_id IN (SELECT value FROM json_array_elements_text(?::jsonb))",
     JSON.stringify(people.map((person) => person.id))
   )) {
     const entry = languagesOf.get(row.user_id) ?? { speaks: [], learns: [] }
@@ -384,12 +384,12 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
   const byId = new Map(people.map((person) => [person.id, person] as const))
   const ranked = rankConnections(me, candidates, now)
 
-  const groups: SuggestionGroup[] = GROUP_ORDER.map((group) => {
+  const groups: SuggestionGroup[] = await Promise.all(GROUP_ORDER.map(async (group) => {
     const picks = (ranked.get(group) ?? []).slice(0, perGroup)
-    const shown = picks.map((item) => {
+    const shown = await Promise.all(picks.map(async (item) => {
       const person = byId.get(item.candidate.id)
       if (!person) throw new Error(`a suggested person went missing: ${item.candidate.id}`)
-      const withFriends: Candidate = { ...item.candidate, mutualHandles: item.candidate.mutual > 0 ? mutualHandlesOf(viewerId, person.id) : [] }
+      const withFriends: Candidate = { ...item.candidate, mutualHandles: item.candidate.mutual > 0 ? await mutualHandlesOf(viewerId, person.id) : [] }
       return {
         id: person.id,
         handle: person.handle,
@@ -400,16 +400,16 @@ function matchedFor(viewerId: string, now: number, perGroup: number): Suggestion
         group,
         reasons: reasonsOf(me, withFriends, item.facts, (code) => languageName(code) ?? code),
       }
-    })
+    }))
     return { group, ...GROUP_TEXT[group], people: shown }
-  })
+  }))
 
   return { hasArea, hasLanguages: languageRows.length > 0, groups: [...groups, { group: "starting", ...GROUP_TEXT.starting, people: [] }] }
 }
 
 // The names of up to three people the viewer follows who also follow this person, most followed first.
-function mutualHandlesOf(viewerId: string, personId: string): string[] {
-  return all<{ handle: string }>(
+async function mutualHandlesOf(viewerId: string, personId: string): Promise<string[]> {
+  return (await all<{ handle: string }>(
     `SELECT friend.handle FROM follows f1
      JOIN follows f2 ON f2.follower_id = f1.followee_id
      JOIN users friend ON friend.id = f1.followee_id
@@ -420,7 +420,7 @@ function mutualHandlesOf(viewerId: string, personId: string): string[] {
     personId,
     viewerId,
     viewerId
-  ).map((row) => row.handle)
+  )).map((row) => row.handle)
 }
 
 // The first few people across the groups, in group order, for the setup steps and the side panel.

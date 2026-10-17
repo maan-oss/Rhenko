@@ -75,7 +75,7 @@ async function ExploreBody({ searchParams }: { searchParams: SearchParams }) {
   )
 }
 
-function PostsTab({
+async function PostsTab({
   viewer,
   sort,
   media,
@@ -91,7 +91,7 @@ function PostsTab({
   allHref: string
 }) {
   const spec: FeedSpec = { kind: "explore", sort, media }
-  const page = feedFor(spec, viewer.id)
+  const page = await feedFor(spec, viewer.id)
   const empty = page.items.length === 0 && !page.next
   return (
     <>
@@ -125,9 +125,9 @@ function PostsTab({
 }
 
 // Starter packs: lists of people published by the people who made them. Owners who have blocked the viewer stay hidden.
-function PacksTab({ viewerId }: { viewerId: string }) {
-  const found = starterPacks(viewerId, PACKS_LIMIT)
-  const visible = listOwnersVisibleTo(viewerId, found.map((pack) => pack.owner.id))
+async function PacksTab({ viewerId }: { viewerId: string }) {
+  const found = await starterPacks(viewerId, PACKS_LIMIT)
+  const visible = await listOwnersVisibleTo(viewerId, found.map((pack) => pack.owner.id))
   const shown = found.filter((pack) => visible.has(pack.owner.id))
   if (shown.length === 0) {
     return (
@@ -152,8 +152,8 @@ function PacksTab({ viewerId }: { viewerId: string }) {
   )
 }
 
-function TrendingTab() {
-  const tags = trendingTags(TRENDING_LIMIT)
+async function TrendingTab() {
+  const tags = await trendingTags(TRENDING_LIMIT)
   return (
     <>
       {tags.length === 0 ? (

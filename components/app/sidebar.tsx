@@ -21,9 +21,9 @@ export async function Sidebar() {
         status: viewer.status ?? null,
       }}
       accounts={accounts}
-      recent={recentSearches(viewer.id)}
-      notifications={unreadNotificationCount(viewer.id)}
-      messages={unreadMessageCount(viewer.id)}
+      recent={await recentSearches(viewer.id)}
+      notifications={await unreadNotificationCount(viewer.id)}
+      messages={await unreadMessageCount(viewer.id)}
       initialCollapsed={store.get(SIDEBAR_COOKIE)?.value === "collapsed"}
     />
   )
@@ -37,8 +37,8 @@ export async function MobileNav() {
     <MobileTabBar
       viewer={viewer}
       accounts={accounts}
-      notifications={unreadNotificationCount(viewer.id)}
-      messages={unreadMessageCount(viewer.id)}
+      notifications={await unreadNotificationCount(viewer.id)}
+      messages={await unreadMessageCount(viewer.id)}
     />
   )
 }

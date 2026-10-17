@@ -27,10 +27,10 @@ export default function BillingPage({ searchParams }: { searchParams: SearchPara
 async function BillingBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const params = await searchParams
-  const state = billingState(viewer)
+  const state = await billingState(viewer)
   const plusId = priceIdFor("plus")
   const verifiedId = priceIdFor("verified")
-  const [plusPrice, verifiedPrice] = await Promise.all([plusId ? priceLabel(plusId) : null, verifiedId ? priceLabel(verifiedId) : null])
+  const [plusPrice, verifiedPrice] = await Promise.all([plusId ? await priceLabel(plusId) : null, verifiedId ? await priceLabel(verifiedId) : null])
   const checkout = typeof params.checkout === "string" ? params.checkout : ""
   const payouts = typeof params.payouts === "string" ? params.payouts : ""
   const notice = NOTICES[`checkout:${checkout}`] ?? NOTICES[`payouts:${payouts}`] ?? null

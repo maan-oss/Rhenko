@@ -62,7 +62,7 @@ export const instant = false
 export default async function ProfilePage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const { handle } = await params
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   if (!profile || (profile.deactivated && profile.id !== viewer.id) || profile.relationship.blockedMe) notFound()
   return <ProfileBody params={params} searchParams={searchParams} />
 }
@@ -70,7 +70,7 @@ export default async function ProfilePage({ params, searchParams }: { params: Pa
 async function ProfileBody({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const { handle } = await params
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   const isSelf = profile?.id === viewer.id
   if (!profile || (profile.deactivated && !isSelf) || profile.relationship.blockedMe) notFound()
 
@@ -82,22 +82,22 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   const section = SECTION_OF[tab]
 
   const spec: FeedSpec = { kind: "profile", tab, handle: profile.handle }
-  const page = feedFor(spec, viewer.id)
+  const page = await feedFor(spec, viewer.id)
   const locked = page.locked === true
   // The pinned post shows only where the profile's posts do, and only when this viewer may see that post.
   const pinned =
-    tab === "posts" && !locked && profile.pinnedPostId && canSeePost(profile.pinnedPostId, viewer.id) ? getPost(profile.pinnedPostId, viewer.id) : null
+    tab === "posts" && !locked && profile.pinnedPostId && await canSeePost(profile.pinnedPostId, viewer.id) ? await getPost(profile.pinnedPostId, viewer.id) : null
   const followState: FollowState = rel.following ? "following" : rel.requested ? "requested" : "none"
   // A profile opened from one of this account's posts credits a follow to that post. The post must be theirs and visible
   // to the viewer; anything else is ignored, and the follow still happens.
   const fromParam = firstParam((await searchParams).from)
-  const fromPost = fromParam && !isSelf && canSeePost(fromParam, viewer.id) && getPost(fromParam, viewer.id)?.author.id === profile.id ? fromParam : undefined
+  const fromPost = fromParam && !isSelf && await canSeePost(fromParam, viewer.id) && (await getPost(fromParam, viewer.id))?.author.id === profile.id ? fromParam : undefined
   const base = `/${profile.handle}`
   const sections = SECTIONS.filter((t) => t !== "likes" || isSelf)
 
   // Mutual followers only show where the profile itself is visible to the viewer.
   const showMutual = !isSelf && !rel.blockedByMe && (!profile.protected || rel.following)
-  const mutual = showMutual ? mutualFollowers(profile.id, viewer.id) : null
+  const mutual = showMutual ? await mutualFollowers(profile.id, viewer.id) : null
 
   return (
     <>

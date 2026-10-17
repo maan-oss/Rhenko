@@ -10,12 +10,12 @@ export async function GET(request: Request) {
   if (q.startsWith("@")) {
     const prefix = q.slice(1).replace(/[^A-Za-z0-9_]/g, "")
     if (!prefix) return Response.json({ users: [], tags: [] })
-    return Response.json({ users: suggestHandles(prefix, viewer.id), tags: [] })
+    return Response.json({ users: await suggestHandles(prefix, viewer.id), tags: [] })
   }
   if (q.startsWith("#")) {
     const prefix = q.slice(1).replace(/[^\p{L}\p{N}_]/gu, "")
     if (!prefix) return Response.json({ users: [], tags: [] })
-    return Response.json({ users: [], tags: suggestTags(prefix) })
+    return Response.json({ users: [], tags: await suggestTags(prefix) })
   }
   return Response.json({ users: [], tags: [] })
 }

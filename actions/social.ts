@@ -36,40 +36,40 @@ type Account = { id: string; protected: number; deactivated: boolean }
 
 // An account by handle, deactivated ones included. A deactivated account is gone for everyone else, but a viewer must
 // still be able to take back their own follow, request, block or mute, so those paths look accounts up this way.
-function accountByHandle(handle: unknown): Account | undefined {
+async function accountByHandle(handle: unknown): Promise<Account | undefined> {
   if (typeof handle !== "string") return undefined
   const clean = handle.trim().replace(/^@/, "")
   if (!clean || clean.length > MAX_HANDLE_INPUT) return undefined
-  const row = get<{ id: string; protected: number; deactivated_at: number | null }>(
-    "SELECT id, protected, deactivated_at FROM users WHERE handle = ? COLLATE NOCASE",
+  const row = await get<{ id: string; protected: number; deactivated_at: number | null }>(
+    "SELECT id, protected, deactivated_at FROM users WHERE handle = ?",
     clean
   )
   return row ? { id: row.id, protected: row.protected, deactivated: row.deactivated_at !== null } : undefined
 }
 
 // An account that is still there: not deactivated.
-function activeAccountByHandle(handle: unknown): Account | undefined {
-  const account = accountByHandle(handle)
+async function activeAccountByHandle(handle: unknown): Promise<Account | undefined> {
+  const account = await accountByHandle(handle)
   return account && !account.deactivated ? account : undefined
 }
 
-function blockedEitherWay(a: string, b: string): boolean {
-  return get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", a, b, b, a) !== undefined
+async function blockedEitherWay(a: string, b: string): Promise<boolean> {
+  return await get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", a, b, b, a) !== undefined
 }
 
 // The post bell belongs to a follow. When the follow ends, in either direction, the bell goes with it, and following
 // again starts without it.
-function dropPostBell(subscriberId: string, authorId: string) {
-  run("DELETE FROM post_subscriptions WHERE user_id = ? AND author_id = ?", subscriberId, authorId)
+async function dropPostBell(subscriberId: string, authorId: string) {
+  await run("DELETE FROM post_subscriptions WHERE user_id = ? AND author_id = ?", subscriberId, authorId)
 }
 
 // A follow that began on one of the account's own posts. The post must be theirs, and the viewer must be able to see it,
 // so the attribution can't be put on someone else's post. Anything else is ignored, and the follow stands regardless.
-function recordFollowSource(viewerId: string, authorId: string, postId: string | undefined, now: number) {
+async function recordFollowSource(viewerId: string, authorId: string, postId: string | undefined, now: number) {
   if (typeof postId !== "string" || postId.length === 0 || postId.length > 64) return
-  const post = get("SELECT 1 AS found FROM posts WHERE id = ? AND author_id = ? AND is_draft = 0 AND publish_at IS NULL AND removed_at IS NULL", postId, authorId)
-  if (!post || !visiblePostIds([postId], viewerId).has(postId)) return
-  run(
+  const post = await get("SELECT 1 AS found FROM posts WHERE id = ? AND author_id = ? AND is_draft = 0 AND publish_at IS NULL AND removed_at IS NULL", postId, authorId)
+  if (!post || !(await visiblePostIds([postId], viewerId)).has(postId)) return
+  await run(
     `INSERT INTO follow_sources (follower_id, followee_id, post_id, created_at) VALUES (?, ?, ?, ?)
      ON CONFLICT (follower_id, followee_id) DO UPDATE SET post_id = excluded.post_id, created_at = excluded.created_at`,
     viewerId,
@@ -86,30 +86,30 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow people." }
   if (want !== undefined && want !== "follow" && want !== "unfollow") return { ok: false, error: "Choose follow or unfollow." }
-  const target = accountByHandle(handle)
+  const target = await accountByHandle(handle)
   if (!target) return { ok: false, error: "That account no longer exists." }
   if (target.id === viewer.id) return { ok: false, error: "You can't follow yourself." }
 
   // Taking back a follow or a request always works, even if the account has been deactivated or blocked you since.
-  const following = get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
+  const following = await get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
   if (following) {
     if (want === "follow") return { ok: true, state: "following" }
-    transaction(() => {
-      run("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
-      run("DELETE FROM follow_sources WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
-      dropPostBell(viewer.id, target.id)
-      run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow'", viewer.id, target.id)
+    await transaction(async () => {
+      await run("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
+      await run("DELETE FROM follow_sources WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
+      await dropPostBell(viewer.id, target.id)
+      await run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow'", viewer.id, target.id)
     })
     refresh()
     return { ok: true, state: "none" }
   }
 
-  const requested = get("SELECT 1 AS found FROM follow_requests WHERE requester_id = ? AND target_id = ?", viewer.id, target.id)
+  const requested = await get("SELECT 1 AS found FROM follow_requests WHERE requester_id = ? AND target_id = ?", viewer.id, target.id)
   if (requested) {
     if (want === "follow") return { ok: true, state: "requested" }
-    transaction(() => {
-      run("DELETE FROM follow_requests WHERE requester_id = ? AND target_id = ?", viewer.id, target.id)
-      run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow_request'", viewer.id, target.id)
+    await transaction(async () => {
+      await run("DELETE FROM follow_requests WHERE requester_id = ? AND target_id = ?", viewer.id, target.id)
+      await run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow_request'", viewer.id, target.id)
     })
     refresh()
     return { ok: true, state: "none" }
@@ -117,31 +117,31 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
 
   if (want === "unfollow") return { ok: true, state: "none" }
   if (target.deactivated) return { ok: false, error: "That account no longer exists." }
-  if (blockedEitherWay(viewer.id, target.id)) return { ok: false, error: "You can't follow this account." }
+  if (await blockedEitherWay(viewer.id, target.id)) return { ok: false, error: "You can't follow this account." }
 
   // Following is what fake accounts do in bulk, so it passes the account check and the limits below. New accounts have smaller ones.
   const verdict = await gate(viewer.id, proof)
   if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
-  const fresh = isNewAccount(viewer.id)
-  const hour = consume(`follow:${viewer.id}`, fresh ? 20 : 60, FOLLOW_HOUR)
+  const fresh = await isNewAccount(viewer.id)
+  const hour = await consume(`follow:${viewer.id}`, fresh ? 20 : 60, FOLLOW_HOUR)
   if (!hour.ok) {
     const why = fresh ? "New accounts can follow fewer people at first. " : ""
     return { ok: false, error: `You're following people too fast. ${why}Try again in ${waitLabel(hour.retryAfterSeconds)}.` }
   }
-  const day = consume(`followday:${viewer.id}`, fresh ? 40 : 300, FOLLOW_DAY)
+  const day = await consume(`followday:${viewer.id}`, fresh ? 40 : 300, FOLLOW_DAY)
   if (!day.ok) return { ok: false, error: `You've reached today's limit for following people. Try again in ${waitLabel(day.retryAfterSeconds)}.` }
 
   if (target.protected === 1) {
-    run("INSERT OR IGNORE INTO follow_requests (requester_id, target_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
-    notify(target.id, viewer.id, "follow_request", null)
+    await run("INSERT INTO follow_requests (requester_id, target_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, Date.now())
+    await notify(target.id, viewer.id, "follow_request", null)
     refresh()
     return { ok: true, state: "requested" }
   }
 
   const now = Date.now()
-  run("INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, now)
-  recordFollowSource(viewer.id, target.id, from, now)
-  notify(target.id, viewer.id, "follow", null)
+  await run("INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, now)
+  await recordFollowSource(viewer.id, target.id, from, now)
+  await notify(target.id, viewer.id, "follow", null)
   refresh()
   return { ok: true, state: "following" }
 }
@@ -149,14 +149,14 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
 export async function acceptFollowRequest(requesterHandle: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const requester = activeAccountByHandle(requesterHandle)
+  const requester = await activeAccountByHandle(requesterHandle)
   if (!requester) return { ok: false, error: "That account no longer exists. Decline the request to clear it." }
-  const pending = get("SELECT 1 AS found FROM follow_requests WHERE requester_id = ? AND target_id = ?", requester.id, viewer.id)
+  const pending = await get("SELECT 1 AS found FROM follow_requests WHERE requester_id = ? AND target_id = ?", requester.id, viewer.id)
   if (!pending) return { ok: false, error: "That request is gone." }
-  transaction(() => {
-    run("DELETE FROM follow_requests WHERE requester_id = ? AND target_id = ?", requester.id, viewer.id)
-    run("INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)", requester.id, viewer.id, Date.now())
-    run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow_request'", requester.id, viewer.id)
+  await transaction(async () => {
+    await run("DELETE FROM follow_requests WHERE requester_id = ? AND target_id = ?", requester.id, viewer.id)
+    await run("INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", requester.id, viewer.id, Date.now())
+    await run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow_request'", requester.id, viewer.id)
   })
   refresh()
   return { ok: true }
@@ -166,11 +166,11 @@ export async function declineFollowRequest(requesterHandle: string): Promise<Voi
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   // Deactivated accounts count here too, so a request from one can still be cleared.
-  const requester = accountByHandle(requesterHandle)
+  const requester = await accountByHandle(requesterHandle)
   if (!requester) return { ok: false, error: "That account no longer exists." }
-  transaction(() => {
-    run("DELETE FROM follow_requests WHERE requester_id = ? AND target_id = ?", requester.id, viewer.id)
-    run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow_request'", requester.id, viewer.id)
+  await transaction(async () => {
+    await run("DELETE FROM follow_requests WHERE requester_id = ? AND target_id = ?", requester.id, viewer.id)
+    await run("DELETE FROM notifications WHERE actor_id = ? AND recipient_id = ? AND kind = 'follow_request'", requester.id, viewer.id)
   })
   refresh()
   return { ok: true }
@@ -179,12 +179,12 @@ export async function declineFollowRequest(requesterHandle: string): Promise<Voi
 export async function removeFollower(handle: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const follower = accountByHandle(handle)
+  const follower = await accountByHandle(handle)
   if (!follower) return { ok: false, error: "That account no longer exists." }
-  transaction(() => {
-    run("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?", follower.id, viewer.id)
-    run("DELETE FROM follow_sources WHERE follower_id = ? AND followee_id = ?", follower.id, viewer.id)
-    dropPostBell(follower.id, viewer.id)
+  await transaction(async () => {
+    await run("DELETE FROM follows WHERE follower_id = ? AND followee_id = ?", follower.id, viewer.id)
+    await run("DELETE FROM follow_sources WHERE follower_id = ? AND followee_id = ?", follower.id, viewer.id)
+    await dropPostBell(follower.id, viewer.id)
   })
   refresh()
   return { ok: true }
@@ -196,34 +196,34 @@ export async function toggleBlock(handle: string, want?: boolean): Promise<VoidR
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose block or unblock." }
-  const target = accountByHandle(handle)
+  const target = await accountByHandle(handle)
   if (!target) return { ok: false, error: "That account no longer exists." }
   if (target.id === viewer.id) return { ok: false, error: "You can't block yourself." }
 
   // Unblocking always works, even when the other account has been deactivated since.
-  const blocked = get("SELECT 1 AS found FROM blocks WHERE blocker_id = ? AND blocked_id = ?", viewer.id, target.id)
+  const blocked = await get("SELECT 1 AS found FROM blocks WHERE blocker_id = ? AND blocked_id = ?", viewer.id, target.id)
   if (blocked) {
     if (want === true) return { ok: true, blocked: true }
-    run("DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?", viewer.id, target.id)
+    await run("DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?", viewer.id, target.id)
     refresh()
     return { ok: true, blocked: false }
   }
   if (want === false) return { ok: true, blocked: false }
   if (target.deactivated) return { ok: false, error: "That account no longer exists." }
-  transaction(() => {
-    run("INSERT OR IGNORE INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
+  await transaction(async () => {
+    await run("INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, Date.now())
     // Blocking cuts every follow, request, post bell and list follow in both directions.
-    run("DELETE FROM follows WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)", viewer.id, target.id, target.id, viewer.id)
-    run("DELETE FROM follow_sources WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)", viewer.id, target.id, target.id, viewer.id)
-    run("DELETE FROM follow_requests WHERE (requester_id = ? AND target_id = ?) OR (requester_id = ? AND target_id = ?)", viewer.id, target.id, target.id, viewer.id)
-    dropPostBell(viewer.id, target.id)
-    dropPostBell(target.id, viewer.id)
-    run("DELETE FROM list_follows WHERE user_id = ? AND list_id IN (SELECT id FROM lists WHERE owner_id = ?)", viewer.id, target.id)
-    run("DELETE FROM list_follows WHERE user_id = ? AND list_id IN (SELECT id FROM lists WHERE owner_id = ?)", target.id, viewer.id)
+    await run("DELETE FROM follows WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)", viewer.id, target.id, target.id, viewer.id)
+    await run("DELETE FROM follow_sources WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)", viewer.id, target.id, target.id, viewer.id)
+    await run("DELETE FROM follow_requests WHERE (requester_id = ? AND target_id = ?) OR (requester_id = ? AND target_id = ?)", viewer.id, target.id, target.id, viewer.id)
+    await dropPostBell(viewer.id, target.id)
+    await dropPostBell(target.id, viewer.id)
+    await run("DELETE FROM list_follows WHERE user_id = ? AND list_id IN (SELECT id FROM lists WHERE owner_id = ?)", viewer.id, target.id)
+    await run("DELETE FROM list_follows WHERE user_id = ? AND list_id IN (SELECT id FROM lists WHERE owner_id = ?)", target.id, viewer.id)
   })
   // A live call between the two ends now, and so does a group call that has someone either of them blocked.
-  hangUpFor(viewer.id, "blocked")
-  hangUpFor(target.id, "blocked")
+  await hangUpFor(viewer.id, "blocked")
+  await hangUpFor(target.id, "blocked")
   refresh()
   return { ok: true, blocked: true }
 }
@@ -233,20 +233,20 @@ export async function toggleMute(handle: string, want?: boolean): Promise<VoidRe
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose mute or unmute." }
-  const target = accountByHandle(handle)
+  const target = await accountByHandle(handle)
   if (!target) return { ok: false, error: "That account no longer exists." }
   if (target.id === viewer.id) return { ok: false, error: "You can't mute yourself." }
   // Unmuting always works, even when the other account has been deactivated since.
-  const muted = get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", viewer.id, target.id)
+  const muted = await get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", viewer.id, target.id)
   if (muted) {
     if (want === true) return { ok: true, muted: true }
-    run("DELETE FROM mutes WHERE muter_id = ? AND muted_id = ?", viewer.id, target.id)
+    await run("DELETE FROM mutes WHERE muter_id = ? AND muted_id = ?", viewer.id, target.id)
     refresh()
     return { ok: true, muted: false }
   }
   if (want === false) return { ok: true, muted: false }
   if (target.deactivated) return { ok: false, error: "That account no longer exists." }
-  run("INSERT OR IGNORE INTO mutes (muter_id, muted_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
+  await run("INSERT INTO mutes (muter_id, muted_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, Date.now())
   refresh()
   return { ok: true, muted: true }
 }
@@ -259,17 +259,17 @@ export async function setTopicFollow(tag: string, follow: boolean): Promise<Topi
   const checked = checkTopic(tag)
   if (!checked.ok) return checked
   if (!follow) {
-    run("DELETE FROM topic_follows WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
+    await run("DELETE FROM topic_follows WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
     refresh()
     return { ok: true, following: false }
   }
-  const already = get("SELECT 1 AS found FROM topic_follows WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
+  const already = await get("SELECT 1 AS found FROM topic_follows WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
   if (!already) {
-    const count = get<{ c: number }>("SELECT COUNT(*) AS c FROM topic_follows WHERE user_id = ?", viewer.id)?.c ?? 0
+    const count = (await get<{ c: number }>("SELECT COUNT(*) AS c FROM topic_follows WHERE user_id = ?", viewer.id))?.c ?? 0
     if (count >= MAX_FOLLOWED_TOPICS) {
       return { ok: false, error: `You can follow up to ${MAX_FOLLOWED_TOPICS} topics. Unfollow one to follow another.` }
     }
-    run("INSERT OR IGNORE INTO topic_follows (user_id, tag, created_at) VALUES (?, ?, ?)", viewer.id, checked.tag, Date.now())
+    await run("INSERT INTO topic_follows (user_id, tag, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, checked.tag, Date.now())
   }
   refresh()
   return { ok: true, following: true }
@@ -283,14 +283,14 @@ export async function loadMorePeople(handle: string, kind: "followers" | "follow
   if (kind !== "followers" && kind !== "following") return { ok: false, error: "Pick followers or following." }
   if (typeof before !== "number" || !Number.isFinite(before)) return { ok: false, error: "Couldn't load more people. Reload the page and try again." }
   if (typeof handle !== "string" || !handle || handle.length > MAX_HANDLE_INPUT) return { ok: false, error: "That account doesn't exist." }
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   const isSelf = profile?.id === viewer.id
   if (!profile || (profile.deactivated && !isSelf) || profile.relationship.blockedMe) return { ok: false, error: "That account doesn't exist." }
   if (profile.protected && !isSelf && !profile.relationship.following) {
     return { ok: false, error: `This account is protected. Follow it to see ${kind === "followers" ? "who follows it" : "who it follows"}.` }
   }
-  const page = peopleOfPage(kind, profile.id, viewer.id, before, PEOPLE_PAGE)
-  return { ok: true, users: withRequested(viewer.id, page.users), next: page.next }
+  const page = await peopleOfPage(kind, profile.id, viewer.id, before, PEOPLE_PAGE)
+  return { ok: true, users: await withRequested(viewer.id, page.users), next: page.next }
 }
 
 // Protecting an account means new followers need approval. Making it public again clears the requests still waiting, since
@@ -300,7 +300,7 @@ export async function setHideCounts(hide: boolean): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof hide !== "boolean") return { ok: false, error: "Choose whether counts are hidden." }
-  run("UPDATE users SET hide_counts = ? WHERE id = ?", hide ? 1 : 0, viewer.id)
+  await run("UPDATE users SET hide_counts = ? WHERE id = ?", hide ? 1 : 0, viewer.id)
   revalidatePath("/", "layout")
   return { ok: true }
 }
@@ -310,12 +310,12 @@ export async function setProtected(protectedAccount: boolean): Promise<VoidResul
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof protectedAccount !== "boolean") return { ok: false, error: "Choose whether your posts are protected." }
   let cleared = 0
-  transaction(() => {
-    run("UPDATE users SET protected = ? WHERE id = ?", protectedAccount ? 1 : 0, viewer.id)
+  await transaction(async () => {
+    await run("UPDATE users SET protected = ? WHERE id = ?", protectedAccount ? 1 : 0, viewer.id)
     if (!protectedAccount) {
-      cleared = get<{ c: number }>("SELECT COUNT(*) AS c FROM follow_requests WHERE target_id = ?", viewer.id)?.c ?? 0
-      run("DELETE FROM follow_requests WHERE target_id = ?", viewer.id)
-      run("DELETE FROM notifications WHERE recipient_id = ? AND kind = 'follow_request'", viewer.id)
+      cleared = (await get<{ c: number }>("SELECT COUNT(*) AS c FROM follow_requests WHERE target_id = ?", viewer.id))?.c ?? 0
+      await run("DELETE FROM follow_requests WHERE target_id = ?", viewer.id)
+      await run("DELETE FROM notifications WHERE recipient_id = ? AND kind = 'follow_request'", viewer.id)
     }
   })
   refresh()
@@ -329,12 +329,12 @@ export async function changeHandle(_prev: ProfileState, formData: FormData): Pro
   const error = validateHandle(handle)
   if (error) return { error }
   if (handle.toLowerCase() === viewer.handle.toLowerCase()) {
-    run("UPDATE users SET handle = ? WHERE id = ?", handle, viewer.id)
+    await run("UPDATE users SET handle = ? WHERE id = ?", handle, viewer.id)
     refresh()
     return { ok: true }
   }
-  if (get("SELECT id FROM users WHERE handle = ? COLLATE NOCASE", handle)) return { error: "That handle is taken." }
-  run("UPDATE users SET handle = ? WHERE id = ?", handle, viewer.id)
+  if (await get("SELECT id FROM users WHERE handle = ?", handle)) return { error: "That handle is taken." }
+  await run("UPDATE users SET handle = ? WHERE id = ?", handle, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -346,7 +346,7 @@ export async function updateBirthday(_prev: ProfileState, formData: FormData): P
   const age = ageFrom(birthday)
   if (age === null) return { error: "Enter a valid date." }
   if (age < MINIMUM_AGE) return { error: `You must be ${MINIMUM_AGE} or older to use Rhenko.` }
-  run("UPDATE users SET birthday = ? WHERE id = ?", birthday, viewer.id)
+  await run("UPDATE users SET birthday = ? WHERE id = ?", birthday, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -378,15 +378,15 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
   if (avatarUpload && !avatarUpload.ok) return { error: avatarUpload.error }
   const bannerUpload = banner instanceof File && banner.size > 0 ? await saveUpload(banner, "image") : null
   if (bannerUpload && !bannerUpload.ok) {
-    if (avatarUpload?.ok) removeUpload(avatarUpload.name)
+    if (avatarUpload?.ok) await removeUpload(avatarUpload.name)
     return { error: bannerUpload.error }
   }
 
-  const previous = get<{ avatar_file: string | null; banner_file: string | null; location: string | null; website: string | null }>(
+  const previous = await get<{ avatar_file: string | null; banner_file: string | null; location: string | null; website: string | null }>(
     "SELECT avatar_file, banner_file, location, website FROM users WHERE id = ?",
     viewer.id
   )
-  run(
+  await run(
     `UPDATE users SET name = ?, bio = ?, location = ?, website = ?,
        avatar_file = COALESCE(?, avatar_file), banner_file = COALESCE(?, banner_file)
      WHERE id = ?`,
@@ -398,8 +398,8 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
     bannerUpload?.ok ? bannerUpload.name : null,
     viewer.id
   )
-  if (avatarUpload?.ok) removeUpload(previous?.avatar_file ?? null)
-  if (bannerUpload?.ok) removeUpload(previous?.banner_file ?? null)
+  if (avatarUpload?.ok) await removeUpload(previous?.avatar_file ?? null)
+  if (bannerUpload?.ok) await removeUpload(previous?.banner_file ?? null)
   refresh()
   return { ok: true }
 }
@@ -413,7 +413,7 @@ export async function saveAbout(input: { location: string; website: string }): P
   if ([...location].length > MAX_LOCATION) return { ok: false, error: `Locations can have up to ${MAX_LOCATION} characters.` }
   const websiteError = validateWebsite(website)
   if (websiteError) return { ok: false, error: websiteError }
-  run("UPDATE users SET location = ?, website = ? WHERE id = ?", location, website, viewer.id)
+  await run("UPDATE users SET location = ?, website = ? WHERE id = ?", location, website, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -422,21 +422,21 @@ export async function saveAbout(input: { location: string; website: string }): P
 export async function togglePostNotifications(handle: string): Promise<VoidResult & { notifying?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const target = accountByHandle(handle)
+  const target = await accountByHandle(handle)
   if (!target) return { ok: false, error: "That account no longer exists." }
   if (target.id === viewer.id) return { ok: false, error: "You can't turn on notifications for yourself." }
 
   // Turning the bell off always works.
-  const existing = get("SELECT 1 AS found FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewer.id, target.id)
+  const existing = await get("SELECT 1 AS found FROM post_subscriptions WHERE user_id = ? AND author_id = ?", viewer.id, target.id)
   if (existing) {
-    dropPostBell(viewer.id, target.id)
+    await dropPostBell(viewer.id, target.id)
     refresh()
     return { ok: true, notifying: false }
   }
   if (target.deactivated) return { ok: false, error: "That account no longer exists." }
-  const following = get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
+  const following = await get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewer.id, target.id)
   if (!following) return { ok: false, error: `Follow @${String(handle).replace(/^@/, "")} first, then turn on post notifications.` }
-  run("INSERT OR IGNORE INTO post_subscriptions (user_id, author_id, created_at) VALUES (?, ?, ?)", viewer.id, target.id, Date.now())
+  await run("INSERT INTO post_subscriptions (user_id, author_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, Date.now())
   refresh()
   return { ok: true, notifying: true }
 }

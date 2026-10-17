@@ -17,8 +17,8 @@ export default function VerifyPage() {
 async function VerifyBody() {
   const challenge = await readChallenge()
   if (!challenge) redirect("/login")
-  const user = findUserById(challenge.userId)
-  const state = user ? secondFactorState(user.id) : null
+  const user = await findUserById(challenge.userId)
+  const state = user ? await secondFactorState(user.id) : null
   if (!user || !state?.enabled) redirect("/login")
   return (
     <>
@@ -35,7 +35,7 @@ async function VerifyBody() {
             : ` You have ${state.recoveryLeft} left.`}
         </AuthNotice></div>
       )}
-      <VerifyCodeForm usable={state.usable} hasKeys={passkeysOf(user.id).length > 0} />
+      <VerifyCodeForm usable={state.usable} hasKeys={(await passkeysOf(user.id)).length > 0} />
       <p className="mt-8 text-center text-sm text-muted-foreground">
         <Link href="/login" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
           Use a different account

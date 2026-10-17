@@ -57,25 +57,25 @@ function refresh() {
 }
 
 async function checkPassword(userId: string, password: string): Promise<boolean> {
-  const row = get<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = ?", userId)
+  const row = await get<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = ?", userId)
   if (!row) return false
-  return verifyPassword(password, row.password_hash)
+  return await verifyPassword(password, row.password_hash)
 }
 
 // Ten password or code checks per account every 15 minutes, so a session left open somewhere can't be used to guess.
-function identityLimit(userId: string): string | null {
-  const limit = consume(`confirm:${userId}`, 10, 15 * MINUTE)
+async function identityLimit(userId: string): Promise<string | null> {
+  const limit = await consume(`confirm:${userId}`, 10, 15 * MINUTE)
   return limit.ok ? null : `Too many tries. Wait ${waitLabel(limit.retryAfterSeconds)}, then try again.`
 }
 
 // Sensitive changes ask for the password, and for a code while two-factor sign-in is on: one from the authenticator
 // app or a recovery code. Returns what went wrong, or null when both check out.
 async function confirmIdentity(userId: string, formData: FormData, needs: { code?: boolean } = {}): Promise<string | null> {
-  const limited = identityLimit(userId)
+  const limited = await identityLimit(userId)
   if (limited) return limited
   if (!(await checkPassword(userId, String(formData.get("password") ?? "")))) return WRONG_PASSWORD
-  if (needs.code !== false && secondFactorState(userId).enabled) {
-    const check = checkSecondFactor(userId, String(formData.get("code") ?? ""))
+  if (needs.code !== false && (await secondFactorState(userId)).enabled) {
+    const check = await checkSecondFactor(userId, String(formData.get("code") ?? ""))
     if (!check.ok) return check.error
   }
   return null
@@ -86,7 +86,7 @@ export async function changePassword(_prev: AccountState, formData: FormData): P
   if (!viewer) return { error: "Sign in first." }
   const current = String(formData.get("current") ?? "")
   const next = String(formData.get("next") ?? "")
-  const limited = identityLimit(viewer.id)
+  const limited = await identityLimit(viewer.id)
   if (limited) return { error: limited }
   if (!(await checkPassword(viewer.id, current))) return { error: WRONG_PASSWORD }
   const problem = passwordProblem(next)
@@ -94,11 +94,11 @@ export async function changePassword(_prev: AccountState, formData: FormData): P
   if (next === current) return { error: "Choose a new password that's different from the current one." }
   const hash = await hashPassword(next)
   const keep = await currentSessionHash()
-  transaction(() => {
-    run("UPDATE users SET password_hash = ? WHERE id = ?", hash, viewer.id)
+  await transaction(async () => {
+    await run("UPDATE users SET password_hash = ? WHERE id = ?", hash, viewer.id)
     // Every other signed-in device has to sign in again, and sign-ins waiting for a code start over.
-    run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS NOT ?", viewer.id, keep)
-    run("DELETE FROM login_challenges WHERE user_id = ?", viewer.id)
+    await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS NOT ?", viewer.id, keep)
+    await run("DELETE FROM login_challenges WHERE user_id = ?", viewer.id)
   })
   return { ok: true }
 }
@@ -111,7 +111,7 @@ export async function revokeSession(tokenHash: string): Promise<VoidResult> {
   }
   const keep = await currentSessionHash()
   if (tokenHash === keep) return { ok: false, error: "That's this device. Log out to end it." }
-  run("DELETE FROM sessions WHERE user_id = ? AND token_hash = ?", viewer.id, tokenHash)
+  await run("DELETE FROM sessions WHERE user_id = ? AND token_hash = ?", viewer.id, tokenHash)
   refresh()
   return { ok: true }
 }
@@ -120,7 +120,7 @@ export async function revokeOtherSessions(): Promise<VoidResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const keep = await currentSessionHash()
-  run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS NOT ?", viewer.id, keep)
+  await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS NOT ?", viewer.id, keep)
   refresh()
   return { ok: true }
 }
@@ -131,7 +131,7 @@ export async function beginTotpSetup(): Promise<SetupResult> {
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (viewer.totpEnabled) return { ok: false, error: "Two-factor sign-in is already on." }
   const secret = generateSecret()
-  run("UPDATE users SET totp_secret = ?, totp_step = 0 WHERE id = ? AND totp_enabled = 0", encryptText(secret), viewer.id)
+  await run("UPDATE users SET totp_secret = ?, totp_step = 0 WHERE id = ? AND totp_enabled = 0", encryptText(secret), viewer.id)
   const uri = otpauthUri(secret, viewer.handle)
   const qr = await QRCode.toDataURL(uri, { margin: 1, width: 224, color: { dark: "#0b0b0c", light: "#ffffff" } })
   return { ok: true, secret, qr, uri }
@@ -140,7 +140,7 @@ export async function beginTotpSetup(): Promise<SetupResult> {
 export async function enableTotp(_prev: AccountState, formData: FormData): Promise<CodesResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const row = get<{ totp_secret: string | null; totp_enabled: number }>(
+  const row = await get<{ totp_secret: string | null; totp_enabled: number }>(
     "SELECT totp_secret, totp_enabled FROM users WHERE id = ?",
     viewer.id
   )
@@ -155,8 +155,8 @@ export async function enableTotp(_prev: AccountState, formData: FormData): Promi
     return { ok: false, error: "That code isn't right. Check that your phone sets its time automatically, then enter the code showing now." }
   }
   const { plain, hashes } = generateRecoveryCodes()
-  const enabled = transaction(() => {
-    const changed = runChanges(
+  const enabled = await transaction(async () => {
+    const changed = await runChanges(
       "UPDATE users SET totp_enabled = 1, totp_step = ?, totp_secret = ? WHERE id = ? AND totp_enabled = 0 AND totp_secret = ?",
       step,
       encryptText(secret),
@@ -164,7 +164,7 @@ export async function enableTotp(_prev: AccountState, formData: FormData): Promi
       row.totp_secret
     )
     if (changed !== 1) return false
-    replaceRecoveryCodes(viewer.id, hashes)
+    await replaceRecoveryCodes(viewer.id, hashes)
     return true
   })
   if (!enabled) return { ok: false, error: "Setup started again in another window. Use the newest QR code, or start over here." }
@@ -175,16 +175,16 @@ export async function enableTotp(_prev: AccountState, formData: FormData): Promi
 export async function disableTotp(_prev: AccountState, formData: FormData): Promise<AccountState> {
   const viewer = await getViewer()
   if (!viewer) return { error: "Sign in first." }
-  const state = secondFactorState(viewer.id)
+  const state = await secondFactorState(viewer.id)
   if (!state.enabled) return { error: "Two-factor sign-in is already off." }
   // When the server can't read the authenticator key and no recovery codes are left, there is no code anyone could
   // give, so the password alone turns it off.
   const stuck = !state.usable && state.recoveryLeft === 0
   const denied = await confirmIdentity(viewer.id, formData, { code: !stuck })
   if (denied) return { error: denied }
-  transaction(() => {
-    run("UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_step = 0 WHERE id = ?", viewer.id)
-    run("DELETE FROM recovery_codes WHERE user_id = ?", viewer.id)
+  await transaction(async () => {
+    await run("UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_step = 0 WHERE id = ?", viewer.id)
+    await run("DELETE FROM recovery_codes WHERE user_id = ?", viewer.id)
   })
   refresh()
   return { ok: true }
@@ -193,7 +193,7 @@ export async function disableTotp(_prev: AccountState, formData: FormData): Prom
 export async function regenerateRecoveryCodes(_prev: AccountState, formData: FormData): Promise<CodesResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const state = secondFactorState(viewer.id)
+  const state = await secondFactorState(viewer.id)
   if (!state.enabled) return { ok: false, error: "Turn on two-factor sign-in first." }
   if (!state.usable && state.recoveryLeft === 0) {
     return { ok: false, error: "Turn two-factor sign-in off, then on again, to get a new key and new recovery codes." }
@@ -201,7 +201,7 @@ export async function regenerateRecoveryCodes(_prev: AccountState, formData: For
   const denied = await confirmIdentity(viewer.id, formData)
   if (denied) return { ok: false, error: denied }
   const { plain, hashes } = generateRecoveryCodes()
-  transaction(() => replaceRecoveryCodes(viewer.id, hashes))
+  await transaction(async () => await replaceRecoveryCodes(viewer.id, hashes))
   refresh()
   return { ok: true, codes: plain }
 }
@@ -212,7 +212,7 @@ export async function setNotificationPref(kind: string, enabled: boolean): Promi
   if (typeof kind !== "string" || !(NOTIFICATION_KINDS as readonly string[]).includes(kind) || typeof enabled !== "boolean") {
     return { ok: false, error: "That setting isn't available. Reload the page and try again." }
   }
-  run(
+  await run(
     `INSERT INTO notification_prefs (user_id, kind, enabled) VALUES (?, ?, ?)
      ON CONFLICT (user_id, kind) DO UPDATE SET enabled = excluded.enabled`,
     viewer.id,
@@ -230,7 +230,7 @@ export async function setStatus(_prev: StatusState, formData: FormData): Promise
   const status = cleanStatus(String(formData.get("status") ?? ""))
   const problem = statusProblem(status)
   if (problem) return { error: problem }
-  run("UPDATE users SET status = ? WHERE id = ?", status, viewer.id)
+  await run("UPDATE users SET status = ? WHERE id = ?", status, viewer.id)
   refresh()
   return { ok: true, status }
 }
@@ -257,7 +257,7 @@ export async function sendEmailCode(_prev: EmailState, formData: FormData): Prom
   const email = cleanEmail(String(formData.get("email") ?? ""))
   const problem = emailProblem(email)
   if (problem) return { error: problem }
-  const current = get<{ email: string | null; email_verified_at: number | null }>(
+  const current = await get<{ email: string | null; email_verified_at: number | null }>(
     "SELECT email, email_verified_at FROM users WHERE id = ?",
     viewer.id
   )
@@ -267,31 +267,31 @@ export async function sendEmailCode(_prev: EmailState, formData: FormData): Prom
   if (confirmingCurrent && current.email_verified_at !== null) return { error: "That address is already verified on your account." }
   const target = confirmingCurrent && current.email ? current.email : email
   if (!confirmingCurrent) {
-    const taken = get(
-      "SELECT 1 AS found FROM users WHERE email = ? COLLATE NOCASE AND email_verified_at IS NOT NULL AND id <> ?",
+    const taken = await get(
+      "SELECT 1 AS found FROM users WHERE email = ? AND email_verified_at IS NOT NULL AND id <> ?",
       email,
       viewer.id
     )
     if (taken) return { error: "That email is already used by another account. Use a different one." }
-    const resending = sameEmail(pendingEmailCode(viewer.id, "verify")?.target, email)
+    const resending = sameEmail((await pendingEmailCode(viewer.id, "verify"))?.target, email)
     if (!resending) {
       const denied = await confirmIdentity(viewer.id, formData)
       if (denied) return { error: denied }
     }
   }
 
-  const perAccount = consume(`verifymail:${viewer.id}`, 1, MINUTE)
+  const perAccount = await consume(`verifymail:${viewer.id}`, 1, MINUTE)
   if (!perAccount.ok) {
     return { error: `A code went out less than a minute ago. Wait ${waitLabel(perAccount.retryAfterSeconds)} before sending another.` }
   }
-  const perAddress = consume(`mailto:${target.toLowerCase()}`, 5, 60 * MINUTE)
+  const perAddress = await consume(`mailto:${target.toLowerCase()}`, 5, 60 * MINUTE)
   if (!perAddress.ok) {
     return { error: `That address has had five codes this hour. Try again in ${waitLabel(perAddress.retryAfterSeconds)}.` }
   }
-  const code = issueEmailCode(viewer.id, "verify", target)
+  const code = await issueEmailCode(viewer.id, "verify", target)
   const sent = await sendMail({ to: target, subject: "Your Rhenko verification code", text: verifyMail(viewer.handle, code) })
   if (!sent.ok) {
-    withdrawEmailCodes(viewer.id, "verify")
+    await withdrawEmailCodes(viewer.id, "verify")
     return { error: sent.error }
   }
   return { ok: true, sentTo: target }
@@ -303,12 +303,12 @@ export async function confirmEmail(_prev: EmailState, formData: FormData): Promi
   if (!viewer) return { error: "Sign in first." }
   let result: RedeemResult<string>
   try {
-    result = redeemEmailCode(viewer.id, "verify", String(formData.get("code") ?? ""), (target) => {
+    result = await redeemEmailCode(viewer.id, "verify", String(formData.get("code") ?? ""), async (target) => {
       // An account that never proved this address was its own gives it up to the one that just did.
-      run("UPDATE users SET email = NULL WHERE email = ? COLLATE NOCASE AND email_verified_at IS NULL AND id <> ?", target, viewer.id)
-      run("UPDATE users SET email = ?, email_verified_at = ? WHERE id = ?", target, Date.now(), viewer.id)
+      await run("UPDATE users SET email = NULL WHERE email = ? AND email_verified_at IS NULL AND id <> ?", target, viewer.id)
+      await run("UPDATE users SET email = ?, email_verified_at = ? WHERE id = ?", target, Date.now(), viewer.id)
       // Reset codes went to the old address.
-      run("DELETE FROM email_codes WHERE user_id = ? AND purpose = 'reset'", viewer.id)
+      await run("DELETE FROM email_codes WHERE user_id = ? AND purpose = 'reset'", viewer.id)
       return target
     })
   } catch (error) {
@@ -330,7 +330,7 @@ export async function confirmEmail(_prev: EmailState, formData: FormData): Promi
 export async function cancelEmailCode(): Promise<VoidResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  withdrawEmailCodes(viewer.id, "verify")
+  await withdrawEmailCodes(viewer.id, "verify")
   refresh()
   return { ok: true }
 }
@@ -338,13 +338,13 @@ export async function cancelEmailCode(): Promise<VoidResult> {
 export async function removeEmail(_prev: EmailState, formData: FormData): Promise<EmailState> {
   const viewer = await getViewer()
   if (!viewer) return { error: "Sign in first." }
-  const current = get<{ email: string | null }>("SELECT email FROM users WHERE id = ?", viewer.id)
+  const current = await get<{ email: string | null }>("SELECT email FROM users WHERE id = ?", viewer.id)
   if (!current?.email) return { error: "There's no email on your account to remove." }
   const denied = await confirmIdentity(viewer.id, formData)
   if (denied) return { error: denied }
-  transaction(() => {
-    run("UPDATE users SET email = NULL, email_verified_at = NULL WHERE id = ?", viewer.id)
-    run("DELETE FROM email_codes WHERE user_id = ?", viewer.id)
+  await transaction(async () => {
+    await run("UPDATE users SET email = NULL, email_verified_at = NULL WHERE id = ?", viewer.id)
+    await run("DELETE FROM email_codes WHERE user_id = ?", viewer.id)
   })
   refresh()
   return { ok: true, email: null, verified: false }
@@ -355,7 +355,7 @@ export async function deactivateAccount(_prev: AccountState, formData: FormData)
   if (!viewer) return { error: "Sign in first." }
   const denied = await confirmIdentity(viewer.id, formData)
   if (denied) return { error: denied }
-  hangUpFor(viewer.id, "deactivated")
+  await hangUpFor(viewer.id, "deactivated")
   // Paid subscriptions end when the period already paid for ends. Nothing is charged for an account that is hidden. If Stripe
   // cannot be asked, the account stays as it is, so the subscription is not left renewing unseen.
   try {
@@ -364,10 +364,10 @@ export async function deactivateAccount(_prev: AccountState, formData: FormData)
     console.error("could not end subscriptions before deactivating an account", error)
     return { error: "Your subscription could not be ended right now, so the account was not deactivated. Try again in a moment." }
   }
-  transaction(() => {
-    run("UPDATE users SET deactivated_at = ? WHERE id = ?", Date.now(), viewer.id)
-    run("DELETE FROM sessions WHERE user_id = ?", viewer.id)
-    run("DELETE FROM login_challenges WHERE user_id = ?", viewer.id)
+  await transaction(async () => {
+    await run("UPDATE users SET deactivated_at = ? WHERE id = ?", Date.now(), viewer.id)
+    await run("DELETE FROM sessions WHERE user_id = ?", viewer.id)
+    await run("DELETE FROM login_challenges WHERE user_id = ?", viewer.id)
   })
   await destroySession()
   if (await adoptRemainingAccount()) redirect("/")
@@ -389,7 +389,7 @@ export async function deleteAccount(_prev: AccountState, formData: FormData): Pr
     console.error("could not end subscriptions before deleting an account", error)
     return { error: "Your subscription could not be ended right now, so the account was not deleted. Try again in a moment." }
   }
-  eraseAccount(viewer.id)
+  await eraseAccount(viewer.id)
   await destroySession()
   if (await adoptRemainingAccount()) redirect("/")
   redirect("/signup?notice=deleted")
@@ -398,24 +398,24 @@ export async function deleteAccount(_prev: AccountState, formData: FormData): Pr
 // Deletes an account, every session it has, and every file it owns: media in its posts and in the replies under
 // them, photos it sent in messages, and its profile photo and banner. Everything that has to end with an account is
 // ended here, in one place, before its rows go.
-function eraseAccount(userId: string): void {
-  hangUpFor(userId, "deleted")
-  const files = transaction(() => {
-    const postFiles = mediaFilesFor(treeOfAuthor(userId))
-    const messageFiles = all<{ media_file: string }>(
+async function eraseAccount(userId: string): Promise<void> {
+  await hangUpFor(userId, "deleted")
+  const files = await transaction(async () => {
+    const postFiles = await mediaFilesFor(await treeOfAuthor(userId))
+    const messageFiles = (await all<{ media_file: string }>(
       "SELECT media_file FROM chat_messages WHERE sender_id = ? AND media_file IS NOT NULL",
       userId
-    ).map((row) => row.media_file)
-    const profile = get<{ avatar_file: string | null; banner_file: string | null }>(
+    )).map((row) => row.media_file)
+    const profile = await get<{ avatar_file: string | null; banner_file: string | null }>(
       "SELECT avatar_file, banner_file FROM users WHERE id = ?",
       userId
     )
     // Circles the account owns pass on or close before its row goes, so none is left without an owner.
-    const circleFiles = releaseCirclesOf(userId)
-    run("DELETE FROM sessions WHERE user_id = ?", userId)
-    run("DELETE FROM passkeys WHERE user_id = ?", userId)
-    run("DELETE FROM users WHERE id = ?", userId)
+    const circleFiles = await releaseCirclesOf(userId)
+    await run("DELETE FROM sessions WHERE user_id = ?", userId)
+    await run("DELETE FROM passkeys WHERE user_id = ?", userId)
+    await run("DELETE FROM users WHERE id = ?", userId)
     return [...postFiles, ...messageFiles, ...circleFiles, profile?.avatar_file ?? null, profile?.banner_file ?? null]
   })
-  removeFiles(files.filter((file): file is string => file !== null))
+  await removeFiles(files.filter((file): file is string => file !== null))
 }

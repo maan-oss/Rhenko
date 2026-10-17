@@ -14,8 +14,8 @@ export type { AdView, AdItem, FeedEntry } from "@/lib/ad-rules"
 export { isAdItem } from "@/lib/ad-rules"
 
 // Whether this person may see ads at all: an adult with a birthday on record, who does not pay for Plus.
-function maySeeAds(viewerId: string): boolean {
-  const row = get<{ birthday: string | null; plus: number }>(
+async function maySeeAds(viewerId: string): Promise<boolean> {
+  const row = await get<{ birthday: string | null; plus: number }>(
     `SELECT u.birthday,
        EXISTS(SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.kind = 'plus' AND s.status IN ('active', 'trialing')) AS plus
      FROM users u WHERE u.id = ? AND u.deactivated_at IS NULL`,
@@ -38,8 +38,8 @@ type Candidate = {
 
 // Campaigns that may run now, the ones that have spent the least of their budget first, with a random order between
 // equals so one campaign does not always come first.
-function candidatesFor(viewerId: string, limit: number): Candidate[] {
-  return all<Candidate>(
+async function candidatesFor(viewerId: string, limit: number): Promise<Candidate[]> {
+  return await all<Candidate>(
     `SELECT c.id, c.headline, c.body, c.cta, c.link_url, c.account_id, a.business_name
      FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id
      WHERE c.status = 'active' AND a.status = 'active' AND c.spent_micro < c.budget_micro AND a.balance_micro >= ?
@@ -54,27 +54,27 @@ function candidatesFor(viewerId: string, limit: number): Candidate[] {
 
 // Records one impression for a person today. Returns false when the ad cannot be paid for, so it is not shown. An ad
 // already charged to this person today is shown again without a second charge.
-function charge(candidate: Candidate, viewerId: string): boolean {
+async function charge(candidate: Candidate, viewerId: string): Promise<boolean> {
   const day = new Date().toISOString().slice(0, 10)
   // The ledger keeps a one-way code for the person, never their identifier, so a charge can be told apart from another
   // without the ledger saying who saw the ad.
   const reference = `${candidate.id}:${createHash("sha256").update(`${viewerId}:${day}`).digest("hex")}`
   const cost = impressionCostMicro()
-  return transaction(() => {
-    const state = get<{ status: string; spent_micro: number; budget_micro: number; balance_micro: number }>(
+  return await transaction(async () => {
+    const state = await get<{ status: string; spent_micro: number; budget_micro: number; balance_micro: number }>(
       `SELECT c.status, c.spent_micro, c.budget_micro, a.balance_micro
        FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ?`,
       candidate.id
     )
     if (!state || state.status !== "active") return false
-    if (get("SELECT 1 AS found FROM ad_ledger WHERE kind = 'spend' AND reference = ?", reference)) return true
+    if (await get("SELECT 1 AS found FROM ad_ledger WHERE kind = 'spend' AND reference = ?", reference)) return true
     if (state.balance_micro < cost) return false
     if (state.spent_micro + cost > state.budget_micro) {
-      run("UPDATE ad_campaigns SET status = 'ended' WHERE id = ? AND status = 'active'", candidate.id)
+      await run("UPDATE ad_campaigns SET status = 'ended' WHERE id = ? AND status = 'active'", candidate.id)
       return false
     }
-    const written = runChanges(
-      "INSERT OR IGNORE INTO ad_ledger (id, account_id, kind, amount_micro, reference, created_at) VALUES (?, ?, 'spend', ?, ?, ?)",
+    const written = await runChanges(
+      "INSERT INTO ad_ledger (id, account_id, kind, amount_micro, reference, created_at) VALUES (?, ?, 'spend', ?, ?, ?) ON CONFLICT DO NOTHING",
       newId(),
       candidate.account_id,
       cost,
@@ -82,10 +82,10 @@ function charge(candidate: Candidate, viewerId: string): boolean {
       Date.now()
     )
     if (written === 0) return true
-    run("UPDATE ad_campaigns SET spent_micro = spent_micro + ?, impressions = impressions + 1 WHERE id = ?", cost, candidate.id)
-    run("UPDATE ad_accounts SET balance_micro = balance_micro - ? WHERE id = ?", cost, candidate.account_id)
+    await run("UPDATE ad_campaigns SET spent_micro = spent_micro + ?, impressions = impressions + 1 WHERE id = ?", cost, candidate.id)
+    await run("UPDATE ad_accounts SET balance_micro = balance_micro - ? WHERE id = ?", cost, candidate.account_id)
     if (state.spent_micro + cost >= state.budget_micro) {
-      run("UPDATE ad_campaigns SET status = 'ended' WHERE id = ?", candidate.id)
+      await run("UPDATE ad_campaigns SET status = 'ended' WHERE id = ?", candidate.id)
     }
     return true
   })
@@ -93,13 +93,13 @@ function charge(candidate: Candidate, viewerId: string): boolean {
 
 // Adds ads to one page of a home feed. The page's cursor is unchanged, so paging still works. Ads are placed only among
 // posts, never inside a reply or a thread (the home feeds hold no replies that are not top-level).
-export function withAds(page: Page<FeedItem>, viewerId: string): Page<FeedEntry> {
+export async function withAds(page: Page<FeedItem>, viewerId: string): Promise<Page<FeedEntry>> {
   const slots = Math.floor(page.items.length / AD_EVERY)
-  if (slots === 0 || !maySeeAds(viewerId)) return page
+  if (slots === 0 || !await maySeeAds(viewerId)) return page
   const chosen: AdView[] = []
-  for (const candidate of candidatesFor(viewerId, slots * 3)) {
+  for (const candidate of await candidatesFor(viewerId, slots * 3)) {
     if (chosen.length >= slots) break
-    if (!charge(candidate, viewerId)) continue
+    if (!await charge(candidate, viewerId)) continue
     chosen.push({
       id: candidate.id,
       headline: candidate.headline,

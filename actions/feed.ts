@@ -28,11 +28,11 @@ export async function recordDwell(entries: { postId: string; ms: number }[]): Pr
     totals.set(entry.postId, (totals.get(entry.postId) ?? 0) + ms)
   }
   if (totals.size === 0) return
-  const visible = visiblePostIds([...totals.keys()], viewer.id, true)
+  const visible = await visiblePostIds([...totals.keys()], viewer.id, true)
   const now = Date.now()
   for (const [postId, ms] of totals) {
     if (!visible.has(postId)) continue
-    run(
+    await run(
       `INSERT INTO post_dwell (viewer_id, post_id, dwell_ms, updated_at)
        SELECT ?, id, ?, ? FROM posts WHERE id = ? AND author_id <> ?
        ON CONFLICT(viewer_id, post_id) DO UPDATE SET
@@ -53,8 +53,8 @@ export async function markNotInterested(postId: string): Promise<{ ok: true } | 
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to change what you see." }
   if (!isId(postId)) return { ok: false, error: "That post was deleted." }
-  const post = get<{ author_id: string }>("SELECT author_id FROM posts WHERE id = ?", postId)
+  const post = await get<{ author_id: string }>("SELECT author_id FROM posts WHERE id = ?", postId)
   if (!post || post.author_id === viewer.id) return { ok: false, error: "That post was deleted." }
-  run("INSERT OR IGNORE INTO feed_hides (viewer_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
+  await run("INSERT INTO feed_hides (viewer_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
   return { ok: true }
 }

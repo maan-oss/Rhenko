@@ -13,7 +13,7 @@ export async function snoozeForYouTopic(tag: string): Promise<{ ok: true } | { o
   if (!viewer) return { ok: false, error: "Sign in to snooze topics." }
   const clean = normalizeTag(String(tag)).trim()
   if (!clean || clean.length > MAX_TAG) return { ok: false, error: "That isn't a topic." }
-  snoozeTopic(viewer.id, clean, Date.now())
+  await snoozeTopic(viewer.id, clean, Date.now())
   forgetRanking(viewer.id)
   return { ok: true }
 }
@@ -24,7 +24,7 @@ export async function unsnoozeForYouTopic(tag: string): Promise<{ ok: true } | {
   if (!viewer) return { ok: false, error: "Sign in to change snoozed topics." }
   const clean = normalizeTag(String(tag)).trim()
   if (!clean || clean.length > MAX_TAG) return { ok: false, error: "That isn't a topic." }
-  unsnoozeTopic(viewer.id, clean)
+  await unsnoozeTopic(viewer.id, clean)
   forgetRanking(viewer.id)
   return { ok: true }
 }

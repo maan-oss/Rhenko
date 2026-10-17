@@ -17,7 +17,7 @@ export const SERVER_LOG = process.env.SERVER_LOG || ""
 export const MAIL_LOG = process.env.MAIL_LOG || SERVER_LOG
 // A Chromium to launch. Empty means the one Playwright installed.
 export const CHROMIUM_PATH = process.env.CHROMIUM_PATH || ""
-// The folder the server keeps rhenko.sqlite in. It is read only for the one check that has to move a schedule closer.
+// The folder the server keeps uploads in when RHENKO_STORAGE=local. The link preview check stores its picture there.
 export const DATA_DIR = process.env.RHENKO_DATA_DIR || path.join(REPO_ROOT, "data")
 // Run only some areas, for example ONLY=auth,posts.
 export const ONLY = (process.env.ONLY || "")

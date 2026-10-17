@@ -39,18 +39,18 @@ function asId(value: unknown): string | null {
   return typeof value === "string" && ID.test(value) ? value : null
 }
 
-function startLimited(userId: string): string | null {
-  const limit = consume(`call:start:${userId}`, START_LIMIT, START_WINDOW_MS)
+async function startLimited(userId: string): Promise<string | null> {
+  const limit = await consume(`call:start:${userId}`, START_LIMIT, START_WINDOW_MS)
   return limit.ok ? null : `You're starting calls too quickly. Try again in ${waitLabel(limit.retryAfterSeconds)}.`
 }
 
-function memberStatus(conversationId: string, userId: string): "accepted" | "requested" | null {
+async function memberStatus(conversationId: string, userId: string): Promise<"accepted" | "requested" | null> {
   return (
-    get<{ status: "accepted" | "requested" }>(
+    (await get<{ status: "accepted" | "requested" }>(
       "SELECT status FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
       conversationId,
       userId
-    )?.status ?? null
+    ))?.status ?? null
   )
 }
 
@@ -110,8 +110,8 @@ export async function startCall(conversationId: string, deviceId: string, video 
   const id = asId(conversationId)
   const device = asId(deviceId)
   if (!id || !device) return { ok: false, error: "That conversation doesn't exist." }
-  const conversation = get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", id)
-  const members = all<{ user_id: string; status: string }>("SELECT user_id, status FROM conversation_members WHERE conversation_id = ?", id)
+  const conversation = await get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", id)
+  const members = await all<{ user_id: string; status: string }>("SELECT user_id, status FROM conversation_members WHERE conversation_id = ?", id)
   const mine = members.find((member) => member.user_id === viewer.id)
   if (!conversation || !mine) return { ok: false, error: "That conversation doesn't exist." }
   const others = members.filter((member) => member.user_id !== viewer.id)
@@ -119,15 +119,15 @@ export async function startCall(conversationId: string, deviceId: string, video 
   if (mine.status !== "accepted") return { ok: false, error: "Accept this conversation first." }
   const other = others[0]
   if (other.status !== "accepted") return { ok: false, error: "You can call once they accept your message." }
-  if (blockedEitherWay(viewer.id, other.user_id)) return { ok: false, error: "You can't call this account." }
-  const callee = personOf(other.user_id)
+  if (await blockedEitherWay(viewer.id, other.user_id)) return { ok: false, error: "You can't call this account." }
+  const callee = await personOf(other.user_id)
   if (!callee) return { ok: false, error: "This account isn't available." }
-  const from = personOf(viewer.id)
+  const from = await personOf(viewer.id)
   if (!from) return { ok: false, error: "Sign in first." }
-  const limited = startLimited(viewer.id)
+  const limited = await startLimited(viewer.id)
   if (limited) return { ok: false, error: limited }
   const caller: Device = { userId: viewer.id, deviceId: device, session: await currentSessionHash() }
-  return startDmCall(id, caller, callee, from, video === true)
+  return await startDmCall(id, caller, callee, from, video === true)
 }
 
 // Starts a voice call in a group, or joins the one already going there.
@@ -137,16 +137,16 @@ export async function startGroupCall(conversationId: string, deviceId: string): 
   const id = asId(conversationId)
   const device = asId(deviceId)
   if (!id || !device) return { ok: false, error: "That conversation doesn't exist." }
-  const conversation = get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", id)
-  const status = memberStatus(id, viewer.id)
+  const conversation = await get<{ kind: "dm" | "group" }>("SELECT kind FROM conversations WHERE id = ?", id)
+  const status = await memberStatus(id, viewer.id)
   if (!conversation || !status) return { ok: false, error: "That conversation doesn't exist." }
   if (conversation.kind !== "group") return { ok: false, error: "Group calls start in group chats." }
   if (status !== "accepted") return { ok: false, error: "Accept this group first." }
-  const person = personOf(viewer.id)
+  const person = await personOf(viewer.id)
   if (!person) return { ok: false, error: "Sign in first." }
-  const limited = startLimited(viewer.id)
+  const limited = await startLimited(viewer.id)
   if (limited) return { ok: false, error: limited }
-  return startGroup(id, { userId: viewer.id, deviceId: device, session: await currentSessionHash() }, person)
+  return await startGroup(id, { userId: viewer.id, deviceId: device, session: await currentSessionHash() }, person)
 }
 
 // Joins a group call that is going on, from its ring or a Join banner. Only accepted members of the group can.
@@ -155,14 +155,14 @@ export async function joinGroupCall(callId: string, deviceId: string): Promise<J
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(callId)
   const device = asId(deviceId)
-  const info = id ? callInfo(id) : null
+  const info = id ? await callInfo(id) : null
   if (!id || !device || !info || info.kind !== "group") return { ok: false, error: GONE }
-  const status = memberStatus(info.conversationId, viewer.id)
+  const status = await memberStatus(info.conversationId, viewer.id)
   if (!status) return { ok: false, error: GONE }
   if (status !== "accepted") return { ok: false, error: "Accept this group first." }
-  const person = personOf(viewer.id)
+  const person = await personOf(viewer.id)
   if (!person) return { ok: false, error: "Sign in first." }
-  return joinGroup(id, { userId: viewer.id, deviceId: device, session: await currentSessionHash() }, person)
+  return await joinGroup(id, { userId: viewer.id, deviceId: device, session: await currentSessionHash() }, person)
 }
 
 // One step of a call from the browser: answering, declining or ending, saying the audio connected, or passing an
@@ -175,7 +175,7 @@ export async function sendCallSignal(callId: string, deviceId: string, action: C
   const step = actionOf(action)
   if (!id || !device || !step) return { ok: false, error: GONE }
   const session = step.kind === "accept" ? await currentSessionHash() : null
-  return signalCall(id, { userId: viewer.id, deviceId: device, session }, step)
+  return await signalCall(id, { userId: viewer.id, deviceId: device, session }, step)
 }
 
 // Sent every few seconds by a tab in a call. A false answer means the call is over. The boot id lets the tab tell
@@ -186,5 +186,5 @@ export async function callHeartbeat(callId: string, deviceId: string): Promise<B
   const id = asId(callId)
   const device = asId(deviceId)
   if (!viewer || !id || !device) return { ok: false, bootId }
-  return { ok: heartbeat(id, { userId: viewer.id, deviceId: device, session: null }), bootId }
+  return { ok: await heartbeat(id, { userId: viewer.id, deviceId: device, session: null }), bootId }
 }

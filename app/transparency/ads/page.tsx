@@ -136,7 +136,7 @@ type LibraryRow = {
 
 async function Library() {
   await connection()
-  const rows = all<LibraryRow>(
+  const rows = await all<LibraryRow>(
     `SELECT c.headline, c.body, c.link_url, c.topic, c.status, c.impressions, a.business_name, a.country
      FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id
      WHERE c.status IN ('active', 'paused', 'ended') AND a.status = 'active'

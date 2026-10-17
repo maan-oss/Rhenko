@@ -59,7 +59,7 @@ function readFields(formData: FormData): Fields | { error: string } {
 export async function createCircle(formData: FormData): Promise<CircleResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to start a circle." }
-  const allowed = consume(`circle:${viewer.id}`, CREATE_LIMIT, CREATE_WINDOW_MS)
+  const allowed = await consume(`circle:${viewer.id}`, CREATE_LIMIT, CREATE_WINDOW_MS)
   if (!allowed.ok) {
     return { ok: false, error: `You've started a lot of circles today. Try again in ${waitLabel(allowed.retryAfterSeconds)}.` }
   }
@@ -69,9 +69,9 @@ export async function createCircle(formData: FormData): Promise<CircleResult> {
   const id = newId()
   const now = Date.now()
   // The address is picked inside the transaction, so two circles with the same name can't both claim it.
-  const slug = transaction(() => {
-    const address = uniqueSlug(fields.name)
-    run(
+  const slug = await transaction(async () => {
+    const address = await uniqueSlug(fields.name)
+    await run(
       `INSERT INTO communities (id, name, description, owner_id, created_at, slug, access, charter, join_question, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
@@ -85,7 +85,7 @@ export async function createCircle(formData: FormData): Promise<CircleResult> {
       fields.joinQuestion,
       now
     )
-    run("INSERT INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'owner', ?)", id, viewer.id, now)
+    await run("INSERT INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'owner', ?)", id, viewer.id, now)
     return address
   })
   refresh()
@@ -95,11 +95,11 @@ export async function createCircle(formData: FormData): Promise<CircleResult> {
 export async function updateCircle(circleId: string, formData: FormData): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can change this circle." }
+  if (!isId(circleId) || !await isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can change this circle." }
   const fields = readFields(formData)
   if ("error" in fields) return { ok: false, error: fields.error }
-  transaction(() => {
-    run(
+  await transaction(async () => {
+    await run(
       "UPDATE communities SET name = ?, description = ?, charter = ?, access = ?, join_question = ?, updated_at = ? WHERE id = ?",
       fields.name,
       fields.tagline,
@@ -110,7 +110,7 @@ export async function updateCircle(circleId: string, formData: FormData): Promis
       circleId
     )
     // Requests only mean something while the circle asks people to request. Switching away clears them.
-    if (fields.access !== "request") run("DELETE FROM community_requests WHERE community_id = ?", circleId)
+    if (fields.access !== "request") await run("DELETE FROM community_requests WHERE community_id = ?", circleId)
   })
   refresh()
   return { ok: true }
@@ -122,19 +122,19 @@ export async function joinCircle(circleId: string, answer?: string): Promise<Joi
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to join circles." }
   const circle = isId(circleId)
-    ? get<{ owner_id: string | null; access: CircleAccess; join_question: string }>(
+    ? await get<{ owner_id: string | null; access: CircleAccess; join_question: string }>(
         "SELECT owner_id, access, join_question FROM communities WHERE id = ?",
         circleId
       )
     : undefined
   if (!circle) return { ok: false, error: "That circle no longer exists." }
-  if (memberRole(circleId, viewer.id)) return { ok: true, state: "joined" }
-  if (circle.owner_id && blockedEitherWay(viewer.id, circle.owner_id)) return { ok: false, error: "You can't join this circle." }
+  if (await memberRole(circleId, viewer.id)) return { ok: true, state: "joined" }
+  if (circle.owner_id && await blockedEitherWay(viewer.id, circle.owner_id)) return { ok: false, error: "You can't join this circle." }
 
   if (circle.access === "closed") return { ok: false, error: "This circle is invite-only. A member can add you by handle." }
   if (circle.access === "open") {
-    run(
-      "INSERT OR IGNORE INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'member', ?)",
+    await run(
+      "INSERT INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'member', ?) ON CONFLICT DO NOTHING",
       circleId,
       viewer.id,
       Date.now()
@@ -146,7 +146,7 @@ export async function joinCircle(circleId: string, answer?: string): Promise<Joi
   const text = String(answer ?? "").trim()
   if (circle.join_question && !text) return { ok: false, error: "Answer the circle's question before you ask to join." }
   if ([...text].length > MAX_CIRCLE_ANSWER) return { ok: false, error: `Answers can have up to ${MAX_CIRCLE_ANSWER} characters.` }
-  run(
+  await run(
     `INSERT INTO community_requests (community_id, user_id, answer, created_at) VALUES (?, ?, ?, ?)
      ON CONFLICT (community_id, user_id) DO UPDATE SET answer = excluded.answer`,
     circleId,
@@ -162,7 +162,7 @@ export async function cancelRequest(circleId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId)) return { ok: false, error: "That circle no longer exists." }
-  run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, viewer.id)
+  await run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -172,8 +172,8 @@ export async function leaveCircle(circleId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(circleId)) return { ok: false, error: "That circle no longer exists." }
-  if (isOwner(circleId, viewer.id)) return { ok: false, error: "The owner can't leave. Delete the circle instead." }
-  run("DELETE FROM community_members WHERE community_id = ? AND user_id = ? AND role <> 'owner'", circleId, viewer.id)
+  if (await isOwner(circleId, viewer.id)) return { ok: false, error: "The owner can't leave. Delete the circle instead." }
+  await run("DELETE FROM community_members WHERE community_id = ? AND user_id = ? AND role <> 'owner'", circleId, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -181,16 +181,16 @@ export async function leaveCircle(circleId: string): Promise<VoidResult> {
 export async function decideRequest(circleId: string, userId: string, approve: boolean): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can answer requests." }
+  if (!isId(circleId) || !await isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can answer requests." }
   if (!isId(userId)) return { ok: false, error: "That request was already answered." }
-  const pending = get("SELECT 1 AS found FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, userId)
+  const pending = await get("SELECT 1 AS found FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, userId)
   if (!pending) return { ok: false, error: "That request was already answered." }
-  if (approve && blockedEitherWay(viewer.id, userId)) return { ok: false, error: "You can't add this person." }
-  transaction(() => {
-    run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, userId)
+  if (approve && await blockedEitherWay(viewer.id, userId)) return { ok: false, error: "You can't add this person." }
+  await transaction(async () => {
+    await run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, userId)
     if (approve) {
-      run(
-        "INSERT OR IGNORE INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'member', ?)",
+      await run(
+        "INSERT INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'member', ?) ON CONFLICT DO NOTHING",
         circleId,
         userId,
         Date.now()
@@ -204,20 +204,20 @@ export async function decideRequest(circleId: string, userId: string, approve: b
 export async function addCircleMember(circleId: string, handle: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can add people." }
+  if (!isId(circleId) || !await isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can add people." }
   const clean = typeof handle === "string" ? handle.trim().replace(/^@/, "").slice(0, MAX_HANDLE_INPUT) : ""
   if (!clean) return { ok: false, error: "Enter the handle of the person to add." }
-  const target = get<{ id: string; handle: string }>(
-    "SELECT id, handle FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL",
+  const target = await get<{ id: string; handle: string }>(
+    "SELECT id, handle FROM users WHERE handle = ? AND deactivated_at IS NULL",
     clean
   )
   if (!target) return { ok: false, error: `@${clean} doesn't exist.` }
-  if (blockedEitherWay(viewer.id, target.id)) return { ok: false, error: `You can't add @${target.handle}.` }
-  if (memberRole(circleId, target.id)) return { ok: false, error: `@${target.handle} is already in this circle.` }
-  transaction(() => {
-    run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, target.id)
-    run(
-      "INSERT OR IGNORE INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'member', ?)",
+  if (await blockedEitherWay(viewer.id, target.id)) return { ok: false, error: `You can't add @${target.handle}.` }
+  if (await memberRole(circleId, target.id)) return { ok: false, error: `@${target.handle} is already in this circle.` }
+  await transaction(async () => {
+    await run("DELETE FROM community_requests WHERE community_id = ? AND user_id = ?", circleId, target.id)
+    await run(
+      "INSERT INTO community_members (community_id, user_id, role, created_at) VALUES (?, ?, 'member', ?) ON CONFLICT DO NOTHING",
       circleId,
       target.id,
       Date.now()
@@ -230,10 +230,10 @@ export async function addCircleMember(circleId: string, handle: string): Promise
 export async function removeCircleMember(circleId: string, userId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can remove people." }
+  if (!isId(circleId) || !await isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can remove people." }
   if (!isId(userId)) return { ok: false, error: "Choose who to remove." }
-  if (isOwner(circleId, userId)) return { ok: false, error: "The owner can't be removed." }
-  run("DELETE FROM community_members WHERE community_id = ? AND user_id = ? AND role <> 'owner'", circleId, userId)
+  if (await isOwner(circleId, userId)) return { ok: false, error: "The owner can't be removed." }
+  await run("DELETE FROM community_members WHERE community_id = ? AND user_id = ? AND role <> 'owner'", circleId, userId)
   refresh()
   return { ok: true }
 }
@@ -243,12 +243,12 @@ export async function removeCircleMember(circleId: string, userId: string): Prom
 export async function deleteCircle(circleId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!isId(circleId) || !isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can delete this circle." }
-  const files = transaction(() => {
-    const circle = get<{ access: CircleAccess }>("SELECT access FROM communities WHERE id = ?", circleId)
-    return circle ? closeCircle(circleId, circle.access) : []
+  if (!isId(circleId) || !await isOwner(circleId, viewer.id)) return { ok: false, error: "Only the owner can delete this circle." }
+  const files = await transaction(async () => {
+    const circle = await get<{ access: CircleAccess }>("SELECT access FROM communities WHERE id = ?", circleId)
+    return circle ? await closeCircle(circleId, circle.access) : []
   })
-  removeFiles(files)
+  await removeFiles(files)
   refresh()
   return { ok: true }
 }

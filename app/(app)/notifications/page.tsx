@@ -23,8 +23,8 @@ async function NotificationsBody({ searchParams }: { searchParams: SearchParams 
   const viewer = await requireViewer()
   const requested = firstParam((await searchParams).tab)
   const tab: NotificationTab = isNotificationTab(requested) ? requested : "all"
-  const page = notificationsPage(viewer.id, tab, null, NOTIFICATION_PAGE_SIZE)
-  const requests = tab === "all" ? followRequestsFor(viewer.id) : []
+  const page = await notificationsPage(viewer.id, tab, null, NOTIFICATION_PAGE_SIZE)
+  const requests = tab === "all" ? await followRequestsFor(viewer.id) : []
 
   return (
     <>

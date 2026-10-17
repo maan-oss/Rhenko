@@ -70,49 +70,49 @@ export type FeedResult = Page<FeedEntry> & { locked?: boolean }
 
 const EMPTY: Page<FeedEntry> = { items: [], next: null }
 
-export function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): FeedResult {
-  publishDue()
+export async function feedFor(spec: FeedSpec, viewerId: string, cursor?: string): Promise<FeedResult> {
+  await publishDue()
   switch (spec.kind) {
     case "home":
-      return withAds(homeFeed(spec.mode, viewerId, cursor, undefined, spec.topic), viewerId)
+      return await withAds(await homeFeed(spec.mode, viewerId, cursor, undefined, spec.topic), viewerId)
     case "profile": {
-      const user = get<{ id: string; protected: number; deactivated_at: number | null }>(
-        "SELECT id, protected, deactivated_at FROM users WHERE handle = ? COLLATE NOCASE",
+      const user = await get<{ id: string; protected: number; deactivated_at: number | null }>(
+        "SELECT id, protected, deactivated_at FROM users WHERE handle = ?",
         spec.handle
       )
       if (!user || user.deactivated_at !== null) return EMPTY
       if (user.id !== viewerId) {
         // Likes are listed only for the account's owner.
         if (spec.tab === "likes") return EMPTY
-        const blocked = get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", viewerId, user.id, user.id, viewerId)
+        const blocked = await get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", viewerId, user.id, user.id, viewerId)
         if (blocked) return EMPTY
-        if (user.protected === 1 && !isFollowing(viewerId, user.id)) return { ...EMPTY, locked: true }
+        if (user.protected === 1 && !await isFollowing(viewerId, user.id)) return { ...EMPTY, locked: true }
       }
-      return profileFeed(spec.tab, user.id, viewerId, cursor)
+      return await profileFeed(spec.tab, user.id, viewerId, cursor)
     }
     case "bookmarks":
-      return bookmarkFeed(viewerId, spec.folder, cursor)
+      return await bookmarkFeed(viewerId, spec.folder, cursor)
     case "list": {
       // A private list's timeline is for its owner only.
-      const list = get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", spec.listId)
+      const list = await get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", spec.listId)
       if (!list || (list.private === 1 && list.owner_id !== viewerId)) return EMPTY
-      return listFeed(spec.listId, viewerId, cursor)
+      return await listFeed(spec.listId, viewerId, cursor)
     }
     case "circle": {
       // A closed circle's posts are for its members. Anyone else gets an empty feed from it.
-      const circle = get<{ access: string }>("SELECT access FROM communities WHERE id = ?", spec.circleId)
+      const circle = await get<{ access: string }>("SELECT access FROM communities WHERE id = ?", spec.circleId)
       if (!circle) return EMPTY
-      if (circle.access === "closed" && !memberRole(spec.circleId, viewerId)) return EMPTY
-      return circleFeed(spec.circleId, viewerId, cursor)
+      if (circle.access === "closed" && !await memberRole(spec.circleId, viewerId)) return EMPTY
+      return await circleFeed(spec.circleId, viewerId, cursor)
     }
     case "explore":
-      return searchPostFeed(parseSearch(spec.media ? "filter:media" : ""), spec.sort, viewerId, cursor)
+      return await searchPostFeed(parseSearch(spec.media ? "filter:media" : ""), spec.sort, viewerId, cursor)
     case "topic":
-      return topicFeed(spec.tag, viewerId, cursor)
+      return await topicFeed(spec.tag, viewerId, cursor)
     case "search": {
       const query = parseSearch(spec.q)
       if (!hasSearchContent(query)) return EMPTY
-      return searchPostFeed(query, spec.sort, viewerId, cursor)
+      return await searchPostFeed(query, spec.sort, viewerId, cursor)
     }
   }
 }

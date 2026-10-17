@@ -32,7 +32,7 @@ export async function saveWhere(input: { country: string; area: string; region: 
   if (problem) return { ok: false, error: problem }
   if (country !== "" && !isCountryCode(country)) return { ok: false, error: "Choose a country from the list." }
   if ((area.trim() !== "" || region.trim() !== "") && country === "") return { ok: false, error: "Choose your country as well." }
-  storeWhere(viewer.id, { country, area, region, suggestNearby: input.suggestNearby === true })
+  await storeWhere(viewer.id, { country, area, region, suggestNearby: input.suggestNearby === true })
   refresh()
   return { ok: true }
 }
@@ -58,7 +58,7 @@ export async function saveLanguages(input: {
     if (typeof code !== "string" || !isLanguageCode(code)) return { ok: false, error: "Choose languages from the list." }
   }
   if (speak.length > 12 || input.learn.length > 12) return { ok: false, error: "Choose up to 12 languages you speak and 12 you are learning." }
-  storeLanguages(viewer.id, { speak, learn: input.learn, suggestLanguage: input.suggestLanguage === true })
+  await storeLanguages(viewer.id, { speak, learn: input.learn, suggestLanguage: input.suggestLanguage === true })
   refresh()
   return { ok: true }
 }
@@ -67,7 +67,7 @@ export async function saveLanguages(input: {
 export async function finishSetup(value: "done" | "skipped"): Promise<ConnectionResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  setOnboarding(viewer.id, value === "done" ? "done" : "skipped")
+  await setOnboarding(viewer.id, value === "done" ? "done" : "skipped")
   refresh()
   return { ok: true }
 }
@@ -78,8 +78,8 @@ export async function dismissSuggestion(userId: string): Promise<ConnectionResul
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof userId !== "string" || userId.length === 0 || userId.length > MAX_ID) return { ok: false, error: "That person can't be found." }
   if (userId === viewer.id) return { ok: false, error: "You can't suggest yourself." }
-  if (!get("SELECT 1 AS found FROM users WHERE id = ?", userId)) return { ok: false, error: "That person can't be found." }
-  dismissConnection(viewer.id, userId)
+  if (!await get("SELECT 1 AS found FROM users WHERE id = ?", userId)) return { ok: false, error: "That person can't be found." }
+  await dismissConnection(viewer.id, userId)
   refresh()
   return { ok: true }
 }
@@ -88,7 +88,7 @@ export async function dismissSuggestion(userId: string): Promise<ConnectionResul
 export async function resetDismissed(): Promise<ConnectionResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  clearDismissals(viewer.id)
+  await clearDismissals(viewer.id)
   refresh()
   return { ok: true }
 }
@@ -96,6 +96,6 @@ export async function resetDismissed(): Promise<ConnectionResult> {
 // "Not now" on the setup prompt on Home. Setup stays available from Connect and from Settings.
 export async function skipSetup(): Promise<void> {
   const viewer = await getAgreedViewer()
-  if (viewer) setOnboarding(viewer.id, "skipped")
+  if (viewer) await setOnboarding(viewer.id, "skipped")
   refresh()
 }

@@ -17,9 +17,9 @@ export default function PrivacySettingsPage() {
 
 async function PrivacyBody() {
   const viewer = await requireViewer()
-  const blocked = blockedUsers(viewer.id)
-  const muted = mutedUsers(viewer.id)
-  const words = mutedWords(viewer.id)
+  const blocked = await blockedUsers(viewer.id)
+  const muted = await mutedUsers(viewer.id)
+  const words = await mutedWords(viewer.id)
   return (
     <>
       <PageHeader title="Privacy and safety" backHref="/settings" />
@@ -40,7 +40,7 @@ async function PrivacyBody() {
             who sees your posts or how they are ordered.
           </p>
         </div>
-        <HideCountsSwitch initial={get<{ hide: number }>("SELECT hide_counts AS hide FROM users WHERE id = ?", viewer.id)?.hide === 1} />
+        <HideCountsSwitch initial={(await get<{ hide: number }>("SELECT hide_counts AS hide FROM users WHERE id = ?", viewer.id))?.hide === 1} />
       </section>
       <Section title="Blocked accounts" empty="Blocked people can't follow you, see your posts, or message you.">
         {blocked.map((user) => (

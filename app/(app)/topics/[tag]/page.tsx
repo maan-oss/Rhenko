@@ -21,11 +21,11 @@ export default async function TopicPage({ params }: { params: Params }) {
   if (!checked.ok) notFound()
   const clean = checked.tag
   const spec: FeedSpec = { kind: "topic", tag: clean }
-  const page = feedFor(spec, viewer.id)
-  const summary = topicSummary(clean)
+  const page = await feedFor(spec, viewer.id)
+  const summary = await topicSummary(clean)
   return (
     <>
-      <PageHeader title={`#${clean}`} backHref="/explore" actions={<TopicFollowButton tag={clean} following={topicFollowing(viewer.id, clean)} />} />
+      <PageHeader title={`#${clean}`} backHref="/explore" actions={<TopicFollowButton tag={clean} following={await topicFollowing(viewer.id, clean)} />} />
       <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
         {summary.postsThisWeek > 0 ? (
           <>

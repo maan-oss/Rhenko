@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/app/page-header"
 // private. Where you are for suggestions, and your languages, are on Connections and languages.
 export default async function AboutSettingsPage() {
   const viewer = await requireViewer()
-  const profile = get<{ location: string | null; website: string | null; handle: string }>(
+  const profile = await get<{ location: string | null; website: string | null; handle: string }>(
     "SELECT location, website, handle FROM users WHERE id = ?",
     viewer.id
   )
-  const topics = all<{ tag: string }>("SELECT tag FROM topic_follows WHERE user_id = ? ORDER BY created_at", viewer.id).map((row) => row.tag)
+  const topics = (await all<{ tag: string }>("SELECT tag FROM topic_follows WHERE user_id = ? ORDER BY created_at", viewer.id)).map((row) => row.tag)
   return (
     <>
       <PageHeader title="About you" backHref="/settings" />

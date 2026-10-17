@@ -10,7 +10,7 @@ export async function GET() {
   if (!viewer) return new Response("Log in to download your analytics.", { status: 401, headers: { "cache-control": "no-store" } })
 
   const now = Date.now()
-  const days = analyticsFor(viewer.id, viewer.handle, now).days.slice(-28)
+  const days = (await analyticsFor(viewer.id, viewer.handle, now)).days.slice(-28)
   const today = Math.floor(now / DAY_MS)
   const rows = [
     "date,post_views,profile_visits,new_followers",

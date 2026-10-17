@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto"
 import dns from "node:dns/promises"
-import fs from "node:fs"
 import http from "node:http"
 import https from "node:https"
 import net from "node:net"
 import { all, run } from "@/lib/db"
-import { removeUpload, uploadPath } from "@/lib/uploads"
+import { contentTypeFor, removeUpload, storeObject } from "@/lib/uploads"
 
 // Link previews: the title, description and picture of the first link in a post, read from the page once and kept.
 // The server fetches a page on a viewer's behalf, so it refuses anything that is not a public web address, and
@@ -241,22 +240,20 @@ async function storePicture(link: string, imageUrl: string, previous: string | n
   const extension = pictureExtension(reply.body)
   if (!extension) return null
   const name = `${createHash("sha256").update(link).digest("hex").slice(0, 32)}.${extension}`
-  const target = uploadPath(name)
-  if (!target) return null
-  const temporary = `${target}.${process.pid}.tmp`
-  await fs.promises.writeFile(temporary, reply.body)
-  await fs.promises.rename(temporary, target)
-  if (previous && previous !== name) removeUpload(previous)
+  // The old picture's smaller copies go too, so none of them still shows the previous fetch.
+  await removeUpload(name)
+  await storeObject(name, new Uint8Array(reply.body), contentTypeFor(name))
+  if (previous && previous !== name) await removeUpload(previous)
   return name
 }
 
 // Previews already read, by link. A link whose page had no title is kept as a row with no title, so it is not fetched
 // again until it is stale.
-export function previewsFor(links: string[]): Map<string, LinkPreview> {
+export async function previewsFor(links: string[]): Promise<Map<string, LinkPreview>> {
   const found = new Map<string, LinkPreview>()
   if (links.length === 0) return found
   const marks = links.map(() => "?").join(",")
-  const rows = all<{ url: string; title: string | null; description: string | null; site: string | null; image_file: string | null }>(
+  const rows = await all<{ url: string; title: string | null; description: string | null; site: string | null; image_file: string | null }>(
     `SELECT url, title, description, site, image_file FROM link_previews WHERE url IN (${marks}) AND title IS NOT NULL`,
     ...links
   )
@@ -277,46 +274,46 @@ const waiting: string[] = []
 const pending = new Set<string>()
 let working = 0
 
-export function requestPreviews(links: string[]): void {
-  const stale = links.length === 0 ? [] : staleLinks(links)
+export async function requestPreviews(links: string[]): Promise<void> {
+  const stale = links.length === 0 ? [] : await staleLinks(links)
   for (const link of stale) {
     if (pending.has(link) || waiting.length >= MAX_QUEUE) continue
     pending.add(link)
     waiting.push(link)
   }
-  pump()
+  await pump()
 }
 
-function staleLinks(links: string[]): string[] {
+async function staleLinks(links: string[]): Promise<string[]> {
   const marks = links.map(() => "?").join(",")
   const fresh = new Set(
-    all<{ url: string }>(`SELECT url FROM link_previews WHERE url IN (${marks}) AND fetched_at > ?`, ...links, Date.now() - FRESH_MS).map(
+    (await all<{ url: string }>(`SELECT url FROM link_previews WHERE url IN (${marks}) AND fetched_at > ?`, ...links, Date.now() - FRESH_MS)).map(
       (row) => row.url
     )
   )
   return links.filter((link) => !fresh.has(link))
 }
 
-function pump(): void {
+async function pump(): Promise<void> {
   while (working < WORKERS && waiting.length > 0) {
     const link = waiting.shift() as string
     working++
     void load(link)
       .catch(() => undefined)
-      .finally(() => {
+      .finally(async () => {
         working--
         pending.delete(link)
-        pump()
+        await pump()
       })
   }
 }
 
 async function load(link: string): Promise<void> {
-  const previous = all<{ image_file: string | null }>("SELECT image_file FROM link_previews WHERE url = ?", link)[0]?.image_file ?? null
+  const previous = (await all<{ image_file: string | null }>("SELECT image_file FROM link_previews WHERE url = ?", link))[0]?.image_file ?? null
   const preview = await fetchPreview(link).catch(() => null)
   const image = preview?.imageUrl ? await storePicture(link, preview.imageUrl, previous).catch(() => null) : null
-  run(
-    "INSERT OR REPLACE INTO link_previews (url, title, description, site, image_file, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
+  await run(
+    "INSERT INTO link_previews (url, title, description, site, image_file, fetched_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (url) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, site = EXCLUDED.site, image_file = EXCLUDED.image_file, fetched_at = EXCLUDED.fetched_at",
     link,
     preview?.title ?? null,
     preview?.description ?? null,
@@ -325,5 +322,5 @@ async function load(link: string): Promise<void> {
     Date.now()
   )
   // A refreshed preview with no picture leaves the old one behind, so its file is removed.
-  if (image === null && previous) removeUpload(previous)
+  if (image === null && previous) await removeUpload(previous)
 }

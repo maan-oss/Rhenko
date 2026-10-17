@@ -8,7 +8,7 @@ export default async function ForYouSettingsPage() {
   const viewer = await requireViewer()
   // The page is rendered for each request, and a snooze is listed only while its time has not passed.
   // eslint-disable-next-line react-hooks/purity
-  const rows = snoozesFor(viewer.id, Date.now())
+  const rows = await snoozesFor(viewer.id, Date.now())
 
   return (
     <>

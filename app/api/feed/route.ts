@@ -18,5 +18,5 @@ export async function GET(request: Request) {
   if (!spec) return Response.json({ error: "Bad feed." }, { status: 400 })
   const cursor = url.searchParams.get("cursor") ?? undefined
   if (cursor !== undefined && cursor.length > 200) return Response.json({ error: "Bad feed." }, { status: 400 })
-  return Response.json(feedFor(spec, viewer.id, cursor))
+  return Response.json(await feedFor(spec, viewer.id, cursor))
 }

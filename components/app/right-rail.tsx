@@ -17,9 +17,9 @@ async function clock(): Promise<number> {
 
 export async function RightRail() {
   const viewer = await getViewer()
-  const tags = trendingTags()
-  const connected = viewer ? topPeople(suggestionsFor(viewer.id, await clock(), 3), 3) : []
-  const suggestions = connected.length === 0 && viewer ? whoToFollow(viewer.id) : []
+  const tags = await trendingTags()
+  const connected = viewer ? topPeople(await suggestionsFor(viewer.id, await clock(), 3), 3) : []
+  const suggestions = connected.length === 0 && viewer ? await whoToFollow(viewer.id) : []
   return (
     <aside className="sticky top-0 hidden h-dvh w-[340px] shrink-0 flex-col gap-4 overflow-y-auto py-3 pr-3 pl-6 xl:flex">
       <section className="overflow-hidden rounded-[24px] border border-border bg-card">

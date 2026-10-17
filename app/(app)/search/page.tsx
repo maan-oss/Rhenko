@@ -41,8 +41,8 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
   const q = (firstParam(params.q) ?? "").slice(0, 300).trim()
   const requested = firstParam(params.f)
   const type = TYPES.find((t) => t.key === requested)?.key ?? "top"
-  if (q) recordSearch(viewer.id, q)
-  const saved = savedSearches(viewer.id)
+  if (q) await recordSearch(viewer.id, q)
+  const saved = await savedSearches(viewer.id)
 
   return (
     <>
@@ -70,7 +70,7 @@ async function SearchBody({ searchParams }: { searchParams: SearchParams }) {
           <Results q={q} type={type} viewer={viewer} />
         </>
       ) : (
-        <SearchHelp recent={recentSearches(viewer.id)} saved={saved} />
+        <SearchHelp recent={await recentSearches(viewer.id)} saved={saved} />
       )}
     </>
   )
@@ -100,22 +100,22 @@ function NoPeople({ q, hasTerms }: { q: string; hasTerms: boolean }) {
 async function Results({ q, type, viewer }: { q: string; type: (typeof TYPES)[number]["key"]; viewer: Viewer }) {
   if (type === "lists") {
     const terms = parseSearch(q).terms.join(" ")
-    const found = terms ? searchLists(terms, viewer.id) : []
+    const found = terms ? await searchLists(terms, viewer.id) : []
     // A list whose owner has blocked the viewer, or whose account is gone, stays out of the results.
-    const visible = listOwnersVisibleTo(viewer.id, found.map((list) => list.owner.id))
+    const visible = await listOwnersVisibleTo(viewer.id, found.map((list) => list.owner.id))
     const lists = found.filter((list) => list.owner.id === viewer.id || visible.has(list.owner.id))
     if (lists.length === 0) return <NoLists q={q} hasTerms={terms !== ""} />
     return <ListResults lists={lists} />
   }
   if (type === "people") {
     const terms = parseSearch(q).terms.join(" ")
-    const users = terms ? searchUsers(terms, viewer.id, 40) : []
+    const users = terms ? await searchUsers(terms, viewer.id, 40) : []
     if (users.length === 0) return <NoPeople q={q} hasTerms={terms !== ""} />
     return <PeopleList users={users} viewerId={viewer.id} removable={false} emptyText="" />
   }
   const media = type === "media"
   const spec: FeedSpec = media ? { kind: "search", q: `${q} filter:media`, sort: "latest" } : { kind: "search", q, sort: type === "latest" ? "latest" : "top" }
-  const page = feedFor(spec, viewer.id)
+  const page = await feedFor(spec, viewer.id)
   const empty = page.items.length === 0 && !page.next
   return (
     <FeedList

@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/app/page-header"
 // the one the data layer counted: nothing is rounded, abbreviated or worked out again here.
 export default async function AnalyticsPage() {
   const viewer = await requireViewer()
-  const stats = analyticsFor(viewer.id, viewer.handle)
+  const stats = await analyticsFor(viewer.id, viewer.handle)
 
   return (
     <>

@@ -47,14 +47,14 @@ export async function answerQuestions(): Promise<void> {
   try {
     // Loops until nothing is due, so a question queued during a pass is picked up in the same pass.
     for (let pass = 0; pass < MAX_PASSES; pass++) {
-      const due = all<Job>(
+      const due = await all<Job>(
         "SELECT post_id, asker_id FROM sahayak_jobs WHERE status = 'queued' AND run_after <= ? ORDER BY run_after LIMIT ?",
         Date.now(),
         BATCH
       )
       if (due.length === 0) break
       for (const job of due) {
-        const attempts = claim(job.post_id, Date.now())
+        const attempts = await claim(job.post_id, Date.now())
         if (attempts === null) continue
         try {
           await answerOne(job, attempts)
@@ -71,8 +71,8 @@ export async function answerQuestions(): Promise<void> {
 // Takes a due question for this attempt. One conditional update does it, so when several processes look at the same question
 // only one gets it. The question is held for a while, so if this process stops now the question waits out the lease instead of
 // being tried again straight away. Returns the attempts used so far, this one included, or null when someone else has it.
-function claim(postId: string, now: number): number | null {
-  const row = get<{ attempts: number }>(
+async function claim(postId: string, now: number): Promise<number | null> {
+  const row = await get<{ attempts: number }>(
     "UPDATE sahayak_jobs SET attempts = attempts + 1, run_after = ? WHERE post_id = ? AND status = 'queued' AND run_after <= ? RETURNING attempts",
     now + LEASE_MS,
     postId,
@@ -82,39 +82,39 @@ function claim(postId: string, now: number): number | null {
 }
 
 async function answerOne(job: Job, attempts: number): Promise<void> {
-  const post = get<Post>(
+  const post = await get<Post>(
     "SELECT id, author_id, body, community_id, reply_to_id, quote_of_id, removed_at FROM posts WHERE id = ?",
     job.post_id
   )
   if (!post || post.removed_at !== null) {
-    finish(job.post_id, "skipped")
+    await finish(job.post_id, "skipped")
     return
   }
 
-  const limit = consume(`sahayak-ask:${job.asker_id}`, QUESTIONS_PER_HOUR, HOUR)
+  const limit = await consume(`sahayak-ask:${job.asker_id}`, QUESTIONS_PER_HOUR, HOUR)
   if (!limit.ok) {
-    reply(post, limitNotice(waitLabel(limit.retryAfterSeconds)))
-    finish(job.post_id, "limited")
+    await reply(post, limitNotice(waitLabel(limit.retryAfterSeconds)))
+    await finish(job.post_id, "limited")
     return
   }
 
-  const answer = await askSarvam(buildMessages(questionOf(post.body), contextFor(post, job.asker_id)))
+  const answer = await askSarvam(buildMessages(questionOf(post.body), await contextFor(post, job.asker_id)))
   if (answer.ok) {
-    reply(post, cleanAnswer(answer.text))
-    finish(job.post_id, "done")
+    await reply(post, cleanAnswer(answer.text))
+    await finish(job.post_id, "done")
     return
   }
   if (attempts >= MAX_ATTEMPTS) {
-    reply(post, FAILED_TEXT)
-    finish(job.post_id, "failed")
+    await reply(post, FAILED_TEXT)
+    await finish(job.post_id, "failed")
     return
   }
-  run("UPDATE sahayak_jobs SET run_after = ? WHERE post_id = ?", Date.now() + BACKOFF_MS * attempts, job.post_id)
+  await run("UPDATE sahayak_jobs SET run_after = ? WHERE post_id = ?", Date.now() + BACKOFF_MS * attempts, job.post_id)
 }
 
 // The quoted post, then the chain of replies above the question, nearest first. The walk stops at the first post the asker
 // can't see, because posts above it are not something the asker has been shown.
-function contextFor(post: Post, askerId: string): Context[] {
+async function contextFor(post: Post, askerId: string): Promise<Context[]> {
   const ids: string[] = []
   if (post.quote_of_id) ids.push(post.quote_of_id)
   const seen = new Set<string>([post.id])
@@ -122,12 +122,12 @@ function contextFor(post: Post, askerId: string): Context[] {
   while (cursor && ids.length < CONTEXT_POSTS && !seen.has(cursor)) {
     seen.add(cursor)
     ids.push(cursor)
-    cursor = get<{ reply_to_id: string | null }>("SELECT reply_to_id FROM posts WHERE id = ?", cursor)?.reply_to_id ?? null
+    cursor = (await get<{ reply_to_id: string | null }>("SELECT reply_to_id FROM posts WHERE id = ?", cursor))?.reply_to_id ?? null
   }
   const visible: Context[] = []
   for (const id of ids) {
-    if (!canSeeLivePost(id, askerId)) break
-    const row = get<{ body: string; handle: string }>(
+    if (!await canSeeLivePost(id, askerId)) break
+    const row = await get<{ body: string; handle: string }>(
       "SELECT p.body, u.handle FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = ?",
       id
     )
@@ -137,10 +137,10 @@ function contextFor(post: Post, askerId: string): Context[] {
 }
 
 // Writes Sahayak's post as a reply, the way a reader's reply is written, and then runs the same checks and notices.
-function reply(parent: Post, text: string): void {
+async function reply(parent: Post, text: string): Promise<void> {
   const now = Date.now()
   const id = randomUUID()
-  run(
+  await run(
     `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id, title)
      VALUES (?, ?, ?, ?, NULL, NULL, ?, 'everyone', 0, NULL, 0, NULL, ?, ?, '')`,
     id,
@@ -151,9 +151,9 @@ function reply(parent: Post, text: string): void {
     languageOf(text),
     parent.community_id
   )
-  goLive(id, now)
+  await goLive(id, now)
 }
 
-function finish(postId: string, status: "done" | "limited" | "failed" | "skipped"): void {
-  run("UPDATE sahayak_jobs SET status = ?, finished_at = ? WHERE post_id = ?", status, Date.now(), postId)
+async function finish(postId: string, status: "done" | "limited" | "failed" | "skipped"): Promise<void> {
+  await run("UPDATE sahayak_jobs SET status = ?, finished_at = ? WHERE post_id = ?", status, Date.now(), postId)
 }

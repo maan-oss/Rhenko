@@ -48,7 +48,7 @@ async function passkeySignIn() {
   await check("a passkey is added from Settings and listed with its name", async () => {
     await addKey(user.page, "Test laptop")
     const rows = await query(
-      "SELECT COUNT(*) AS n FROM passkeys WHERE user_id = (SELECT id FROM users WHERE handle = ? COLLATE NOCASE)",
+      "SELECT COUNT(*) AS n FROM passkeys WHERE user_id = (SELECT id FROM users WHERE handle = ?)",
       user.handle
     )
     assert.equal(rows[0].n, 1, "the key was not saved")
@@ -64,7 +64,7 @@ async function passkeySignIn() {
 
   await check("a passkey use is recorded with its time", async () => {
     const rows = await query(
-      "SELECT last_used_at AS used FROM passkeys WHERE user_id = (SELECT id FROM users WHERE handle = ? COLLATE NOCASE)",
+      "SELECT last_used_at AS used FROM passkeys WHERE user_id = (SELECT id FROM users WHERE handle = ?)",
       user.handle
     )
     assert.ok(rows[0].used !== null, "the key does not show a use")

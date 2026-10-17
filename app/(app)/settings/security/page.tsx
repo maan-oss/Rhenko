@@ -19,8 +19,8 @@ export default function SecuritySettingsPage() {
 async function SecurityBody() {
   const viewer = await requireViewer()
   const current = await currentSessionHash()
-  const sessions = sessionsFor(viewer.id)
-  const twoFactor = twoFactorFor(viewer.id)
+  const sessions = await sessionsFor(viewer.id)
+  const twoFactor = await twoFactorFor(viewer.id)
   return (
     <>
       <PageHeader title="Security" backHref="/settings" />
@@ -31,7 +31,7 @@ async function SecurityBody() {
         <TwoFactorPanel enabled={twoFactor.enabled} usable={twoFactor.usable} codesLeft={twoFactor.recoveryLeft} />
       </Section>
       <Section title="Passkeys and security keys">
-        <PasskeysPanel passkeys={passkeysOf(viewer.id)} />
+        <PasskeysPanel passkeys={await passkeysOf(viewer.id)} />
       </Section>
       <Section title="Signed-in devices">
         <p className="text-[15px] text-muted-foreground">

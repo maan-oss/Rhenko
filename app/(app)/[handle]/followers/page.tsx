@@ -11,7 +11,7 @@ export const instant = false
 export default async function FollowersPage({ params }: { params: Params }) {
   const viewer = await requireViewer()
   const { handle } = await params
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   if (!profile || (profile.deactivated && profile.id !== viewer.id) || profile.relationship.blockedMe) notFound()
   return <FollowersBody handle={handle} />
 }

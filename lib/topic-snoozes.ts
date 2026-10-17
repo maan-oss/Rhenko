@@ -4,22 +4,22 @@ import { all, run } from "@/lib/db"
 export const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000
 
 // The topics the viewer has snoozed at this time, as tags without the #.
-export function snoozedTopics(viewerId: string, now: number): Set<string> {
-  return new Set(all<{ tag: string }>("SELECT tag FROM topic_snoozes WHERE user_id = ? AND until_at > ?", viewerId, now).map((row) => row.tag))
+export async function snoozedTopics(viewerId: string, now: number): Promise<Set<string>> {
+  return new Set((await all<{ tag: string }>("SELECT tag FROM topic_snoozes WHERE user_id = ? AND until_at > ?", viewerId, now)).map((row) => row.tag))
 }
 
 // The snoozes still running, soonest to end last, for the settings page.
-export function snoozesFor(viewerId: string, now: number): { tag: string; untilAt: number }[] {
-  return all<{ tag: string; until_at: number }>(
+export async function snoozesFor(viewerId: string, now: number): Promise<{ tag: string; untilAt: number }[]> {
+  return (await all<{ tag: string; until_at: number }>(
     "SELECT tag, until_at FROM topic_snoozes WHERE user_id = ? AND until_at > ? ORDER BY until_at DESC",
     viewerId,
     now
-  ).map((row) => ({ tag: row.tag, untilAt: row.until_at }))
+  )).map((row) => ({ tag: row.tag, untilAt: row.until_at }))
 }
 
 // Snoozing a topic again restarts its time.
-export function snoozeTopic(viewerId: string, tag: string, now: number): void {
-  run(
+export async function snoozeTopic(viewerId: string, tag: string, now: number): Promise<void> {
+  await run(
     `INSERT INTO topic_snoozes (user_id, tag, until_at, created_at) VALUES (?, ?, ?, ?)
      ON CONFLICT (user_id, tag) DO UPDATE SET until_at = excluded.until_at, created_at = excluded.created_at`,
     viewerId,
@@ -29,6 +29,6 @@ export function snoozeTopic(viewerId: string, tag: string, now: number): void {
   )
 }
 
-export function unsnoozeTopic(viewerId: string, tag: string): void {
-  run("DELETE FROM topic_snoozes WHERE user_id = ? AND tag = ?", viewerId, tag)
+export async function unsnoozeTopic(viewerId: string, tag: string): Promise<void> {
+  await run("DELETE FROM topic_snoozes WHERE user_id = ? AND tag = ?", viewerId, tag)
 }

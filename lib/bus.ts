@@ -117,10 +117,10 @@ export type RealtimeEvent =
   | { type: "posts"; postId: string }
 
 // Sends an event to the open tabs of each person in `userIds`. People with no tab open anywhere get nothing written.
-export function publish(userIds: string[], event: RealtimeEvent): void {
+export async function publish(userIds: string[], event: RealtimeEvent): Promise<void> {
   const ids = [...new Set(userIds)]
   if (ids.length === 0) return
-  const open = all<{ user_id: string }>(
+  const open = await all<{ user_id: string }>(
     `SELECT DISTINCT user_id FROM streams WHERE seen_at > ? AND user_id IN (${ids.map(() => "?").join(", ")})`,
     Date.now() - STREAM_STALE_MS,
     ...ids
@@ -128,43 +128,43 @@ export function publish(userIds: string[], event: RealtimeEvent): void {
   if (open.length === 0) return
   const payload = JSON.stringify(event)
   const now = Date.now()
-  transaction(() => {
-    for (const row of open) run("INSERT INTO events (user_id, payload, created_at) VALUES (?, ?, ?)", row.user_id, payload, now)
+  await transaction(async () => {
+    for (const row of open) await run("INSERT INTO events (user_id, payload, created_at) VALUES (?, ?, ?)", row.user_id, payload, now)
   })
 }
 
 // Starts a stream for a person in this process. The returned function ends it.
-export function subscribe(userId: string, listener: (event: RealtimeEvent) => void): () => void {
+export async function subscribe(userId: string, listener: (event: RealtimeEvent) => void): Promise<() => void> {
   const key = `user:${userId}`
   const streamId = randomUUID()
-  run("INSERT INTO streams (id, user_id, worker, seen_at) VALUES (?, ?, ?, ?)", streamId, userId, WORKER_ID, Date.now())
+  await run("INSERT INTO streams (id, user_id, worker, seen_at) VALUES (?, ?, ?, ?)", streamId, userId, WORKER_ID, Date.now())
   local.on(key, listener)
-  startPoller()
+  await startPoller()
   let open = true
-  return () => {
+  return async () => {
     if (!open) return
     open = false
     local.off(key, listener)
-    run("DELETE FROM streams WHERE id = ?", streamId)
+    await run("DELETE FROM streams WHERE id = ?", streamId)
   }
 }
 
 // How many event streams a person has open right now, in any process. Zero means nothing of theirs can ring.
-export function listenerCount(userId: string): number {
-  return get<{ n: number }>("SELECT COUNT(*) AS n FROM streams WHERE user_id = ? AND seen_at > ?", userId, Date.now() - STREAM_STALE_MS)?.n ?? 0
+export async function listenerCount(userId: string): Promise<number> {
+  return (await get<{ n: number }>("SELECT COUNT(*) AS n FROM streams WHERE user_id = ? AND seen_at > ?", userId, Date.now() - STREAM_STALE_MS))?.n ?? 0
 }
 
 // Starts the loop that hands events to this process's tabs. It begins after the newest event, so a tab never receives
 // events from before it connected.
-function startPoller(): void {
+async function startPoller(): Promise<void> {
   if (globals.__rhenkoBusPoller) return
-  const latest = get<{ id: number }>("SELECT COALESCE(MAX(id), 0) AS id FROM events")
+  const latest = await get<{ id: number }>("SELECT COALESCE(MAX(id), 0) AS id FROM events")
   const poller: Poller = {
     cursor: latest?.id ?? 0,
     checkedInAt: Date.now(),
-    timer: setInterval(() => {
+    timer: setInterval(async () => {
       try {
-        pollOnce()
+        await pollOnce()
       } catch (error) {
         console.error("[bus] reading events failed", error)
       }
@@ -174,11 +174,11 @@ function startPoller(): void {
   globals.__rhenkoBusPoller = poller
 }
 
-function pollOnce(): void {
+async function pollOnce(): Promise<void> {
   const poller = globals.__rhenkoBusPoller
   if (!poller) return
   for (;;) {
-    const rows = all<{ id: number; user_id: string; payload: string }>(
+    const rows = await all<{ id: number; user_id: string; payload: string }>(
       "SELECT id, user_id, payload FROM events WHERE id > ? ORDER BY id LIMIT ?",
       poller.cursor,
       READ_BATCH
@@ -201,12 +201,12 @@ function pollOnce(): void {
   const now = Date.now()
   if (now - poller.checkedInAt >= CHECK_IN_MS) {
     poller.checkedInAt = now
-    run("UPDATE streams SET seen_at = ? WHERE worker = ?", now, WORKER_ID)
+    await run("UPDATE streams SET seen_at = ? WHERE worker = ?", now, WORKER_ID)
   }
 }
 
 // Removes streams whose process stopped checking in, and events everyone has read. Runs from the maintenance pass.
-export function sweepBus(now = Date.now()): void {
-  run("DELETE FROM streams WHERE seen_at <= ?", now - STREAM_STALE_MS)
-  run("DELETE FROM events WHERE created_at <= ?", now - EVENT_KEEP_MS)
+export async function sweepBus(now = Date.now()): Promise<void> {
+  await run("DELETE FROM streams WHERE seen_at <= ?", now - STREAM_STALE_MS)
+  await run("DELETE FROM events WHERE created_at <= ?", now - EVENT_KEEP_MS)
 }

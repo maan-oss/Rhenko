@@ -22,12 +22,12 @@ export default function BookmarksPage({ searchParams }: { searchParams: SearchPa
 
 async function BookmarksBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  const folders = bookmarkFolders(viewer.id)
+  const folders = await bookmarkFolders(viewer.id)
   const folder = firstParam((await searchParams).folder)
   if (folder !== undefined && folder !== "none" && !folders.some((f) => f.id === folder)) redirect("/bookmarks")
 
   const spec: FeedSpec = folder === undefined ? { kind: "bookmarks" } : { kind: "bookmarks", folder }
-  const page = feedFor(spec, viewer.id)
+  const page = await feedFor(spec, viewer.id)
 
   const tabs = [
     { href: "/bookmarks", label: "All", icon: <Bookmark />, active: folder === undefined },

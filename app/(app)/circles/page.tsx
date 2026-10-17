@@ -22,8 +22,8 @@ export default function CirclesPage({ searchParams }: { searchParams: SearchPara
 async function CirclesBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const query = (firstParam((await searchParams).q) ?? "").trim().slice(0, 60)
-  const mine = circlesFor(viewer.id)
-  const found = discoverCircles(viewer.id, query)
+  const mine = await circlesFor(viewer.id)
+  const found = await discoverCircles(viewer.id, query)
   return (
     <>
       <PageHeader

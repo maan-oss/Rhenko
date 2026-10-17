@@ -72,7 +72,7 @@ async function NoticesBody() {
   await connection()
   const viewer = await requireViewer()
   const now = await clock()
-  const notices = all<NoticeRow>(
+  const notices = await all<NoticeRow>(
     `SELECT n.id, n.category, n.explanation, n.excerpt, n.created_at, n.appeal_until, n.restored_at,
             (SELECT COUNT(*) FROM posts p WHERE p.id = n.post_id) AS post_exists,
             a.id AS appeal_id, a.decided_at AS appeal_decided_at, COALESCE(a.decision_note, '') AS appeal_note
@@ -83,7 +83,7 @@ async function NoticesBody() {
      LIMIT 100`,
     viewer.id
   )
-  const reports = all<ReportRow>(
+  const reports = await all<ReportRow>(
     `SELECT id, reason, created_at, resolved_at, outcome FROM reports
      WHERE reporter_id = ? ORDER BY created_at DESC LIMIT 100`,
     viewer.id

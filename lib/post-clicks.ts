@@ -25,30 +25,30 @@ export function totalClicks(counts: ClickCounts): number {
 
 // Counts one click on a post. Clicks on one's own posts are not counted, and nothing records who clicked.
 // The caller checks that the post is visible to the viewer. Returns false when the click was not counted.
-export function recordPostClick(viewerId: string, postId: string, kind: ClickKind, now = Date.now()): boolean {
-  if (!consume(`post-click:${viewerId}`, CLICKS_PER_MINUTE, MINUTE_MS, now).ok) return false
-  const post = get<{ author_id: string }>(
+export async function recordPostClick(viewerId: string, postId: string, kind: ClickKind, now = Date.now()): Promise<boolean> {
+  if (!(await consume(`post-click:${viewerId}`, CLICKS_PER_MINUTE, MINUTE_MS, now)).ok) return false
+  const post = await get<{ author_id: string }>(
     "SELECT author_id FROM posts WHERE id = ? AND is_draft = 0 AND publish_at IS NULL AND removed_at IS NULL",
     postId
   )
   if (!post || post.author_id === viewerId) return false
-  run("INSERT INTO post_clicks (post_id, kind, created_at) VALUES (?, ?, ?)", postId, kind, now)
+  await run("INSERT INTO post_clicks (post_id, kind, created_at) VALUES (?, ?, ?)", postId, kind, now)
   return true
 }
 
 // Clicks by kind for one post. Used by the post's own analytics page.
-export function clickCountsFor(postId: string): ClickCounts {
+export async function clickCountsFor(postId: string): Promise<ClickCounts> {
   const counts = emptyClickCounts()
-  for (const row of all<{ kind: string; c: number }>("SELECT kind, COUNT(*) AS c FROM post_clicks WHERE post_id = ? GROUP BY kind", postId)) {
+  for (const row of await all<{ kind: string; c: number }>("SELECT kind, COUNT(*) AS c FROM post_clicks WHERE post_id = ? GROUP BY kind", postId)) {
     if (isClickKind(row.kind)) counts[row.kind] = row.c
   }
   return counts
 }
 
 // Clicks by kind for every post of one author, in one query. Used by the posts table and its CSV file.
-export function clickCountsByPost(authorId: string): Map<string, ClickCounts> {
+export async function clickCountsByPost(authorId: string): Promise<Map<string, ClickCounts>> {
   const byPost = new Map<string, ClickCounts>()
-  for (const row of all<{ post_id: string; kind: string; c: number }>(
+  for (const row of await all<{ post_id: string; kind: string; c: number }>(
     `SELECT c.post_id, c.kind, COUNT(*) AS c FROM post_clicks c
      JOIN posts p ON p.id = c.post_id
      WHERE p.author_id = ?

@@ -24,6 +24,6 @@ async function InterestsBody() {
   const viewer = await getViewer()
   if (!viewer) redirect("/login")
   if (viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
-  const topics = all<{ tag: string }>("SELECT tag FROM topic_follows WHERE user_id = ? ORDER BY created_at", viewer.id).map((row) => row.tag)
+  const topics = (await all<{ tag: string }>("SELECT tag FROM topic_follows WHERE user_id = ? ORDER BY created_at", viewer.id)).map((row) => row.tag)
   return <InterestsSetup initial={topics} />
 }

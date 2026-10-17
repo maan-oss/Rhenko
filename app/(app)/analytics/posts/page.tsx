@@ -97,7 +97,7 @@ export default async function PostsAnalyticsPage({
   const key: SortKey = SORT_KEYS.find((candidate) => candidate === requested) ?? "date"
   const direction: Direction = single(params.dir) === "asc" ? "asc" : "desc"
 
-  const rows = sortRows(ownPostRows(viewer.id), key, direction)
+  const rows = sortRows(await ownPostRows(viewer.id), key, direction)
   const shown = rows.slice(0, SHOWN)
 
   return (

@@ -79,40 +79,40 @@ function toCircle(row: CircleRow): Circle {
   }
 }
 
-export function circleBySlug(slug: string, viewerId: string): Circle | null {
-  const row = get<CircleRow>(`${CIRCLE_SELECT} WHERE c.slug = ?`, viewerId, viewerId, slug)
+export async function circleBySlug(slug: string, viewerId: string): Promise<Circle | null> {
+  const row = await get<CircleRow>(`${CIRCLE_SELECT} WHERE c.slug = ?`, viewerId, viewerId, slug)
   return row ? toCircle(row) : null
 }
 
 // The circles the viewer belongs to, by name.
-export function circlesFor(viewerId: string): Circle[] {
-  return all<CircleRow>(
-    `${CIRCLE_SELECT} WHERE c.id IN (SELECT community_id FROM community_members WHERE user_id = ?) ORDER BY c.name COLLATE NOCASE`,
+export async function circlesFor(viewerId: string): Promise<Circle[]> {
+  return (await all<CircleRow>(
+    `${CIRCLE_SELECT} WHERE c.id IN (SELECT community_id FROM community_members WHERE user_id = ?) ORDER BY lower(c.name)`,
     viewerId,
     viewerId,
     viewerId
-  ).map(toCircle)
+  )).map(toCircle)
 }
 
 // Circles the viewer can find and join: open and ask-to-join circles they are not in yet, largest first. A closed circle
 // is never listed here, because its existence is shared only with its members.
-export function discoverCircles(viewerId: string, query: string, limit = 30): Circle[] {
+export async function discoverCircles(viewerId: string, query: string, limit = 30): Promise<Circle[]> {
   const words = query.trim().toLowerCase()
-  const filter = words ? "AND lower(c.name) LIKE ? ESCAPE '\\'" : ""
+  const filter = words ? "AND lower(c.name) ILIKE ? ESCAPE '\\'" : ""
   const params: (string | number)[] = [viewerId, viewerId, viewerId]
   if (words) params.push(`%${words.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`)
   params.push(limit)
-  return all<CircleRow>(
+  return (await all<CircleRow>(
     `${CIRCLE_SELECT}
      WHERE c.access <> 'closed' AND c.id NOT IN (SELECT community_id FROM community_members WHERE user_id = ?) ${filter}
      ORDER BY member_count DESC, c.created_at DESC
      LIMIT ?`,
     ...params
-  ).map(toCircle)
+  )).map(toCircle)
 }
 
-export function memberRole(circleId: string, userId: string): CircleRole | null {
-  const row = get<{ role: CircleRole }>(
+export async function memberRole(circleId: string, userId: string): Promise<CircleRole | null> {
+  const row = await get<{ role: CircleRole }>(
     "SELECT role FROM community_members WHERE community_id = ? AND user_id = ?",
     circleId,
     userId
@@ -120,28 +120,28 @@ export function memberRole(circleId: string, userId: string): CircleRole | null 
   return row?.role ?? null
 }
 
-export function isOwner(circleId: string, userId: string): boolean {
-  return get("SELECT 1 AS found FROM communities WHERE id = ? AND owner_id = ?", circleId, userId) !== undefined
+export async function isOwner(circleId: string, userId: string): Promise<boolean> {
+  return await get("SELECT 1 AS found FROM communities WHERE id = ? AND owner_id = ?", circleId, userId) !== undefined
 }
 
 // Members, owner first, then in the order they joined.
-export function circleMembers(circleId: string): { user: MiniUser; role: CircleRole }[] {
-  return all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number; role: CircleRole }>(
+export async function circleMembers(circleId: string): Promise<{ user: MiniUser; role: CircleRole }[]> {
+  return (await all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number; role: CircleRole }>(
     `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, m.role
      FROM community_members m JOIN users u ON u.id = m.user_id
      WHERE m.community_id = ? AND u.deactivated_at IS NULL
      ORDER BY (m.role = 'owner') DESC, m.created_at ASC
      LIMIT 500`,
     circleId
-  ).map((r) => ({
+  )).map((r) => ({
     user: { id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 },
     role: r.role,
   }))
 }
 
 // People waiting for an answer, oldest first. Only the owner reads this.
-export function circleRequests(circleId: string): { user: MiniUser; answer: string; createdAt: number }[] {
-  return all<{
+export async function circleRequests(circleId: string): Promise<{ user: MiniUser; answer: string; createdAt: number }[]> {
+  return (await all<{
     id: string
     handle: string
     name: string
@@ -156,7 +156,7 @@ export function circleRequests(circleId: string): { user: MiniUser; answer: stri
      ORDER BY r.created_at ASC
      LIMIT 200`,
     circleId
-  ).map((r) => ({
+  )).map((r) => ({
     user: { id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 },
     answer: r.answer,
     createdAt: r.created_at,
@@ -179,50 +179,50 @@ export function slugFor(name: string): string {
   return folded === "new" ? "new-circle" : folded
 }
 
-export function uniqueSlug(name: string): string {
+export async function uniqueSlug(name: string): Promise<string> {
   const base = slugFor(name)
-  const taken = (slug: string) => get("SELECT 1 AS found FROM communities WHERE slug = ?", slug) !== undefined
-  if (!taken(base)) return base
+  const taken = async (slug: string) => await get("SELECT 1 AS found FROM communities WHERE slug = ?", slug) !== undefined
+  if (!await taken(base)) return base
   for (;;) {
     const candidate = `${base}-${randomBytes(3).toString("hex")}`
-    if (!taken(candidate)) return candidate
+    if (!await taken(candidate)) return candidate
   }
 }
 
 // Media files of the posts in a circle. The caller removes them once the change is saved.
-function mediaOfCircle(circleId: string): string[] {
-  return all<{ file: string }>(
+async function mediaOfCircle(circleId: string): Promise<string[]> {
+  return (await all<{ file: string }>(
     "SELECT m.file FROM post_media m JOIN posts p ON p.id = m.post_id WHERE p.community_id = ?",
     circleId
-  ).map((r) => r.file)
+  )).map((r) => r.file)
 }
 
 // Deletes a circle's rows. Posts in an open or ask-to-join circle stay on the site as ordinary posts. A closed circle's
 // posts were only ever shown to its members, so they go with it, and their files come back to be removed.
 // Callers run this inside their own transaction.
-export function closeCircle(circleId: string, access: CircleAccess): string[] {
-  const files = access === "closed" ? mediaOfCircle(circleId) : []
-  if (access === "closed") run("DELETE FROM posts WHERE community_id = ?", circleId)
-  run("DELETE FROM communities WHERE id = ?", circleId)
+export async function closeCircle(circleId: string, access: CircleAccess): Promise<string[]> {
+  const files = access === "closed" ? await mediaOfCircle(circleId) : []
+  if (access === "closed") await run("DELETE FROM posts WHERE community_id = ?", circleId)
+  await run("DELETE FROM communities WHERE id = ?", circleId)
   return files
 }
 
 // Run when an account is erased, before its rows go. A circle it owned passes to the member who joined first. A circle
 // with nobody else in it closes. Returns the files that closing removed.
-export function releaseCirclesOf(userId: string): string[] {
+export async function releaseCirclesOf(userId: string): Promise<string[]> {
   const files: string[] = []
-  const owned = all<{ id: string; access: CircleAccess }>("SELECT id, access FROM communities WHERE owner_id = ?", userId)
+  const owned = await all<{ id: string; access: CircleAccess }>("SELECT id, access FROM communities WHERE owner_id = ?", userId)
   for (const circle of owned) {
-    const heir = get<{ user_id: string }>(
+    const heir = await get<{ user_id: string }>(
       "SELECT user_id FROM community_members WHERE community_id = ? AND user_id <> ? ORDER BY created_at ASC LIMIT 1",
       circle.id,
       userId
     )
     if (heir) {
-      run("UPDATE communities SET owner_id = ?, updated_at = ? WHERE id = ?", heir.user_id, Date.now(), circle.id)
-      run("UPDATE community_members SET role = 'owner' WHERE community_id = ? AND user_id = ?", circle.id, heir.user_id)
+      await run("UPDATE communities SET owner_id = ?, updated_at = ? WHERE id = ?", heir.user_id, Date.now(), circle.id)
+      await run("UPDATE community_members SET role = 'owner' WHERE community_id = ? AND user_id = ?", circle.id, heir.user_id)
     } else {
-      files.push(...closeCircle(circle.id, circle.access))
+      files.push(...await closeCircle(circle.id, circle.access))
     }
   }
   return files

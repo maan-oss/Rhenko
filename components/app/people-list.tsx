@@ -3,7 +3,7 @@ import { withRequested } from "@/lib/people-state"
 import type { UserCard } from "@/lib/data"
 
 // A fixed list of people, such as search results. Followers and following use PeoplePager, which pages.
-export function PeopleList({
+export async function PeopleList({
   users,
   viewerId,
   removable,
@@ -19,7 +19,7 @@ export function PeopleList({
   }
   return (
     <ul>
-      {withRequested(viewerId, users).map((user) => (
+      {(await withRequested(viewerId, users)).map((user) => (
         <PersonRow key={user.id} user={user} viewerId={viewerId} removable={removable} />
       ))}
     </ul>

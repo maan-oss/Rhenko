@@ -1,25 +1,61 @@
-// Seeds a scratch database with a realistic amount of data, starts the production server against it, and times the
-// pages people use most. It never touches data/: pass a directory of your own.
+// Seeds a scratch Postgres database with a realistic amount of data, starts the production server against it, and times
+// the pages people use most. It never touches the app's own database: pass a scratch database of your own.
 //
-//   node scripts/bench.mjs --dir <scratch dir> [--reseed] [--port 3400] [--runs 15] [--json <file>]
+//   node scripts/bench.mjs --database-url <scratch url> [--reseed] [--port 3400] [--runs 15] [--json <file>]
+//
+// The scratch database must already exist and must not be the database DATABASE_URL points at, nor one named rhenko.
+// If it has no schema yet, db/postgres/schema.sql is applied and the data is seeded. --reseed drops the public schema of
+// the scratch database and seeds it again. Without it, the data already there is timed as it is. Each run signs in with a
+// new session, so no token is kept between runs.
 //
 // Build first (npm run build). The timings are wall-clock time for the whole response, server render included.
-import { DatabaseSync } from "node:sqlite"
 import { createHash, randomBytes } from "node:crypto"
 import { spawn } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
+import postgres from "postgres"
 
-const args = parseArgs(process.argv.slice(2))
-if (!args.dir) {
-  console.error("Usage: node scripts/bench.mjs --dir <scratch dir> [--reseed] [--port 3400] [--runs 15] [--json <file>]")
+const USAGE = "Usage: node scripts/bench.mjs --database-url <scratch url> [--reseed] [--port 3400] [--runs 15] [--json <file>]"
+
+function fail(message) {
+  console.error(message)
   process.exit(1)
 }
-const dir = path.resolve(args.dir)
+
+const args = parseArgs(process.argv.slice(2))
+if (typeof args["database-url"] !== "string") fail(USAGE)
+const scratchUrl = checkScratch(args["database-url"])
 const port = Number(args.port ?? 3400)
 const runs = Number(args.runs ?? 15)
 const scale = Number(args.scale ?? 1)
-const dbFile = path.join(dir, "rhenko.sqlite")
+const SCHEMA_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "db", "postgres", "schema.sql")
+
+// The benchmark writes to its database, so it refuses the app's own database and any database named rhenko.
+function checkScratch(text) {
+  let target
+  try {
+    target = new URL(text)
+  } catch {
+    fail("--database-url is not a URL. Give a postgres:// URL for a scratch database.")
+  }
+  if (!["postgres:", "postgresql:"].includes(target.protocol)) fail("--database-url must start with postgres://.")
+  const name = databaseName(target)
+  if (!name) fail("--database-url must name the scratch database, for example postgres://user@127.0.0.1:5433/rhenko_bench.")
+  if (name === "rhenko") fail("Refusing to use a database named rhenko. Give a scratch database of your own.")
+  if (process.env.DATABASE_URL) {
+    const main = new URL(process.env.DATABASE_URL)
+    const sameHost = main.hostname === target.hostname && (main.port || "5432") === (target.port || "5432")
+    if (sameHost && databaseName(main) === name) {
+      fail("That is the database DATABASE_URL points at. Give a scratch database of your own.")
+    }
+  }
+  return text
+}
+
+function databaseName(url) {
+  return decodeURIComponent(url.pathname.replace(/^\//, ""))
+}
 
 // Repeatable: the same seed always gives the same data, so before and after runs compare like with like.
 let seed = 20261012
@@ -34,122 +70,197 @@ const pick = (list) => list[Math.floor(random() * list.length)]
 const sha = (value) => createHash("sha256").update(value).digest("hex")
 const SYLLABLES = ["ka", "ri", "to", "mel", "so", "ven", "dal", "ix", "per", "lo", "fu", "ne", "gar", "bi", "tu", "zan"]
 const word = () => Array.from({ length: 2 + Math.floor(random() * 2) }, () => pick(SYLLABLES)).join("")
+const DAY = 24 * 60 * 60 * 1000
 
 const USERS = Math.round(2000 * scale)
 const POSTS = Math.round(40000 * scale)
 const VOCAB = Array.from({ length: 3000 }, word)
 const TAGS = Array.from({ length: 300 }, word)
+const VIEWER = "viewer"
+// Rows per INSERT statement. Each statement carries at most a few thousand parameters.
+const BATCH = 1000
+
+// Counts, timestamps and flags come back as plain numbers, as they did from SQLite.
+const NUMBER_TYPES = {
+  number: {
+    to: 0,
+    from: [16, 20, 1700],
+    parse: (value) => (value === "t" ? 1 : value === "f" ? 0 : Number(value)),
+    serialize: (value) => String(value),
+  },
+}
 
 async function main() {
-  if (args.reseed) fs.rmSync(dir, { recursive: true, force: true })
-  fs.mkdirSync(dir, { recursive: true })
-
-  const fresh = !fs.existsSync(dbFile)
-  let token = null
-  if (fresh) {
-    // The first authenticated request creates the schema, the same way a real deployment does.
-    console.log("Creating the schema through the server ...")
-    const server = await startServer()
-    await fetch(`http://127.0.0.1:${port}/`, { headers: { cookie: "rhenko_session=bootstrap" }, redirect: "manual" })
-    await stopServer(server)
-    token = seedDatabase()
-  } else {
-    token = readToken()
-  }
-
-  const server = await startServer()
+  const sql = postgres(scratchUrl, { max: 1, prepare: false, types: NUMBER_TYPES })
   try {
-    const results = await measure(token)
-    printTable(results)
-    if (args.json) fs.writeFileSync(args.json, JSON.stringify({ at: new Date().toISOString(), dbBytes: fs.statSync(dbFile).size, results }, null, 2))
+    if (args.reseed) {
+      console.log("Dropping the public schema of the scratch database ...")
+      await sql.unsafe("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;").simple()
+    }
+    const [{ found }] = await sql.unsafe("SELECT (to_regclass('public.users') IS NOT NULL)::int AS found")
+    if (found) {
+      console.log("Using the data already in the scratch database. Pass --reseed to seed it again.")
+    } else {
+      console.log("Creating the schema from db/postgres/schema.sql ...")
+      await sql.unsafe(fs.readFileSync(SCHEMA_FILE, "utf8")).simple()
+      await seedDatabase(sql)
+    }
+    const token = await newSession(sql)
+    const [{ bytes }] = await sql.unsafe("SELECT pg_database_size(current_database()) AS bytes")
+
+    const server = await startServer()
+    try {
+      const results = await measure(token)
+      printTable(results)
+      if (args.json) fs.writeFileSync(args.json, JSON.stringify({ at: new Date().toISOString(), dbBytes: bytes, results }, null, 2))
+    } finally {
+      await stopServer(server)
+    }
   } finally {
-    await stopServer(server)
+    await sql.end()
   }
 }
 
-function seedDatabase() {
-  console.log(`Seeding ${USERS} users and ${POSTS} posts ...`)
-  const db = new DatabaseSync(dbFile)
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = OFF;")
-  const now = Date.now()
-  const DAY = 24 * 60 * 60 * 1000
-  db.exec("BEGIN")
-  const userIds = []
-  const insertUser = db.prepare(
-    "INSERT INTO users (id, handle, name, bio, password_hash, created_at, terms_version) VALUES (?, ?, ?, ?, 'x', ?, '2026-10-12')"
-  )
-  for (let i = 0; i < USERS; i++) {
-    const id = `u${i}`
-    userIds.push(id)
-    insertUser.run(id, `user${i}`, `User ${i}`, `Bio for user ${i}`, now - 400 * DAY)
+// Inserts rows through one statement per batch, so a large seed does not make one round trip per row.
+class Batch {
+  constructor(tx, table, columns, tail = "") {
+    this.tx = tx
+    this.table = table
+    this.columns = columns
+    this.tail = tail
+    this.rows = []
   }
-  const viewer = "viewer"
-  insertUser.run(viewer, "viewer", "Viewer", "The account the benchmark signs in as", now - 400 * DAY)
-  db.exec("COMMIT")
 
-  db.exec("BEGIN")
-  const insertFollow = db.prepare("INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)")
-  for (const id of [...userIds, viewer]) {
-    for (let k = 0; k < 25; k++) insertFollow.run(id, pick(userIds), now - 200 * DAY)
+  async add(row) {
+    this.rows.push(row)
+    if (this.rows.length >= BATCH) await this.flush()
   }
-  db.exec("COMMIT")
+
+  async flush() {
+    if (this.rows.length === 0) return
+    const values = []
+    const groups = this.rows.map((row) => {
+      const marks = this.columns.map((column) => {
+        values.push(row[column])
+        return `$${values.length}`
+      })
+      return `(${marks.join(", ")})`
+    })
+    await this.tx.unsafe(`insert into ${this.table} (${this.columns.join(", ")}) values ${groups.join(", ")} ${this.tail}`, values)
+    this.rows = []
+  }
+}
+
+async function seedDatabase(sql) {
+  console.log(`Seeding ${USERS} users and ${POSTS} posts ...`)
+  const now = Date.now()
+  const userIds = []
+
+  await sql.begin(async (tx) => {
+    const users = new Batch(tx, "users", ["id", "handle", "name", "bio", "password_hash", "created_at", "terms_version"])
+    for (let i = 0; i < USERS; i++) {
+      const id = `u${i}`
+      userIds.push(id)
+      await users.add({
+        id,
+        handle: `user${i}`,
+        name: `User ${i}`,
+        bio: `Bio for user ${i}`,
+        password_hash: "x",
+        created_at: now - 400 * DAY,
+        terms_version: "2026-10-12",
+      })
+    }
+    await users.add({
+      id: VIEWER,
+      handle: "viewer",
+      name: "Viewer",
+      bio: "The account the benchmark signs in as",
+      password_hash: "x",
+      created_at: now - 400 * DAY,
+      terms_version: "2026-10-12",
+    })
+    await users.flush()
+  })
+
+  await sql.begin(async (tx) => {
+    const follows = new Batch(tx, "follows", ["follower_id", "followee_id", "created_at"], "on conflict do nothing")
+    for (const id of [...userIds, VIEWER]) {
+      for (let k = 0; k < 25; k++) await follows.add({ follower_id: id, followee_id: pick(userIds), created_at: now - 200 * DAY })
+    }
+    await follows.flush()
+  })
 
   const postIds = []
-  db.exec("BEGIN")
-  const insertPost = db.prepare(
-    "INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  )
-  for (let i = 0; i < POSTS; i++) {
-    const id = `p${i}`
-    const sentences = 1 + Math.floor(random() * 3)
-    const parts = Array.from({ length: sentences }, () => Array.from({ length: 6 + Math.floor(random() * 10) }, () => pick(VOCAB)).join(" "))
-    if (random() < 0.3) parts.push(`#${pick(TAGS)}`)
-    if (random() < 0.15) parts.push(`@${pick(userIds).replace(/^u/, "user")}`)
-    const replyTo = postIds.length > 0 && random() < 0.12 ? pick(postIds) : null
-    const quoteOf = postIds.length > 0 && random() < 0.03 ? pick(postIds) : null
-    postIds.push(id)
-    insertPost.run(id, pick(userIds), parts.join(". "), replyTo, quoteOf, now - Math.floor(random() * 60 * DAY))
-  }
-  db.exec("COMMIT")
+  await sql.begin(async (tx) => {
+    const posts = new Batch(tx, "posts", ["id", "author_id", "body", "reply_to_id", "quote_of_id", "created_at"])
+    for (let i = 0; i < POSTS; i++) {
+      const id = `p${i}`
+      const sentences = 1 + Math.floor(random() * 3)
+      const parts = Array.from({ length: sentences }, () => Array.from({ length: 6 + Math.floor(random() * 10) }, () => pick(VOCAB)).join(" "))
+      if (random() < 0.3) parts.push(`#${pick(TAGS)}`)
+      if (random() < 0.15) parts.push(`@${pick(userIds).replace(/^u/, "user")}`)
+      const replyTo = postIds.length > 0 && random() < 0.12 ? pick(postIds) : null
+      const quoteOf = postIds.length > 0 && random() < 0.03 ? pick(postIds) : null
+      postIds.push(id)
+      await posts.add({
+        id,
+        author_id: pick(userIds),
+        body: parts.join(". "),
+        reply_to_id: replyTo,
+        quote_of_id: quoteOf,
+        created_at: now - Math.floor(random() * 60 * DAY),
+      })
+    }
+    await posts.flush()
+  })
 
   // Engagement is heavy-tailed, as on a real network: most posts get a few likes, a few get thousands.
-  db.exec("BEGIN")
-  const insertLike = db.prepare("INSERT OR IGNORE INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)")
-  const insertRepost = db.prepare("INSERT OR IGNORE INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?)")
-  const insertView = db.prepare("INSERT OR IGNORE INTO post_views (post_id, viewer_id, created_at) VALUES (?, ?, ?)")
-  for (const id of postIds) {
-    const likes = Math.floor(Math.pow(random(), 6) * 120 * scale)
-    for (let k = 0; k < likes; k++) insertLike.run(pick(userIds), id, now - Math.floor(random() * 30 * DAY))
-    const reposts = Math.floor(Math.pow(random(), 6) * 30 * scale)
-    for (let k = 0; k < reposts; k++) insertRepost.run(pick(userIds), id, now - Math.floor(random() * 30 * DAY))
-    const views = likes + Math.floor(random() * 10)
-    for (let k = 0; k < views; k++) insertView.run(id, pick(userIds), now - Math.floor(random() * 30 * DAY))
-  }
-  db.exec("COMMIT")
+  await sql.begin(async (tx) => {
+    const likeBatch = new Batch(tx, "likes", ["user_id", "post_id", "created_at"], "on conflict do nothing")
+    const repostBatch = new Batch(tx, "reposts", ["user_id", "post_id", "created_at"], "on conflict do nothing")
+    const viewBatch = new Batch(tx, "post_views", ["post_id", "viewer_id", "created_at"], "on conflict do nothing")
+    for (const id of postIds) {
+      const likes = Math.floor(Math.pow(random(), 6) * 120 * scale)
+      for (let k = 0; k < likes; k++) await likeBatch.add({ user_id: pick(userIds), post_id: id, created_at: now - Math.floor(random() * 30 * DAY) })
+      const reposts = Math.floor(Math.pow(random(), 6) * 30 * scale)
+      for (let k = 0; k < reposts; k++) await repostBatch.add({ user_id: pick(userIds), post_id: id, created_at: now - Math.floor(random() * 30 * DAY) })
+      const views = likes + Math.floor(random() * 10)
+      for (let k = 0; k < views; k++) await viewBatch.add({ post_id: id, viewer_id: pick(userIds), created_at: now - Math.floor(random() * 30 * DAY) })
+    }
+    await likeBatch.flush()
+    await repostBatch.flush()
+    await viewBatch.flush()
+  })
 
-  db.exec("BEGIN")
-  const insertNote = db.prepare("INSERT INTO notifications (id, recipient_id, actor_id, kind, post_id, read, created_at) VALUES (?, ?, ?, 'like', ?, ?, ?)")
-  for (let i = 0; i < 3000; i++) {
-    insertNote.run(`n${i}`, viewer, pick(userIds), pick(postIds), random() < 0.5 ? 1 : 0, now - Math.floor(random() * 30 * DAY))
-  }
-  db.exec("COMMIT")
+  await sql.begin(async (tx) => {
+    const notes = new Batch(tx, "notifications", ["id", "recipient_id", "actor_id", "kind", "post_id", "read", "created_at"])
+    for (let i = 0; i < 3000; i++) {
+      await notes.add({
+        id: `n${i}`,
+        recipient_id: VIEWER,
+        actor_id: pick(userIds),
+        kind: "like",
+        post_id: pick(postIds),
+        read: random() < 0.5 ? 1 : 0,
+        created_at: now - Math.floor(random() * 30 * DAY),
+      })
+    }
+    await notes.flush()
+  })
 
-  const raw = randomBytes(32).toString("hex")
-  db.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at, user_agent, last_seen) VALUES (?, ?, ?, ?, 'bench', ?)").run(
-    sha(raw),
-    viewer,
-    now,
-    now + 30 * DAY,
-    now
-  )
-  db.exec("PRAGMA optimize; ANALYZE;")
-  db.close()
-  fs.writeFileSync(path.join(dir, "bench-token.txt"), raw)
-  return raw
+  await sql.unsafe("ANALYZE")
 }
 
-function readToken() {
-  return fs.readFileSync(path.join(dir, "bench-token.txt"), "utf8").trim()
+// A session for the benchmark's own account. Its token lives in memory for this run only.
+async function newSession(sql) {
+  const raw = randomBytes(32).toString("hex")
+  const now = Date.now()
+  await sql.unsafe(
+    "INSERT INTO sessions (token_hash, user_id, created_at, expires_at, user_agent, last_seen) VALUES ($1, $2, $3, $4, 'bench', $5)",
+    [sha(raw), VIEWER, now, now + 30 * DAY, now]
+  )
+  return raw
 }
 
 // Words the search runs use: common ones, a rare one, and one with an operator.
@@ -222,7 +333,7 @@ function printTable(rows) {
 function startServer() {
   const server = spawn(process.execPath, [path.join(process.cwd(), "node_modules/next/dist/bin/next"), "start", "-p", String(port)], {
     cwd: process.cwd(),
-    env: { ...process.env, RHENKO_DATA_DIR: dir, NODE_ENV: "production" },
+    env: { ...process.env, DATABASE_URL: scratchUrl, NODE_ENV: "production" },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
   })

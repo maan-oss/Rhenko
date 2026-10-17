@@ -17,25 +17,25 @@ export const instant = false
 export default async function StatusPage({ params }: { params: Params }) {
   const { postId } = await params
   const viewer = await requireViewer()
-  if (!canSeePost(postId, viewer.id)) notFound()
+  if (!await canSeePost(postId, viewer.id)) notFound()
   return <StatusBody params={params} />
 }
 
 async function StatusBody({ params }: { params: Params }) {
   const viewer = await requireViewer()
   const { handle, postId } = await params
-  const post = canSeePost(postId, viewer.id) ? getPost(postId, viewer.id) : null
+  const post = await canSeePost(postId, viewer.id) ? await getPost(postId, viewer.id) : null
   if (!post) notFound()
   if (post.author.handle.toLowerCase() !== handle.toLowerCase()) {
     redirect(`/${post.author.handle}/status/${post.id}`)
   }
 
   // The post this one answers shows above it when the viewer may see it, and otherwise says it isn't available.
-  const parent = post.replyToId ? getPost(post.replyToId, viewer.id) : null
+  const parent = post.replyToId ? await getPost(post.replyToId, viewer.id) : null
   // A draft or scheduled post is its author's alone until it goes out, so it has no notes or replies yet.
   const live = !post.isDraft && post.publishAt === null
   const items = live
-    ? repliesTo(post.id, viewer.id).map((reply) => ({ key: `reply:${reply.id}`, sortAt: reply.createdAt, post: reply, repostedBy: null, folderId: null }))
+    ? (await repliesTo(post.id, viewer.id)).map((reply) => ({ key: `reply:${reply.id}`, sortAt: reply.createdAt, post: reply, repostedBy: null, folderId: null }))
     : []
 
   return (
@@ -49,7 +49,7 @@ async function StatusBody({ params }: { params: Params }) {
       <PostCard post={post} viewer={viewer} detail={live} draft={!live} />
       {live ? (
         <>
-          <CommunityNotes postId={post.id} notes={notesFor(post.id, viewer.id)} signedIn />
+          <CommunityNotes postId={post.id} notes={await notesFor(post.id, viewer.id)} signedIn />
           {post.canReply ? (
             <div className="border-b border-border px-4 py-3">
               <Composer viewer={viewer} replyToId={post.id} id="reply" placeholder="Post your reply" compact />

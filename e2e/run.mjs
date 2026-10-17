@@ -18,8 +18,9 @@
 //                    the same "[mail] to ..." lines. Defaults to SERVER_LOG. Without either, the email checks fail and say so.
 //                    The legal area's decision emails are sent by the command line, which reads RHENKO_SMTP_URL from
 //                    the environment it is started in, so give the suite the same RHENKO_SMTP_URL as the server.
-//   RHENKO_DATA_DIR  folder the server keeps rhenko.sqlite in (same value the server got; default ./data). Used for exactly
-//                    one step: moving a scheduled post to 30 seconds from now (see e2e/posts.mjs).
+//   DATABASE_URL     the Postgres database the server uses. A few checks read and change rows in it directly, for example to
+//                    move a scheduled post to 30 seconds from now (see e2e/posts.mjs). Those checks fail without it.
+//   RHENKO_DATA_DIR  folder the server keeps uploads in when RHENKO_STORAGE=local (same value the server got; default ./data).
 //   ONLY             run only some areas, for example ONLY=auth,posts
 //   E2E_TIMEOUT_MS   how long one wait for something on a page may take (default 20000; raise it for a server that
 //                    compiles pages as it goes)
@@ -146,7 +147,7 @@ function describeSetup() {
   console.log(`  browser:       ${CHROMIUM_PATH || "the one Playwright installed"}`)
   console.log(`  wait limit:    ${TIMEOUT} ms per wait`)
   console.log(`  mail log:      ${MAIL_LOG || "not set (the email checks will fail and say so)"}`)
-  console.log(`  database dir:  ${DATA_DIR} (used for the scheduled post only)`)
+  console.log(`  uploads dir:   ${DATA_DIR} (used only when RHENKO_STORAGE=local)`)
   console.log(`  areas:         ${ONLY.length > 0 ? ONLY.join(", ") : AREAS.map(([name]) => name).join(", ")}`)
 }
 

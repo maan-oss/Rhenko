@@ -42,16 +42,16 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
   const tab = firstParam(params.tab)
   // A pinned list is a tab of its own. Only a list the viewer has pinned opens here, whatever the address says.
-  const pins = pinnedTimelines(viewer.id)
+  const pins = await pinnedTimelines(viewer.id)
   const pin = pins.find((item) => item.id === tab) ?? null
   const mode = tab === "following" ? "following" : "for-you"
   // For you can be narrowed to a topic the viewer follows and has not snoozed. Anything else in the address is ignored.
-  const snoozed = snoozedTopics(viewer.id, await clock())
-  const chips = followedTopics(viewer.id).filter((tag) => !snoozed.has(tag)).slice(0, TOPIC_CHIPS)
+  const snoozed = await snoozedTopics(viewer.id, await clock())
+  const chips = (await followedTopics(viewer.id)).filter((tag) => !snoozed.has(tag)).slice(0, TOPIC_CHIPS)
   const asked = firstParam(params.topic)
   const topic = mode === "for-you" && !pin && asked && chips.includes(normalizeTag(asked)) ? normalizeTag(asked) : undefined
   const spec: FeedSpec = pin ? { kind: "list", listId: pin.id } : { kind: "home", mode, topic }
-  const page = feedFor(spec, viewer.id)
+  const page = await feedFor(spec, viewer.id)
   const following = !pin && mode === "following"
   const empty = page.items.length === 0 && !page.next
   const active = pin ? pin.id : topic ? `topic:${topic}` : mode
@@ -72,7 +72,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         viewer={viewer}
         placeholder="What's happening?"
         id="compose"
-        circles={circlesFor(viewer.id).map((circle) => ({ id: circle.id, name: circle.name }))}
+        circles={(await circlesFor(viewer.id)).map((circle) => ({ id: circle.id, name: circle.name }))}
       />
       {mode === "for-you" && !pin && chips.length > 0 ? <TopicChips topics={chips} active={topic ?? null} /> : null}
       <FeedList
@@ -108,7 +108,7 @@ async function clock(): Promise<number> {
 
 // An empty For you feed: a few people to start with, then write the first post or go and find people.
 async function ForYouEmpty({ viewerId }: { viewerId: string }) {
-  const people = topPeople(suggestionsFor(viewerId, await clock(), 4), 4)
+  const people = topPeople(await suggestionsFor(viewerId, await clock(), 4), 4)
   return (
     <>
       {people.length > 0 ? (
@@ -139,8 +139,8 @@ async function ForYouEmpty({ viewerId }: { viewerId: string }) {
 }
 
 // An empty Following feed: a few people worth following right here, because the suggestions rail is not on every screen.
-function FollowingEmpty({ viewerId }: { viewerId: string }) {
-  const people = whoToFollow(viewerId, 5)
+async function FollowingEmpty({ viewerId }: { viewerId: string }) {
+  const people = await whoToFollow(viewerId, 5)
   return (
     <>
       {people.length > 0 ? (

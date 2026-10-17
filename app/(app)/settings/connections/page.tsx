@@ -15,7 +15,7 @@ export default function ConnectionsSettingsPage() {
 
 async function ConnectionsBody() {
   const viewer = await requireViewer()
-  const settings = settingsFor(viewer.id)
+  const settings = await settingsFor(viewer.id)
   return (
     <>
       <PageHeader title="Connections and languages" backHref="/settings" />
@@ -32,7 +32,7 @@ async function ConnectionsBody() {
           where: { country: settings.country, area: settings.area, region: settings.region, suggestNearby: settings.suggestNearby },
           languages: { speak: settings.speak, learn: settings.learn, suggestLanguage: settings.suggestLanguage },
         }}
-        dismissed={dismissedCount(viewer.id)}
+        dismissed={await dismissedCount(viewer.id)}
       />
       <div className="px-4 pt-2 pb-10">
         <Link href="/welcome" className="text-sm font-semibold underline underline-offset-4">

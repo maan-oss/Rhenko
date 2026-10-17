@@ -17,9 +17,9 @@ export function textHash(body: string): string | null {
   return normalized ? createHash("sha256").update(normalized).digest("hex").slice(0, 32) : null
 }
 
-export function factsFor(postId: string, authorId: string, hash: string | null, now = Date.now()): AbuseFacts {
-  const account = get<{ created_at: number }>("SELECT created_at FROM users WHERE id = ?", authorId)
-  const recent = get<{ n: number }>(
+export async function factsFor(postId: string, authorId: string, hash: string | null, now = Date.now()): Promise<AbuseFacts> {
+  const account = await get<{ created_at: number }>("SELECT created_at FROM users WHERE id = ?", authorId)
+  const recent = await get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM posts
      WHERE author_id = ? AND id <> ? AND is_draft = 0 AND publish_at IS NULL AND created_at >= ?`,
     authorId,
@@ -27,7 +27,7 @@ export function factsFor(postId: string, authorId: string, hash: string | null, 
     now - 10 * MINUTE
   )
   const same = hash
-    ? get<{ n: number }>(
+    ? await get<{ n: number }>(
         `SELECT COUNT(*) AS n FROM posts
          WHERE author_id = ? AND id <> ? AND text_hash = ? AND is_draft = 0 AND publish_at IS NULL AND created_at >= ?`,
         authorId,
@@ -37,7 +37,7 @@ export function factsFor(postId: string, authorId: string, hash: string | null, 
       )
     : undefined
   const others = hash
-    ? get<{ n: number }>(
+    ? await get<{ n: number }>(
         `SELECT COUNT(DISTINCT author_id) AS n FROM posts
          WHERE text_hash = ? AND author_id <> ? AND id <> ? AND is_draft = 0 AND publish_at IS NULL AND created_at >= ?`,
         hash,
@@ -47,12 +47,12 @@ export function factsFor(postId: string, authorId: string, hash: string | null, 
       )
     : undefined
   // A notice the author got for spam that was later reversed does not count against them.
-  const notices = get<{ n: number }>(
+  const notices = await get<{ n: number }>(
     "SELECT COUNT(*) AS n FROM moderation_notices WHERE user_id = ? AND category = 'spam' AND restored_at IS NULL",
     authorId
   )
   // Reports from accounts less than a week old do not count. A crowd of new accounts is how a post gets reported away.
-  const reports = get<{ n: number }>(
+  const reports = await get<{ n: number }>(
     `SELECT COUNT(DISTINCT r.reporter_id) AS n FROM reports r
      JOIN users u ON u.id = r.reporter_id
      WHERE r.created_at >= ? AND u.created_at <= ? AND (r.user_id = ? OR r.post_id IN (SELECT id FROM posts WHERE author_id = ?))`,

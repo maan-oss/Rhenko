@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const handle = new URL(request.url).searchParams.get("handle") ?? ""
   if (!HANDLE_PATTERN.test(handle)) return Response.json({ error: "No such account." }, { status: 404 })
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   if (!profile || (profile.deactivated && profile.id !== viewer.id) || profile.relationship.blockedMe) {
     return Response.json({ error: "No such account." }, { status: 404 })
   }

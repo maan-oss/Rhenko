@@ -16,9 +16,9 @@ export async function reportAd(campaignId: string, reason: string, note: string)
   const viewer = await requireAgreedViewer()
   if (typeof campaignId !== "string" || !/^[0-9a-f-]{36}$/.test(campaignId)) return { ok: false, error: "That ad is not available." }
   if (!(REPORT_REASONS as readonly string[]).includes(reason)) return { ok: false, error: "Choose a reason for the report." }
-  const campaign = get("SELECT c.id FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ? AND c.status IN ('active', 'paused', 'ended')", campaignId)
+  const campaign = await get("SELECT c.id FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ? AND c.status IN ('active', 'paused', 'ended')", campaignId)
   if (!campaign) return { ok: false, error: "That ad is not available." }
-  run(
+  await run(
     "INSERT INTO ad_reports (id, campaign_id, reporter_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(campaign_id, reporter_id) DO UPDATE SET reason = excluded.reason, note = excluded.note, created_at = excluded.created_at",
     newId(),
     campaignId,
@@ -43,7 +43,7 @@ function text(value: FormDataEntryValue | null, max: number): string {
 // Sets up the advertiser's account. Accepting the advertising policy is recorded with the time it was accepted.
 export async function createAdAccount(_previous: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireAgreedViewer()
-  if (get("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)) return { error: "You already have an advertising account." }
+  if (await get("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)) return { error: "You already have an advertising account." }
   const business = text(formData.get("business_name"), 80)
   const country = text(formData.get("country"), 2).toUpperCase()
   const contact = text(formData.get("contact_email"), 254)
@@ -52,7 +52,7 @@ export async function createAdAccount(_previous: FormState, formData: FormData):
   if (!EMAIL.test(contact)) return { error: "Enter a contact email address." }
   if (formData.get("accept_policy") !== "on") return { error: "Read and accept the advertising policy to continue." }
   const now = Date.now()
-  run(
+  await run(
     `INSERT INTO ad_accounts (id, user_id, business_name, country, contact_email, currency, balance_micro, status, policy_accepted_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, 0, 'active', ?, ?)`,
     newId(),
@@ -71,9 +71,9 @@ export async function createAdAccount(_previous: FormState, formData: FormData):
 // Sends a campaign to review. It does not run until a person approves it (scripts/ads.mjs), so nothing is shown unreviewed.
 export async function createCampaign(_previous: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireAgreedViewer()
-  const account = get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
+  const account = await get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
   if (!account) return { error: "Set up an advertising account first." }
-  const waiting = get<{ n: number }>("SELECT COUNT(*) AS n FROM ad_campaigns WHERE account_id = ? AND status = 'in_review'", account.id)
+  const waiting = await get<{ n: number }>("SELECT COUNT(*) AS n FROM ad_campaigns WHERE account_id = ? AND status = 'in_review'", account.id)
   if ((waiting?.n ?? 0) >= AD_CAMPAIGNS_WAITING_MAX) {
     return { error: `You can have ${AD_CAMPAIGNS_WAITING_MAX} campaigns waiting for review. Wait for one to be reviewed.` }
   }
@@ -91,7 +91,7 @@ export async function createCampaign(_previous: FormState, formData: FormData): 
   }
   const problem = campaignProblem(fields)
   if (problem) return { error: problem }
-  run(
+  await run(
     `INSERT INTO ad_campaigns (id, account_id, headline, body, cta, link_url, picture_file, topic, budget_micro, spent_micro, impressions, clicks, status, review_note, reviewed_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 0, 0, 0, 'in_review', NULL, NULL, ?)`,
     newId(),
@@ -111,14 +111,14 @@ export async function createCampaign(_previous: FormState, formData: FormData): 
 // Pauses a running campaign, or starts a paused one again. Ended, rejected and waiting campaigns cannot be changed here.
 export async function setCampaignPaused(campaignId: string, paused: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
   const viewer = await requireAgreedViewer()
-  const row = get<{ status: string }>(
+  const row = await get<{ status: string }>(
     "SELECT c.status FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ? AND a.user_id = ?",
     campaignId,
     viewer.id
   )
   if (!row) return { ok: false, error: "That campaign does not exist." }
-  if (paused && row.status === "active") run("UPDATE ad_campaigns SET status = 'paused' WHERE id = ?", campaignId)
-  else if (!paused && row.status === "paused") run("UPDATE ad_campaigns SET status = 'active' WHERE id = ?", campaignId)
+  if (paused && row.status === "active") await run("UPDATE ad_campaigns SET status = 'paused' WHERE id = ?", campaignId)
+  else if (!paused && row.status === "paused") await run("UPDATE ad_campaigns SET status = 'active' WHERE id = ?", campaignId)
   else return { ok: false, error: "This campaign cannot be changed right now." }
   revalidatePath("/advertise")
   return { ok: true }
@@ -128,7 +128,7 @@ export async function setCampaignPaused(campaignId: string, paused: boolean): Pr
 export async function startAdCredit(amount: number): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const viewer = await requireAgreedViewer()
   if (!paymentsConfigured()) return { ok: false, error: "Payments are not set up on this server yet." }
-  const account = get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
+  const account = await get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
   if (!account) return { ok: false, error: "Set up an advertising account first." }
   try {
     return { ok: true, url: await adCreditUrl(viewer, account.id, amount) }

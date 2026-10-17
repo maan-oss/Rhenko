@@ -154,7 +154,7 @@ async function agreementScreen() {
   const user = await createUser({ tag: "terms" })
   try {
     await check("an account that has not agreed to the current terms is sent to the agreement screen", async () => {
-      await execute("UPDATE users SET terms_version = NULL WHERE handle = ? COLLATE NOCASE", user.handle)
+      await execute("UPDATE users SET terms_version = NULL WHERE handle = ?", user.handle)
       await user.page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
       await user.page.waitForURL((url) => new URL(url).pathname === "/accept-terms", { timeout: TIMEOUT })
       await user.page.getByRole("heading", { name: "Updated terms" }).waitFor()
@@ -169,7 +169,7 @@ async function agreementScreen() {
       await user.page.waitForURL((url) => new URL(url).pathname === "/", { timeout: TIMEOUT })
     })
     await check("the agreement is recorded with the version in force", async () => {
-      const rows = await query("SELECT terms_version, terms_accepted_at FROM users WHERE handle = ? COLLATE NOCASE", user.handle)
+      const rows = await query("SELECT terms_version, terms_accepted_at FROM users WHERE handle = ?", user.handle)
       assert.equal(rows[0]?.terms_version, TERMS_VERSION, "the version was not recorded")
       assert.ok(rows[0]?.terms_accepted_at, "the time of agreement was not recorded")
     })

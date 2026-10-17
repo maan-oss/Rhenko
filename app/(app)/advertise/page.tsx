@@ -24,14 +24,14 @@ export default function AdvertisePage({ searchParams }: { searchParams: SearchPa
 async function AdvertiseBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const params = await searchParams
-  const birthday = get<{ birthday: string | null }>("SELECT birthday FROM users WHERE id = ?", viewer.id)?.birthday ?? null
+  const birthday = (await get<{ birthday: string | null }>("SELECT birthday FROM users WHERE id = ?", viewer.id))?.birthday ?? null
   const age = birthday ? ageFrom(birthday) : null
-  const account = get<{ id: string; business_name: string; country: string; contact_email: string; balance_micro: number }>(
+  const account = await get<{ id: string; business_name: string; country: string; contact_email: string; balance_micro: number }>(
     "SELECT id, business_name, country, contact_email, balance_micro FROM ad_accounts WHERE user_id = ?",
     viewer.id
   )
   const campaigns = account
-    ? all<{
+    ? await all<{
         id: string
         headline: string
         status: CampaignRow["status"]

@@ -8,10 +8,10 @@ import { sahayakOn } from "@/lib/sarvam"
 
 export const SAHAYAK_ID = "sahayak-bot"
 
-export function queueQuestion(postId: string, askerId: string, now = Date.now()): void {
+export async function queueQuestion(postId: string, askerId: string, now = Date.now()): Promise<void> {
   if (!sahayakOn()) return
-  run(
-    "INSERT OR IGNORE INTO sahayak_jobs (post_id, asker_id, status, attempts, run_after, created_at) VALUES (?, ?, 'queued', 0, ?, ?)",
+  await run(
+    "INSERT INTO sahayak_jobs (post_id, asker_id, status, attempts, run_after, created_at) VALUES (?, ?, 'queued', 0, ?, ?) ON CONFLICT DO NOTHING",
     postId,
     askerId,
     now,
@@ -20,6 +20,6 @@ export function queueQuestion(postId: string, askerId: string, now = Date.now())
   // Answering starts now rather than at the next maintenance tick. The import is dynamic so this module stays free of the
   // answering code, which depends on the post writes that call this.
   void import("@/lib/sahayak")
-    .then((worker) => worker.answerQuestions())
+    .then(async (worker) => await worker.answerQuestions())
     .catch((error) => console.error("[sahayak] answering failed", error))
 }

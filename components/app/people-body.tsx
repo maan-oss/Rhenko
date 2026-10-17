@@ -17,13 +17,13 @@ type Kind = "followers" | "following"
 // Followers or following for one account, with the same visibility rules as the profile.
 export async function PeopleBody({ handle, kind }: { handle: string; kind: Kind }) {
   const viewer = await requireViewer()
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   const isSelf = profile?.id === viewer.id
   if (!profile || (profile.deactivated && !isSelf) || profile.relationship.blockedMe) notFound()
 
   const base = `/${profile.handle}`
   const hidden = profile.protected && !isSelf && !profile.relationship.following
-  const page = hidden ? null : peopleOfPage(kind, profile.id, viewer.id, null, PEOPLE_PAGE)
+  const page = hidden ? null : await peopleOfPage(kind, profile.id, viewer.id, null, PEOPLE_PAGE)
   return (
     <>
       <PageHeader title={profile.name} backHref={base} />
@@ -50,7 +50,7 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: Kind 
           kind={kind}
           viewerId={viewer.id}
           removable={isSelf && kind === "followers"}
-          initialUsers={withRequested(viewer.id, page.users)}
+          initialUsers={await withRequested(viewer.id, page.users)}
           initialNext={page.next}
           empty={<NoPeople handle={profile.handle} kind={kind} isSelf={isSelf} />}
         />

@@ -65,7 +65,7 @@ function isId(value: unknown): value is string {
 export async function createPost(formData: FormData): Promise<CreateResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to post." }
-  const allowed = consume(`post:${viewer.id}`, POST_LIMIT, POST_WINDOW_MS)
+  const allowed = await consume(`post:${viewer.id}`, POST_LIMIT, POST_WINDOW_MS)
   if (!allowed.ok) return { ok: false, error: `You've posted a lot in the last minute. Try again in ${waitLabel(allowed.retryAfterSeconds)}.` }
   // A post that goes out, or a reply, passes the account check. A draft is seen only by its author, so it does not.
   if (formData.get("draft") !== "on") {
@@ -132,20 +132,20 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   let replyCircle: string | null = null
   if (replyTo !== null) {
     if (draft || scheduleAt !== null) return { ok: false, error: "Replies go out right away, so they can't be saved as drafts or scheduled." }
-    const permission = isId(replyTo) ? replyPermission(viewer.id, replyTo) : { ok: false as const, error: POST_UNAVAILABLE }
+    const permission = isId(replyTo) ? await replyPermission(viewer.id, replyTo) : { ok: false as const, error: POST_UNAVAILABLE }
     if (!permission.ok) return { ok: false, error: permission.error }
     // A reply takes the reply setting of the post it answers.
     replySetting = permission.setting
-    replyCircle = get<{ community_id: string | null }>("SELECT community_id FROM posts WHERE id = ?", replyTo)?.community_id ?? null
+    replyCircle = (await get<{ community_id: string | null }>("SELECT community_id FROM posts WHERE id = ?", replyTo))?.community_id ?? null
   }
-  if (quoteOf !== null && (!isId(quoteOf) || !canSeeLivePost(quoteOf, viewer.id))) return { ok: false, error: POST_UNAVAILABLE }
+  if (quoteOf !== null && (!isId(quoteOf) || !await canSeeLivePost(quoteOf, viewer.id))) return { ok: false, error: POST_UNAVAILABLE }
 
   // A post goes in a circle its author belongs to. A reply stays in the circle of the post it answers, so a conversation
   // in a closed circle stays with its members.
   let community: string | null = null
   if (replyTo !== null) community = replyCircle
   else if (circleId !== null) {
-    if (!isId(circleId) || memberRole(circleId, viewer.id) === null) {
+    if (!isId(circleId) || await memberRole(circleId, viewer.id) === null) {
       return { ok: false, error: "You can only post in circles you belong to." }
     }
     community = circleId
@@ -155,13 +155,13 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   let threadId: string | null = null
   if (threadOf !== null) {
     const first = isId(threadOf)
-      ? get<{ author_id: string; reply_to_id: string | null; thread_id: string | null }>(
+      ? await get<{ author_id: string; reply_to_id: string | null; thread_id: string | null }>(
           "SELECT author_id, reply_to_id, thread_id FROM posts WHERE id = ? AND is_draft = 0 AND publish_at IS NULL AND removed_at IS NULL",
           threadOf
         )
       : undefined
     const before = replyTo !== null && isId(replyTo)
-      ? get<{ author_id: string; thread_id: string | null }>("SELECT author_id, thread_id FROM posts WHERE id = ?", replyTo)
+      ? await get<{ author_id: string; thread_id: string | null }>("SELECT author_id, thread_id FROM posts WHERE id = ?", replyTo)
       : undefined
     const inThread = before !== undefined && (replyTo === threadOf || before.thread_id === threadOf)
     if (!first || first.author_id !== viewer.id || first.reply_to_id !== null || first.thread_id !== null || !inThread || before?.author_id !== viewer.id) {
@@ -171,7 +171,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   }
 
   for (let i = 0; i < picked.length; i++) {
-    const room = consume(`upload:${viewer.id}`, UPLOAD_LIMIT, UPLOAD_WINDOW_MS)
+    const room = await consume(`upload:${viewer.id}`, UPLOAD_LIMIT, UPLOAD_WINDOW_MS)
     if (!room.ok) {
       return { ok: false, error: `You've added a lot of photos and videos in the last hour. Try again in ${waitLabel(room.retryAfterSeconds)}.` }
     }
@@ -179,20 +179,20 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
 
   // From here on, every way out without a post removes the files saved for it.
   const saved: { file: string; kind: MediaKind; alt: string; stickers: string | null }[] = []
-  const discard = () => removeFiles(saved.map((s) => s.file))
+  const discard = async () => await removeFiles(saved.map((s) => s.file))
   try {
     for (const item of picked) {
       const upload = await saveUpload(item.file)
       if (!upload) continue
       if (!upload.ok) {
-        discard()
+        await discard()
         return { ok: false, error: upload.error }
       }
       const stickers = upload.kind === "image" && item.stickers ? stickerSetJson(item.stickers) : null
       saved.push({ file: upload.name, kind: upload.kind, alt: item.alt, stickers })
     }
   } catch (error) {
-    discard()
+    await discard()
     console.error("[posts] saving media failed", error)
     return { ok: false, error: "Your photos or video couldn't be saved. Try again." }
   }
@@ -202,8 +202,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const status = draft ? "draft" : scheduleAt !== null ? "scheduled" : "published"
   const publishAt = status === "scheduled" ? scheduleAt : null
   try {
-    transaction(() => {
-      run(
+    await transaction(async () => {
+      await run(
         `INSERT INTO posts (id, author_id, body, reply_to_id, quote_of_id, media_file, created_at, reply_setting, sensitive, publish_at, is_draft, thread_id, lang, community_id, title, made_with_ai)
          VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
@@ -222,8 +222,8 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
         title,
         madeWithAi ? 1 : 0
       )
-      saved.forEach((media, position) => {
-        run(
+      for (const [position, media] of saved.entries()) {
+        await run(
           "INSERT INTO post_media (id, post_id, file, kind, alt, position, stickers) VALUES (?, ?, ?, ?, ?, ?, ?)",
           newId(),
           id,
@@ -233,23 +233,23 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
           position,
           media.stickers
         )
-      })
+      }
       if (wantsPoll) {
         // The length is kept, so a draft's poll can start its clock when the draft is published.
         const durationMs = pollMinutes * 60 * 1000
-        run("INSERT INTO polls (post_id, ends_at, duration_ms) VALUES (?, ?, ?)", id, (publishAt ?? now) + durationMs, durationMs)
-        pollOptions.forEach((label, position) => {
-          run("INSERT INTO poll_options (id, post_id, position, label) VALUES (?, ?, ?, ?)", newId(), id, position, label)
-        })
+        await run("INSERT INTO polls (post_id, ends_at, duration_ms) VALUES (?, ?, ?)", id, (publishAt ?? now) + durationMs, durationMs)
+        for (const [position, label] of pollOptions.entries()) {
+          await run("INSERT INTO poll_options (id, post_id, position, label) VALUES (?, ?, ?, ?)", newId(), id, position, label)
+        }
       }
     })
   } catch (error) {
-    discard()
+    await discard()
     console.error("[posts] saving the post failed", error)
     return { ok: false, error: "Your post couldn't be saved. Try again." }
   }
 
-  if (status === "published") goLive(id)
+  if (status === "published") await goLive(id)
   refresh()
   return { ok: true, id, status }
 }
@@ -259,7 +259,7 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to edit posts." }
   if (!isId(postId)) return { ok: false, error: "That post was deleted." }
-  const post = get<{
+  const post = await get<{
     author_id: string
     created_at: number
     is_draft: number
@@ -290,18 +290,18 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
     const titleError = validateTitle(title)
     if (titleError) return { ok: false, error: titleError }
   }
-  const media = all<{ id: string }>("SELECT id FROM post_media WHERE post_id = ?", postId)
-  const hasPoll = get("SELECT 1 AS found FROM polls WHERE post_id = ?", postId) !== undefined
+  const media = await all<{ id: string }>("SELECT id FROM post_media WHERE post_id = ?", postId)
+  const hasPoll = await get("SELECT 1 AS found FROM polls WHERE post_id = ?", postId) !== undefined
   const validation = validatePost(body, media.length, hasPoll, article)
   if (validation) return { ok: false, error: validation }
 
-  transaction(() => {
+  await transaction(async () => {
     // Only a changed text counts as an edit: it is marked as edited and the text being replaced is kept, dated to
     // when it was written, for the edit history. Changing only the alt text leaves the post as it was.
     const changed = body !== post.body
     const retitled = article && title !== post.title
     if (changed) {
-      run(
+      await run(
         "INSERT INTO post_edits (id, post_id, body, created_at) VALUES (?, ?, ?, ?)",
         newId(),
         postId,
@@ -309,42 +309,42 @@ export async function editPost(postId: string, formData: FormData): Promise<Void
         post.edited_at ?? post.created_at
       )
     }
-    if (retitled) run("UPDATE posts SET title = ? WHERE id = ?", title, postId)
-    run("UPDATE posts SET body = ?, edited_at = ? WHERE id = ?", body, changed || retitled ? Date.now() : post.edited_at, postId)
+    if (retitled) await run("UPDATE posts SET title = ? WHERE id = ?", title, postId)
+    await run("UPDATE posts SET body = ?, edited_at = ? WHERE id = ?", body, changed || retitled ? Date.now() : post.edited_at, postId)
     if (changed) {
       // The language is found again for the new text, and a translation of the old text no longer applies.
-      run("UPDATE posts SET lang = ? WHERE id = ?", languageOf(body), postId)
-      run("DELETE FROM post_translations WHERE post_id = ?", postId)
+      await run("UPDATE posts SET lang = ? WHERE id = ?", languageOf(body), postId)
+      await run("DELETE FROM post_translations WHERE post_id = ?", postId)
     }
     for (const item of media) {
       const raw = formData.get(`alt-${item.id}`)
       if (typeof raw === "string") {
-        run("UPDATE post_media SET alt = ? WHERE id = ?", raw.trim().slice(0, MAX_ALT), item.id)
+        await run("UPDATE post_media SET alt = ? WHERE id = ?", raw.trim().slice(0, MAX_ALT), item.id)
       }
     }
   })
   // The new text is checked again, so an edit cannot turn a cleared post into spam. The check keeps its own transaction,
   // so it runs once the save above is done.
-  if (body !== post.body || (article && title !== post.title)) screenPost(postId)
+  if (body !== post.body || (article && title !== post.title)) await screenPost(postId)
   refresh()
   return { ok: true }
 }
 
-function postAuthor(postId: string): string | null {
-  return get<{ author_id: string }>("SELECT author_id FROM posts WHERE id = ?", postId)?.author_id ?? null
+async function postAuthor(postId: string): Promise<string | null> {
+  return (await get<{ author_id: string }>("SELECT author_id FROM posts WHERE id = ?", postId))?.author_id ?? null
 }
 
 export async function deletePost(postId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to delete posts." }
-  const author = isId(postId) ? postAuthor(postId) : null
+  const author = isId(postId) ? await postAuthor(postId) : null
   if (!author) return { ok: false, error: "That post was deleted." }
   if (author !== viewer.id) return { ok: false, error: "You can only delete your own posts." }
 
   // Replies go with their parent, so their media is removed too.
-  const files = mediaFilesFor(thread(postId))
-  run("DELETE FROM posts WHERE id = ? AND author_id = ?", postId, viewer.id)
-  removeFiles(files)
+  const files = await mediaFilesFor(await thread(postId))
+  await run("DELETE FROM posts WHERE id = ? AND author_id = ?", postId, viewer.id)
+  await removeFiles(files)
   refresh()
   return { ok: true }
 }
@@ -353,12 +353,12 @@ export async function deletePost(postId: string): Promise<VoidResult> {
 export async function undoPost(postId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const post = isId(postId) ? get<{ author_id: string; created_at: number }>("SELECT author_id, created_at FROM posts WHERE id = ?", postId) : undefined
+  const post = isId(postId) ? await get<{ author_id: string; created_at: number }>("SELECT author_id, created_at FROM posts WHERE id = ?", postId) : undefined
   if (!post || post.author_id !== viewer.id) return { ok: false, error: "That post was deleted." }
   if (Date.now() - post.created_at > UNDO_WINDOW_MS) return { ok: false, error: "The undo window has closed." }
-  const files = mediaFilesFor(thread(postId))
-  run("DELETE FROM posts WHERE id = ? AND author_id = ?", postId, viewer.id)
-  removeFiles(files)
+  const files = await mediaFilesFor(await thread(postId))
+  await run("DELETE FROM posts WHERE id = ? AND author_id = ?", postId, viewer.id)
+  await removeFiles(files)
   refresh()
   return { ok: true }
 }
@@ -368,11 +368,11 @@ export async function undoPost(postId: string): Promise<VoidResult> {
 export async function setReplyHidden(replyId: string, hidden: boolean): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const reply = isId(replyId) ? get<{ reply_to_id: string | null }>("SELECT reply_to_id FROM posts WHERE id = ?", replyId) : undefined
+  const reply = isId(replyId) ? await get<{ reply_to_id: string | null }>("SELECT reply_to_id FROM posts WHERE id = ?", replyId) : undefined
   if (!reply?.reply_to_id) return { ok: false, error: "That reply was deleted." }
-  const parentAuthor = postAuthor(reply.reply_to_id)
+  const parentAuthor = await postAuthor(reply.reply_to_id)
   if (parentAuthor !== viewer.id) return { ok: false, error: "Only the author of the post can hide its replies." }
-  run("UPDATE posts SET hidden_by_parent = ? WHERE id = ?", hidden === true ? 1 : 0, replyId)
+  await run("UPDATE posts SET hidden_by_parent = ? WHERE id = ?", hidden === true ? 1 : 0, replyId)
   refresh()
   return { ok: true }
 }
@@ -383,8 +383,8 @@ export type EditHistoryResult = { ok: true; versions: EditVersion[] } | { ok: fa
 export async function getEditHistory(postId: string): Promise<EditHistoryResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to see edit history." }
-  if (!isId(postId) || !canSeePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
-  const versions = editHistoryFor(postId, viewer.id)
+  if (!isId(postId) || !await canSeePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  const versions = await editHistoryFor(postId, viewer.id)
   if (versions.length === 0) return { ok: false, error: POST_UNAVAILABLE }
   return { ok: true, versions }
 }
@@ -393,7 +393,7 @@ export async function publishNow(postId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to publish." }
   const post = isId(postId)
-    ? get<{ author_id: string; body: string; reply_to_id: string | null; quote_of_id: string | null; is_draft: number; publish_at: number | null }>(
+    ? await get<{ author_id: string; body: string; reply_to_id: string | null; quote_of_id: string | null; is_draft: number; publish_at: number | null }>(
         "SELECT author_id, body, reply_to_id, quote_of_id, is_draft, publish_at FROM posts WHERE id = ?",
         postId
       )
@@ -402,11 +402,11 @@ export async function publishNow(postId: string): Promise<VoidResult> {
   if (post.is_draft === 0 && post.publish_at === null) return { ok: false, error: "That post is already live." }
   const now = Date.now()
   // A poll runs its full length from the moment the post goes live.
-  transaction(() => {
-    run("UPDATE posts SET is_draft = 0, publish_at = NULL, created_at = ? WHERE id = ?", now, postId)
-    startPollClock(postId, now)
+  await transaction(async () => {
+    await run("UPDATE posts SET is_draft = 0, publish_at = NULL, created_at = ? WHERE id = ?", now, postId)
+    await startPollClock(postId, now)
   })
-  goLive(postId, now)
+  await goLive(postId, now)
   refresh()
   return { ok: true }
 }
@@ -414,56 +414,56 @@ export async function publishNow(postId: string): Promise<VoidResult> {
 export async function toggleLike(postId: string): Promise<ToggleResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to like posts." }
-  if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
-  const author = postAuthor(postId)
+  if (!isId(postId) || !await canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  const author = await postAuthor(postId)
   if (!author) return { ok: false, error: POST_UNAVAILABLE }
 
-  const existing = get("SELECT 1 AS found FROM likes WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+  const existing = await get("SELECT 1 AS found FROM likes WHERE user_id = ? AND post_id = ?", viewer.id, postId)
   if (existing) {
-    run("DELETE FROM likes WHERE user_id = ? AND post_id = ?", viewer.id, postId)
-    run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'like'", viewer.id, postId)
+    await run("DELETE FROM likes WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+    await run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'like'", viewer.id, postId)
     return { ok: true, active: false }
   }
-  const likes = consume(`like:${viewer.id}`, isNewAccount(viewer.id) ? 60 : 240, HOUR_MS)
+  const likes = await consume(`like:${viewer.id}`, await isNewAccount(viewer.id) ? 60 : 240, HOUR_MS)
   if (!likes.ok) return { ok: false, error: `You're liking posts too fast. Try again in ${waitLabel(likes.retryAfterSeconds)}.` }
-  run("INSERT OR IGNORE INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
-  notify(author, viewer.id, "like", postId)
+  await run("INSERT INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
+  await notify(author, viewer.id, "like", postId)
   return { ok: true, active: true }
 }
 
 export async function toggleRepost(postId: string): Promise<ToggleResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to repost." }
-  if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
-  const author = postAuthor(postId)
+  if (!isId(postId) || !await canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  const author = await postAuthor(postId)
   if (!author) return { ok: false, error: POST_UNAVAILABLE }
 
-  const existing = get("SELECT 1 AS found FROM reposts WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+  const existing = await get("SELECT 1 AS found FROM reposts WHERE user_id = ? AND post_id = ?", viewer.id, postId)
   if (existing) {
-    run("DELETE FROM reposts WHERE user_id = ? AND post_id = ?", viewer.id, postId)
-    run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'repost'", viewer.id, postId)
+    await run("DELETE FROM reposts WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+    await run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'repost'", viewer.id, postId)
     return { ok: true, active: false }
   }
-  const reposts = consume(`repost:${viewer.id}`, isNewAccount(viewer.id) ? 30 : 120, HOUR_MS)
+  const reposts = await consume(`repost:${viewer.id}`, await isNewAccount(viewer.id) ? 30 : 120, HOUR_MS)
   if (!reposts.ok) return { ok: false, error: `You're reposting too fast. Try again in ${waitLabel(reposts.retryAfterSeconds)}.` }
-  run("INSERT OR IGNORE INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
-  notify(author, viewer.id, "repost", postId)
+  await run("INSERT INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
+  await notify(author, viewer.id, "repost", postId)
   return { ok: true, active: true }
 }
 
 export async function toggleBookmark(postId: string): Promise<ToggleResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to bookmark posts." }
-  if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  if (!isId(postId) || !await canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
 
-  const existing = get("SELECT 1 AS found FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+  const existing = await get("SELECT 1 AS found FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
   if (existing) {
-    run("DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+    await run("DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
     return { ok: true, active: false }
   }
-  const marks = consume(`bookmark:${viewer.id}`, isNewAccount(viewer.id) ? 60 : 300, HOUR_MS)
+  const marks = await consume(`bookmark:${viewer.id}`, await isNewAccount(viewer.id) ? 60 : 300, HOUR_MS)
   if (!marks.ok) return { ok: false, error: `You're bookmarking posts too fast. Try again in ${waitLabel(marks.retryAfterSeconds)}.` }
-  run("INSERT OR IGNORE INTO bookmarks (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
+  await run("INSERT INTO bookmarks (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
   return { ok: true, active: true }
 }
 
@@ -472,12 +472,12 @@ export async function moveBookmark(postId: string, folderId: string | null): Pro
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!isId(postId)) return { ok: false, error: "Bookmark this post first." }
   if (folderId !== null) {
-    const owned = isId(folderId) && get("SELECT 1 AS found FROM bookmark_folders WHERE id = ? AND user_id = ?", folderId, viewer.id)
+    const owned = isId(folderId) && await get("SELECT 1 AS found FROM bookmark_folders WHERE id = ? AND user_id = ?", folderId, viewer.id)
     if (!owned) return { ok: false, error: "That folder doesn't exist." }
   }
-  const updated = get<{ c: number }>("SELECT COUNT(*) AS c FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+  const updated = await get<{ c: number }>("SELECT COUNT(*) AS c FROM bookmarks WHERE user_id = ? AND post_id = ?", viewer.id, postId)
   if (!updated || updated.c === 0) return { ok: false, error: "Bookmark this post first." }
-  run("UPDATE bookmarks SET folder_id = ? WHERE user_id = ? AND post_id = ?", folderId, viewer.id, postId)
+  await run("UPDATE bookmarks SET folder_id = ? WHERE user_id = ? AND post_id = ?", folderId, viewer.id, postId)
   refresh()
   return { ok: true }
 }
@@ -489,7 +489,7 @@ export async function createFolder(formData: FormData): Promise<IdResult> {
   if (!name) return { ok: false, error: "Name the folder." }
   if (name.length > MAX_FOLDER_NAME) return { ok: false, error: `Folder names can have up to ${MAX_FOLDER_NAME} characters.` }
   const id = newId()
-  run("INSERT INTO bookmark_folders (id, user_id, name, created_at) VALUES (?, ?, ?, ?)", id, viewer.id, name, Date.now())
+  await run("INSERT INTO bookmark_folders (id, user_id, name, created_at) VALUES (?, ?, ?, ?)", id, viewer.id, name, Date.now())
   refresh()
   return { ok: true, id }
 }
@@ -497,7 +497,7 @@ export async function createFolder(formData: FormData): Promise<IdResult> {
 export async function deleteFolder(folderId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (isId(folderId)) run("DELETE FROM bookmark_folders WHERE id = ? AND user_id = ?", folderId, viewer.id)
+  if (isId(folderId)) await run("DELETE FROM bookmark_folders WHERE id = ? AND user_id = ?", folderId, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -508,7 +508,7 @@ export async function pinPost(postId: string | null): Promise<VoidResult> {
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (postId !== null) {
     const post = isId(postId)
-      ? get<{ author_id: string; reply_to_id: string | null; is_draft: number; publish_at: number | null }>(
+      ? await get<{ author_id: string; reply_to_id: string | null; is_draft: number; publish_at: number | null }>(
           "SELECT author_id, reply_to_id, is_draft, publish_at FROM posts WHERE id = ?",
           postId
         )
@@ -517,7 +517,7 @@ export async function pinPost(postId: string | null): Promise<VoidResult> {
     if (post.is_draft === 1 || post.publish_at !== null) return { ok: false, error: "Publish this post before pinning it." }
     if (post.reply_to_id) return { ok: false, error: "Replies can't be pinned." }
   }
-  run("UPDATE users SET pinned_post_id = ? WHERE id = ?", postId, viewer.id)
+  await run("UPDATE users SET pinned_post_id = ? WHERE id = ?", postId, viewer.id)
   refresh()
   return { ok: true }
 }
@@ -525,18 +525,18 @@ export async function pinPost(postId: string | null): Promise<VoidResult> {
 export async function toggleHighlight(postId: string): Promise<ToggleResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  const author = isId(postId) ? postAuthor(postId) : null
+  const author = isId(postId) ? await postAuthor(postId) : null
   if (!author) return { ok: false, error: "That post was deleted." }
   if (author !== viewer.id) return { ok: false, error: "You can only highlight your own posts." }
-  const existing = get("SELECT 1 AS found FROM highlights WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+  const existing = await get("SELECT 1 AS found FROM highlights WHERE user_id = ? AND post_id = ?", viewer.id, postId)
   if (existing) {
-    run("DELETE FROM highlights WHERE user_id = ? AND post_id = ?", viewer.id, postId)
+    await run("DELETE FROM highlights WHERE user_id = ? AND post_id = ?", viewer.id, postId)
     refresh()
     return { ok: true, active: false }
   }
-  const count = get<{ c: number }>("SELECT COUNT(*) AS c FROM highlights WHERE user_id = ?", viewer.id)?.c ?? 0
+  const count = (await get<{ c: number }>("SELECT COUNT(*) AS c FROM highlights WHERE user_id = ?", viewer.id))?.c ?? 0
   if (count >= MAX_HIGHLIGHTS) return { ok: false, error: `You can highlight up to ${MAX_HIGHLIGHTS} posts.` }
-  run("INSERT INTO highlights (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
+  await run("INSERT INTO highlights (user_id, post_id, created_at) VALUES (?, ?, ?)", viewer.id, postId, Date.now())
   refresh()
   return { ok: true, active: true }
 }
@@ -544,15 +544,15 @@ export async function toggleHighlight(postId: string): Promise<ToggleResult> {
 export async function votePoll(postId: string, optionId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to vote." }
-  if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
-  const poll = get<{ ends_at: number }>("SELECT ends_at FROM polls WHERE post_id = ?", postId)
+  if (!isId(postId) || !await canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  const poll = await get<{ ends_at: number }>("SELECT ends_at FROM polls WHERE post_id = ?", postId)
   if (!poll) return { ok: false, error: "That poll was deleted." }
   if (poll.ends_at <= Date.now()) return { ok: false, error: "This poll has ended." }
-  const option = isId(optionId) && get("SELECT 1 AS found FROM poll_options WHERE id = ? AND post_id = ?", optionId, postId)
+  const option = isId(optionId) && await get("SELECT 1 AS found FROM poll_options WHERE id = ? AND post_id = ?", optionId, postId)
   if (!option) return { ok: false, error: "That choice doesn't exist." }
-  const voted = get("SELECT 1 AS found FROM poll_votes WHERE post_id = ? AND user_id = ?", postId, viewer.id)
+  const voted = await get("SELECT 1 AS found FROM poll_votes WHERE post_id = ? AND user_id = ?", postId, viewer.id)
   if (voted) return { ok: false, error: "You already voted in this poll." }
-  run("INSERT OR IGNORE INTO poll_votes (post_id, user_id, option_id, created_at) VALUES (?, ?, ?, ?)", postId, viewer.id, optionId, Date.now())
+  await run("INSERT INTO poll_votes (post_id, user_id, option_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING", postId, viewer.id, optionId, Date.now())
   refresh()
   return { ok: true }
 }
@@ -563,9 +563,9 @@ export async function recordViews(postIds: string[]): Promise<void> {
   if (!viewer || !Array.isArray(postIds)) return
   const ids = [...new Set(postIds.filter(isId))].slice(0, 50)
   const now = Date.now()
-  for (const id of visiblePostIds(ids, viewer.id, true)) {
-    run(
-      "INSERT OR IGNORE INTO post_views (post_id, viewer_id, created_at) SELECT id, ?, ? FROM posts WHERE id = ? AND author_id <> ?",
+  for (const id of await visiblePostIds(ids, viewer.id, true)) {
+    await run(
+      "INSERT INTO post_views (post_id, viewer_id, created_at) SELECT id, ?, ? FROM posts WHERE id = ? AND author_id <> ? ON CONFLICT DO NOTHING",
       viewer.id,
       now,
       id,
@@ -577,13 +577,13 @@ export async function recordViews(postIds: string[]): Promise<void> {
 export async function reportPost(postId: string, reason: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to report posts." }
-  if (!isId(postId) || !postAuthor(postId)) return { ok: false, error: "That post was deleted." }
+  if (!isId(postId) || !await postAuthor(postId)) return { ok: false, error: "That post was deleted." }
   if (!(REPORT_REASONS as readonly string[]).includes(reason)) return { ok: false, error: "Pick a reason." }
   // Reports are how posts get taken down, so each account can send only so many an hour.
-  const reportLimit = consume(`report:${viewer.id}`, isNewAccount(viewer.id) ? 5 : 20, HOUR_MS)
+  const reportLimit = await consume(`report:${viewer.id}`, await isNewAccount(viewer.id) ? 5 : 20, HOUR_MS)
   if (!reportLimit.ok) return { ok: false, error: `You've sent a lot of reports. Try again in ${waitLabel(reportLimit.retryAfterSeconds)}.` }
   const reportId = newId()
-  run(
+  await run(
     "INSERT INTO reports (id, reporter_id, post_id, user_id, reason, created_at) VALUES (?, ?, ?, NULL, ?, ?)",
     reportId,
     viewer.id,
@@ -593,7 +593,7 @@ export async function reportPost(postId: string, reason: string): Promise<VoidRe
   )
   // A picture of someone shared without their consent comes off the feeds at once, and a person reviews it after.
   if (reason === "Intimate image without consent") {
-    hidePost({
+    await hidePost({
       postId,
       category: "intimate_image",
       explanation: "Hidden while we review a report that it was shared without the consent of the person in it.",
@@ -609,7 +609,7 @@ export async function addMutedWord(word: string): Promise<VoidResult> {
   const clean = typeof word === "string" ? word.trim().replace(/^#/, "").toLowerCase() : ""
   if (!clean) return { ok: false, error: "Enter a word or phrase." }
   if (clean.length > MAX_MUTED_WORD) return { ok: false, error: `Muted words can have up to ${MAX_MUTED_WORD} characters.` }
-  run("INSERT OR IGNORE INTO muted_words (user_id, word, created_at) VALUES (?, ?, ?)", viewer.id, clean, Date.now())
+  await run("INSERT INTO muted_words (user_id, word, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, clean, Date.now())
   refresh()
   return { ok: true }
 }
@@ -617,7 +617,7 @@ export async function addMutedWord(word: string): Promise<VoidResult> {
 export async function removeMutedWord(word: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (typeof word === "string") run("DELETE FROM muted_words WHERE user_id = ? AND word = ?", viewer.id, word)
+  if (typeof word === "string") await run("DELETE FROM muted_words WHERE user_id = ? AND word = ?", viewer.id, word)
   refresh()
   return { ok: true }
 }

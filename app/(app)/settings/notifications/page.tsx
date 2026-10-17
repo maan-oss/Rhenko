@@ -18,7 +18,7 @@ export default function NotificationSettingsPage() {
 
 async function NotificationBody() {
   const viewer = await requireViewer()
-  const prefs = notificationPrefsFor(viewer.id)
+  const prefs = await notificationPrefsFor(viewer.id)
   const rows = NOTIFICATION_KINDS.map((kind) => ({
     kind,
     title: NOTIFICATION_LABELS[kind].title,
@@ -33,14 +33,14 @@ async function NotificationBody() {
       </div>
       <section className="flex flex-col gap-3 border-t border-border px-4 py-6">
         <h2 className="text-lg font-semibold">Mentions</h2>
-        <MentionFilterChoice initial={mentionsVerifiedOnly(viewer.id)} />
+        <MentionFilterChoice initial={await mentionsVerifiedOnly(viewer.id)} />
       </section>
       <section className="flex flex-col gap-3 border-t border-border px-4 py-6">
         <h2 className="text-lg font-semibold">Priority</h2>
         <p className="text-sm text-muted-foreground">
           Choose accounts you follow. Their likes, replies, posts, follows and mentions also show in the Priority tab of notifications.
         </p>
-        <PriorityAccounts initial={followedAccountsForPriority(viewer.id)} limit={MAX_PRIORITY_ACCOUNTS} />
+        <PriorityAccounts initial={await followedAccountsForPriority(viewer.id)} limit={MAX_PRIORITY_ACCOUNTS} />
       </section>
     </>
   )

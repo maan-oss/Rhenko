@@ -26,18 +26,18 @@ export function excerptOf(body: string): string {
 }
 
 // Hides a post with its replies and writes the notice its author will see. Hiding a post that is already hidden does nothing.
-export function hidePost(input: HideInput, now = Date.now()): HideResult {
-  const post = get<{ id: string; author_id: string; body: string; removed_at: number | null }>(
+export async function hidePost(input: HideInput, now = Date.now()): Promise<HideResult> {
+  const post = await get<{ id: string; author_id: string; body: string; removed_at: number | null }>(
     "SELECT id, author_id, body, removed_at FROM posts WHERE id = ?",
     input.postId
   )
   if (!post) return { ok: false, error: "That post doesn't exist any more." }
   if (post.removed_at !== null) return { ok: false, error: "That post is already hidden." }
-  const ids = thread(post.id)
+  const ids = await thread(post.id)
   const noticeId = newId()
-  transaction(() => {
-    run(`UPDATE posts SET removed_at = ? WHERE id IN (${ids.map(() => "?").join(",")})`, now, ...ids)
-    run(
+  await transaction(async () => {
+    await run(`UPDATE posts SET removed_at = ? WHERE id IN (${ids.map(() => "?").join(",")})`, now, ...ids)
+    await run(
       `INSERT INTO moderation_notices (id, user_id, post_id, category, explanation, excerpt, source, created_at, appeal_until)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       noticeId,
@@ -56,18 +56,18 @@ export function hidePost(input: HideInput, now = Date.now()): HideResult {
 
 // Puts a hidden post and its replies back, the ones hidden at the same moment as the post. Used when an appeal succeeds
 // or a notice is rejected.
-export function restorePost(postId: string, now = Date.now()): boolean {
-  const root = get<{ removed_at: number | null }>("SELECT removed_at FROM posts WHERE id = ?", postId)
+export async function restorePost(postId: string, now = Date.now()): Promise<boolean> {
+  const root = await get<{ removed_at: number | null }>("SELECT removed_at FROM posts WHERE id = ?", postId)
   if (!root || root.removed_at === null) return false
-  const ids = thread(postId)
-  run(
+  const ids = await thread(postId)
+  await run(
     `UPDATE posts SET removed_at = NULL WHERE removed_at = ? AND id IN (${ids.map(() => "?").join(",")})`,
     root.removed_at,
     ...ids
   )
-  run("UPDATE moderation_notices SET restored_at = ? WHERE post_id = ? AND restored_at IS NULL", now, postId)
+  await run("UPDATE moderation_notices SET restored_at = ? WHERE post_id = ? AND restored_at IS NULL", now, postId)
   // A person has looked at the post and put it back, so the automatic limit or hold no longer applies to it.
-  run(`UPDATE post_risk SET action = 'allow' WHERE post_id IN (${ids.map(() => "?").join(",")})`, ...ids)
+  await run(`UPDATE post_risk SET action = 'allow' WHERE post_id IN (${ids.map(() => "?").join(",")})`, ...ids)
   return true
 }
 
@@ -75,8 +75,8 @@ export type AppealDecision = "reversed" | "upheld"
 
 // Deletes hidden posts whose appeal window has closed with no appeal, or whose appeal was decided against the author.
 // Their files go too, and the notice keeps its reason but loses the excerpt of the content.
-export function purgeHidden(now = Date.now()): number {
-  const due = all<{ notice_id: string; post_id: string }>(
+export async function purgeHidden(now = Date.now()): Promise<number> {
+  const due = await all<{ notice_id: string; post_id: string }>(
     `SELECT n.id AS notice_id, n.post_id AS post_id FROM moderation_notices n
      JOIN posts p ON p.id = n.post_id
      LEFT JOIN appeals a ON a.notice_id = n.id
@@ -85,13 +85,13 @@ export function purgeHidden(now = Date.now()): number {
     now
   )
   for (const item of due) {
-    const ids = thread(item.post_id)
-    const files = mediaFilesFor(ids)
-    transaction(() => {
-      run("DELETE FROM posts WHERE id = ?", item.post_id)
-      run("UPDATE moderation_notices SET excerpt = '' WHERE id = ?", item.notice_id)
+    const ids = await thread(item.post_id)
+    const files = await mediaFilesFor(ids)
+    await transaction(async () => {
+      await run("DELETE FROM posts WHERE id = ?", item.post_id)
+      await run("UPDATE moderation_notices SET excerpt = '' WHERE id = ?", item.notice_id)
     })
-    removeFiles(files)
+    await removeFiles(files)
   }
   return due.length
 }

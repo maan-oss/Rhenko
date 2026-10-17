@@ -25,9 +25,9 @@ async function LocationBody() {
   const viewer = await getViewer()
   if (!viewer) redirect("/login")
   if (viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
-  const profile = get<{ location: string | null; website: string | null }>("SELECT location, website FROM users WHERE id = ?", viewer.id)
+  const profile = await get<{ location: string | null; website: string | null }>("SELECT location, website FROM users WHERE id = ?", viewer.id)
   if (!profile) redirect("/login")
-  const settings = settingsFor(viewer.id)
+  const settings = await settingsFor(viewer.id)
   return (
     <LocationSetup
       initial={{

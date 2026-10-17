@@ -3,12 +3,9 @@
 //   node scripts/grant-verified.mjs <handle>            grant the badge
 //   node scripts/grant-verified.mjs <handle> --revoke   remove the badge
 //
-// Reads the database the same way the app does: RHENKO_DATA_DIR if set, otherwise
-// ./data. The server can keep running, because SQLite's WAL mode lets two processes
-// share the file. Badges are not something people can request in the app.
-import { DatabaseSync } from "node:sqlite"
-import fs from "node:fs"
-import path from "node:path"
+// Reads and writes the database the app uses (DATABASE_URL). The server can keep running. Badges are not something
+// people can request in the app.
+import postgres from "postgres"
 
 const args = process.argv.slice(2)
 const revoke = args.includes("--revoke")
@@ -19,22 +16,26 @@ if (!handle) {
   process.exit(1)
 }
 
-const dataDir = process.env.RHENKO_DATA_DIR ?? path.join(process.cwd(), "data")
-const file = path.join(dataDir, "rhenko.sqlite")
-if (!fs.existsSync(file)) {
-  console.error(`No database at ${file}. Start the app once, or set RHENKO_DATA_DIR.`)
+const url = process.env.DATABASE_URL
+if (!url) {
+  console.error("DATABASE_URL is not set. Set it to the Postgres database the app uses.")
   process.exit(1)
 }
 
-const db = new DatabaseSync(file)
+const sql = postgres(url, { max: 1, prepare: false })
 try {
-  const user = db.prepare("SELECT handle FROM users WHERE handle = ? COLLATE NOCASE").get(handle)
+  // handle is citext, so the match ignores case.
+  const [user] = await sql.unsafe("SELECT handle FROM users WHERE handle = $1", [handle])
   if (!user) {
     console.error(`No account named @${handle}.`)
-    process.exit(1)
+    process.exitCode = 1
+  } else {
+    await sql.unsafe("UPDATE users SET verified = $1 WHERE handle = $2", [revoke ? 0 : 1, handle])
+    console.log(`@${user.handle} is ${revoke ? "no longer verified" : "verified"}.`)
   }
-  db.prepare("UPDATE users SET verified = ? WHERE handle = ? COLLATE NOCASE").run(revoke ? 0 : 1, handle)
-  console.log(`@${user.handle} is ${revoke ? "no longer verified" : "verified"}.`)
+} catch (error) {
+  console.error(error.message)
+  process.exitCode = 1
 } finally {
-  db.close()
+  await sql.end()
 }

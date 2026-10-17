@@ -16,7 +16,7 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Signature check failed.", { status: 400, headers: { "Cache-Control": "no-store" } })
   }
   try {
-    processStripeEvent(event)
+    await processStripeEvent(event)
   } catch (error) {
     console.error("stripe webhook failed", event.type, error)
     return new Response("Could not process the event.", { status: 500, headers: { "Cache-Control": "no-store" } })

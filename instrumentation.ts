@@ -5,5 +5,5 @@ export async function register() {
   const { keepServingOnRejections } = await import("@/lib/process-guard")
   keepServingOnRejections()
   const { startMaintenance } = await import("@/lib/maintenance")
-  startMaintenance()
+  await startMaintenance()
 }

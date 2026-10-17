@@ -34,9 +34,9 @@ export async function translatePost(postId: string): Promise<TranslateResult> {
   if (!viewer) return { ok: false, error: "Sign in to translate posts." }
   if (typeof postId !== "string" || postId.length === 0 || postId.length > MAX_ID) return { ok: false, error: "That post can't be found." }
   if (!translationOn()) return { ok: false, error: "Translation isn't set up on this server." }
-  if (!canSeeLivePost(postId, viewer.id)) return { ok: false, error: "That post can't be found." }
+  if (!await canSeeLivePost(postId, viewer.id)) return { ok: false, error: "That post can't be found." }
 
-  const post = get<{ body: string; lang: string | null }>("SELECT body, lang FROM posts WHERE id = ?", postId)
+  const post = await get<{ body: string; lang: string | null }>("SELECT body, lang FROM posts WHERE id = ?", postId)
   if (!post) return { ok: false, error: "That post can't be found." }
   if (post.body.trim() === "") return { ok: false, error: "There is no text to translate." }
   if (post.body.length > TRANSLATE_MAX_CHARS) return { ok: false, error: "This post is too long to translate here." }
@@ -45,15 +45,15 @@ export async function translatePost(postId: string): Promise<TranslateResult> {
   const source = post.lang || detectLanguage(post.body) || "auto"
   if (source !== "auto" && viewer.speaks.includes(source)) return { ok: false, error: "This post is already in a language you read." }
 
-  const kept = cachedPostTranslation(postId, target)
+  const kept = await cachedPostTranslation(postId, target)
   if (kept) return { ok: true, text: kept.text, source: kept.source }
 
-  const limit = consume(`translate:${viewer.id}`, PER_HOUR, HOUR)
+  const limit = await consume(`translate:${viewer.id}`, PER_HOUR, HOUR)
   if (!limit.ok) return { ok: false, error: `You've asked for a lot of translations. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
 
   const result = await translateText(post.body, source, target)
   if (!result.ok) return result
-  keepPostTranslation(postId, target, result.source, result.text)
+  await keepPostTranslation(postId, target, result.source, result.text)
   return { ok: true, text: result.text, source: result.source }
 }
 
@@ -64,7 +64,7 @@ export async function translateMessage(messageId: string): Promise<TranslateResu
   if (typeof messageId !== "string" || messageId.length === 0 || messageId.length > MAX_ID) return { ok: false, error: "That message can't be found." }
   if (!translationOn()) return { ok: false, error: "Translation isn't set up on this server." }
 
-  const message = get<{ body: string; lang: string | null; deleted_at: number | null }>(
+  const message = await get<{ body: string; lang: string | null; deleted_at: number | null }>(
     `SELECT m.body, m.lang, m.deleted_at FROM chat_messages m
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
      WHERE m.id = ?`,
@@ -79,14 +79,14 @@ export async function translateMessage(messageId: string): Promise<TranslateResu
   const source = message.lang || detectLanguage(message.body) || "auto"
   if (source !== "auto" && viewer.speaks.includes(source)) return { ok: false, error: "This message is already in a language you read." }
 
-  const kept = cachedMessageTranslation(messageId, target)
+  const kept = await cachedMessageTranslation(messageId, target)
   if (kept) return { ok: true, text: kept.text, source: kept.source }
 
-  const limit = consume(`translate:${viewer.id}`, PER_HOUR, HOUR)
+  const limit = await consume(`translate:${viewer.id}`, PER_HOUR, HOUR)
   if (!limit.ok) return { ok: false, error: `You've asked for a lot of translations. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
 
   const result = await translateText(message.body, source, target)
   if (!result.ok) return result
-  keepMessageTranslation(messageId, target, result.source, result.text)
+  await keepMessageTranslation(messageId, target, result.source, result.text)
   return { ok: true, text: result.text, source: result.source }
 }

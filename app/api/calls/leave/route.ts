@@ -28,6 +28,6 @@ export async function POST(request: NextRequest) {
   const callId = form.get("callId") ?? ""
   const deviceId = form.get("deviceId") ?? ""
   if (!ID.test(callId) || !ID.test(deviceId)) return new Response(null, { status: 400 })
-  endFromClosingTab(callId, { userId: viewer.id, deviceId, session: null })
+  await endFromClosingTab(callId, { userId: viewer.id, deviceId, session: null })
   return new Response(null, { status: 204 })
 }

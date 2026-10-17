@@ -103,8 +103,8 @@ export async function priceLabel(priceId: string): Promise<string | null> {
 
 type SubscriptionRow = { id: string; kind: Kind; status: string; cancel_at_period_end: number; current_period_end: number | null; created_at: number }
 
-export function activeSubscription(userId: string, kind: Kind): SubscriptionRow | undefined {
-  return get<SubscriptionRow>(
+export async function activeSubscription(userId: string, kind: Kind): Promise<SubscriptionRow | undefined> {
+  return await get<SubscriptionRow>(
     "SELECT id, kind, status, cancel_at_period_end, current_period_end, created_at FROM subscriptions WHERE user_id = ? AND kind = ? AND status IN ('active', 'trialing') ORDER BY created_at DESC LIMIT 1",
     userId,
     kind
@@ -135,21 +135,21 @@ function idOf(customer: string | { id: string } | null | undefined): string | nu
 // Writes what Stripe says about a subscription. The badge for paid verification is recomputed from the rows.
 // A webhook can arrive after the account it belongs to has been deleted. Those events are skipped rather than failing and being
 // sent again by Stripe for days.
-function userExists(userId: string): boolean {
-  return Boolean(get("SELECT 1 AS found FROM users WHERE id = ?", userId))
+async function userExists(userId: string): Promise<boolean> {
+  return Boolean(await get("SELECT 1 AS found FROM users WHERE id = ?", userId))
 }
 
-function saveSubscription(subscription: Stripe.Subscription): void {
+async function saveSubscription(subscription: Stripe.Subscription): Promise<void> {
   const kind = subscriptionKind(subscription)
   const customer = idOf(subscription.customer)
   const userId =
-    subscription.metadata?.user_id || (customer ? get<{ user_id: string }>("SELECT user_id FROM stripe_customers WHERE customer_id = ?", customer)?.user_id : undefined)
-  if (!kind || !userId || !userExists(userId)) return
+    subscription.metadata?.user_id || (customer ? (await get<{ user_id: string }>("SELECT user_id FROM stripe_customers WHERE customer_id = ?", customer))?.user_id : undefined)
+  if (!kind || !userId || !await userExists(userId)) return
   if (customer) {
-    run("INSERT INTO stripe_customers (user_id, customer_id, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING", userId, customer, Date.now())
+    await run("INSERT INTO stripe_customers (user_id, customer_id, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING", userId, customer, Date.now())
   }
   const now = Date.now()
-  run(
+  await run(
     `INSERT INTO subscriptions (id, user_id, kind, status, cancel_at_period_end, current_period_end, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET status = excluded.status, cancel_at_period_end = excluded.cancel_at_period_end,
@@ -163,12 +163,12 @@ function saveSubscription(subscription: Stripe.Subscription): void {
     subscription.created ? subscription.created * 1000 : now,
     now
   )
-  syncPaidVerified(userId)
+  await syncPaidVerified(userId)
 }
 
 // The paid badge is on while the person has an active paid verification subscription, and off the moment it lapses.
-export function syncPaidVerified(userId: string): void {
-  run(
+export async function syncPaidVerified(userId: string): Promise<void> {
+  await run(
     `UPDATE users SET paid_verified = CASE WHEN EXISTS(
        SELECT 1 FROM subscriptions WHERE user_id = ? AND kind = 'verified' AND status IN ('active', 'trialing')
      ) THEN 1 ELSE 0 END WHERE id = ?`,
@@ -181,10 +181,10 @@ export function syncPaidVerified(userId: string): void {
 // one is charged for an account that is hidden.
 export async function endSubscriptionsAtPeriodEnd(userId: string): Promise<void> {
   if (!paymentsConfigured()) return
-  const rows = all<{ id: string }>("SELECT id FROM subscriptions WHERE user_id = ? AND status IN ('active', 'trialing') AND cancel_at_period_end = 0", userId)
+  const rows = await all<{ id: string }>("SELECT id FROM subscriptions WHERE user_id = ? AND status IN ('active', 'trialing') AND cancel_at_period_end = 0", userId)
   for (const row of rows) {
     const updated = await stripe().subscriptions.update(row.id, { cancel_at_period_end: true })
-    saveSubscription(updated)
+    await saveSubscription(updated)
   }
 }
 
@@ -195,8 +195,8 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
   if (kind === "verified" && !viewer.emailVerified) {
     throw new Error("Confirm your email address first. Paid verification needs one.")
   }
-  if (activeSubscription(viewer.id, kind)) throw new Error("You already have this subscription.")
-  const customer = get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
+  if (await activeSubscription(viewer.id, kind)) throw new Error("You already have this subscription.")
+  const customer = await get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
   const origin = publicOrigin()
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
@@ -215,7 +215,7 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
 
 // The customer portal: change a card, see invoices, or cancel. Stripe runs it, so the app never sees card details.
 export async function billingPortalUrl(viewer: Viewer): Promise<string> {
-  const customer = get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
+  const customer = await get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
   if (!customer) throw new Error("You have no subscription to manage yet.")
   const session = await stripe().billingPortal.sessions.create({ customer: customer.customer_id, return_url: `${publicOrigin()}/settings/billing` })
   return session.url
@@ -223,13 +223,13 @@ export async function billingPortalUrl(viewer: Viewer): Promise<string> {
 
 // Withdrawal: a subscription cancelled within fourteen days of starting ends at once and its first payment is refunded.
 export async function withdrawFromSubscription(viewer: Viewer, kind: Kind): Promise<{ ok: true } | { ok: false; error: string }> {
-  const row = activeSubscription(viewer.id, kind)
+  const row = await activeSubscription(viewer.id, kind)
   if (!row) return { ok: false, error: "There is no active subscription to withdraw from." }
   if (Date.now() - row.created_at > WITHDRAW_DAYS * 24 * 60 * 60 * 1000) {
     return { ok: false, error: `You can withdraw within ${WITHDRAW_DAYS} days of starting. After that, cancel and the subscription ends at the end of the period you paid for.` }
   }
   const cancelled = await stripe().subscriptions.cancel(row.id)
-  saveSubscription(cancelled)
+  await saveSubscription(cancelled)
   const invoices = await stripe().invoices.list({ subscription: row.id, limit: 1 })
   const invoice = invoices.data[0] as (Stripe.Invoice & { payment_intent?: string | { id: string } | null }) | undefined
   const intent = invoice ? idOf(invoice.payment_intent as string | { id: string } | null | undefined) : null
@@ -244,13 +244,13 @@ export async function withdrawFromSubscription(viewer: Viewer, kind: Kind): Prom
 // A checkout for a tip. The creator's payout account receives the amount less the platform's share.
 export async function tipCheckoutUrl(viewer: Viewer, postId: string, amount: number): Promise<string> {
   if (!tipAmounts().includes(amount)) throw new Error("That tip amount is not on offer.")
-  const post = get<{ author_id: string; handle: string }>(
+  const post = await get<{ author_id: string; handle: string }>(
     "SELECT p.author_id, u.handle FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = ? AND p.removed_at IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL",
     postId
   )
-  if (!post || visiblePostIds([postId], viewer.id).size === 0) throw new Error("That post is not available.")
+  if (!post || (await visiblePostIds([postId], viewer.id)).size === 0) throw new Error("That post is not available.")
   if (post.author_id === viewer.id) throw new Error("You cannot tip yourself.")
-  const account = get<{ account_id: string; charges_enabled: number }>("SELECT account_id, charges_enabled FROM connect_accounts WHERE user_id = ?", post.author_id)
+  const account = await get<{ account_id: string; charges_enabled: number }>("SELECT account_id, charges_enabled FROM connect_accounts WHERE user_id = ?", post.author_id)
   if (!account || account.charges_enabled !== 1) throw new Error("This person has not set up tips yet.")
   const fee = Math.round((amount * tipFeePercent()) / 100)
   const origin = publicOrigin()
@@ -270,7 +270,7 @@ export async function tipCheckoutUrl(viewer: Viewer, postId: string, amount: num
 // ── Creator payouts (Stripe Connect Express) ────────────────────────────────────────────────────────────────────────
 
 export async function payoutOnboardingUrl(viewer: Viewer): Promise<string> {
-  let account = get<{ account_id: string }>("SELECT account_id FROM connect_accounts WHERE user_id = ?", viewer.id)
+  let account = await get<{ account_id: string }>("SELECT account_id FROM connect_accounts WHERE user_id = ?", viewer.id)
   if (!account) {
     const created = await stripe().accounts.create({
       type: "express",
@@ -279,7 +279,7 @@ export async function payoutOnboardingUrl(viewer: Viewer): Promise<string> {
       capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
       metadata: { user_id: viewer.id },
     })
-    run(
+    await run(
       "INSERT INTO connect_accounts (user_id, account_id, charges_enabled, payouts_enabled, updated_at) VALUES (?, ?, 0, 0, ?)",
       viewer.id,
       created.id,
@@ -301,27 +301,27 @@ export async function payoutOnboardingUrl(viewer: Viewer): Promise<string> {
 
 // Adds the paid amount to the balance once: a repeated record for the same checkout is ignored. Runs inside the
 // webhook's transaction (processStripeEvent), so it does not open one of its own.
-function creditAdAccount(accountId: string, amount: number, reference: string): void {
-  const account = get<{ id: string }>("SELECT id FROM ad_accounts WHERE id = ?", accountId)
+async function creditAdAccount(accountId: string, amount: number, reference: string): Promise<void> {
+  const account = await get<{ id: string }>("SELECT id FROM ad_accounts WHERE id = ?", accountId)
   if (!account) {
     // Stripe has already taken the payment. Log it so the operator can refund it.
     console.error("advertising credit paid for an account that no longer exists", reference)
     return
   }
-  const added = runChanges(
-    "INSERT OR IGNORE INTO ad_ledger (id, account_id, kind, amount_micro, reference, created_at) VALUES (?, ?, 'credit', ?, ?, ?)",
+  const added = await runChanges(
+    "INSERT INTO ad_ledger (id, account_id, kind, amount_micro, reference, created_at) VALUES (?, ?, 'credit', ?, ?, ?) ON CONFLICT DO NOTHING",
     newId(),
     accountId,
     amount * MICRO_PER_CENT,
     reference,
     Date.now()
   )
-  if (added > 0) run("UPDATE ad_accounts SET balance_micro = balance_micro + ? WHERE id = ?", amount * MICRO_PER_CENT, accountId)
+  if (added > 0) await run("UPDATE ad_accounts SET balance_micro = balance_micro + ? WHERE id = ?", amount * MICRO_PER_CENT, accountId)
 }
 
 export async function adCreditUrl(viewer: Viewer, accountId: string, amount: number): Promise<string> {
   if (!ADD_CREDIT_OPTIONS.includes(amount)) throw new Error("That amount is not on offer.")
-  const account = get<{ id: string; currency: string }>("SELECT id, currency FROM ad_accounts WHERE id = ? AND user_id = ?", accountId, viewer.id)
+  const account = await get<{ id: string; currency: string }>("SELECT id, currency FROM ad_accounts WHERE id = ? AND user_id = ?", accountId, viewer.id)
   if (!account) throw new Error("Set up an advertising account first.")
   const origin = publicOrigin()
   const session = await stripe().checkout.sessions.create({
@@ -346,34 +346,34 @@ export function webhookEvent(payload: string, signature: string): Stripe.Event {
 }
 
 // Applies one event once. Stripe can send an event again, so each one is recorded and a repeat changes nothing.
-export function processStripeEvent(event: Stripe.Event): void {
-  if (get<{ id: string }>("SELECT id FROM stripe_events WHERE id = ?", event.id)) return
-  transaction(() => {
-    apply(event)
-    run("INSERT INTO stripe_events (id, received_at) VALUES (?, ?)", event.id, Date.now())
+export async function processStripeEvent(event: Stripe.Event): Promise<void> {
+  if (await get<{ id: string }>("SELECT id FROM stripe_events WHERE id = ?", event.id)) return
+  await transaction(async () => {
+    await apply(event)
+    await run("INSERT INTO stripe_events (id, received_at) VALUES (?, ?)", event.id, Date.now())
   })
 }
 
-function apply(event: Stripe.Event): void {
+async function apply(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.mode === "subscription") {
         const userId = session.client_reference_id ?? session.metadata?.user_id
         const customer = idOf(session.customer)
-        if (userId && customer && userExists(userId)) {
-          run("INSERT INTO stripe_customers (user_id, customer_id, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING", userId, customer, Date.now())
+        if (userId && customer && await userExists(userId)) {
+          await run("INSERT INTO stripe_customers (user_id, customer_id, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING", userId, customer, Date.now())
         }
       } else if (session.mode === "payment" && session.metadata?.kind === "tip") {
         const tipper = session.client_reference_id ?? session.metadata.from_user_id
         const creator = session.metadata.to_user_id
         if (!tipper || !creator) return
-        if (!userExists(tipper) || !userExists(creator)) {
+        if (!await userExists(tipper) || !await userExists(creator)) {
           // Stripe has already moved the money. Log it so the operator can refund it.
           console.error("tip paid for an account that no longer exists, not recorded", session.id)
           return
         }
-        run(
+        await run(
           `INSERT INTO tips (id, post_id, from_user_id, to_user_id, amount, fee, currency, payment_intent, status, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?) ON CONFLICT(id) DO NOTHING`,
           session.id,
@@ -388,18 +388,18 @@ function apply(event: Stripe.Event): void {
         )
       } else if (session.mode === "payment" && session.metadata?.kind === "ad_credit") {
         const accountId = session.metadata.ad_account_id
-        if (accountId && session.amount_total) creditAdAccount(accountId, session.amount_total, session.id)
+        if (accountId && session.amount_total) await creditAdAccount(accountId, session.amount_total, session.id)
       }
       return
     }
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
-      saveSubscription(event.data.object as Stripe.Subscription)
+      await saveSubscription(event.data.object as Stripe.Subscription)
       return
     case "account.updated": {
       const account = event.data.object as Stripe.Account
-      run(
+      await run(
         "UPDATE connect_accounts SET charges_enabled = ?, payouts_enabled = ?, updated_at = ? WHERE account_id = ?",
         account.charges_enabled ? 1 : 0,
         account.payouts_enabled ? 1 : 0,
@@ -411,7 +411,7 @@ function apply(event: Stripe.Event): void {
     case "charge.refunded": {
       const charge = event.data.object as Stripe.Charge
       const intent = idOf(charge.payment_intent as string | { id: string } | null)
-      if (intent) run("UPDATE tips SET status = 'refunded' WHERE payment_intent = ?", intent)
+      if (intent) await run("UPDATE tips SET status = 'refunded' WHERE payment_intent = ?", intent)
       return
     }
     default:
@@ -430,14 +430,14 @@ export type BillingState = {
   payouts: { started: boolean; ready: boolean }
 }
 
-export function billingState(viewer: Viewer): BillingState {
-  const plus = activeSubscription(viewer.id, "plus")
-  const verified = activeSubscription(viewer.id, "verified")
-  const tips = get<{ count: number; total: number | null }>(
+export async function billingState(viewer: Viewer): Promise<BillingState> {
+  const plus = await activeSubscription(viewer.id, "plus")
+  const verified = await activeSubscription(viewer.id, "verified")
+  const tips = await get<{ count: number; total: number | null }>(
     "SELECT COUNT(*) AS count, SUM(amount - fee) AS total FROM tips WHERE to_user_id = ? AND status = 'paid'",
     viewer.id
   )
-  const account = get<{ charges_enabled: number }>("SELECT charges_enabled FROM connect_accounts WHERE user_id = ?", viewer.id)
+  const account = await get<{ charges_enabled: number }>("SELECT charges_enabled FROM connect_accounts WHERE user_id = ?", viewer.id)
   return {
     configured: paymentsConfigured(),
     emailVerified: viewer.emailVerified,

@@ -19,7 +19,7 @@ export async function acceptTerms(_prev: LegalState, formData: FormData): Promis
   const viewer = await getViewer()
   if (!viewer) return { error: "Sign in first." }
   if (formData.get("agree") !== "on") return { error: "Tick the box to agree to the current Terms and Privacy Policy." }
-  run("UPDATE users SET terms_version = ?, terms_accepted_at = ? WHERE id = ?", TERMS_VERSION, Date.now(), viewer.id)
+  await run("UPDATE users SET terms_version = ?, terms_accepted_at = ? WHERE id = ?", TERMS_VERSION, Date.now(), viewer.id)
   redirect("/")
 }
 
@@ -29,17 +29,17 @@ export async function appealNotice(_prev: LegalState, formData: FormData): Promi
   if (!viewer) return { error: "Sign in to appeal." }
   const noticeId = String(formData.get("notice") ?? "")
   const reason = String(formData.get("reason") ?? "").replace(/\r\n/g, "\n").trim()
-  const notice = get<{ id: string; user_id: string; appeal_until: number; restored_at: number | null }>(
+  const notice = await get<{ id: string; user_id: string; appeal_until: number; restored_at: number | null }>(
     "SELECT id, user_id, appeal_until, restored_at FROM moderation_notices WHERE id = ?",
     noticeId
   )
   if (!notice || notice.user_id !== viewer.id) return { error: "That notice isn't on your account." }
   if (notice.restored_at !== null) return { error: "That post was already put back." }
   if (Date.now() > notice.appeal_until) return { error: "The time to appeal this notice has passed." }
-  if (get("SELECT id FROM appeals WHERE notice_id = ?", notice.id)) return { error: "You have already appealed this notice." }
+  if (await get("SELECT id FROM appeals WHERE notice_id = ?", notice.id)) return { error: "You have already appealed this notice." }
   if ([...reason].length < 10) return { error: "Say in a sentence or two why the decision should change." }
   if ([...reason].length > 2000) return { error: "Keep the appeal under 2,000 characters." }
-  run(
+  await run(
     "INSERT INTO appeals (id, notice_id, user_id, reason, created_at) VALUES (?, ?, ?, ?, ?)",
     newId(),
     notice.id,
@@ -56,7 +56,7 @@ export async function submitNotice(_prev: LegalState, formData: FormData): Promi
   // A hidden field no person fills in. A form filled by a bot is accepted quietly and goes nowhere.
   if (String(formData.get("website") ?? "") !== "") return { ok: true, reference: "received" }
 
-  const limit = consume(`notice:${await clientIp()}`, 10, HOUR)
+  const limit = await consume(`notice:${await clientIp()}`, 10, HOUR)
   if (!limit.ok) return { error: `Too many notices from this network. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
 
   const kind = String(formData.get("kind") ?? "")
@@ -83,10 +83,10 @@ export async function submitNotice(_prev: LegalState, formData: FormData): Promi
 
   // The post a link points at, when the link is one of this server's post addresses.
   const match = /\/status\/([0-9a-f-]{36})/i.exec(url)
-  const postId = match && get("SELECT id FROM posts WHERE id = ?", match[1]) ? match[1] : null
+  const postId = match && await get("SELECT id FROM posts WHERE id = ?", match[1]) ? match[1] : null
 
   const id = newId()
-  run(
+  await run(
     `INSERT INTO legal_notices (id, kind, name, email, address, url, post_id, work, description, good_faith, accurate, signature, status, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, 'open', ?)`,
     id,
@@ -103,7 +103,7 @@ export async function submitNotice(_prev: LegalState, formData: FormData): Promi
   )
 
   if (postId && URGENT_KINDS.has(kind)) {
-    hidePost({
+    await hidePost({
       postId,
       category: kind,
       explanation: `Hidden while we review a notice about ${noticeKindLabel(kind).toLowerCase()}.`,

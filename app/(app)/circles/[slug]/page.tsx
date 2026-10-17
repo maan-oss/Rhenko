@@ -27,10 +27,10 @@ type Params = Promise<{ slug: string }>
 type SearchParams = Promise<{ tab?: string | string[] }>
 
 // The circle the viewer may open: it exists, and its owner is not blocked by or blocking the viewer.
-function openCircle(slug: string, viewerId: string): Circle | null {
-  const circle = circleBySlug(slug.toLowerCase(), viewerId)
+async function openCircle(slug: string, viewerId: string): Promise<Circle | null> {
+  const circle = await circleBySlug(slug.toLowerCase(), viewerId)
   if (!circle) return null
-  if (circle.owner && circle.owner.id !== viewerId && !listOwnersVisibleTo(viewerId, [circle.owner.id]).has(circle.owner.id))
+  if (circle.owner && circle.owner.id !== viewerId && !(await listOwnersVisibleTo(viewerId, [circle.owner.id])).has(circle.owner.id))
     return null
   return circle
 }
@@ -40,13 +40,13 @@ export const instant = false
 
 export default async function CirclePage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  if (!openCircle((await params).slug, viewer.id)) notFound()
+  if (!await openCircle((await params).slug, viewer.id)) notFound()
   return <CircleBody params={params} searchParams={searchParams} />
 }
 
 async function CircleBody({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  const circle = openCircle((await params).slug, viewer.id)
+  const circle = await openCircle((await params).slug, viewer.id)
   if (!circle) notFound()
 
   const owner = circle.role === "owner"
@@ -57,7 +57,7 @@ async function CircleBody({ params, searchParams }: { params: Params; searchPara
   const requested = firstParam((await searchParams).tab)
   const tab = requested === "members" || (requested === "settings" && owner) ? requested : "posts"
   const spec: FeedSpec = { kind: "circle", circleId: circle.id }
-  const page = tab === "posts" && !hidden ? feedFor(spec, viewer.id) : null
+  const page = tab === "posts" && !hidden ? await feedFor(spec, viewer.id) : null
 
   return (
     <>
@@ -144,8 +144,8 @@ async function CircleBody({ params, searchParams }: { params: Params; searchPara
   )
 }
 
-function MembersPanel({ circleId, owner, viewerId }: { circleId: string; owner: boolean; viewerId: string }) {
-  const members = circleMembers(circleId)
+async function MembersPanel({ circleId, owner, viewerId }: { circleId: string; owner: boolean; viewerId: string }) {
+  const members = await circleMembers(circleId)
   return (
     <>
       {owner ? (
@@ -178,8 +178,8 @@ function MembersPanel({ circleId, owner, viewerId }: { circleId: string; owner: 
   )
 }
 
-function SettingsPanel({ circle }: { circle: Circle }) {
-  const requests = circle.access === "request" ? circleRequests(circle.id) : []
+async function SettingsPanel({ circle }: { circle: Circle }) {
+  const requests = circle.access === "request" ? await circleRequests(circle.id) : []
   return (
     <>
       <section className="border-b border-border">

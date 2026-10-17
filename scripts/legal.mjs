@@ -11,20 +11,10 @@
 // rejected: a post hidden because of this notice is put back.
 // Email goes out over RHENKO_SMTP_URL with RHENKO_MAIL_FROM. Without it, the email is printed so it can be sent by hand.
 //
-// Reads the database the way the app does: RHENKO_DATA_DIR if set, otherwise ./data. The app can keep running.
-import fs from "node:fs"
-import path from "node:path"
+// Reads and writes the database the app uses (DATABASE_URL). The app can keep running.
 import { randomUUID } from "node:crypto"
 import nodemailer from "nodemailer"
-
-// node:sqlite prints a warning that it is experimental. This hides that one warning and keeps every other.
-const emitWarning = process.emitWarning
-process.emitWarning = (warning, ...rest) => {
-  const type = typeof rest[0] === "string" ? rest[0] : rest[0]?.type
-  if (type === "ExperimentalWarning" && String(warning).includes("SQLite")) return
-  return emitWarning.call(process, warning, ...rest)
-}
-const { DatabaseSync } = await import("node:sqlite")
+import postgres from "postgres"
 
 // These mirror lib/legal.ts. The e2e suite checks that they still match.
 const KINDS = {
@@ -105,15 +95,27 @@ const shape = Object.hasOwn(SHAPES, command) ? SHAPES[command] : null
 if (!shape || params.length !== shape.args) fail(USAGE)
 if (Object.keys(options).some((name) => !shape.options.includes(name))) fail(USAGE)
 
-const dataDir = path.resolve(process.env.RHENKO_DATA_DIR || path.join(process.cwd(), "data"))
-const databaseFile = path.join(dataDir, "rhenko.sqlite")
-if (!fs.existsSync(databaseFile)) {
-  fail(`There is no database at ${databaseFile}. Run this from the project folder, or set RHENKO_DATA_DIR to the folder that holds rhenko.sqlite.`)
-}
-const db = new DatabaseSync(databaseFile)
-db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
-if (!db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'legal_notices'").get()) {
-  fail("This database has not been upgraded for the current version yet. Start the app once, then run this again.")
+const url = process.env.DATABASE_URL
+if (!url) fail("DATABASE_URL is not set. Set it to the Postgres database the app uses.")
+
+// Counts, timestamps and flags come back as plain numbers, as they did from SQLite.
+const sql = postgres(url, {
+  max: 1,
+  prepare: false,
+  types: {
+    number: {
+      to: 0,
+      from: [16, 20, 1700],
+      parse: (value) => (value === "t" ? 1 : value === "f" ? 0 : Number(value)),
+      serialize: (value) => String(value),
+    },
+  },
+})
+
+// The first row of a query on a connection (the database, or the transaction open on it), or undefined.
+async function one(conn, text, ...values) {
+  const [row] = await conn.unsafe(text, values)
+  return row
 }
 
 function prefixOf(value, noun) {
@@ -124,11 +126,9 @@ function prefixOf(value, noun) {
   return prefix
 }
 
-function findNotice(value) {
+async function findNotice(value) {
   const prefix = prefixOf(value, "notice")
-  const rows = db
-    .prepare("SELECT * FROM legal_notices WHERE substr(id, 1, ?) = ? LIMIT 2")
-    .all(prefix.length, prefix)
+  const rows = await sql.unsafe("SELECT * FROM legal_notices WHERE substr(id, 1, $1) = $2 LIMIT 2", [prefix.length, prefix])
   if (rows.length === 0) fail(`There is no notice whose id starts with ${prefix}.`)
   if (rows.length > 1) fail(`More than one notice starts with ${prefix}. Give more of the id.`)
   return rows[0]
@@ -136,22 +136,21 @@ function findNotice(value) {
 
 // The same thread tree the moderation script uses: the post and every reply under it.
 const TREE = `WITH RECURSIVE tree(id) AS (
-  SELECT id FROM posts WHERE id = ?
+  SELECT id FROM posts WHERE id = $1
   UNION ALL
   SELECT p.id FROM posts p JOIN tree t ON p.reply_to_id = t.id
 )`
-function threadIds(postId) {
-  return db.prepare(`${TREE} SELECT id FROM tree`).all(postId).map((row) => row.id)
+async function threadIds(conn, postId) {
+  const rows = await conn.unsafe(`${TREE} SELECT id FROM tree`, [postId])
+  return rows.map((row) => row.id)
 }
 
-function list() {
-  const rows = db
-    .prepare(
-      `SELECT id, kind, name, email, url, post_id, created_at FROM legal_notices
-       WHERE status = 'open'
-       ORDER BY CASE WHEN kind IN ('intimate_image', 'child_abuse') THEN 0 ELSE 1 END, created_at ASC, id ASC`
-    )
-    .all()
+async function list() {
+  const rows = await sql.unsafe(
+    `SELECT id, kind, name, email, url, post_id, created_at FROM legal_notices
+     WHERE status = 'open'
+     ORDER BY CASE WHEN kind IN ('intimate_image', 'child_abuse') THEN 0 ELSE 1 END, created_at ASC, id ASC`
+  )
   if (rows.length === 0) {
     console.log("No open notices.")
     return
@@ -171,8 +170,8 @@ function list() {
   console.log("Decide with:     node scripts/legal.mjs decide <noticeId> actioned|rejected --note \"<reason>\"")
 }
 
-function show() {
-  const notice = findNotice(params[0])
+async function show() {
+  const notice = await findNotice(params[0])
   console.log(field("Notice", notice.id))
   console.log(field("About", `${KINDS[notice.kind] ?? notice.kind}${URGENT.has(notice.kind) ? " (urgent)" : ""}`))
   console.log(field("Status", notice.status === "open" ? "open" : `${notice.status}${notice.decided_at ? `, decided ${when(notice.decided_at)}` : ""}`))
@@ -184,9 +183,7 @@ function show() {
   console.log(field("Said", notice.description))
   console.log(field("Signed", notice.signature))
   if (notice.post_id) {
-    const post = db
-      .prepare("SELECT p.id, p.body, p.removed_at, u.handle FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = ?")
-      .get(notice.post_id)
+    const post = await one(sql, "SELECT p.id, p.body, p.removed_at, u.handle FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = $1", notice.post_id)
     if (post) {
       console.log(field("Post", `${post.id} by @${post.handle}, ${post.removed_at ? "hidden" : "visible"}`))
       console.log(field("Text", excerpt(post.body)))
@@ -224,48 +221,43 @@ async function decide() {
   if ([...note].length < 10) fail("Write the reason in at least 10 characters. The sender reads this.")
   if ([...note].length > 1000) fail("Keep the reason under 1,000 characters.")
 
-  const notice = findNotice(params[0])
+  const notice = await findNotice(params[0])
   if (notice.status !== "open") fail(`That notice was already ${notice.status}.`)
   const now = Date.now()
-  const post = notice.post_id ? db.prepare("SELECT id, body, author_id, removed_at FROM posts WHERE id = ?").get(notice.post_id) : null
+  const post = notice.post_id ? await one(sql, "SELECT id, body, author_id, removed_at FROM posts WHERE id = $1", notice.post_id) : null
   const sourceTag = `legal:${notice.id}`
 
-  db.exec("BEGIN IMMEDIATE")
   try {
-    db.prepare("UPDATE legal_notices SET status = ?, decision_note = ?, decided_at = ? WHERE id = ?").run(verdict, note, now, notice.id)
-    if (post && verdict === "actioned") {
-      if (post.removed_at === null) {
-        const ids = threadIds(post.id)
-        db.prepare(`UPDATE posts SET removed_at = ? WHERE id IN (${ids.map(() => "?").join(",")})`).run(now, ...ids)
-        db.prepare(
-          `INSERT INTO moderation_notices (id, user_id, post_id, category, explanation, excerpt, source, created_at, appeal_until)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(randomUUID(), post.author_id, post.id, notice.kind, note, excerpt(post.body), sourceTag, now, now + APPEAL_MS)
-      } else {
-        // Hidden while the notice was open: the author's notice now carries the decision instead of the interim reason.
-        db.prepare("UPDATE moderation_notices SET explanation = ?, appeal_until = ? WHERE post_id = ? AND source = ? AND restored_at IS NULL").run(
-          note,
-          now + APPEAL_MS,
-          post.id,
-          sourceTag
-        )
+    await sql.begin(async (tx) => {
+      await tx.unsafe("UPDATE legal_notices SET status = $1, decision_note = $2, decided_at = $3 WHERE id = $4", [verdict, note, now, notice.id])
+      if (post && verdict === "actioned") {
+        if (post.removed_at === null) {
+          const ids = await threadIds(tx, post.id)
+          await tx.unsafe("UPDATE posts SET removed_at = $1 WHERE id = ANY($2::text[])", [now, ids])
+          await tx.unsafe(
+            `INSERT INTO moderation_notices (id, user_id, post_id, category, explanation, excerpt, source, created_at, appeal_until)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [randomUUID(), post.author_id, post.id, notice.kind, note, excerpt(post.body), sourceTag, now, now + APPEAL_MS]
+          )
+        } else {
+          // Hidden while the notice was open: the author's notice now carries the decision instead of the interim reason.
+          await tx.unsafe(
+            "UPDATE moderation_notices SET explanation = $1, appeal_until = $2 WHERE post_id = $3 AND source = $4 AND restored_at IS NULL",
+            [note, now + APPEAL_MS, post.id, sourceTag]
+          )
+        }
       }
-    }
-    if (post && verdict === "rejected" && post.removed_at !== null) {
-      const ids = threadIds(post.id)
-      db.prepare(`UPDATE posts SET removed_at = NULL WHERE removed_at = ? AND id IN (${ids.map(() => "?").join(",")})`).run(
-        post.removed_at,
-        ...ids
-      )
-      db.prepare("UPDATE moderation_notices SET restored_at = ? WHERE post_id = ? AND source = ? AND restored_at IS NULL").run(
-        now,
-        post.id,
-        sourceTag
-      )
-    }
-    db.exec("COMMIT")
+      if (post && verdict === "rejected" && post.removed_at !== null) {
+        const ids = await threadIds(tx, post.id)
+        await tx.unsafe("UPDATE posts SET removed_at = NULL WHERE removed_at = $1 AND id = ANY($2::text[])", [post.removed_at, ids])
+        await tx.unsafe("UPDATE moderation_notices SET restored_at = $1 WHERE post_id = $2 AND source = $3 AND restored_at IS NULL", [
+          now,
+          post.id,
+          sourceTag,
+        ])
+      }
+    })
   } catch (error) {
-    db.exec("ROLLBACK")
     fail(`The decision was not saved: ${error.message}. Nothing changed. Run this again.`)
   }
 
@@ -278,11 +270,7 @@ async function decide() {
           `What we did: ${post ? "the content you named was hidden from Rhenko. Its author has been told why and can appeal." : "the content you named was actioned."}`,
           `Why: ${note}`,
         ]
-      : [
-          `We looked at your notice about ${about} and did not take action.`,
-          "",
-          `Why: ${note}`,
-        ]
+      : [`We looked at your notice about ${about} and did not take action.`, "", `Why: ${note}`]
   lines.push("", `Reference: ${notice.id}`, "", "If you think we got this wrong, reply to this email and say why. A person will read your reply.")
   const sent = await emailSender(notice.email, `Decision on your notice (${notice.id.slice(0, 8)})`, lines.join("\n"))
 
@@ -292,23 +280,28 @@ async function decide() {
   if (sent) console.log("The sender has been emailed.")
 }
 
-function recordRequest() {
+async function recordRequest() {
   const summary = (options.summary ?? "").replace(/\r\n/g, "\n").trim()
   if ([...summary].length < 10) fail("Describe the request in at least 10 characters: who sent it, what it asks for, and the legal basis.")
   if ([...summary].length > 2000) fail("Keep the description under 2,000 characters.")
   const id = randomUUID()
-  db.prepare(
+  await sql.unsafe(
     `INSERT INTO legal_notices (id, kind, name, email, description, signature, status, created_at, decided_at)
-     VALUES (?, ?, 'Order or request from an authority', '', ?, 'Recorded by the operator', 'recorded', ?, ?)`
-  ).run(id, REQUEST_KIND, summary, Date.now(), Date.now())
+     VALUES ($1, $2, 'Order or request from an authority', '', $3, 'Recorded by the operator', 'recorded', $4, $5)`,
+    [id, REQUEST_KIND, summary, Date.now(), Date.now()]
+  )
   console.log(`Recorded request ${id}. It counts in the transparency figures.`)
 }
 
 try {
-  if (command === "list") list()
-  else if (command === "show") show()
+  // The legal tables are added by the current schema. An older database has to be brought up to date first.
+  const [{ found }] = await sql.unsafe("SELECT (to_regclass('legal_notices') IS NOT NULL)::int AS found")
+  if (!found) fail("This database has not been upgraded for the current version yet. Apply db/postgres/schema.sql, then run this again.")
+
+  if (command === "list") await list()
+  else if (command === "show") await show()
   else if (command === "decide") await decide()
-  else recordRequest()
+  else await recordRequest()
 } finally {
-  db.close()
+  await sql.end()
 }

@@ -252,7 +252,7 @@ async function microphone(purpose: "call" | "answer", video = false): Promise<Me
   try {
     return await navigator.mediaDevices.getUserMedia({ audio, video: video ? CAMERA : false })
   } catch (error) {
-    if (video) return microphone(purpose, false)
+    if (video) return await microphone(purpose, false)
     const name = error instanceof DOMException ? error.name : ""
     if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone was found. Connect one and try again."
     if (name === "NotReadableError") return "Your microphone is busy in another app. Close it there and try again."
@@ -274,7 +274,7 @@ function stopStream(stream: MediaStream | null): void {
   stream?.getTracks().forEach((track) => track.stop())
 }
 
-function send(current: Session, action: CallAction): Promise<{ ok: true } | { ok: false; error: string } | null> {
+async function send(current: Session, action: CallAction): Promise<{ ok: true } | { ok: false; error: string } | null> {
   return sendCallSignal(current.callId, device(), action).catch(() => null)
 }
 
@@ -1226,8 +1226,8 @@ export async function placeCall(conversationId: string, peer: EventPerson, video
 }
 
 // Starts a group call, or joins the one going on in that group.
-export function placeGroupCall(conversationId: string): Promise<Placed> {
-  return enterGroup(() => startGroupCall(conversationId, device()))
+export async function placeGroupCall(conversationId: string): Promise<Placed> {
+  return await enterGroup(async () => await startGroupCall(conversationId, device()))
 }
 
 // Joins a group call that is going on, from a Join banner or the group's call button.
@@ -1237,7 +1237,7 @@ export async function joinLiveCall(callId: string): Promise<Placed> {
     await acceptCall()
     return { ok: true }
   }
-  return enterGroup(() => joinGroupAction(callId, device()))
+  return await enterGroup(async () => await joinGroupAction(callId, device()))
 }
 
 // Why this tab cannot start or join a call right now, if it cannot.

@@ -1,32 +1,17 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto"
-import fs from "node:fs"
-import path from "node:path"
-import { DATA_DIR } from "@/lib/db"
 
-// Secrets stored in the database (two-factor keys) are encrypted with one server key. The key comes from
-// RHENKO_SECRET when it is set. Otherwise the server creates data/secret.key on first use and keeps it there,
-// so back that file up with the database. Changing or losing the key makes stored two-factor keys unreadable;
-// recovery codes still work for those accounts.
+// Secrets stored in the database (two-factor keys) are encrypted with one server key, which comes from RHENKO_SECRET.
+// Changing or losing that value makes stored two-factor keys unreadable; recovery codes still work for those accounts.
 
 let cached: Buffer | null = null
 
 function serverKey(): Buffer {
   if (cached) return cached
-  const fromEnv = process.env.RHENKO_SECRET
-  if (fromEnv && fromEnv.length >= 16) {
-    cached = createHash("sha256").update(fromEnv).digest()
-    return cached
+  const secret = process.env.RHENKO_SECRET
+  if (!secret || secret.length < 16) {
+    throw new Error("RHENKO_SECRET must be set to at least 16 characters. It keys the encrypted two-factor secrets and codes.")
   }
-  const file = path.join(DATA_DIR, "secret.key")
-  if (!fs.existsSync(file)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-    try {
-      fs.writeFileSync(file, randomBytes(32).toString("base64"), { mode: 0o600, flag: "wx" })
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-    }
-  }
-  cached = Buffer.from(fs.readFileSync(file, "utf8").trim(), "base64")
+  cached = createHash("sha256").update(secret).digest()
   return cached
 }
 

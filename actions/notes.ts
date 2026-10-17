@@ -21,15 +21,15 @@ function isId(value: unknown): value is string {
 export async function addNote(postId: string, formData: FormData): Promise<NoteResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to add a note." }
-  if (!isId(postId) || !canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  if (!isId(postId) || !await canSeeLivePost(postId, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
   if (!body) return { ok: false, error: "Write the note first." }
   if (countChars(body) > MAX_NOTE) return { ok: false, error: `Notes can have up to ${MAX_NOTE} characters.` }
-  if (get("SELECT 1 AS found FROM community_notes WHERE post_id = ? AND author_id = ?", postId, viewer.id)) {
+  if (await get("SELECT 1 AS found FROM community_notes WHERE post_id = ? AND author_id = ?", postId, viewer.id)) {
     return { ok: false, error: "You already added a note to this post." }
   }
   const id = newId()
-  run("INSERT INTO community_notes (id, post_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)", id, postId, viewer.id, body, Date.now())
+  await run("INSERT INTO community_notes (id, post_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)", id, postId, viewer.id, body, Date.now())
   refresh()
   return { ok: true, id }
 }
@@ -39,16 +39,16 @@ export async function rateNote(noteId: string, helpful: boolean): Promise<VoidRe
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to rate notes." }
   if (typeof helpful !== "boolean") return { ok: false, error: "Pick helpful or not helpful." }
-  const note = isId(noteId) ? get<{ author_id: string; post_id: string }>("SELECT author_id, post_id FROM community_notes WHERE id = ?", noteId) : undefined
+  const note = isId(noteId) ? await get<{ author_id: string; post_id: string }>("SELECT author_id, post_id FROM community_notes WHERE id = ?", noteId) : undefined
   if (!note) return { ok: false, error: "That note was deleted." }
-  if (!canSeeLivePost(note.post_id, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
+  if (!await canSeeLivePost(note.post_id, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   if (note.author_id === viewer.id) return { ok: false, error: "You can't rate your own note." }
-  const current = get<{ helpful: number }>("SELECT helpful FROM community_note_ratings WHERE note_id = ? AND user_id = ?", noteId, viewer.id)
+  const current = await get<{ helpful: number }>("SELECT helpful FROM community_note_ratings WHERE note_id = ? AND user_id = ?", noteId, viewer.id)
   if (current && (current.helpful === 1) === helpful) {
-    run("DELETE FROM community_note_ratings WHERE note_id = ? AND user_id = ?", noteId, viewer.id)
+    await run("DELETE FROM community_note_ratings WHERE note_id = ? AND user_id = ?", noteId, viewer.id)
   } else {
-    run(
-      "INSERT OR REPLACE INTO community_note_ratings (note_id, user_id, helpful, created_at) VALUES (?, ?, ?, ?)",
+    await run(
+      "INSERT INTO community_note_ratings (note_id, user_id, helpful, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (note_id, user_id) DO UPDATE SET helpful = EXCLUDED.helpful, created_at = EXCLUDED.created_at",
       noteId,
       viewer.id,
       helpful ? 1 : 0,
@@ -62,7 +62,7 @@ export async function rateNote(noteId: string, helpful: boolean): Promise<VoidRe
 export async function deleteNote(noteId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (isId(noteId)) run("DELETE FROM community_notes WHERE id = ? AND author_id = ?", noteId, viewer.id)
+  if (isId(noteId)) await run("DELETE FROM community_notes WHERE id = ? AND author_id = ?", noteId, viewer.id)
   refresh()
   return { ok: true }
 }

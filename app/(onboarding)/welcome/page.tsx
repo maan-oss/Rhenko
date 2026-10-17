@@ -25,7 +25,7 @@ async function WelcomeBody() {
   const viewer = await getViewer()
   if (!viewer) redirect("/login")
   if (viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
-  const profile = get<{
+  const profile = await get<{
     name: string
     handle: string
     bio: string | null

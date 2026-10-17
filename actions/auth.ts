@@ -83,15 +83,15 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
 
   const taken = "That handle is taken. Try another one."
   const emailTaken = "That email is already used by another account. Use a different one, or leave it blank."
-  if (get("SELECT id FROM users WHERE handle = ? COLLATE NOCASE", handle)) return { error: taken }
-  if (email && get("SELECT id FROM users WHERE email = ? COLLATE NOCASE", email)) return { error: emailTaken }
+  if (await get("SELECT id FROM users WHERE handle = ?", handle)) return { error: taken }
+  if (email && await get("SELECT id FROM users WHERE email = ?", email)) return { error: emailTaken }
 
   // The human check comes once the fields are right, so a typo does not use up a puzzle.
   const answer = parseAnswer(formData.get("proof"))
   if (!answer || !(await verifyProof(answer))) return { error: CHECK_FIRST, proofRequired: true }
 
   // Ten new accounts per network each hour. Only a sign-up that is about to succeed counts.
-  const limit = consume(`signup:${await clientIp()}`, 10, 60 * MINUTE)
+  const limit = await consume(`signup:${await clientIp()}`, 10, 60 * MINUTE)
   if (!limit.ok) {
     return { error: `Too many accounts were made from this network in the last hour. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
   }
@@ -99,7 +99,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const id = newId()
   const hash = await hashPassword(password)
   try {
-    run(
+    await run(
       `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at, terms_version, terms_accepted_at, onboarding)
        VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL, ?, ?, 'pending')`,
       id,
@@ -132,13 +132,13 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   // too. Sign-ins that work are not counted, so a person who signs in often is not asked for it.
   const failures = `loginfail:${handle.toLowerCase().slice(0, 32)}`
   const networkFailures = `loginfailip:${await clientIp()}`
-  const checkFirst = reached(failures, 3, 15 * MINUTE) || reached(networkFailures, 10, 15 * MINUTE)
+  const checkFirst = await reached(failures, 3, 15 * MINUTE) || await reached(networkFailures, 10, 15 * MINUTE)
 
-  const ipLimit = consume(`loginip:${await clientIp()}`, 30, 15 * MINUTE)
+  const ipLimit = await consume(`loginip:${await clientIp()}`, 30, 15 * MINUTE)
   if (!ipLimit.ok) {
     return { error: `Too many sign-in attempts from this network. Try again in ${waitLabel(ipLimit.retryAfterSeconds)}.` }
   }
-  const handleLimit = consume(`login:${handle.toLowerCase().slice(0, 32)}`, 10, 15 * MINUTE)
+  const handleLimit = await consume(`login:${handle.toLowerCase().slice(0, 32)}`, 10, 15 * MINUTE)
   if (!handleLimit.ok) {
     return { error: `Too many sign-in attempts for that handle. Try again in ${waitLabel(handleLimit.retryAfterSeconds)}.` }
   }
@@ -150,14 +150,14 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   }
 
   // One password check runs whether or not the handle exists, so a failed sign-in takes as long either way.
-  const user = handle.length <= HANDLE_MAX ? findUserByHandleWithSecret(handle) : undefined
+  const user = handle.length <= HANDLE_MAX ? await findUserByHandleWithSecret(handle) : undefined
   let ok = false
   if (user && password.length <= MAX_PASSWORD) ok = await verifyPassword(password, user.password_hash)
   else await spendPasswordCheck(password.slice(0, MAX_PASSWORD))
   if (!user || !ok) {
     // Only a wrong password is counted, for the check above.
-    consume(failures, 3, 15 * MINUTE)
-    consume(networkFailures, 10, 15 * MINUTE)
+    await consume(failures, 3, 15 * MINUTE)
+    await consume(networkFailures, 10, 15 * MINUTE)
     return { error: "Handle or password is wrong." }
   }
 
@@ -166,7 +166,7 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
     await createChallenge(user.id)
     redirect("/login/verify")
   }
-  if (user.deactivated_at !== null) run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
+  if (user.deactivated_at !== null) await run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
   await recordSignal(user.id, "login")
   await createSession(user.id)
   redirect("/")
@@ -176,15 +176,15 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
 export async function verifySecondFactor(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const challenge = await readChallenge()
   if (!challenge) redirect("/login?notice=expired")
-  const user = findUserById(challenge.userId)
+  const user = await findUserById(challenge.userId)
   if (!user || user.totp_enabled !== 1) {
     await clearChallenge()
     redirect("/login?notice=expired")
   }
 
-  const result = checkSecondFactor(user.id, String(formData.get("code") ?? ""))
+  const result = await checkSecondFactor(user.id, String(formData.get("code") ?? ""))
   if (!result.ok) {
-    if (!countChallengeFailure(challenge.tokenHash)) {
+    if (!await countChallengeFailure(challenge.tokenHash)) {
       await clearChallenge()
       redirect("/login?notice=codes")
     }
@@ -192,7 +192,7 @@ export async function verifySecondFactor(_prev: AuthState, formData: FormData): 
   }
 
   await clearChallenge()
-  if (user.deactivated_at !== null) run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
+  if (user.deactivated_at !== null) await run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
   await createSession(user.id)
   redirect("/")
 }
@@ -200,7 +200,7 @@ export async function verifySecondFactor(_prev: AuthState, formData: FormData): 
 // Logs out the active account. Another remembered account takes over if there is one.
 export async function logout(): Promise<void> {
   const viewer = await getViewer()
-  if (viewer) hangUpFor(viewer.id, "signed-out", await currentSessionHash())
+  if (viewer) await hangUpFor(viewer.id, "signed-out", await currentSessionHash())
   await destroySession()
   if (await adoptRemainingAccount()) redirect("/")
   redirect("/login")
@@ -211,7 +211,7 @@ export async function switchAccount(userId: string): Promise<void> {
   const viewer = await getViewer()
   const before = await currentSessionHash()
   if (!(await activateAccount(userId))) return
-  if (viewer && viewer.id !== userId) hangUpFor(viewer.id, "signed-out", before)
+  if (viewer && viewer.id !== userId) await hangUpFor(viewer.id, "signed-out", before)
   redirect("/")
 }
 
@@ -236,11 +236,11 @@ export async function requestPasswordReset(_prev: ResetRequestState, formData: F
   if (value.length > MAX_EMAIL) return { error: "That's longer than any handle or email. Check it and try again." }
   if (filledHoneypot(formData)) return { error: UNSENT }
 
-  const ipLimit = consume(`resetip:${await clientIp()}`, 10, 60 * MINUTE)
+  const ipLimit = await consume(`resetip:${await clientIp()}`, 10, 60 * MINUTE)
   if (!ipLimit.ok) {
     return { error: `Too many reset requests from this network. Try again in ${waitLabel(ipLimit.retryAfterSeconds)}.` }
   }
-  const targetLimit = consume(`reset:${value.toLowerCase()}`, 3, 15 * MINUTE)
+  const targetLimit = await consume(`reset:${value.toLowerCase()}`, 3, 15 * MINUTE)
   if (!targetLimit.ok) {
     return { error: `Too many reset requests for that handle or email. Try again in ${waitLabel(targetLimit.retryAfterSeconds)}.` }
   }
@@ -249,22 +249,22 @@ export async function requestPasswordReset(_prev: ResetRequestState, formData: F
   if (!answer || !(await verifyProof(answer))) return { error: CHECK_FIRST, proofRequired: true }
 
   const byEmail = value.includes("@")
-  const user = get<{ id: string; handle: string; email: string }>(
+  const user = await get<{ id: string; handle: string; email: string }>(
     byEmail
-      ? "SELECT id, handle, email FROM users WHERE email = ? COLLATE NOCASE AND email_verified_at IS NOT NULL"
-      : "SELECT id, handle, email FROM users WHERE handle = ? COLLATE NOCASE AND email IS NOT NULL AND email_verified_at IS NOT NULL",
+      ? "SELECT id, handle, email FROM users WHERE email = ? AND email_verified_at IS NOT NULL"
+      : "SELECT id, handle, email FROM users WHERE handle = ? AND email IS NOT NULL AND email_verified_at IS NOT NULL",
     value
   )
   // At most one code a minute for an account, and five emails an hour to one address.
   if (
     user &&
-    consume(`resetmail:${user.id}`, 1, MINUTE).ok &&
-    consume(`mailto:${user.email.toLowerCase()}`, 5, 60 * MINUTE).ok
+    (await consume(`resetmail:${user.id}`, 1, MINUTE)).ok &&
+    (await consume(`mailto:${user.email.toLowerCase()}`, 5, 60 * MINUTE)).ok
   ) {
-    const code = issueEmailCode(user.id, "reset", user.email)
+    const code = await issueEmailCode(user.id, "reset", user.email)
     after(async () => {
       const sent = await sendMail({ to: user.email, subject: "Your Rhenko password reset code", text: resetMail(user.handle, code) })
-      if (!sent.ok) withdrawEmailCodes(user.id, "reset")
+      if (!sent.ok) await withdrawEmailCodes(user.id, "reset")
     })
   }
   return { sent: true, email: byEmail ? value : undefined }
@@ -282,23 +282,23 @@ export async function resetPassword(_prev: AuthState, formData: FormData): Promi
   const passwordError = passwordProblem(password)
   if (passwordError) return { error: passwordError }
 
-  const limit = consume(`resetcheck:${await clientIp()}`, 20, 15 * MINUTE)
+  const limit = await consume(`resetcheck:${await clientIp()}`, 20, 15 * MINUTE)
   if (!limit.ok) return { error: `Too many tries from this network. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
 
   // The new password is hashed before the lookup, so an address without an account takes as long as one with.
   const hash = await hashPassword(password)
   const wrong = { error: "That code isn't right, or it has expired. Check the email we sent, or ask for a new code." }
-  const user = get<{ id: string; email: string }>(
-    "SELECT id, email FROM users WHERE email = ? COLLATE NOCASE AND email_verified_at IS NOT NULL",
+  const user = await get<{ id: string; email: string }>(
+    "SELECT id, email FROM users WHERE email = ? AND email_verified_at IS NOT NULL",
     email
   )
   if (!user) return wrong
-  const result = redeemEmailCode(user.id, "reset", code, (target) => {
+  const result = await redeemEmailCode(user.id, "reset", code, async (target) => {
     if (target.toLowerCase() !== user.email.toLowerCase()) return false
-    run("UPDATE users SET password_hash = ? WHERE id = ?", hash, user.id)
-    run("DELETE FROM sessions WHERE user_id = ?", user.id)
-    run("DELETE FROM login_challenges WHERE user_id = ?", user.id)
-    run("DELETE FROM email_codes WHERE user_id = ? AND purpose = 'reset'", user.id)
+    await run("UPDATE users SET password_hash = ? WHERE id = ?", hash, user.id)
+    await run("DELETE FROM sessions WHERE user_id = ?", user.id)
+    await run("DELETE FROM login_challenges WHERE user_id = ?", user.id)
+    await run("DELETE FROM email_codes WHERE user_id = ? AND purpose = 'reset'", user.id)
     return true
   })
   if (!result.ok || !result.value) return wrong

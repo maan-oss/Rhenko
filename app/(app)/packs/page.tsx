@@ -15,9 +15,9 @@ export default function PacksPage() {
 
 async function PacksBody() {
   const viewer = await requireViewer()
-  const packs = starterPacks(viewer.id)
+  const packs = await starterPacks(viewer.id)
   // A pack whose owner has blocked the viewer stays out of sight, as the list itself does.
-  const visible = listOwnersVisibleTo(viewer.id, packs.map((pack) => pack.owner.id))
+  const visible = await listOwnersVisibleTo(viewer.id, packs.map((pack) => pack.owner.id))
   const shown = packs.filter((pack) => visible.has(pack.owner.id))
 
   return (

@@ -24,17 +24,17 @@ export const instant = false
 
 export default async function ConversationPage({ params }: { params: Params }) {
   const viewer = await requireViewer()
-  if (!conversationFor((await params).id, viewer.id)) notFound()
+  if (!await conversationFor((await params).id, viewer.id)) notFound()
   return <ConversationBody params={params} />
 }
 
 async function ConversationBody({ params }: { params: Params }) {
   const viewer = await requireViewer()
   const { id } = await params
-  const conversation = conversationFor(id, viewer.id)
+  const conversation = await conversationFor(id, viewer.id)
   if (!conversation) notFound()
 
-  const messages = conversationMessages(id, viewer.id, THREAD_PAGE)
+  const messages = await conversationMessages(id, viewer.id, THREAD_PAGE)
   const others = conversation.members.filter((m) => m.id !== viewer.id)
   const isGroup = conversation.kind === "group"
   const title = isGroup ? conversation.title || others.map((o) => o.name).join(", ") : others[0]?.name ?? "Conversation"

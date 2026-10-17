@@ -18,6 +18,6 @@ export async function POST(request: NextRequest) {
   const { postId, kind } = (body ?? {}) as { postId?: unknown; kind?: unknown }
   if (typeof postId !== "string" || postId.length > 64 || !isClickKind(kind)) return new Response(null, { status: 400 })
 
-  if (visiblePostIds([postId], viewer.id, true).has(postId)) recordPostClick(viewer.id, postId, kind)
+  if ((await visiblePostIds([postId], viewer.id, true)).has(postId)) await recordPostClick(viewer.id, postId, kind)
   return new Response(null, { status: 204 })
 }

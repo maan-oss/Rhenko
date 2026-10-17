@@ -25,7 +25,7 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const params = await searchParams
   const tab = firstParam(params.tab) === "scheduled" ? "scheduled" : "drafts"
-  const found = ownPending(viewer.id, tab === "drafts" ? "draft" : "scheduled")
+  const found = await ownPending(viewer.id, tab === "drafts" ? "draft" : "scheduled")
   // Scheduled posts are listed in the order they go out. Drafts keep the data layer's order, newest first.
   const posts = tab === "scheduled" ? [...found].sort((a, b) => (a.publishAt ?? 0) - (b.publishAt ?? 0)) : found
 

@@ -25,8 +25,8 @@ async function clock(): Promise<number> {
 
 async function ConnectBody() {
   const viewer = await requireViewer()
-  const suggestions = suggestionsFor(viewer.id, await clock(), 6)
-  const settings = settingsFor(viewer.id)
+  const suggestions = await suggestionsFor(viewer.id, await clock(), 6)
+  const settings = await settingsFor(viewer.id)
   const groups = suggestions.groups.filter((group) => group.people.length > 0)
 
   // What is missing, each with the one thing that fixes it. Settings is where both are changed.

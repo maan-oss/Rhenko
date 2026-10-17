@@ -19,7 +19,7 @@ export const instant = false
 export default async function PostAnalyticsPage({ params }: { params: Params }) {
   const viewer = await requireViewer()
   const { handle, postId } = await params
-  const stats = postAnalytics(postId, viewer.id)
+  const stats = await postAnalytics(postId, viewer.id)
   if (!stats) notFound()
   if (stats.handle.toLowerCase() !== handle.toLowerCase()) redirect(`/${stats.handle}/status/${stats.id}/analytics`)
 

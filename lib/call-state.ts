@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks"
 import { randomUUID } from "node:crypto"
 import { all, get, run, transaction } from "@/lib/db"
 import {
@@ -112,15 +113,18 @@ type Working = {
   entries: Map<string, { call: Call; doc: string | null }>
   removed: Set<string>
 }
-let working: Working | null = null
+// The working set of the operation in progress on this chain of async calls. Concurrent requests never share one.
+const workingStore = new AsyncLocalStorage<Working>()
+// Advisory lock key that serializes call writes across requests and processes.
+const CALLS_LOCK = 7412
 
 // Set once when the server run starts.
 export function serverBootId(): string {
   return BOOT_ID
 }
 
-export function personOf(userId: string): EventPerson | null {
-  const row = get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
+export async function personOf(userId: string): Promise<EventPerson | null> {
+  const row = await get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
     "SELECT id, name, handle, avatar_file FROM users WHERE id = ? AND deactivated_at IS NULL",
     userId
   )
@@ -128,8 +132,8 @@ export function personOf(userId: string): EventPerson | null {
 }
 
 // Which kind of call an id names, and where, for the checks the server actions make before acting on it.
-export function callInfo(callId: string): { kind: "dm" | "group"; conversationId: string } | null {
-  const row = get<{ kind: "dm" | "group"; conversation_id: string }>("SELECT kind, conversation_id FROM calls WHERE id = ?", callId)
+export async function callInfo(callId: string): Promise<{ kind: "dm" | "group"; conversationId: string } | null> {
+  const row = await get<{ kind: "dm" | "group"; conversation_id: string }>("SELECT kind, conversation_id FROM calls WHERE id = ?", callId)
   return row ? { kind: row.kind, conversationId: row.conversation_id } : null
 }
 
@@ -152,34 +156,36 @@ function decode(doc: string): Call {
 }
 
 function openWork(): Working {
-  if (!working) throw new Error("Calls are changed only inside a call operation.")
-  return working
+  const state = workingStore.getStore()
+  if (!state) throw new Error("Calls are changed only inside a call operation.")
+  return state
 }
 
-// Runs one operation on the calls. A write runs in a transaction and saves what it changed. A read takes no lock. An
-// operation started inside another one joins it.
-function operate<T>(writes: boolean, fn: () => T): T {
-  if (working) return fn()
-  const body = (): T => {
+// Runs one operation on the calls. A write runs in a transaction that holds a database lock, so no other write
+// interleaves with it, and saves what it changed. A read takes no lock. An operation started inside another one joins it.
+async function operate<T>(writes: boolean, fn: () => Promise<T>): Promise<T> {
+  if (workingStore.getStore()) return await fn()
+  const body = (): Promise<T> => {
     const state: Working = { entries: new Map(), removed: new Set() }
-    working = state
-    try {
-      const result = fn()
-      if (writes) saveCalls(state)
+    return workingStore.run(state, async () => {
+      const result = await fn()
+      if (writes) await saveCalls(state)
       return result
-    } finally {
-      working = null
-    }
+    })
   }
-  return writes ? transaction(body) : body()
+  if (!writes) return await body()
+  return await transaction(async () => {
+    await run("SELECT pg_advisory_xact_lock(?)", CALLS_LOCK)
+    return await body()
+  })
 }
 
-function saveCalls(state: Working): void {
-  for (const id of state.removed) run("DELETE FROM calls WHERE id = ?", id)
+async function saveCalls(state: Working): Promise<void> {
+  for (const id of state.removed) await run("DELETE FROM calls WHERE id = ?", id)
   for (const [id, entry] of state.entries) {
     const doc = encode(entry.call)
     if (doc === entry.doc) continue
-    run(
+    await run(
       "INSERT INTO calls (id, kind, conversation_id, doc) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET doc = excluded.doc",
       id,
       entry.call.kind,
@@ -189,21 +195,21 @@ function saveCalls(state: Working): void {
   }
 }
 
-function getCall(id: string): Call | null {
+async function getCall(id: string): Promise<Call | null> {
   const state = openWork()
   const known = state.entries.get(id)
   if (known) return known.call
   if (state.removed.has(id)) return null
-  const row = get<{ doc: string }>("SELECT doc FROM calls WHERE id = ?", id)
+  const row = await get<{ doc: string }>("SELECT doc FROM calls WHERE id = ?", id)
   if (!row) return null
   const call = decode(row.doc)
   state.entries.set(id, { call, doc: row.doc })
   return call
 }
 
-function listCalls(): Call[] {
+async function listCalls(): Promise<Call[]> {
   const state = openWork()
-  for (const row of all<{ id: string; doc: string }>("SELECT id, doc FROM calls")) {
+  for (const row of await all<{ id: string; doc: string }>("SELECT id, doc FROM calls")) {
     if (state.entries.has(row.id) || state.removed.has(row.id)) continue
     state.entries.set(row.id, { call: decode(row.doc), doc: row.doc })
   }
@@ -227,17 +233,17 @@ function endCall(call: Call): void {
   state.removed.add(call.id)
 }
 
-function anyCalls(): boolean {
-  return get("SELECT 1 AS found FROM calls LIMIT 1") !== undefined
+async function anyCalls(): Promise<boolean> {
+  return await get("SELECT 1 AS found FROM calls LIMIT 1") !== undefined
 }
 
-function relay(userId: string, callId: string, signal: CallSignal, device?: string): void {
-  publish([userId], device ? { type: "call", callId, signal, device } : { type: "call", callId, signal })
+async function relay(userId: string, callId: string, signal: CallSignal, device?: string): Promise<void> {
+  await publish([userId], device ? { type: "call", callId, signal, device } : { type: "call", callId, signal })
 }
 
 // Accepted members of a conversation whose accounts are live.
-function acceptedMembers(conversationId: string): { user_id: string; muted: number }[] {
-  return all<{ user_id: string; muted: number }>(
+async function acceptedMembers(conversationId: string): Promise<{ user_id: string; muted: number }[]> {
+  return await all<{ user_id: string; muted: number }>(
     `SELECT cm.user_id, cm.muted FROM conversation_members cm JOIN users u ON u.id = cm.user_id
      WHERE cm.conversation_id = ? AND cm.status = 'accepted' AND u.deactivated_at IS NULL`,
     conversationId
@@ -245,8 +251,8 @@ function acceptedMembers(conversationId: string): { user_id: string; muted: numb
 }
 
 // Whether a member muted the conversation. Null when they are not an accepted member.
-function memberMuted(conversationId: string, userId: string): boolean | null {
-  const row = get<{ muted: number }>(
+async function memberMuted(conversationId: string, userId: string): Promise<boolean | null> {
+  const row = await get<{ muted: number }>(
     "SELECT muted FROM conversation_members WHERE conversation_id = ? AND user_id = ? AND status = 'accepted'",
     conversationId,
     userId
@@ -255,23 +261,23 @@ function memberMuted(conversationId: string, userId: string): boolean | null {
 }
 
 // A group's name as one member sees it: its title, or the other members' names.
-function groupTitle(conversationId: string, viewerId: string): string {
-  const title = get<{ title: string }>("SELECT title FROM conversations WHERE id = ?", conversationId)?.title ?? ""
+async function groupTitle(conversationId: string, viewerId: string): Promise<string> {
+  const title = (await get<{ title: string }>("SELECT title FROM conversations WHERE id = ?", conversationId))?.title ?? ""
   if (title) return title
-  const names = all<{ name: string }>(
+  const names = (await all<{ name: string }>(
     `SELECT u.name FROM conversation_members cm JOIN users u ON u.id = cm.user_id
      WHERE cm.conversation_id = ? AND cm.user_id <> ? AND u.deactivated_at IS NULL ORDER BY cm.joined_at LIMIT 4`,
     conversationId,
     viewerId
-  ).map((row) => row.name)
+  )).map((row) => row.name)
   if (names.length === 0) return "Group call"
   return names.length > 3 ? `${names.slice(0, 3).join(", ")} and others` : names.join(", ")
 }
 
 // Talking or ringing out counts as talking. Being rung counts as ringing.
-function busyState(userId: string, except?: string): "talking" | "ringing" | null {
+async function busyState(userId: string, except?: string): Promise<"talking" | "ringing" | null> {
   let ringing = false
-  for (const call of listCalls()) {
+  for (const call of await listCalls()) {
     if (call.id === except) continue
     if (call.kind === "dm") {
       if (call.caller.userId === userId) return "talking"
@@ -287,22 +293,28 @@ function busyState(userId: string, except?: string): "talking" | "ringing" | nul
   return ringing ? "ringing" : null
 }
 
-function blockedWithAnyone(call: GroupCall, userId: string): boolean {
+async function blockedWithAnyone(call: GroupCall, userId: string): Promise<boolean> {
   for (const other of call.participants.keys()) {
-    if (other !== userId && blockedEitherWay(other, userId)) return true
+    if (other !== userId && await blockedEitherWay(other, userId)) return true
   }
   return false
 }
 
 // The call's record in its conversation. The sender is the first of the candidates whose account still exists, and
 // nothing is written for a conversation that is gone.
-function writeRecord(call: Call, outcome: CallOutcome, seconds: number, people: number, senders: string[]): void {
+async function writeRecord(call: Call, outcome: CallOutcome, seconds: number, people: number, senders: string[]): Promise<void> {
   const now = Date.now()
-  if (!get("SELECT 1 AS found FROM conversations WHERE id = ?", call.conversationId)) return
-  const sender = senders.find((id) => get("SELECT 1 AS found FROM users WHERE id = ?", id) !== undefined)
+  if (!await get("SELECT 1 AS found FROM conversations WHERE id = ?", call.conversationId)) return
+  let sender: string | undefined
+  for (const id of senders) {
+    if (await get("SELECT 1 AS found FROM users WHERE id = ?", id)) {
+      sender = id
+      break
+    }
+  }
   if (!sender) return
   try {
-    run(
+    await run(
       `INSERT INTO chat_messages (id, conversation_id, sender_id, body, call_status, call_seconds, call_kind, call_people, created_at)
        VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)`,
       randomUUID(),
@@ -314,26 +326,26 @@ function writeRecord(call: Call, outcome: CallOutcome, seconds: number, people: 
       people,
       now
     )
-    run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, call.conversationId)
+    await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, call.conversationId)
   } catch (error) {
     console.error("[calls] the call record could not be saved", error)
     return
   }
-  const members = all<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ?", call.conversationId)
-  publish(
+  const members = await all<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ?", call.conversationId)
+  await publish(
     members.map((member) => member.user_id),
     { type: "message", conversationId: call.conversationId }
   )
 }
 
 // A banner goes to every open tab. Someone with none open gets it when they next open the app.
-function deliverBanner(userId: string, event: BannerEvent): void {
-  if (listenerCount(userId) > 0) {
-    publish([userId], event)
+async function deliverBanner(userId: string, event: BannerEvent): Promise<void> {
+  if (await listenerCount(userId) > 0) {
+    await publish([userId], event)
     return
   }
-  run("INSERT INTO queued_banners (user_id, event, created_at) VALUES (?, ?, ?)", userId, JSON.stringify(event), Date.now())
-  run(
+  await run("INSERT INTO queued_banners (user_id, event, created_at) VALUES (?, ?, ?)", userId, JSON.stringify(event), Date.now())
+  await run(
     "DELETE FROM queued_banners WHERE user_id = ?1 AND id NOT IN (SELECT id FROM queued_banners WHERE user_id = ?1 ORDER BY id DESC LIMIT ?2)",
     userId,
     BANNERS_KEPT
@@ -341,35 +353,35 @@ function deliverBanner(userId: string, event: BannerEvent): void {
 }
 
 // Banners saved while the person had nothing open. They are handed over once.
-export function takeQueuedBanners(userId: string): RealtimeEvent[] {
-  return transaction(() => {
-    const rows = all<{ event: string; created_at: number }>(
+export async function takeQueuedBanners(userId: string): Promise<RealtimeEvent[]> {
+  return await transaction(async () => {
+    const rows = await all<{ event: string; created_at: number }>(
       "SELECT event, created_at FROM queued_banners WHERE user_id = ? ORDER BY id",
       userId
     )
-    run("DELETE FROM queued_banners WHERE user_id = ?", userId)
+    await run("DELETE FROM queued_banners WHERE user_id = ?", userId)
     const now = Date.now()
     return rows.filter((row) => now - row.created_at < BANNER_KEEP_MS).map((row) => JSON.parse(row.event) as RealtimeEvent)
   })
 }
 
 // Drops banners nobody came back for. Runs from the maintenance pass.
-export function pruneQueuedBanners(now: number): void {
-  run("DELETE FROM queued_banners WHERE created_at <= ?", now - BANNER_KEEP_MS)
+export async function pruneQueuedBanners(now: number): Promise<void> {
+  await run("DELETE FROM queued_banners WHERE created_at <= ?", now - BANNER_KEEP_MS)
 }
 
 // Tells someone they missed a call, unless they muted the conversation or a block stands between them.
-function missedCallBanner(call: Call, recipientId: string, fromId: string): void {
-  if (memberMuted(call.conversationId, recipientId) !== false) return
-  if (blockedEitherWay(recipientId, fromId)) return
-  const from = personOf(fromId)
+async function missedCallBanner(call: Call, recipientId: string, fromId: string): Promise<void> {
+  if (await memberMuted(call.conversationId, recipientId) !== false) return
+  if (await blockedEitherWay(recipientId, fromId)) return
+  const from = await personOf(fromId)
   if (!from) return
   const group = call.kind === "group"
-  deliverBanner(recipientId, {
+  await deliverBanner(recipientId, {
     type: "banner",
     kind: "missed-call",
     conversationId: call.conversationId,
-    title: group ? groupTitle(call.conversationId, recipientId) : from.name,
+    title: group ? await groupTitle(call.conversationId, recipientId) : from.name,
     line: group ? `Missed group call from ${from.name}` : "Missed call",
     preview: null,
     href: `/messages/${call.conversationId}`,
@@ -379,74 +391,74 @@ function missedCallBanner(call: Call, recipientId: string, fromId: string): void
 
 // ── One-to-one calls ────────────────────────────────────────────────────────────────────────────────────────────────
 
-function closeDm(call: DmCall, outcome: CallOutcome, seconds: number): void {
+async function closeDm(call: DmCall, outcome: CallOutcome, seconds: number): Promise<void> {
   call.ringUntil = null
   endCall(call)
-  writeRecord(call, outcome, seconds, 2, [call.caller.userId])
+  await writeRecord(call, outcome, seconds, 2, [call.caller.userId])
 }
 
-function answerDm(call: DmCall, device: Device): void {
+async function answerDm(call: DmCall, device: Device): Promise<void> {
   const now = Date.now()
   call.answeredAt = now
   call.callee = device
   call.ringUntil = null
   call.beats.set(call.caller.userId, now)
   call.beats.set(device.userId, now)
-  relay(call.caller.userId, call.id, { kind: "accept" }, call.caller.deviceId)
+  await relay(call.caller.userId, call.id, { kind: "accept" }, call.caller.deviceId)
   // Every other tab of the person called was ringing too. They stop, since this one answered.
-  relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
+  await relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
 }
 
 // The person called turns the ring down. Every tab that rang stops, and the caller hears it was declined.
-function declineDm(call: DmCall): void {
-  closeDm(call, "declined", 0)
-  relay(call.caller.userId, call.id, { kind: "decline" }, call.caller.deviceId)
-  relay(call.calleeId, call.id, { kind: "end", reason: "declined", seconds: 0 })
+async function declineDm(call: DmCall): Promise<void> {
+  await closeDm(call, "declined", 0)
+  await relay(call.caller.userId, call.id, { kind: "decline" }, call.caller.deviceId)
+  await relay(call.calleeId, call.id, { kind: "end", reason: "declined", seconds: 0 })
 }
 
 // The caller gives up before an answer. Every tab that rang stops, and it is a missed call for the other person.
-function cancelDm(call: DmCall, banner: boolean): void {
-  closeDm(call, "missed", 0)
-  relay(call.calleeId, call.id, { kind: "end", reason: "missed", seconds: 0 })
-  if (banner) missedCallBanner(call, call.calleeId, call.caller.userId)
+async function cancelDm(call: DmCall, banner: boolean): Promise<void> {
+  await closeDm(call, "missed", 0)
+  await relay(call.calleeId, call.id, { kind: "end", reason: "missed", seconds: 0 })
+  if (banner) await missedCallBanner(call, call.calleeId, call.caller.userId)
 }
 
 // Nobody answered: the caller hears so, and the ring stops everywhere.
-function unansweredDm(call: DmCall, banner: boolean): void {
-  closeDm(call, "missed", 0)
-  relay(call.caller.userId, call.id, { kind: "end", reason: "missed", seconds: 0 }, call.caller.deviceId)
-  relay(call.calleeId, call.id, { kind: "end", reason: "missed", seconds: 0 })
-  if (banner) missedCallBanner(call, call.calleeId, call.caller.userId)
+async function unansweredDm(call: DmCall, banner: boolean): Promise<void> {
+  await closeDm(call, "missed", 0)
+  await relay(call.caller.userId, call.id, { kind: "end", reason: "missed", seconds: 0 }, call.caller.deviceId)
+  await relay(call.calleeId, call.id, { kind: "end", reason: "missed", seconds: 0 })
+  if (banner) await missedCallBanner(call, call.calleeId, call.caller.userId)
 }
 
 // An answered call ends at `at`. It counts only the time it was connected. One that never connected failed.
-function hangUpDm(call: DmCall, byUserId: string, at: number, byReason?: CallEndReason, otherReason?: CallEndReason): void {
+async function hangUpDm(call: DmCall, byUserId: string, at: number, byReason?: CallEndReason, otherReason?: CallEndReason): Promise<void> {
   const connectedAt = call.connectedAt
   const seconds = connectedAt !== null ? Math.max(0, Math.round((at - connectedAt) / 1000)) : 0
   const outcome: CallOutcome = connectedAt !== null ? "ended" : "failed"
-  closeDm(call, outcome, seconds)
+  await closeDm(call, outcome, seconds)
   const byCaller = byUserId === call.caller.userId
   const mine = byCaller ? call.caller : call.callee
   const other = byCaller ? call.callee : call.caller
-  if (other) relay(other.userId, call.id, { kind: "end", reason: otherReason ?? outcome, seconds }, other.deviceId)
-  if (mine) relay(mine.userId, call.id, { kind: "end", reason: byReason ?? outcome, seconds }, mine.deviceId)
+  if (other) await relay(other.userId, call.id, { kind: "end", reason: otherReason ?? outcome, seconds }, other.deviceId)
+  if (mine) await relay(mine.userId, call.id, { kind: "end", reason: byReason ?? outcome, seconds }, mine.deviceId)
 }
 
 // The ring ran out. A one-to-one ring ends as missed, and a group ring stops.
-function ringTimedOut(call: Call): void {
+async function ringTimedOut(call: Call): Promise<void> {
   if (call.kind === "dm") {
     call.ringUntil = null
-    if (call.answeredAt === null) unansweredDm(call, true)
+    if (call.answeredAt === null) await unansweredDm(call, true)
     return
   }
-  ringWindowClosed(call)
+  await ringWindowClosed(call)
 }
 
 // Rings the other person in a one-to-one chat. Pressing call while they are already calling you answers them.
 // Someone with nothing open cannot ring: the caller hears so at once and they get a missed call.
-export function startDmCall(conversationId: string, caller: Device, callee: EventPerson, from: EventPerson, video: boolean): StartResult {
-  return operate<StartResult>(true, () => {
-    for (const call of listCalls()) {
+export async function startDmCall(conversationId: string, caller: Device, callee: EventPerson, from: EventPerson, video: boolean): Promise<StartResult> {
+  return await operate<StartResult>(true, async () => {
+    for (const call of await listCalls()) {
       if (
         call.kind === "dm" &&
         call.conversationId === conversationId &&
@@ -454,14 +466,14 @@ export function startDmCall(conversationId: string, caller: Device, callee: Even
         call.calleeId === caller.userId &&
         call.caller.userId === callee.id
       ) {
-        answerDm(call, caller)
+        await answerDm(call, caller)
         return { ok: true, mode: "answered", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: BOOT_ID, peer: callee }
       }
     }
-    const mine = busyState(caller.userId)
+    const mine = await busyState(caller.userId)
     if (mine === "talking") return { ok: false, error: "You're already on a call." }
     if (mine === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
-    if (busyState(callee.id) !== null) return { ok: false, error: `${callee.name} is on another call.` }
+    if (await busyState(callee.id) !== null) return { ok: false, error: `${callee.name} is on another call.` }
 
     const now = Date.now()
     const call: DmCall = {
@@ -478,14 +490,14 @@ export function startDmCall(conversationId: string, caller: Device, callee: Even
       ringUntil: null,
       beats: new Map(),
     }
-    if (listenerCount(callee.id) === 0) {
-      writeRecord(call, "missed", 0, 2, [caller.userId])
-      missedCallBanner(call, callee.id, caller.userId)
+    if (await listenerCount(callee.id) === 0) {
+      await writeRecord(call, "missed", 0, 2, [caller.userId])
+      await missedCallBanner(call, callee.id, caller.userId)
       return { ok: false, unavailable: true, error: `${callee.name} isn't available right now.` }
     }
     call.ringUntil = now + CALL_RING_MS
     createCall(call)
-    relay(callee.id, call.id, { kind: "ring", call: "dm", conversationId, from, title: null, iceServers: iceServersFor(callee.id), video })
+    await relay(callee.id, call.id, { kind: "ring", call: "dm", conversationId, from, title: null, iceServers: iceServersFor(callee.id), video })
     return { ok: true, mode: "ringing", callId: call.id, iceServers: iceServersFor(caller.userId), bootId: BOOT_ID }
   })
 }
@@ -494,7 +506,7 @@ function lostAt(action: Extract<CallAction, { kind: "end" }>, now: number): numb
   return now - Math.min(Math.max(action.lostMs ?? 0, 0), MAX_LOST_MS)
 }
 
-function dmSignal(call: DmCall, from: Device, action: CallAction): SignalResult {
+async function dmSignal(call: DmCall, from: Device, action: CallAction): Promise<SignalResult> {
   const isCaller = from.userId === call.caller.userId
   const isCallee = from.userId === call.calleeId
   if (!isCaller && !isCallee) return { ok: false, error: GONE }
@@ -510,27 +522,27 @@ function dmSignal(call: DmCall, from: Device, action: CallAction): SignalResult 
     case "accept":
       if (!isCallee) return { ok: false, error: GONE }
       if (answered) return OK
-      if (blockedEitherWay(call.caller.userId, call.calleeId)) {
-        unansweredDm(call, false)
+      if (await blockedEitherWay(call.caller.userId, call.calleeId)) {
+        await unansweredDm(call, false)
         return { ok: false, error: GONE }
       }
-      answerDm(call, from)
+      await answerDm(call, from)
       return OK
     case "decline":
       if (!isCallee || answered) return { ok: false, error: GONE }
-      declineDm(call)
+      await declineDm(call)
       return OK
     case "end":
       if (!answered) {
         // Cancelling your own ring is a missed call for the other person. Ending one you are being rung by declines it.
-        if (isCaller) cancelDm(call, true)
-        else declineDm(call)
+        if (isCaller) await cancelDm(call, true)
+        else await declineDm(call)
         return OK
       }
       {
         const now = Date.now()
         const at = lostAt(action, now)
-        hangUpDm(call, from.userId, at, undefined, at < now ? "dropped" : undefined)
+        await hangUpDm(call, from.userId, at, undefined, at < now ? "dropped" : undefined)
       }
       return OK
     case "connected":
@@ -542,19 +554,19 @@ function dmSignal(call: DmCall, from: Device, action: CallAction): SignalResult 
     case "offer": {
       if (!answered || !call.callee) return { ok: false, error: GONE }
       const to = isCaller ? call.callee : call.caller
-      relay(to.userId, call.id, { kind: "offer", sdp: action.sdp, restart: action.restart, from: { userId: from.userId, deviceId: from.deviceId }, person: null }, to.deviceId)
+      await relay(to.userId, call.id, { kind: "offer", sdp: action.sdp, restart: action.restart, from: { userId: from.userId, deviceId: from.deviceId }, person: null }, to.deviceId)
       return OK
     }
     case "answer": {
       if (!answered || !call.callee) return { ok: false, error: GONE }
       const to = isCaller ? call.callee : call.caller
-      relay(to.userId, call.id, { kind: "answer", sdp: action.sdp, from: { userId: from.userId, deviceId: from.deviceId } }, to.deviceId)
+      await relay(to.userId, call.id, { kind: "answer", sdp: action.sdp, from: { userId: from.userId, deviceId: from.deviceId } }, to.deviceId)
       return OK
     }
     case "ice": {
       if (!answered || !call.callee) return { ok: false, error: GONE }
       const to = isCaller ? call.callee : call.caller
-      relay(to.userId, call.id, { kind: "ice", candidate: action.candidate, from: { userId: from.userId, deviceId: from.deviceId } }, to.deviceId)
+      await relay(to.userId, call.id, { kind: "ice", candidate: action.candidate, from: { userId: from.userId, deviceId: from.deviceId } }, to.deviceId)
       return OK
     }
   }
@@ -568,11 +580,11 @@ function membersOf(call: GroupCall): GroupMember[] {
     .map((p) => ({ userId: p.userId, deviceId: p.deviceId, seq: p.seq, person: p.person }))
 }
 
-function groupState(call: GroupCall, live: boolean, viewerId: string, quiet: boolean): CallSignal {
+async function groupState(call: GroupCall, live: boolean, viewerId: string, quiet: boolean): Promise<CallSignal> {
   return {
     kind: "group",
     conversationId: call.conversationId,
-    title: groupTitle(call.conversationId, viewerId),
+    title: await groupTitle(call.conversationId, viewerId),
     live,
     members: live ? membersOf(call) : [],
     quiet,
@@ -580,9 +592,9 @@ function groupState(call: GroupCall, live: boolean, viewerId: string, quiet: boo
 }
 
 // Every accepted member hears who is in the call, so their page can offer to join it.
-function broadcastGroup(call: GroupCall, live: boolean): void {
-  for (const member of acceptedMembers(call.conversationId)) {
-    relay(member.user_id, call.id, groupState(call, live, member.user_id, member.muted === 1))
+async function broadcastGroup(call: GroupCall, live: boolean): Promise<void> {
+  for (const member of await acceptedMembers(call.conversationId)) {
+    await relay(member.user_id, call.id, await groupState(call, live, member.user_id, member.muted === 1))
   }
 }
 
@@ -595,14 +607,14 @@ function settleTogether(call: GroupCall, at: number): void {
   }
 }
 
-function liveGroupIn(conversationId: string): GroupCall | null {
-  for (const call of listCalls()) {
+async function liveGroupIn(conversationId: string): Promise<GroupCall | null> {
+  for (const call of await listCalls()) {
     if (call.kind === "group" && call.conversationId === conversationId) return call
   }
   return null
 }
 
-function joinedResult(call: GroupCall, me: Participant): JoinResult {
+async function joinedResult(call: GroupCall, me: Participant): Promise<JoinResult> {
   return {
     ok: true,
     callId: call.id,
@@ -611,72 +623,72 @@ function joinedResult(call: GroupCall, me: Participant): JoinResult {
     bootId: BOOT_ID,
     seq: me.seq,
     members: membersOf(call).filter((member) => member.userId !== me.userId),
-    title: groupTitle(call.conversationId, me.userId),
+    title: await groupTitle(call.conversationId, me.userId),
   }
 }
 
 // The last person left: the call writes its one record. It counts everyone who joined, and the time two or more
 // people were connected. If nobody joined, it is a missed group call for everyone it rang.
-function finishGroup(call: GroupCall, at: number): void {
+async function finishGroup(call: GroupCall, at: number): Promise<void> {
   call.ringUntil = null
   endCall(call)
   settleTogether(call, at)
   const people = call.joined.size
   const outcome: CallOutcome = people < 2 ? "missed" : call.connectedAt !== null ? "ended" : "failed"
-  writeRecord(call, outcome, outcome === "ended" ? call.togetherMs / 1000 : 0, people, [call.starterId, ...call.joined])
-  for (const userId of call.ringing) relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
+  await writeRecord(call, outcome, outcome === "ended" ? call.togetherMs / 1000 : 0, people, [call.starterId, ...call.joined])
+  for (const userId of call.ringing) await relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
   call.ringing.clear()
   if (outcome === "missed") {
-    for (const userId of call.rung) missedCallBanner(call, userId, call.starterId)
+    for (const userId of call.rung) await missedCallBanner(call, userId, call.starterId)
   }
-  broadcastGroup(call, false)
+  await broadcastGroup(call, false)
 }
 
 // Someone leaves. Their tab hears why when it did not choose to go. Being rung for it stops too.
-function leaveGroup(call: GroupCall, userId: string, reason: CallEndReason | null, at = Date.now()): void {
+async function leaveGroup(call: GroupCall, userId: string, reason: CallEndReason | null, at = Date.now()): Promise<void> {
   const participant = call.participants.get(userId)
   if (participant) {
     call.participants.delete(userId)
-    if (reason) relay(userId, call.id, { kind: "end", reason, seconds: 0 }, participant.deviceId)
+    if (reason) await relay(userId, call.id, { kind: "end", reason, seconds: 0 }, participant.deviceId)
     settleTogether(call, at)
   }
-  if (call.ringing.delete(userId)) relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
-  if (call.participants.size === 0) finishGroup(call, at)
-  else broadcastGroup(call, true)
+  if (call.ringing.delete(userId)) await relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
+  if (call.participants.size === 0) await finishGroup(call, at)
+  else await broadcastGroup(call, true)
 }
 
 // The rings stop. A call nobody joined ends, and whoever started it hears that no one joined.
-function ringWindowClosed(call: GroupCall): void {
+async function ringWindowClosed(call: GroupCall): Promise<void> {
   call.ringUntil = null
-  for (const userId of call.ringing) relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
+  for (const userId of call.ringing) await relay(userId, call.id, { kind: "end", reason: "missed", seconds: 0 })
   call.ringing.clear()
   if (call.joined.size >= 2) {
-    broadcastGroup(call, true)
+    await broadcastGroup(call, true)
     return
   }
   for (const participant of call.participants.values()) {
-    relay(participant.userId, call.id, { kind: "end", reason: "nobody", seconds: 0 }, participant.deviceId)
+    await relay(participant.userId, call.id, { kind: "end", reason: "nobody", seconds: 0 }, participant.deviceId)
   }
   call.participants.clear()
-  finishGroup(call, Date.now())
+  await finishGroup(call, Date.now())
 }
 
 // Starts a call in a group, or joins the one already going there. It rings the members who are free, reachable, have
 // not muted the group, and have no block with anyone in the call.
-export function startGroupCall(conversationId: string, device: Device, person: EventPerson): JoinResult {
-  return operate<JoinResult>(true, () => {
-    const live = liveGroupIn(conversationId)
-    if (live) return joinGroupCall(live.id, device, person)
-    const busy = busyState(device.userId)
+export async function startGroupCall(conversationId: string, device: Device, person: EventPerson): Promise<JoinResult> {
+  return await operate<JoinResult>(true, async () => {
+    const live = await liveGroupIn(conversationId)
+    if (live) return await joinGroupCall(live.id, device, person)
+    const busy = await busyState(device.userId)
     if (busy === "talking") return { ok: false, error: "You're already on a call." }
     if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
 
-    const others = acceptedMembers(conversationId).filter(
-      (member) =>
+    const others = (await acceptedMembers(conversationId)).filter(
+      async (member) =>
         member.user_id !== device.userId &&
-        busyState(member.user_id) === null &&
-        listenerCount(member.user_id) > 0 &&
-        !blockedEitherWay(member.user_id, device.userId)
+        await busyState(member.user_id) === null &&
+        await listenerCount(member.user_id) > 0 &&
+        !await blockedEitherWay(member.user_id, device.userId)
     )
     const now = Date.now()
     const me: Participant = { ...device, seq: 1, person, beat: now }
@@ -697,7 +709,7 @@ export function startGroupCall(conversationId: string, device: Device, person: E
       togetherMs: 0,
     }
     if (others.length === 0) {
-      writeRecord(call, "missed", 0, 1, [device.userId])
+      await writeRecord(call, "missed", 0, 1, [device.userId])
       return { ok: false, error: "No one in this group is available right now." }
     }
     createCall(call)
@@ -705,51 +717,51 @@ export function startGroupCall(conversationId: string, device: Device, person: E
       if (member.muted === 1) continue
       call.ringing.add(member.user_id)
       call.rung.add(member.user_id)
-      relay(member.user_id, call.id, {
+      await relay(member.user_id, call.id, {
         kind: "ring",
         call: "group",
         conversationId,
         from: person,
-        title: groupTitle(conversationId, member.user_id),
+        title: await groupTitle(conversationId, member.user_id),
         iceServers: iceServersFor(member.user_id),
       })
     }
-    broadcastGroup(call, true)
-    return joinedResult(call, me)
+    await broadcastGroup(call, true)
+    return await joinedResult(call, me)
   })
 }
 
 // Joins a group call, from its ring or from a Join banner. Joining from a second tab moves you there, and the first
 // tab hears why it stopped.
-export function joinGroupCall(callId: string, device: Device, person: EventPerson): JoinResult {
-  return operate<JoinResult>(true, () => {
-    const call = getCall(callId)
+export async function joinGroupCall(callId: string, device: Device, person: EventPerson): Promise<JoinResult> {
+  return await operate<JoinResult>(true, async () => {
+    const call = await getCall(callId)
     if (!call || call.kind !== "group") return { ok: false, error: GONE }
     const current = call.participants.get(device.userId)
-    if (current && current.deviceId === device.deviceId) return joinedResult(call, current)
+    if (current && current.deviceId === device.deviceId) return await joinedResult(call, current)
     if (current) {
       call.participants.delete(device.userId)
-      relay(device.userId, call.id, { kind: "end", reason: "moved", seconds: 0 }, current.deviceId)
+      await relay(device.userId, call.id, { kind: "end", reason: "moved", seconds: 0 }, current.deviceId)
     } else {
-      const busy = busyState(device.userId, call.id)
+      const busy = await busyState(device.userId, call.id)
       if (busy === "talking") return { ok: false, error: "You're already on a call." }
       if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
       if (call.participants.size >= GROUP_CALL_MAX) return { ok: false, error: `This call is full. Calls can have up to ${GROUP_CALL_MAX} people.` }
-      if (blockedWithAnyone(call, device.userId)) return { ok: false, error: "You can't join this call." }
+      if (await blockedWithAnyone(call, device.userId)) return { ok: false, error: "You can't join this call." }
     }
     const now = Date.now()
     call.seq += 1
     const me: Participant = { ...device, seq: call.seq, person, beat: now }
     call.participants.set(device.userId, me)
     call.joined.add(device.userId)
-    if (call.ringing.delete(device.userId)) relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
+    if (call.ringing.delete(device.userId)) await relay(device.userId, call.id, { kind: "claimed", device: device.deviceId })
     settleTogether(call, now)
-    broadcastGroup(call, true)
-    return joinedResult(call, me)
+    await broadcastGroup(call, true)
+    return await joinedResult(call, me)
   })
 }
 
-function groupSignal(call: GroupCall, from: Device, action: CallAction): SignalResult {
+async function groupSignal(call: GroupCall, from: Device, action: CallAction): Promise<SignalResult> {
   const me = call.participants.get(from.userId)
   const inCall = me !== undefined && me.deviceId === from.deviceId
   switch (action.kind) {
@@ -757,10 +769,10 @@ function groupSignal(call: GroupCall, from: Device, action: CallAction): SignalR
       return { ok: false, error: GONE }
     case "decline":
       // Turning a group ring down stops it on every tab. The call goes on, and it can still be joined.
-      if (call.ringing.delete(from.userId)) relay(from.userId, call.id, { kind: "end", reason: "declined", seconds: 0 })
+      if (call.ringing.delete(from.userId)) await relay(from.userId, call.id, { kind: "end", reason: "declined", seconds: 0 })
       return OK
     case "end":
-      if (inCall) leaveGroup(call, from.userId, null, lostAt(action, Date.now()))
+      if (inCall) await leaveGroup(call, from.userId, null, lostAt(action, Date.now()))
       return OK
     case "connected":
       if (!inCall) return { ok: false, error: GONE }
@@ -782,7 +794,7 @@ function groupSignal(call: GroupCall, from: Device, action: CallAction): SignalR
           : action.kind === "answer"
             ? { kind: "answer", sdp: action.sdp, from: ref }
             : { kind: "ice", candidate: action.candidate, from: ref }
-      relay(to.userId, call.id, signal, to.deviceId)
+      await relay(to.userId, call.id, signal, to.deviceId)
       return OK
     }
   }
@@ -791,18 +803,18 @@ function groupSignal(call: GroupCall, from: Device, action: CallAction): SignalR
 // ── Both kinds ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // One step of a call from a tab, already checked for shape by the server action.
-export function signalCall(callId: string, from: Device, action: CallAction): SignalResult {
-  return operate<SignalResult>(true, () => {
-    const call = getCall(callId)
+export async function signalCall(callId: string, from: Device, action: CallAction): Promise<SignalResult> {
+  return await operate<SignalResult>(true, async () => {
+    const call = await getCall(callId)
     if (!call) return { ok: false, error: GONE }
-    return call.kind === "dm" ? dmSignal(call, from, action) : groupSignal(call, from, action)
+    return call.kind === "dm" ? await dmSignal(call, from, action) : await groupSignal(call, from, action)
   })
 }
 
 // A tab in a call checks in. False tells it the call is over.
-export function heartbeat(callId: string, device: Device): boolean {
-  return operate<boolean>(true, () => {
-    const call = getCall(callId)
+export async function heartbeat(callId: string, device: Device): Promise<boolean> {
+  return await operate<boolean>(true, async () => {
+    const call = await getCall(callId)
     if (!call) return false
     const now = Date.now()
     if (call.kind === "dm") {
@@ -820,98 +832,98 @@ export function heartbeat(callId: string, device: Device): boolean {
 
 // A tab closing mid-call. It ends a call it placed or answered, and leaves a group call. A tab that was only ringing
 // leaves the person's other tabs ringing.
-export function endFromClosingTab(callId: string, device: Device): void {
-  operate(true, () => {
-    const call = getCall(callId)
+export async function endFromClosingTab(callId: string, device: Device): Promise<void> {
+  await operate(true, async () => {
+    const call = await getCall(callId)
     if (!call) return
     if (call.kind === "dm") {
       const own = device.userId === call.caller.userId ? call.caller : call.callee
       if (!own || own.userId !== device.userId || own.deviceId !== device.deviceId) return
-      dmSignal(call, device, { kind: "end" })
+      await dmSignal(call, device, { kind: "end" })
       return
     }
     const participant = call.participants.get(device.userId)
-    if (participant && participant.deviceId === device.deviceId) leaveGroup(call, device.userId, null)
+    if (participant && participant.deviceId === device.deviceId) await leaveGroup(call, device.userId, null)
   })
 }
 
 // Runs every second on the process that holds the maintenance lease. An unanswered ring ends at its deadline. An answered
 // call whose tabs stopped checking in ends where it was last heard from.
-export function expireStaleCalls(now: number): void {
-  if (!anyCalls()) return
-  operate(true, () => {
-    for (const call of listCalls()) {
+export async function expireStaleCalls(now: number): Promise<void> {
+  if (!await anyCalls()) return
+  await operate(true, async () => {
+    for (const call of await listCalls()) {
       if (!alive(call)) continue
       if (call.kind === "dm") {
         if (call.answeredAt === null) {
-          if (call.ringUntil !== null && now >= call.ringUntil) ringTimedOut(call)
+          if (call.ringUntil !== null && now >= call.ringUntil) await ringTimedOut(call)
           continue
         }
         for (const [userId, beat] of call.beats) {
           if (now - beat > CALL_STALE_MS) {
-            hangUpDm(call, userId, beat, "dropped", "dropped")
+            await hangUpDm(call, userId, beat, "dropped", "dropped")
             break
           }
         }
         continue
       }
-      if (call.ringUntil !== null && now >= call.ringUntil) ringTimedOut(call)
+      if (call.ringUntil !== null && now >= call.ringUntil) await ringTimedOut(call)
       for (const participant of [...call.participants.values()]) {
         if (!alive(call)) break
-        if (now - participant.beat > CALL_STALE_MS) leaveGroup(call, participant.userId, "dropped", participant.beat)
+        if (now - participant.beat > CALL_STALE_MS) await leaveGroup(call, participant.userId, "dropped", participant.beat)
       }
     }
   })
 }
 
-function departDm(call: DmCall, userId: string, reason: HangUpReason | "left" | "removed", session: string | null): void {
+async function departDm(call: DmCall, userId: string, reason: HangUpReason | "left" | "removed", session: string | null): Promise<void> {
   const isCaller = call.caller.userId === userId
   if (!isCaller && call.calleeId !== userId) return
-  if (reason === "blocked" && !blockedEitherWay(call.caller.userId, call.calleeId)) return
+  if (reason === "blocked" && !await blockedEitherWay(call.caller.userId, call.calleeId)) return
   const own = isCaller ? call.caller : call.callee
   // A sign-out on one browser ends only the call running there. A ring keeps going on the person's other devices.
   if (session !== null && own?.session !== session) return
   const note: CallEndReason | undefined = reason === "blocked" ? undefined : reason
   if (call.answeredAt === null) {
     if (isCaller) {
-      cancelDm(call, reason === "signed-out" || reason === "left")
-      if (note) relay(userId, call.id, { kind: "end", reason: note, seconds: 0 }, call.caller.deviceId)
+      await cancelDm(call, reason === "signed-out" || reason === "left")
+      if (note) await relay(userId, call.id, { kind: "end", reason: note, seconds: 0 }, call.caller.deviceId)
     } else {
-      unansweredDm(call, false)
+      await unansweredDm(call, false)
     }
     return
   }
-  hangUpDm(call, userId, Date.now(), note)
+  await hangUpDm(call, userId, Date.now(), note)
 }
 
-function blocks(blockerId: string, blockedId: string): boolean {
-  return get("SELECT 1 AS found FROM blocks WHERE blocker_id = ? AND blocked_id = ?", blockerId, blockedId) !== undefined
+async function blocks(blockerId: string, blockedId: string): Promise<boolean> {
+  return await get("SELECT 1 AS found FROM blocks WHERE blocker_id = ? AND blocked_id = ?", blockerId, blockedId) !== undefined
 }
 
 // A block between two people in one group call: whoever was blocked goes, so the person who blocked keeps their call.
 // A ring for a call with someone across the block stops.
-function settleBlocks(call: GroupCall, userId: string): void {
-  if (call.ringing.has(userId) && blockedWithAnyone(call, userId)) leaveGroup(call, userId, null)
+async function settleBlocks(call: GroupCall, userId: string): Promise<void> {
+  if (call.ringing.has(userId) && await blockedWithAnyone(call, userId)) await leaveGroup(call, userId, null)
   if (!alive(call) || !call.participants.has(userId)) return
   for (const other of [...call.ringing]) {
-    if (blockedEitherWay(userId, other)) leaveGroup(call, other, null)
+    if (await blockedEitherWay(userId, other)) await leaveGroup(call, other, null)
   }
   for (const other of [...call.participants.keys()]) {
     if (other === userId || !alive(call) || !call.participants.has(userId)) continue
-    if (blocks(other, userId)) leaveGroup(call, userId, "blocked")
-    else if (blocks(userId, other)) leaveGroup(call, other, "blocked")
+    if (await blocks(other, userId)) await leaveGroup(call, userId, "blocked")
+    else if (await blocks(userId, other)) await leaveGroup(call, other, "blocked")
   }
 }
 
-function departGroup(call: GroupCall, userId: string, reason: HangUpReason | "left" | "removed", session: string | null): void {
+async function departGroup(call: GroupCall, userId: string, reason: HangUpReason | "left" | "removed", session: string | null): Promise<void> {
   if (reason === "blocked") {
-    settleBlocks(call, userId)
+    await settleBlocks(call, userId)
     return
   }
   const participant = call.participants.get(userId)
   if (!participant && !call.ringing.has(userId)) return
   if (session !== null && participant?.session !== session) return
-  leaveGroup(call, userId, reason)
+  await leaveGroup(call, userId, reason)
 }
 
 // Ends a person's part in live calls and writes the right records: a ring that stops is missed, an answered call
@@ -922,13 +934,13 @@ function departGroup(call: GroupCall, userId: string, reason: HangUpReason | "le
 // blocked is called after the block is saved, with either person's id (or both). A one-to-one call between the pair
 // ends. In a group call the person who was blocked leaves and the person who blocked stays, and a ring for a call
 // with someone across the block stops.
-export function hangUpFor(userId: string, reason: HangUpReason, session: string | null = null): void {
-  if (!anyCalls()) return
-  operate(true, () => {
-    for (const call of listCalls()) {
+export async function hangUpFor(userId: string, reason: HangUpReason, session: string | null = null): Promise<void> {
+  if (!await anyCalls()) return
+  await operate(true, async () => {
+    for (const call of await listCalls()) {
       if (!alive(call)) continue
-      if (call.kind === "dm") departDm(call, userId, reason, session)
-      else departGroup(call, userId, reason, session)
+      if (call.kind === "dm") await departDm(call, userId, reason, session)
+      else await departGroup(call, userId, reason, session)
     }
   })
 }
@@ -936,31 +948,31 @@ export function hangUpFor(userId: string, reason: HangUpReason, session: string 
 // A person leaves a conversation, declines its request, or (with "removed") is removed from a group by the person who
 // made it. Their call in it ends, or, in a group, they leave the call and it drops out of their view. Their tab says
 // which of the two happened.
-export function leaveConversationCalls(userId: string, conversationId: string, how: "left" | "removed" = "left"): void {
-  if (!anyCalls()) return
-  operate(true, () => {
-    for (const call of listCalls()) {
+export async function leaveConversationCalls(userId: string, conversationId: string, how: "left" | "removed" = "left"): Promise<void> {
+  if (!await anyCalls()) return
+  await operate(true, async () => {
+    for (const call of await listCalls()) {
       if (call.conversationId !== conversationId || !alive(call)) continue
       if (call.kind === "dm") {
-        departDm(call, userId, how, null)
+        await departDm(call, userId, how, null)
         continue
       }
-      departGroup(call, userId, how, null)
-      relay(userId, call.id, { kind: "group", conversationId, title: "", live: false, members: [], quiet: true })
+      await departGroup(call, userId, how, null)
+      await relay(userId, call.id, { kind: "group", conversationId, title: "", live: false, members: [], quiet: true })
     }
   })
 }
 
 // What a newly opened event stream needs at once: the group calls going on in the person's groups, and rings still
 // waiting for them, so a tab opened mid-ring can answer.
-export function openingEvents(userId: string): RealtimeEvent[] {
-  if (!anyCalls()) return []
-  return operate(false, () => {
+export async function openingEvents(userId: string): Promise<RealtimeEvent[]> {
+  if (!await anyCalls()) return []
+  return await operate(false, async () => {
     const events: RealtimeEvent[] = []
-    for (const call of listCalls()) {
+    for (const call of await listCalls()) {
       if (call.kind === "dm") {
         if (call.calleeId !== userId || call.answeredAt !== null) continue
-        const from = personOf(call.caller.userId)
+        const from = await personOf(call.caller.userId)
         if (!from) continue
         events.push({
           type: "call",
@@ -969,11 +981,11 @@ export function openingEvents(userId: string): RealtimeEvent[] {
         })
         continue
       }
-      const muted = memberMuted(call.conversationId, userId)
+      const muted = await memberMuted(call.conversationId, userId)
       if (muted === null) continue
-      events.push({ type: "call", callId: call.id, signal: groupState(call, true, userId, muted) })
+      events.push({ type: "call", callId: call.id, signal: await groupState(call, true, userId, muted) })
       if (!call.ringing.has(userId)) continue
-      const from = personOf(call.starterId) ?? [...call.participants.values()][0]?.person ?? null
+      const from = await personOf(call.starterId) ?? [...call.participants.values()][0]?.person ?? null
       if (!from) continue
       events.push({
         type: "call",
@@ -983,7 +995,7 @@ export function openingEvents(userId: string): RealtimeEvent[] {
           call: "group",
           conversationId: call.conversationId,
           from,
-          title: groupTitle(call.conversationId, userId),
+          title: await groupTitle(call.conversationId, userId),
           iceServers: iceServersFor(userId),
         },
       })

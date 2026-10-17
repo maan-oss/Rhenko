@@ -23,9 +23,9 @@ export default function AccountSettingsPage() {
 
 async function AccountBody() {
   const viewer = await requireViewer()
-  const profile = getProfileByHandle(viewer.handle, viewer.id)
-  const email = emailSettingsFor(viewer.id)
-  const codeNeed = codeNeedFor(viewer.id)
+  const profile = await getProfileByHandle(viewer.handle, viewer.id)
+  const email = await emailSettingsFor(viewer.id)
+  const codeNeed = await codeNeedFor(viewer.id)
   return (
     <>
       <PageHeader title="Account" backHref="/settings" />

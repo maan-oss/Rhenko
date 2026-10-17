@@ -13,8 +13,8 @@ export const metadata: Metadata = {
 
 // The figures come from this server's own records, read when the page is opened. They are not an audited report.
 
-function count(sql: string, ...params: Param[]): number {
-  return get<{ n: number }>(sql, ...params)?.n ?? 0
+async function count(sql: string, ...params: Param[]): Promise<number> {
+  return (await get<{ n: number }>(sql, ...params))?.n ?? 0
 }
 
 function Figure({ label, value }: { label: string; value: number }) {
@@ -28,10 +28,10 @@ function Figure({ label, value }: { label: string; value: number }) {
 
 async function Reports() {
   await connection()
-  const total = count("SELECT COUNT(*) AS n FROM reports")
-  const open = count("SELECT COUNT(*) AS n FROM reports WHERE resolved_at IS NULL")
-  const hidden = count("SELECT COUNT(*) AS n FROM reports WHERE outcome = 'hidden'")
-  const noAction = count("SELECT COUNT(*) AS n FROM reports WHERE outcome = 'no_action'")
+  const total = await count("SELECT COUNT(*) AS n FROM reports")
+  const open = await count("SELECT COUNT(*) AS n FROM reports WHERE resolved_at IS NULL")
+  const hidden = await count("SELECT COUNT(*) AS n FROM reports WHERE outcome = 'hidden'")
+  const noAction = await count("SELECT COUNT(*) AS n FROM reports WHERE outcome = 'no_action'")
   return (
     <div className="flex flex-col">
       <Figure label="Reports received" value={total} />
@@ -44,13 +44,13 @@ async function Reports() {
 
 async function Notices() {
   await connection()
-  const byKind = all<{ kind: string; n: number }>(
+  const byKind = await all<{ kind: string; n: number }>(
     "SELECT kind, COUNT(*) AS n FROM legal_notices WHERE kind <> 'authority_request' GROUP BY kind"
   )
   const received = byKind.reduce((sum, row) => sum + row.n, 0)
-  const actioned = count("SELECT COUNT(*) AS n FROM legal_notices WHERE status = 'actioned'")
-  const rejected = count("SELECT COUNT(*) AS n FROM legal_notices WHERE status = 'rejected'")
-  const open = count("SELECT COUNT(*) AS n FROM legal_notices WHERE status = 'open' AND kind <> 'authority_request'")
+  const actioned = await count("SELECT COUNT(*) AS n FROM legal_notices WHERE status = 'actioned'")
+  const rejected = await count("SELECT COUNT(*) AS n FROM legal_notices WHERE status = 'rejected'")
+  const open = await count("SELECT COUNT(*) AS n FROM legal_notices WHERE status = 'open' AND kind <> 'authority_request'")
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col">
@@ -71,16 +71,16 @@ async function Notices() {
 
 async function Hiding() {
   await connection()
-  const hidden = count("SELECT COUNT(*) AS n FROM moderation_notices")
-  const restored = count("SELECT COUNT(*) AS n FROM moderation_notices WHERE restored_at IS NOT NULL")
-  const deleted = count(
+  const hidden = await count("SELECT COUNT(*) AS n FROM moderation_notices")
+  const restored = await count("SELECT COUNT(*) AS n FROM moderation_notices WHERE restored_at IS NOT NULL")
+  const deleted = await count(
     `SELECT COUNT(*) AS n FROM moderation_notices n
      WHERE n.restored_at IS NULL AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.id = n.post_id)`
   )
-  const appeals = count("SELECT COUNT(*) AS n FROM appeals")
-  const reversed = count("SELECT COUNT(*) AS n FROM appeals WHERE decision = 'reversed'")
-  const upheld = count("SELECT COUNT(*) AS n FROM appeals WHERE decision = 'upheld'")
-  const waiting = count("SELECT COUNT(*) AS n FROM appeals WHERE decided_at IS NULL")
+  const appeals = await count("SELECT COUNT(*) AS n FROM appeals")
+  const reversed = await count("SELECT COUNT(*) AS n FROM appeals WHERE decision = 'reversed'")
+  const upheld = await count("SELECT COUNT(*) AS n FROM appeals WHERE decision = 'upheld'")
+  const waiting = await count("SELECT COUNT(*) AS n FROM appeals WHERE decided_at IS NULL")
   return (
     <div className="flex flex-col">
       <Figure label="Posts hidden, with a notice sent to the author" value={hidden} />
@@ -96,7 +96,7 @@ async function Hiding() {
 
 async function Requests() {
   await connection()
-  const recorded = count("SELECT COUNT(*) AS n FROM legal_notices WHERE kind = 'authority_request'")
+  const recorded = await count("SELECT COUNT(*) AS n FROM legal_notices WHERE kind = 'authority_request'")
   return (
     <div className="flex flex-col">
       <Figure label="Orders and requests from courts or authorities" value={recorded} />
@@ -106,11 +106,11 @@ async function Requests() {
 
 async function Advertising() {
   await connection()
-  const campaigns = count("SELECT COUNT(*) AS n FROM ad_campaigns")
-  const waiting = count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE status = 'in_review'")
-  const approved = count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE reviewed_at IS NOT NULL AND status <> 'rejected'")
-  const rejected = count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE status = 'rejected'")
-  const reports = count("SELECT COUNT(*) AS n FROM ad_reports")
+  const campaigns = await count("SELECT COUNT(*) AS n FROM ad_campaigns")
+  const waiting = await count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE status = 'in_review'")
+  const approved = await count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE reviewed_at IS NOT NULL AND status <> 'rejected'")
+  const rejected = await count("SELECT COUNT(*) AS n FROM ad_campaigns WHERE status = 'rejected'")
+  const reports = await count("SELECT COUNT(*) AS n FROM ad_reports")
   return (
     <div className="flex flex-col">
       <Figure label="Campaigns sent for review" value={campaigns} />

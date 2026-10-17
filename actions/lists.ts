@@ -19,9 +19,9 @@ function refresh() {
   revalidatePath("/", "layout")
 }
 
-function ownedList(listId: unknown, userId: string): boolean {
+async function ownedList(listId: unknown, userId: string): Promise<boolean> {
   if (typeof listId !== "string") return false
-  return get("SELECT 1 AS found FROM lists WHERE id = ? AND owner_id = ?", listId, userId) !== undefined
+  return await get("SELECT 1 AS found FROM lists WHERE id = ? AND owner_id = ?", listId, userId) !== undefined
 }
 
 export async function createList(formData: FormData): Promise<ListResult> {
@@ -36,7 +36,7 @@ export async function createList(formData: FormData): Promise<ListResult> {
   }
   const isPrivate = formData.get("private") === "on" ? 1 : 0
   const id = newId()
-  run(
+  await run(
     "INSERT INTO lists (id, owner_id, name, description, private, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     id,
     viewer.id,
@@ -52,8 +52,8 @@ export async function createList(formData: FormData): Promise<ListResult> {
 export async function deleteList(listId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can delete this list." }
-  run("DELETE FROM lists WHERE id = ?", listId)
+  if (!await ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can delete this list." }
+  await run("DELETE FROM lists WHERE id = ?", listId)
   refresh()
   return { ok: true }
 }
@@ -61,19 +61,19 @@ export async function deleteList(listId: string): Promise<VoidResult> {
 export async function addListMember(listId: string, handle: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
+  if (!await ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
   const clean = typeof handle === "string" ? handle.trim().replace(/^@/, "").slice(0, MAX_HANDLE_INPUT) : ""
   if (!clean) return { ok: false, error: "Enter the handle of the person to add." }
-  const target = get<{ id: string; handle: string }>(
-    "SELECT id, handle FROM users WHERE handle = ? COLLATE NOCASE AND deactivated_at IS NULL",
+  const target = await get<{ id: string; handle: string }>(
+    "SELECT id, handle FROM users WHERE handle = ? AND deactivated_at IS NULL",
     clean
   )
   if (!target) return { ok: false, error: `@${clean} doesn't exist.` }
-  if (blockedEitherWay(viewer.id, target.id)) return { ok: false, error: `You can't add @${target.handle}.` }
-  if (get("SELECT 1 AS found FROM list_members WHERE list_id = ? AND user_id = ?", listId, target.id)) {
+  if (await blockedEitherWay(viewer.id, target.id)) return { ok: false, error: `You can't add @${target.handle}.` }
+  if (await get("SELECT 1 AS found FROM list_members WHERE list_id = ? AND user_id = ?", listId, target.id)) {
     return { ok: false, error: `@${target.handle} is already on this list.` }
   }
-  run("INSERT OR IGNORE INTO list_members (list_id, user_id, created_at) VALUES (?, ?, ?)", listId, target.id, Date.now())
+  await run("INSERT INTO list_members (list_id, user_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", listId, target.id, Date.now())
   refresh()
   return { ok: true }
 }
@@ -81,9 +81,9 @@ export async function addListMember(listId: string, handle: string): Promise<Voi
 export async function removeListMember(listId: string, userId: string): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
+  if (!await ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
   if (typeof userId !== "string" || !userId) return { ok: false, error: "Choose who to remove." }
-  run("DELETE FROM list_members WHERE list_id = ? AND user_id = ?", listId, userId)
+  await run("DELETE FROM list_members WHERE list_id = ? AND user_id = ?", listId, userId)
   refresh()
   return { ok: true }
 }
@@ -96,21 +96,21 @@ export async function toggleListFollow(listId: string, want?: boolean): Promise<
   if (!viewer) return { ok: false, error: "Sign in to follow lists." }
   if (typeof listId !== "string") return { ok: false, error: "That list no longer exists." }
   if (want !== undefined && typeof want !== "boolean") return { ok: false, error: "Choose follow or unfollow." }
-  const list = get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", listId)
+  const list = await get<{ owner_id: string; private: number }>("SELECT owner_id, private FROM lists WHERE id = ?", listId)
   if (!list) return { ok: false, error: "That list no longer exists." }
   if (list.owner_id === viewer.id) return { ok: false, error: "You already own this list." }
-  const followed = get("SELECT 1 AS found FROM list_follows WHERE list_id = ? AND user_id = ?", listId, viewer.id)
+  const followed = await get("SELECT 1 AS found FROM list_follows WHERE list_id = ? AND user_id = ?", listId, viewer.id)
   // Unfollowing always works. Following needs a public list, the owner not to have blocked you, and you not to have blocked them.
   if (followed) {
     if (want === true) return { ok: true, following: true }
-    run("DELETE FROM list_follows WHERE list_id = ? AND user_id = ?", listId, viewer.id)
+    await run("DELETE FROM list_follows WHERE list_id = ? AND user_id = ?", listId, viewer.id)
     refresh()
     return { ok: true, following: false }
   }
   if (want === false) return { ok: true, following: false }
   if (list.private === 1) return { ok: false, error: "Private lists can't be followed." }
-  if (blockedEitherWay(viewer.id, list.owner_id)) return { ok: false, error: "You can't follow this list." }
-  run("INSERT OR IGNORE INTO list_follows (list_id, user_id, created_at) VALUES (?, ?, ?)", listId, viewer.id, Date.now())
+  if (await blockedEitherWay(viewer.id, list.owner_id)) return { ok: false, error: "You can't follow this list." }
+  await run("INSERT INTO list_follows (list_id, user_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", listId, viewer.id, Date.now())
   refresh()
   return { ok: true, following: true }
 }
@@ -119,14 +119,14 @@ export async function toggleListFollow(listId: string, want?: boolean): Promise<
 export async function setStarterPack(listId: string, on: boolean): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
-  if (!ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
+  if (!await ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can change this list." }
   if (on) {
-    const list = get<{ private: number }>("SELECT private FROM lists WHERE id = ?", listId)
+    const list = await get<{ private: number }>("SELECT private FROM lists WHERE id = ?", listId)
     if (list?.private === 1) return { ok: false, error: "Only public lists can be starter packs." }
-    const members = get<{ c: number }>("SELECT COUNT(*) AS c FROM list_members WHERE list_id = ?", listId)?.c ?? 0
+    const members = (await get<{ c: number }>("SELECT COUNT(*) AS c FROM list_members WHERE list_id = ?", listId))?.c ?? 0
     if (members === 0) return { ok: false, error: "Add people to the list before you publish it as a starter pack." }
   }
-  run("UPDATE lists SET starter = ? WHERE id = ?", on ? 1 : 0, listId)
+  await run("UPDATE lists SET starter = ? WHERE id = ?", on ? 1 : 0, listId)
   refresh()
   return { ok: true }
 }
@@ -142,10 +142,10 @@ export async function followStarterPack(listId: string): Promise<FollowPackResul
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to follow people." }
   if (typeof listId !== "string") return { ok: false, error: "That starter pack no longer exists." }
-  const list = get<{ owner_id: string; starter: number; private: number }>("SELECT owner_id, starter, private FROM lists WHERE id = ?", listId)
+  const list = await get<{ owner_id: string; starter: number; private: number }>("SELECT owner_id, starter, private FROM lists WHERE id = ?", listId)
   if (!list || list.starter !== 1 || list.private === 1) return { ok: false, error: "That starter pack no longer exists." }
-  if (blockedEitherWay(viewer.id, list.owner_id)) return { ok: false, error: "You can't follow this starter pack." }
-  const members = all<{ handle: string }>(
+  if (await blockedEitherWay(viewer.id, list.owner_id)) return { ok: false, error: "You can't follow this starter pack." }
+  const members = await all<{ handle: string }>(
     `SELECT u.handle FROM list_members m JOIN users u ON u.id = m.user_id
      WHERE m.list_id = ? AND u.id <> ? AND u.deactivated_at IS NULL
      ORDER BY m.created_at DESC LIMIT ?`,
@@ -174,12 +174,12 @@ export async function setTimelinePin(listId: string, on: boolean): Promise<VoidR
   if (!viewer) return { ok: false, error: "Sign in to pin lists to Home." }
   if (typeof listId !== "string") return { ok: false, error: "That list no longer exists." }
   if (on) {
-    if (!mayPin(listId, viewer.id)) return { ok: false, error: "Follow this list before you pin it to Home." }
-    if (!isTimelinePinned(viewer.id, listId) && timelinePinCount(viewer.id) >= MAX_TIMELINE_PINS) {
+    if (!await mayPin(listId, viewer.id)) return { ok: false, error: "Follow this list before you pin it to Home." }
+    if (!await isTimelinePinned(viewer.id, listId) && await timelinePinCount(viewer.id) >= MAX_TIMELINE_PINS) {
       return { ok: false, error: `Home holds up to ${MAX_TIMELINE_PINS} pinned lists. Unpin one to add another.` }
     }
   }
-  storeTimelinePin(viewer.id, listId, on, Date.now())
+  await storeTimelinePin(viewer.id, listId, on, Date.now())
   refresh()
   return { ok: true }
 }

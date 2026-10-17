@@ -18,20 +18,13 @@
 // It shows what will go and asks first; --yes skips the question. It cannot be undone, so take a backup first.
 // An id can be shortened to its first 8 characters when that picks out one record.
 //
-// Reads the database the way the app does: RHENKO_DATA_DIR if set, otherwise ./data. The app can keep running.
+// Reads and writes the database the app uses (DATABASE_URL). The app can keep running. The photo and video files
+// that remove deletes are looked for in the uploads folder under RHENKO_DATA_DIR (default ./data), where local storage keeps them.
 import fs from "node:fs"
 import path from "node:path"
 import readline from "node:readline/promises"
 import { randomUUID } from "node:crypto"
-
-// node:sqlite prints a warning that it is experimental. This hides that one warning and keeps every other.
-const emitWarning = process.emitWarning
-process.emitWarning = (warning, ...rest) => {
-  const type = typeof rest[0] === "string" ? rest[0] : rest[0]?.type
-  if (type === "ExperimentalWarning" && String(warning).includes("SQLite")) return
-  return emitWarning.call(process, warning, ...rest)
-}
-const { DatabaseSync } = await import("node:sqlite")
+import postgres from "postgres"
 
 // These mirror lib/legal.ts. The e2e suite checks that they still match.
 const CATEGORIES = {
@@ -141,20 +134,36 @@ const shape = Object.hasOwn(SHAPES, command) ? SHAPES[command] : null
 if (!shape || params.length !== shape.args) fail(USAGE)
 if (Object.keys(options).some((name) => !shape.options.includes(name))) fail(USAGE)
 
+// Uploads are kept in Supabase Storage in production. This folder is where local storage keeps them.
 const dataDir = path.resolve(process.env.RHENKO_DATA_DIR || path.join(process.cwd(), "data"))
-const databaseFile = path.join(dataDir, "rhenko.sqlite")
 const uploadDir = path.join(dataDir, "uploads")
 
-if (!fs.existsSync(databaseFile)) {
-  fail(`There is no database at ${databaseFile}. Run this from the project folder, or set RHENKO_DATA_DIR to the folder that holds rhenko.sqlite.`)
+const url = process.env.DATABASE_URL
+if (!url) fail("DATABASE_URL is not set. Set it to the Postgres database the app uses.")
+
+// Counts, timestamps and flags come back as plain numbers, as they did from SQLite.
+const sql = postgres(url, {
+  max: 1,
+  prepare: false,
+  types: {
+    number: {
+      to: 0,
+      from: [16, 20, 1700],
+      parse: (value) => (value === "t" ? 1 : value === "f" ? 0 : Number(value)),
+      serialize: (value) => String(value),
+    },
+  },
+})
+
+// The first row of a query on a connection (the database, or the transaction open on it), or undefined.
+async function one(conn, text, ...values) {
+  const [row] = await conn.unsafe(text, values)
+  return row
 }
-const db = new DatabaseSync(databaseFile)
-db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
-function columns(table) {
-  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name))
-}
-if (!columns("reports").has("outcome") || !columns("posts").has("removed_at") || !columns("moderation_notices").has("post_id")) {
-  fail("This database has not been upgraded for the current version yet. Start the app once, then run this again.")
+
+async function hasColumn(table, column) {
+  const row = await one(sql, "SELECT 1 AS found FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2", table, column)
+  return row !== undefined
 }
 
 // An id as typed: the whole id or its first characters, which must match exactly one record.
@@ -172,57 +181,46 @@ function onlyMatch(rows, noun, prefix) {
   return rows[0]
 }
 
-function findReport(value) {
+async function findReport(value) {
   const prefix = idPrefix(value, "report")
-  return onlyMatch(
-    db.prepare("SELECT id, resolved_at FROM reports WHERE substr(id, 1, ?) = ? LIMIT 2").all(prefix.length, prefix),
-    "report",
-    prefix
-  )
+  const rows = await sql.unsafe("SELECT id, resolved_at FROM reports WHERE substr(id, 1, $1) = $2 LIMIT 2", [prefix.length, prefix])
+  return onlyMatch(rows, "report", prefix)
 }
 
-function findPost(value) {
+async function findPost(value) {
   const prefix = idPrefix(value, "post")
-  return onlyMatch(
-    db
-      .prepare(
-        `SELECT p.id, p.body, p.created_at, p.author_id, p.removed_at, u.handle AS author
-         FROM posts p JOIN users u ON u.id = p.author_id WHERE substr(p.id, 1, ?) = ? LIMIT 2`
-      )
-      .all(prefix.length, prefix),
-    "post",
-    prefix
+  const rows = await sql.unsafe(
+    `SELECT p.id, p.body, p.created_at, p.author_id, p.removed_at, u.handle AS author
+     FROM posts p JOIN users u ON u.id = p.author_id WHERE substr(p.id, 1, $1) = $2 LIMIT 2`,
+    [prefix.length, prefix]
   )
+  return onlyMatch(rows, "post", prefix)
 }
 
 // The post and every reply under it at any depth. Quotes are not part of the tree: they stay visible.
 const TREE = `WITH RECURSIVE tree(id) AS (
-  SELECT id FROM posts WHERE id = ?
+  SELECT id FROM posts WHERE id = $1
   UNION ALL
   SELECT p.id FROM posts p JOIN tree t ON p.reply_to_id = t.id
 )`
 
-function threadIds(postId) {
-  return db
-    .prepare(`${TREE} SELECT id FROM tree`)
-    .all(postId)
-    .map((row) => row.id)
+async function threadIds(conn, postId) {
+  const rows = await conn.unsafe(`${TREE} SELECT id FROM tree`, [postId])
+  return rows.map((row) => row.id)
 }
 
-function list() {
-  const rows = db
-    .prepare(
-      `SELECT r.id, r.reason, r.created_at, r.post_id, reporter.handle AS reporter,
-              p.body AS body, author.handle AS author, account.handle AS account
-       FROM reports r
-       JOIN users reporter ON reporter.id = r.reporter_id
-       LEFT JOIN posts p ON p.id = r.post_id
-       LEFT JOIN users author ON author.id = p.author_id
-       LEFT JOIN users account ON account.id = r.user_id
-       WHERE r.resolved_at IS NULL
-       ORDER BY r.created_at ASC, r.id ASC`
-    )
-    .all()
+async function list() {
+  const rows = await sql.unsafe(
+    `SELECT r.id, r.reason, r.created_at, r.post_id, reporter.handle AS reporter,
+            p.body AS body, author.handle AS author, account.handle AS account
+     FROM reports r
+     JOIN users reporter ON reporter.id = r.reporter_id
+     LEFT JOIN posts p ON p.id = r.post_id
+     LEFT JOIN users author ON author.id = p.author_id
+     LEFT JOIN users account ON account.id = r.user_id
+     WHERE r.resolved_at IS NULL
+     ORDER BY r.created_at ASC, r.id ASC`
+  )
   if (rows.length === 0) {
     console.log("No open reports.")
     return
@@ -246,92 +244,83 @@ function list() {
   console.log("Delete a post with:   node scripts/moderation.mjs remove <postId>")
 }
 
-function resolve() {
-  const report = findReport(params[0])
+async function resolve() {
+  const report = await findReport(params[0])
   if (report.resolved_at !== null) {
     console.log(`Report ${report.id} was already resolved on ${when(report.resolved_at)}.`)
     return
   }
   const now = Date.now()
-  db.prepare("UPDATE reports SET resolved_at = ?, outcome = 'no_action', outcome_at = ? WHERE id = ? AND resolved_at IS NULL").run(
-    now,
-    now,
-    report.id
-  )
+  await sql.unsafe("UPDATE reports SET resolved_at = $1, outcome = 'no_action', outcome_at = $2 WHERE id = $3 AND resolved_at IS NULL", [now, now, report.id])
   console.log(`Resolved report ${report.id}. Nothing was hidden or removed.`)
 }
 
-function hide() {
+async function hide() {
   const category = options.category ?? ""
   if (!Object.hasOwn(CATEGORIES, category)) fail(`Give a category: ${Object.keys(CATEGORIES).join(", ")}.`)
   const explain = (options.explain ?? "").replace(/\r\n/g, "\n").trim()
   if ([...explain].length < 10) fail("Explain why in at least 10 characters. The author reads this.")
   if ([...explain].length > 500) fail("Keep the explanation under 500 characters.")
 
-  const post = findPost(params[0])
+  const post = await findPost(params[0])
   if (post.removed_at !== null) {
     fail(`That post is already hidden. Put it back with: node scripts/moderation.mjs restore ${post.id.slice(0, 8)}`)
   }
-  const ids = threadIds(post.id)
+  const ids = await threadIds(sql, post.id)
   const now = Date.now()
   const noticeId = randomUUID()
-  db.exec("BEGIN IMMEDIATE")
   try {
-    db.prepare(`UPDATE posts SET removed_at = ? WHERE id IN (${ids.map(() => "?").join(",")})`).run(now, ...ids)
-    db.prepare(
-      "UPDATE reports SET resolved_at = ?, outcome = 'hidden', outcome_at = ? WHERE post_id = ? AND resolved_at IS NULL"
-    ).run(now, now, post.id)
-    db.prepare(
-      `INSERT INTO moderation_notices (id, user_id, post_id, category, explanation, excerpt, source, created_at, appeal_until)
-       VALUES (?, ?, ?, ?, ?, ?, 'moderator', ?, ?)`
-    ).run(noticeId, post.author_id, post.id, category, explain, excerpt(post.body), now, now + APPEAL_MS)
-    db.exec("COMMIT")
+    await sql.begin(async (tx) => {
+      await tx.unsafe("UPDATE posts SET removed_at = $1 WHERE id = ANY($2::text[])", [now, ids])
+      await tx.unsafe(
+        "UPDATE reports SET resolved_at = $1, outcome = 'hidden', outcome_at = $2 WHERE post_id = $3 AND resolved_at IS NULL",
+        [now, now, post.id]
+      )
+      await tx.unsafe(
+        `INSERT INTO moderation_notices (id, user_id, post_id, category, explanation, excerpt, source, created_at, appeal_until)
+         VALUES ($1, $2, $3, $4, $5, $6, 'moderator', $7, $8)`,
+        [noticeId, post.author_id, post.id, category, explain, excerpt(post.body), now, now + APPEAL_MS]
+      )
+    })
   } catch (error) {
-    db.exec("ROLLBACK")
     fail(`The post was not hidden: ${error.message}. Nothing changed. Run this again.`)
   }
   console.log(`Hid ${count(ids.length, "post")} by @${post.author} (${CATEGORIES[category]}).`)
   console.log(`Notice ${noticeId}. The author can appeal within 30 days; after that, or if the appeal fails, the post is deleted.`)
 }
 
-function restoreThread(postId, removedAt, now) {
-  const ids = threadIds(postId)
-  db.prepare(`UPDATE posts SET removed_at = NULL WHERE removed_at = ? AND id IN (${ids.map(() => "?").join(",")})`).run(
-    removedAt,
-    ...ids
-  )
-  db.prepare("UPDATE moderation_notices SET restored_at = ? WHERE post_id = ? AND restored_at IS NULL").run(now, postId)
+async function restoreThread(conn, postId, removedAt, now) {
+  const ids = await threadIds(conn, postId)
+  await conn.unsafe("UPDATE posts SET removed_at = NULL WHERE removed_at = $1 AND id = ANY($2::text[])", [removedAt, ids])
+  await conn.unsafe("UPDATE moderation_notices SET restored_at = $1 WHERE post_id = $2 AND restored_at IS NULL", [now, postId])
   return ids.length
 }
 
-function restore() {
-  const post = findPost(params[0])
+async function restore() {
+  const post = await findPost(params[0])
   if (post.removed_at === null) fail("That post is not hidden.")
   const now = Date.now()
   let restored = 0
-  db.exec("BEGIN IMMEDIATE")
   try {
-    restored = restoreThread(post.id, post.removed_at, now)
-    db.exec("COMMIT")
+    await sql.begin(async (tx) => {
+      restored = await restoreThread(tx, post.id, post.removed_at, now)
+    })
   } catch (error) {
-    db.exec("ROLLBACK")
     fail(`The post was not put back: ${error.message}. Nothing changed. Run this again.`)
   }
   console.log(`Put back ${count(restored, "post")} by @${post.author}.`)
 }
 
-function appeals() {
-  const rows = db
-    .prepare(
-      `SELECT a.id, a.reason, a.created_at, n.category, n.explanation, n.excerpt, n.created_at AS notice_at,
-              n.restored_at, u.handle AS account
-       FROM appeals a
-       JOIN moderation_notices n ON n.id = a.notice_id
-       JOIN users u ON u.id = a.user_id
-       WHERE a.decided_at IS NULL
-       ORDER BY a.created_at ASC, a.id ASC`
-    )
-    .all()
+async function appeals() {
+  const rows = await sql.unsafe(
+    `SELECT a.id, a.reason, a.created_at, n.category, n.explanation, n.excerpt, n.created_at AS notice_at,
+            n.restored_at, u.handle AS account
+     FROM appeals a
+     JOIN moderation_notices n ON n.id = a.notice_id
+     JOIN users u ON u.id = a.user_id
+     WHERE a.decided_at IS NULL
+     ORDER BY a.created_at ASC, a.id ASC`
+  )
   if (rows.length === 0) {
     console.log("No appeals waiting for a decision.")
     return
@@ -350,7 +339,7 @@ function appeals() {
   console.log("Decide with: node scripts/moderation.mjs decide <appealId> reverse|uphold --note \"<reason>\"")
 }
 
-function decide() {
+async function decide() {
   const verdict = params[1]
   if (verdict !== "reverse" && verdict !== "uphold") fail("Say reverse or uphold.")
   const note = (options.note ?? "").replace(/\r\n/g, "\n").trim()
@@ -358,28 +347,22 @@ function decide() {
   if ([...note].length > 1000) fail("Keep the reason under 1,000 characters.")
 
   const prefix = idPrefix(params[0], "appeal")
-  const appeal = onlyMatch(
-    db
-      .prepare("SELECT id, notice_id, decided_at FROM appeals WHERE substr(id, 1, ?) = ? LIMIT 2")
-      .all(prefix.length, prefix),
-    "appeal",
-    prefix
-  )
+  const appealRows = await sql.unsafe("SELECT id, notice_id, decided_at FROM appeals WHERE substr(id, 1, $1) = $2 LIMIT 2", [prefix.length, prefix])
+  const appeal = onlyMatch(appealRows, "appeal", prefix)
   if (appeal.decided_at !== null) fail("That appeal was already decided.")
-  const notice = db.prepare("SELECT post_id FROM moderation_notices WHERE id = ?").get(appeal.notice_id)
+  const notice = await one(sql, "SELECT post_id FROM moderation_notices WHERE id = $1", appeal.notice_id)
   const decision = verdict === "reverse" ? "reversed" : "upheld"
   const now = Date.now()
   let restored = 0
-  db.exec("BEGIN IMMEDIATE")
   try {
-    db.prepare("UPDATE appeals SET decided_at = ?, decision = ?, decision_note = ? WHERE id = ?").run(now, decision, note, appeal.id)
-    if (decision === "reversed" && notice) {
-      const post = db.prepare("SELECT removed_at FROM posts WHERE id = ?").get(notice.post_id)
-      if (post && post.removed_at !== null) restored = restoreThread(notice.post_id, post.removed_at, now)
-    }
-    db.exec("COMMIT")
+    await sql.begin(async (tx) => {
+      await tx.unsafe("UPDATE appeals SET decided_at = $1, decision = $2, decision_note = $3 WHERE id = $4", [now, decision, note, appeal.id])
+      if (decision === "reversed" && notice) {
+        const post = await one(tx, "SELECT removed_at FROM posts WHERE id = $1", notice.post_id)
+        if (post && post.removed_at !== null) restored = await restoreThread(tx, notice.post_id, post.removed_at, now)
+      }
+    })
   } catch (error) {
-    db.exec("ROLLBACK")
     fail(`The decision was not saved: ${error.message}. Nothing changed. Run this again.`)
   }
   if (decision === "reversed") {
@@ -390,40 +373,35 @@ function decide() {
 }
 
 // The post, every reply under it at any depth, the files they use and what else goes with them.
-function inventory(postId) {
-  const totals = db
-    .prepare(
-      `${TREE}
-       SELECT
-         (SELECT COUNT(*) FROM tree) AS posts,
-         (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id IN (SELECT id FROM tree) AND q.id NOT IN (SELECT id FROM tree)) AS quotes,
-         (SELECT COUNT(*) FROM reports r WHERE r.post_id IN (SELECT id FROM tree) AND r.resolved_at IS NULL) AS reports`
-    )
-    .get(postId)
-  const files = db
-    .prepare(
-      `${TREE}
-       SELECT file FROM post_media WHERE post_id IN (SELECT id FROM tree)
-       UNION
-       SELECT media_file FROM posts WHERE id IN (SELECT id FROM tree) AND media_file IS NOT NULL`
-    )
-    .all(postId)
-    .map((row) => row.file)
-  return { ...totals, files }
+async function inventory(postId) {
+  const [totals] = await sql.unsafe(
+    `${TREE}
+     SELECT
+       (SELECT COUNT(*) FROM tree) AS posts,
+       (SELECT COUNT(*) FROM posts q WHERE q.quote_of_id IN (SELECT id FROM tree) AND q.id NOT IN (SELECT id FROM tree)) AS quotes,
+       (SELECT COUNT(*) FROM reports r WHERE r.post_id IN (SELECT id FROM tree) AND r.resolved_at IS NULL) AS reports`,
+    [postId]
+  )
+  const fileRows = await sql.unsafe(
+    `${TREE}
+     SELECT file FROM post_media WHERE post_id IN (SELECT id FROM tree)
+     UNION
+     SELECT media_file FROM posts WHERE id IN (SELECT id FROM tree) AND media_file IS NOT NULL`,
+    [postId]
+  )
+  return { ...totals, files: fileRows.map((row) => row.file) }
 }
 
-function stillUsed(file) {
-  return (
-    db
-      .prepare(
-        `SELECT 1 AS used FROM post_media WHERE file = ?1
-         UNION ALL SELECT 1 FROM posts WHERE media_file = ?1
-         UNION ALL SELECT 1 FROM users WHERE avatar_file = ?1 OR banner_file = ?1
-         UNION ALL SELECT 1 FROM chat_messages WHERE media_file = ?1
-         LIMIT 1`
-      )
-      .get(file) !== undefined
+async function stillUsed(file) {
+  const rows = await sql.unsafe(
+    `SELECT 1 AS used FROM post_media WHERE file = $1
+     UNION ALL SELECT 1 FROM posts WHERE media_file = $1
+     UNION ALL SELECT 1 FROM users WHERE avatar_file = $1 OR banner_file = $1
+     UNION ALL SELECT 1 FROM chat_messages WHERE media_file = $1
+     LIMIT 1`,
+    [file]
   )
+  return rows.length > 0
 }
 
 async function confirmed() {
@@ -438,8 +416,8 @@ async function confirmed() {
 }
 
 async function remove() {
-  const post = findPost(params[0])
-  const found = inventory(post.id)
+  const post = await findPost(params[0])
+  const found = await inventory(post.id)
   console.log(field("Post", `${post.id} by @${post.author}, posted ${when(post.created_at)}`))
   console.log(field("Text", post.body))
   // What leaves the database with the post, then the files that go with it.
@@ -458,12 +436,9 @@ async function remove() {
     return
   }
 
-  db.exec("BEGIN IMMEDIATE")
   try {
-    db.prepare("DELETE FROM posts WHERE id = ?").run(post.id)
-    db.exec("COMMIT")
+    await sql.unsafe("DELETE FROM posts WHERE id = $1", [post.id])
   } catch (error) {
-    db.exec("ROLLBACK")
     fail(`The post was not removed: ${error.message}. Nothing changed. Run this again.`)
   }
   console.log(`Removed ${andList(rows)} from the database.`)
@@ -477,7 +452,7 @@ async function remove() {
       console.log(`Left a file alone because its name is not one the app creates: ${plain(file)}`)
       continue
     }
-    if (stillUsed(file)) {
+    if (await stillUsed(file)) {
       shared++
       continue
     }
@@ -499,13 +474,18 @@ async function remove() {
 }
 
 try {
-  if (command === "list") list()
-  else if (command === "resolve") resolve()
-  else if (command === "hide") hide()
-  else if (command === "restore") restore()
-  else if (command === "appeals") appeals()
-  else if (command === "decide") decide()
+  // The moderation tables and columns are part of the current schema. An older database has to be brought up to date first.
+  if (!(await hasColumn("reports", "outcome")) || !(await hasColumn("posts", "removed_at")) || !(await hasColumn("moderation_notices", "post_id"))) {
+    fail("This database has not been upgraded for the current version yet. Apply db/postgres/schema.sql, then run this again.")
+  }
+
+  if (command === "list") await list()
+  else if (command === "resolve") await resolve()
+  else if (command === "hide") await hide()
+  else if (command === "restore") await restore()
+  else if (command === "appeals") await appeals()
+  else if (command === "decide") await decide()
   else await remove()
 } finally {
-  db.close()
+  await sql.end()
 }

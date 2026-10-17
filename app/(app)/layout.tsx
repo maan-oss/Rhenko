@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (viewer && viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
   // The badge numbers. A new object on each render, so the badges take the numbers the server now has.
   const counts = viewer
-    ? { notifications: unreadNotificationCount(viewer.id), messages: unreadMessageCount(viewer.id) }
+    ? { notifications: await unreadNotificationCount(viewer.id), messages: await unreadMessageCount(viewer.id) }
     : { notifications: 0, messages: 0 }
   return (
     <ViewerLanguages speaks={viewer?.speaks ?? []} translate={translationOn()}>

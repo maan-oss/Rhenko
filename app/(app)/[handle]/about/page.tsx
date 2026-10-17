@@ -16,7 +16,7 @@ export const instant = false
 export default async function AboutPage({ params }: { params: Params }) {
   const viewer = await requireViewer()
   const { handle } = await params
-  const profile = getProfileByHandle(handle, viewer.id)
+  const profile = await getProfileByHandle(handle, viewer.id)
   const isSelf = profile?.id === viewer.id
   if (!profile || (profile.deactivated && !isSelf) || profile.relationship.blockedMe) notFound()
 

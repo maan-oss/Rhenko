@@ -27,21 +27,21 @@ const globals = globalThis as unknown as Globals
 let lastPass = 0
 let lastAnswers = 0
 
-export function startMaintenance(): void {
+export async function startMaintenance(): Promise<void> {
   if (globals.__rhenkoMaintenance) return
   globals.__rhenkoMaintenance = setInterval(tick, TICK_MS)
   globals.__rhenkoMaintenance.unref?.()
-  tick()
+  await tick()
 }
 
-function tick(): void {
+async function tick(): Promise<void> {
   const now = Date.now()
   try {
-    if (holdLease(LEASE_NAME, LEASE_MS, now)) {
-      expireStaleCalls(now)
+    if (await holdLease(LEASE_NAME, LEASE_MS, now)) {
+      await expireStaleCalls(now)
       if (now - lastPass >= PASS_MS) {
         lastPass = now
-        runMaintenance(now)
+        await runMaintenance(now)
       }
     }
   } catch (error) {
@@ -55,34 +55,34 @@ function tick(): void {
   }
 }
 
-export function runMaintenance(now = Date.now()): void {
-  publishDue(now)
-  announceEndedPolls(now)
-  run("DELETE FROM sessions WHERE expires_at < ?", now)
-  run("DELETE FROM login_challenges WHERE expires_at < ?", now)
-  run("DELETE FROM email_codes WHERE expires_at < ?", now)
+export async function runMaintenance(now = Date.now()): Promise<void> {
+  await publishDue(now)
+  await announceEndedPolls(now)
+  await run("DELETE FROM sessions WHERE expires_at < ?", now)
+  await run("DELETE FROM login_challenges WHERE expires_at < ?", now)
+  await run("DELETE FROM email_codes WHERE expires_at < ?", now)
   // Hidden posts whose appeal window has closed, or whose appeal failed, are deleted here.
-  purgeHidden(now)
+  await purgeHidden(now)
   if (now - lastRetentionPass >= HOUR) {
     lastRetentionPass = now
-    keepWithinRetention(now)
+    await keepWithinRetention(now)
   }
   // The For you models are refit once an hour from what people did after each post was shown. A failed fit leaves the
   // feed on the weights it has, so it is logged and the rest of the pass goes on.
   if (now - lastLearningPass >= HOUR) {
     lastLearningPass = now
     try {
-      trainFeedModel(now)
+      await trainFeedModel(now)
     } catch (error) {
       console.error("[maintenance] feed model training failed", error)
     }
-    purgeFeedSignals(now)
+    await purgeFeedSignals(now)
   }
   // Older posts and messages get their language recorded a few at a time, so translation can tell what they are written in.
-  recordMissingLanguages(100)
-  sweepLimits(now)
-  sweepBus(now)
-  pruneQueuedBanners(now)
+  await recordMissingLanguages(100)
+  await sweepLimits(now)
+  await sweepBus(now)
+  await pruneQueuedBanners(now)
 }
 
 // Records are kept only as long as the Privacy Policy says. Views and profile visits 90 days, read notifications 180
@@ -93,32 +93,32 @@ const DAY = 24 * HOUR
 let lastRetentionPass = 0
 let lastLearningPass = 0
 
-function keepWithinRetention(now: number): void {
+async function keepWithinRetention(now: number): Promise<void> {
   // Refreshes the planner's statistics as the tables grow. Cheap, and keeps the feed queries on their indexes.
-  optimizeDatabase()
-  run("DELETE FROM post_views WHERE created_at < ?", now - RETENTION.viewsDays * DAY)
-  purgeDismissals(now)
-  run("DELETE FROM profile_visits WHERE created_at < ?", now - RETENTION.visitsDays * DAY)
-  run("DELETE FROM notifications WHERE read = 1 AND created_at < ?", now - RETENTION.readNotificationsDays * DAY)
-  run("DELETE FROM legal_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
-  run("DELETE FROM moderation_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
-  run("DELETE FROM sahayak_jobs WHERE finished_at IS NOT NULL AND finished_at < ?", now - RETENTION.sahayakDays * DAY)
-  run("DELETE FROM account_signals WHERE created_at < ?", now - RETENTION.signalsDays * DAY)
+  await optimizeDatabase()
+  await run("DELETE FROM post_views WHERE created_at < ?", now - RETENTION.viewsDays * DAY)
+  await purgeDismissals(now)
+  await run("DELETE FROM profile_visits WHERE created_at < ?", now - RETENTION.visitsDays * DAY)
+  await run("DELETE FROM notifications WHERE read = 1 AND created_at < ?", now - RETENTION.readNotificationsDays * DAY)
+  await run("DELETE FROM legal_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
+  await run("DELETE FROM moderation_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
+  await run("DELETE FROM sahayak_jobs WHERE finished_at IS NOT NULL AND finished_at < ?", now - RETENTION.sahayakDays * DAY)
+  await run("DELETE FROM account_signals WHERE created_at < ?", now - RETENTION.signalsDays * DAY)
   // A human-check puzzle is only useful until it expires; a day later it is removed.
-  run("DELETE FROM proof_challenges WHERE expires_at < ?", now - DAY)
+  await run("DELETE FROM proof_challenges WHERE expires_at < ?", now - DAY)
 }
 
 // Tells everyone who voted in a poll that it has ended, once.
-function announceEndedPolls(now: number): void {
-  const ended = all<{ post_id: string; author_id: string }>(
+async function announceEndedPolls(now: number): Promise<void> {
+  const ended = await all<{ post_id: string; author_id: string }>(
     `SELECT pl.post_id, p.author_id FROM polls pl
      JOIN posts p ON p.id = pl.post_id
      WHERE pl.ends_at <= ? AND pl.notified_at IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL`,
     now
   )
   for (const poll of ended) {
-    const voters = all<{ user_id: string }>("SELECT user_id FROM poll_votes WHERE post_id = ?", poll.post_id)
-    for (const voter of voters) notify(voter.user_id, poll.author_id, "poll", poll.post_id)
-    run("UPDATE polls SET notified_at = ? WHERE post_id = ?", now, poll.post_id)
+    const voters = await all<{ user_id: string }>("SELECT user_id FROM poll_votes WHERE post_id = ?", poll.post_id)
+    for (const voter of voters) await notify(voter.user_id, poll.author_id, "poll", poll.post_id)
+    await run("UPDATE polls SET notified_at = ? WHERE post_id = ?", now, poll.post_id)
   }
 }

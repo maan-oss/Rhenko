@@ -7,8 +7,8 @@ import { BANNER_PREVIEW_MAX } from "@/lib/rules"
 export type { NotificationKind }
 
 // True unless the person switched this kind of notification off in settings.
-export function wantsNotification(recipientId: string, kind: NotificationKind): boolean {
-  const row = get<{ enabled: number }>(
+export async function wantsNotification(recipientId: string, kind: NotificationKind): Promise<boolean> {
+  const row = await get<{ enabled: number }>(
     "SELECT enabled FROM notification_prefs WHERE user_id = ? AND kind = ?",
     recipientId,
     kind
@@ -16,9 +16,9 @@ export function wantsNotification(recipientId: string, kind: NotificationKind): 
   return row ? row.enabled === 1 : true
 }
 
-export function blockedEitherWay(a: string, b: string): boolean {
+export async function blockedEitherWay(a: string, b: string): Promise<boolean> {
   return (
-    get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", a, b, b, a) !==
+    await get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", a, b, b, a) !==
     undefined
   )
 }
@@ -37,16 +37,16 @@ const NOTICE: Record<NotificationKind, string> = {
 }
 
 // True when `muterId` muted `mutedId`. A muted account's activity doesn't notify the person who muted it.
-export function hasMuted(muterId: string, mutedId: string): boolean {
-  return get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", muterId, mutedId) !== undefined
+export async function hasMuted(muterId: string, mutedId: string): Promise<boolean> {
+  return await get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", muterId, mutedId) !== undefined
 }
 
-export function notify(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): void {
+export async function notify(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): Promise<void> {
   if (recipientId === actorId) return
-  if (!wantsNotification(recipientId, kind)) return
-  if (blockedEitherWay(recipientId, actorId)) return
-  if (hasMuted(recipientId, actorId)) return
-  run(
+  if (!await wantsNotification(recipientId, kind)) return
+  if (await blockedEitherWay(recipientId, actorId)) return
+  if (await hasMuted(recipientId, actorId)) return
+  await run(
     "INSERT INTO notifications (id, recipient_id, actor_id, kind, post_id, read, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)",
     newId(),
     recipientId,
@@ -55,22 +55,22 @@ export function notify(recipientId: string, actorId: string, kind: NotificationK
     postId,
     Date.now()
   )
-  publish([recipientId], { type: "notification" })
-  announceNotification(recipientId, actorId, kind, postId)
+  await publish([recipientId], { type: "notification" })
+  await announceNotification(recipientId, actorId, kind, postId)
 }
 
 // A banner for the notification, with a short excerpt of the post it is about. The excerpt appears only when the
 // recipient may see that post, so a mention or reply from an account hidden from them shows no text.
-function announceNotification(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): void {
-  const actor = get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
+async function announceNotification(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): Promise<void> {
+  const actor = await get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
     "SELECT id, name, handle, avatar_file FROM users WHERE id = ?",
     actorId
   )
   if (!actor) return
-  const post = postId && canSeePost(postId, recipientId) ? get<{ body: string }>("SELECT body FROM posts WHERE id = ?", postId) : undefined
+  const post = postId && await canSeePost(postId, recipientId) ? await get<{ body: string }>("SELECT body FROM posts WHERE id = ?", postId) : undefined
   const text = post?.body.replace(/\s+/g, " ").trim() ?? ""
   const preview = text.length > BANNER_PREVIEW_MAX ? `${text.slice(0, BANNER_PREVIEW_MAX - 1)}…` : text
-  publish([recipientId], {
+  await publish([recipientId], {
     type: "banner",
     kind,
     conversationId: null,

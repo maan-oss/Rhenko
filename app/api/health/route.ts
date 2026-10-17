@@ -8,7 +8,7 @@ export async function GET() {
   await connection()
   const headers = { "Cache-Control": "no-store" }
   try {
-    if (get<{ ok: number }>("SELECT 1 AS ok")?.ok !== 1) throw new Error("SELECT 1 did not return 1")
+    if ((await get<{ ok: number }>("SELECT 1 AS ok"))?.ok !== 1) throw new Error("SELECT 1 did not return 1")
     return Response.json({ ok: true, db: true, time: new Date().toISOString() }, { headers })
   } catch (error) {
     console.error("Health check failed: the database did not answer.", error)

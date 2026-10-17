@@ -17,9 +17,9 @@ export default function ListsPage() {
 
 async function ListsBody() {
   const viewer = await requireViewer()
-  const { owned, followed } = listsFor(viewer.id)
+  const { owned, followed } = await listsFor(viewer.id)
   // A followed list stays out of sight when its owner's account is gone or the owner has blocked the viewer.
-  const visible = listOwnersVisibleTo(viewer.id, followed.map((list) => list.owner.id))
+  const visible = await listOwnersVisibleTo(viewer.id, followed.map((list) => list.owner.id))
   return (
     <>
       <ListsHeader />

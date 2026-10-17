@@ -10,7 +10,7 @@ export async function GET() {
   const now = Date.now()
   const rows = [
     "post_id,posted_at,text,views,likes,reposts,quotes,replies,bookmarks,follows,engagement_rate,link_clicks,profile_clicks,detail_clicks,photo_clicks,hashtag_clicks",
-    ...ownPostRows(viewer.id).map((post) =>
+    ...(await ownPostRows(viewer.id)).map((post) =>
       [
         post.id,
         new Date(post.createdAt).toISOString(),

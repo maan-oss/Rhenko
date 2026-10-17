@@ -43,17 +43,17 @@ export function networkHash(ip: string): string | null {
 }
 
 // Gives a browser the check to run. Turnstile when it is configured; otherwise a puzzle, harder for a busy network.
-export function issueProof(ip: string, now = Date.now()): ProofSpec {
+export async function issueProof(ip: string, now = Date.now()): Promise<ProofSpec> {
   const siteKey = turnstileSiteKey()
   if (siteKey) return { kind: "turnstile", siteKey }
   const hash = networkHash(ip)
   const recent = hash
-    ? (get<{ n: number }>("SELECT COUNT(*) AS n FROM proof_challenges WHERE ip_hash = ? AND created_at >= ?", hash, now - 10 * MINUTE)?.n ?? 0)
+    ? ((await get<{ n: number }>("SELECT COUNT(*) AS n FROM proof_challenges WHERE ip_hash = ? AND created_at >= ?", hash, now - 10 * MINUTE))?.n ?? 0)
     : 0
   const bits = bitsFor(recent, baseBits())
   const id = randomBytes(16).toString("hex")
   const salt = randomBytes(12).toString("base64url")
-  run(
+  await run(
     "INSERT INTO proof_challenges (id, salt, bits, ip_hash, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?, ?, NULL)",
     id,
     salt,
@@ -68,14 +68,14 @@ export function issueProof(ip: string, now = Date.now()): ProofSpec {
 // Whether the answer is a correct one. A puzzle is used up by the first answer, right or wrong, so it cannot be tried again.
 // Turnstile tokens are single-use at Cloudflare.
 export async function verifyProof(answer: ProofAnswer, now = Date.now()): Promise<boolean> {
-  if (answer.kind === "turnstile") return verifyTurnstile(answer.token)
-  const row = get<{ salt: string; bits: number; expires_at: number; used_at: number | null }>(
+  if (answer.kind === "turnstile") return await verifyTurnstile(answer.token)
+  const row = await get<{ salt: string; bits: number; expires_at: number; used_at: number | null }>(
     "SELECT salt, bits, expires_at, used_at FROM proof_challenges WHERE id = ?",
     answer.id
   )
   if (!row || row.used_at !== null || row.expires_at < now) return false
   // Synchronous from here to the end of the check, so two answers cannot both spend the same puzzle.
-  run("UPDATE proof_challenges SET used_at = ? WHERE id = ?", now, answer.id)
+  await run("UPDATE proof_challenges SET used_at = ? WHERE id = ?", now, answer.id)
   const digest = createHash("sha256").update(puzzleInput(row.salt, answer.nonce)).digest("hex")
   return meetsDifficulty(digest, row.bits)
 }

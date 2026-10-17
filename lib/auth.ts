@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt, randomUUID, scrypt as scryptCb, tim
 import { cookies, headers } from "next/headers"
 import { connection } from "next/server"
 import { redirect } from "next/navigation"
-import { db, get, run, transaction, type Param } from "@/lib/db"
+import { change, get, run, transaction, type Param } from "@/lib/db"
 import { TERMS_VERSION } from "@/lib/legal"
 import { consume } from "@/lib/rate-limit"
 import { decryptText, encryptText, isEncrypted, keyedHash } from "@/lib/secrets"
@@ -112,13 +112,18 @@ export function toViewer(row: UserRow): Viewer {
 }
 
 // Runs a write and returns how many rows it changed, for updates that only count when they apply.
-export function runChanges(sql: string, ...params: Param[]): number {
-  return Number(db().prepare(sql).run(...params).changes)
+export async function runChanges(sql: string, ...params: Param[]): Promise<number> {
+  return await change(sql, ...params)
 }
 
 // True when a write broke a unique index, such as "users.email" or "users.handle".
+// The unique index behind each column the app reports on. Postgres names them in the schema.
+const UNIQUE_INDEXES: Record<string, string> = { "users.email": "users_email", "users.handle": "users_handle_key" }
+
 export function isUniqueViolation(error: unknown, column: string): boolean {
-  return error instanceof Error && error.message.includes("UNIQUE constraint failed") && error.message.includes(column)
+  if (typeof error !== "object" || error === null) return false
+  const pg = error as { code?: string; constraint_name?: string }
+  return pg.code === "23505" && pg.constraint_name === UNIQUE_INDEXES[column]
 }
 
 function scrypt(password: string, salt: Buffer): Promise<Buffer> {
@@ -168,12 +173,12 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex")
 }
 
-export function findUserByHandleWithSecret(handle: string): UserRow | undefined {
-  return get<UserRow>("SELECT * FROM users WHERE handle = ? COLLATE NOCASE", handle)
+export async function findUserByHandleWithSecret(handle: string): Promise<UserRow | undefined> {
+  return await get<UserRow>("SELECT * FROM users WHERE handle = ?", handle)
 }
 
-export function findUserById(id: string): UserRow | undefined {
-  return get<UserRow>("SELECT * FROM users WHERE id = ?", id)
+export async function findUserById(id: string): Promise<UserRow | undefined> {
+  return await get<UserRow>("SELECT * FROM users WHERE id = ?", id)
 }
 
 async function userAgent(): Promise<string> {
@@ -213,7 +218,7 @@ function saveTokens(store: CookieStore, tokens: string[]): void {
 export async function createSession(userId: string): Promise<void> {
   const token = randomBytes(32).toString("base64url")
   const now = Date.now()
-  run(
+  await run(
     "INSERT INTO sessions (token_hash, user_id, created_at, expires_at, user_agent, last_seen) VALUES (?, ?, ?, ?, ?, ?)",
     hashToken(token),
     userId,
@@ -228,8 +233,8 @@ export async function createSession(userId: string): Promise<void> {
 }
 
 // True while a session token still names a live account. Long-lived streams check this to close once a session ends.
-export function sessionTokenValid(token: string): boolean {
-  const row = get<{ user_id: string }>(
+export async function sessionTokenValid(token: string): Promise<boolean> {
+  const row = await get<{ user_id: string }>(
     `SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND u.deactivated_at IS NULL`,
     hashToken(token),
@@ -246,7 +251,7 @@ export async function currentSessionHash(): Promise<string | null> {
 export async function destroySession(): Promise<void> {
   const store = await cookies()
   const token = store.get(SESSION_COOKIE)?.value
-  if (token) run("DELETE FROM sessions WHERE token_hash = ?", hashToken(token))
+  if (token) await run("DELETE FROM sessions WHERE token_hash = ?", hashToken(token))
   store.delete(SESSION_COOKIE)
   if (token) saveTokens(store, storedTokens(store).filter((known) => known !== token))
 }
@@ -269,7 +274,7 @@ export async function listAccounts(): Promise<AccountSummary[]> {
   const seen = new Set<string>()
   const accounts: AccountSummary[] = []
   for (const token of tokens) {
-    const row = get<{ id: string; handle: string; name: string; avatar_file: string | null }>(
+    const row = await get<{ id: string; handle: string; name: string; avatar_file: string | null }>(
       `SELECT u.id, u.handle, u.name, u.avatar_file FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ? AND u.deactivated_at IS NULL`,
       hashToken(token),
@@ -286,7 +291,7 @@ export async function listAccounts(): Promise<AccountSummary[]> {
 export async function activateAccount(userId: string): Promise<boolean> {
   const store = await cookies()
   for (const token of storedTokens(store)) {
-    const row = get<{ user_id: string }>(
+    const row = await get<{ user_id: string }>(
       `SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ? AND u.deactivated_at IS NULL`,
       hashToken(token),
@@ -303,7 +308,7 @@ export async function activateAccount(userId: string): Promise<boolean> {
 // After logging out, the next remembered account takes over if there is one.
 export async function adoptRemainingAccount(): Promise<boolean> {
   const next = (await listAccounts())[0]
-  return next ? activateAccount(next.id) : false
+  return next ? await activateAccount(next.id) : false
 }
 
 // Two-step sign-in: a short-lived challenge stands in for the session until
@@ -313,9 +318,9 @@ export async function createChallenge(userId: string): Promise<void> {
   const now = Date.now()
   const store = await cookies()
   const previous = store.get(CHALLENGE_COOKIE)?.value
-  if (previous) run("DELETE FROM login_challenges WHERE token_hash = ?", hashToken(previous))
-  run("DELETE FROM login_challenges WHERE expires_at < ?", now)
-  run(
+  if (previous) await run("DELETE FROM login_challenges WHERE token_hash = ?", hashToken(previous))
+  await run("DELETE FROM login_challenges WHERE expires_at < ?", now)
+  await run(
     "INSERT INTO login_challenges (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
     hashToken(token),
     userId,
@@ -337,7 +342,7 @@ export async function readChallenge(): Promise<{ userId: string; tokenHash: stri
   const token = (await cookies()).get(CHALLENGE_COOKIE)?.value
   if (!token) return null
   const tokenHash = hashToken(token)
-  const row = get<{ user_id: string }>(
+  const row = await get<{ user_id: string }>(
     "SELECT user_id FROM login_challenges WHERE token_hash = ? AND expires_at > ?",
     tokenHash,
     Date.now()
@@ -347,14 +352,14 @@ export async function readChallenge(): Promise<{ userId: string; tokenHash: stri
 
 // Counts a wrong code against one sign-in. Returns false on the fifth wrong code, when the sign-in has to start
 // again. consume() allows `limit` calls in its window and refuses the next, so a limit of four refuses the fifth.
-export function countChallengeFailure(tokenHash: string): boolean {
-  return consume(`2fa:${tokenHash}`, CHALLENGE_TRIES - 1, CHALLENGE_MS).ok
+export async function countChallengeFailure(tokenHash: string): Promise<boolean> {
+  return (await consume(`2fa:${tokenHash}`, CHALLENGE_TRIES - 1, CHALLENGE_MS)).ok
 }
 
 export async function clearChallenge(): Promise<void> {
   const store = await cookies()
   const token = store.get(CHALLENGE_COOKIE)?.value
-  if (token) run("DELETE FROM login_challenges WHERE token_hash = ?", hashToken(token))
+  if (token) await run("DELETE FROM login_challenges WHERE token_hash = ?", hashToken(token))
   store.delete(CHALLENGE_COOKIE)
 }
 
@@ -379,10 +384,10 @@ export function readTotpSecret(stored: string | null): string | null {
 }
 
 // Saves an encrypted copy of a secret that was still stored in plain form, unless it changed in the meantime.
-function encryptLegacySecret(userId: string, stored: string | null): void {
+async function encryptLegacySecret(userId: string, stored: string | null): Promise<void> {
   const opened = openSecret(stored)
   if (opened.kind !== "ok" || !opened.legacy) return
-  run("UPDATE users SET totp_secret = ? WHERE id = ? AND totp_secret = ?", encryptText(opened.secret), userId, stored)
+  await run("UPDATE users SET totp_secret = ? WHERE id = ? AND totp_secret = ?", encryptText(opened.secret), userId, stored)
 }
 
 export type SecondFactorState = {
@@ -392,42 +397,42 @@ export type SecondFactorState = {
   recoveryLeft: number
 }
 
-export function recoveryCodesLeft(userId: string): number {
-  return get<{ c: number }>("SELECT COUNT(*) AS c FROM recovery_codes WHERE user_id = ? AND used_at IS NULL", userId)?.c ?? 0
+export async function recoveryCodesLeft(userId: string): Promise<number> {
+  return (await get<{ c: number }>("SELECT COUNT(*) AS c FROM recovery_codes WHERE user_id = ? AND used_at IS NULL", userId))?.c ?? 0
 }
 
-export function secondFactorState(userId: string): SecondFactorState {
-  const row = get<{ totp_enabled: number; totp_secret: string | null }>(
+export async function secondFactorState(userId: string): Promise<SecondFactorState> {
+  const row = await get<{ totp_enabled: number; totp_secret: string | null }>(
     "SELECT totp_enabled, totp_secret FROM users WHERE id = ?",
     userId
   )
   if (!row || row.totp_enabled !== 1) return { enabled: false, usable: false, recoveryLeft: 0 }
-  return { enabled: true, usable: openSecret(row.totp_secret).kind === "ok", recoveryLeft: recoveryCodesLeft(userId) }
+  return { enabled: true, usable: openSecret(row.totp_secret).kind === "ok", recoveryLeft: await recoveryCodesLeft(userId) }
 }
 
 // Replaces every recovery code with new hashes. Call inside a transaction.
-export function replaceRecoveryCodes(userId: string, hashes: string[]): void {
-  run("DELETE FROM recovery_codes WHERE user_id = ?", userId)
+export async function replaceRecoveryCodes(userId: string, hashes: string[]): Promise<void> {
+  await run("DELETE FROM recovery_codes WHERE user_id = ?", userId)
   for (const hash of hashes) {
-    run("INSERT INTO recovery_codes (id, user_id, code_hash) VALUES (?, ?, ?)", newId(), userId, hash)
+    await run("INSERT INTO recovery_codes (id, user_id, code_hash) VALUES (?, ?, ?)", newId(), userId, hash)
   }
 }
 
 // Uses up one recovery code inside a transaction, so it works once. Codes stored as plain SHA-256, from before
 // keyed hashes, still work and are deleted when used.
-function redeemRecoveryCode(userId: string, code: string): boolean {
+async function redeemRecoveryCode(userId: string, code: string): Promise<boolean> {
   const keyed = hashRecoveryCode(code)
   const legacy = legacyRecoveryHash(code)
-  return transaction(() => {
-    const row = get<{ id: string; code_hash: string }>(
+  return await transaction(async () => {
+    const row = await get<{ id: string; code_hash: string }>(
       "SELECT id, code_hash FROM recovery_codes WHERE user_id = ? AND used_at IS NULL AND code_hash IN (?, ?) LIMIT 1",
       userId,
       keyed,
       legacy
     )
     if (!row) return false
-    if (row.code_hash === legacy) return runChanges("DELETE FROM recovery_codes WHERE id = ?", row.id) === 1
-    return runChanges("UPDATE recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL", Date.now(), row.id) === 1
+    if (row.code_hash === legacy) return await runChanges("DELETE FROM recovery_codes WHERE id = ?", row.id) === 1
+    return await runChanges("UPDATE recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL", Date.now(), row.id) === 1
   })
 }
 
@@ -436,8 +441,8 @@ export type CodeCheck = { ok: true; used: "app" | "recovery" } | { ok: false; er
 // Checks a code from the authenticator app, or a recovery code, for an account with two-factor sign-in on.
 // An app code counts once: its time step is saved with a conditional update, and only a changed row is a success,
 // so a replayed code fails even when two requests race.
-export function checkSecondFactor(userId: string, input: string): CodeCheck {
-  const row = get<{ totp_enabled: number; totp_secret: string | null; totp_step: number }>(
+export async function checkSecondFactor(userId: string, input: string): Promise<CodeCheck> {
+  const row = await get<{ totp_enabled: number; totp_secret: string | null; totp_step: number }>(
     "SELECT totp_enabled, totp_secret, totp_step FROM users WHERE id = ?",
     userId
   )
@@ -456,11 +461,11 @@ export function checkSecondFactor(userId: string, input: string): CodeCheck {
       }
       return { ok: false, error: "That code isn't right. Codes change every 30 seconds, so enter the one showing now." }
     }
-    const saved = transaction(() => {
-      if (runChanges("UPDATE users SET totp_step = ? WHERE id = ? AND totp_enabled = 1 AND totp_step < ?", step, userId, step) !== 1) {
+    const saved = await transaction(async () => {
+      if (await runChanges("UPDATE users SET totp_step = ? WHERE id = ? AND totp_enabled = 1 AND totp_step < ?", step, userId, step) !== 1) {
         return false
       }
-      encryptLegacySecret(userId, row.totp_secret)
+      await encryptLegacySecret(userId, row.totp_secret)
       return true
     })
     if (!saved) return { ok: false, error: "That code was already used. Wait for the next one in your app." }
@@ -469,10 +474,10 @@ export function checkSecondFactor(userId: string, input: string): CodeCheck {
 
   const recovery = normalizeRecoveryCode(input)
   if (recovery) {
-    if (!redeemRecoveryCode(userId, recovery)) {
+    if (!await redeemRecoveryCode(userId, recovery)) {
       return { ok: false, error: "That recovery code isn't valid, or it was already used." }
     }
-    encryptLegacySecret(userId, row.totp_secret)
+    await encryptLegacySecret(userId, row.totp_secret)
     return { ok: true, used: "recovery" }
   }
 
@@ -488,11 +493,11 @@ function emailCodeHash(purpose: EmailPurpose, userId: string, target: string, co
 }
 
 // A new code for one purpose, replacing any earlier one. Returns the code to send.
-export function issueEmailCode(userId: string, purpose: EmailPurpose, target: string, now = Date.now()): string {
+export async function issueEmailCode(userId: string, purpose: EmailPurpose, target: string, now = Date.now()): Promise<string> {
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0")
-  transaction(() => {
-    run("DELETE FROM email_codes WHERE user_id = ? AND purpose = ?", userId, purpose)
-    run(
+  await transaction(async () => {
+    await run("DELETE FROM email_codes WHERE user_id = ? AND purpose = ?", userId, purpose)
+    await run(
       `INSERT INTO email_codes (id, user_id, purpose, target, code_hash, attempts, expires_at, created_at)
        VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
       newId(),
@@ -508,12 +513,12 @@ export function issueEmailCode(userId: string, purpose: EmailPurpose, target: st
 }
 
 // Removes the codes for one purpose: when a code couldn't be sent, or the person changed their mind.
-export function withdrawEmailCodes(userId: string, purpose: EmailPurpose): void {
-  run("DELETE FROM email_codes WHERE user_id = ? AND purpose = ?", userId, purpose)
+export async function withdrawEmailCodes(userId: string, purpose: EmailPurpose): Promise<void> {
+  await run("DELETE FROM email_codes WHERE user_id = ? AND purpose = ?", userId, purpose)
 }
 
-export function pendingEmailCode(userId: string, purpose: EmailPurpose, now = Date.now()): { target: string; expiresAt: number } | null {
-  const row = get<{ target: string; expires_at: number }>(
+export async function pendingEmailCode(userId: string, purpose: EmailPurpose, now = Date.now()): Promise<{ target: string; expiresAt: number } | null> {
+  const row = await get<{ target: string; expires_at: number }>(
     "SELECT target, expires_at FROM email_codes WHERE user_id = ? AND purpose = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1",
     userId,
     purpose,
@@ -526,16 +531,16 @@ export type RedeemResult<T> = { ok: true; value: T } | { ok: false; reason: "mis
 
 // Checks an email code. A right code is deleted and `apply` runs in the same transaction, so a code works once and
 // nothing is used up when `apply` throws. A wrong code costs one of its five tries; the fifth deletes it.
-export function redeemEmailCode<T>(
+export async function redeemEmailCode<T>(
   userId: string,
   purpose: EmailPurpose,
   input: string,
-  apply: (target: string) => T,
+  apply: (target: string) => T | Promise<T>,
   now = Date.now()
-): RedeemResult<T> {
+): Promise<RedeemResult<T>> {
   const typed = input.replace(/\s+/g, "")
-  return transaction((): RedeemResult<T> => {
-    const row = get<{ id: string; target: string; code_hash: string; attempts: number }>(
+  return await transaction(async (): Promise<RedeemResult<T>> => {
+    const row = await get<{ id: string; target: string; code_hash: string; attempts: number }>(
       `SELECT id, target, code_hash, attempts FROM email_codes
        WHERE user_id = ? AND purpose = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1`,
       userId,
@@ -544,7 +549,7 @@ export function redeemEmailCode<T>(
     )
     if (!row) return { ok: false, reason: "missing", triesLeft: 0 }
     if (row.attempts >= EMAIL_CODE_TRIES) {
-      run("DELETE FROM email_codes WHERE id = ?", row.id)
+      await run("DELETE FROM email_codes WHERE id = ?", row.id)
       return { ok: false, reason: "spent", triesLeft: 0 }
     }
     const expected = Buffer.from(row.code_hash, "hex")
@@ -552,14 +557,14 @@ export function redeemEmailCode<T>(
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
       const attempts = row.attempts + 1
       if (attempts >= EMAIL_CODE_TRIES) {
-        run("DELETE FROM email_codes WHERE id = ?", row.id)
+        await run("DELETE FROM email_codes WHERE id = ?", row.id)
         return { ok: false, reason: "spent", triesLeft: 0 }
       }
-      run("UPDATE email_codes SET attempts = ? WHERE id = ?", attempts, row.id)
+      await run("UPDATE email_codes SET attempts = ? WHERE id = ?", attempts, row.id)
       return { ok: false, reason: "wrong", triesLeft: EMAIL_CODE_TRIES - attempts }
     }
-    run("DELETE FROM email_codes WHERE id = ?", row.id)
-    return { ok: true, value: apply(row.target) }
+    await run("DELETE FROM email_codes WHERE id = ?", row.id)
+    return { ok: true, value: await apply(row.target) }
   })
 }
 
@@ -569,10 +574,10 @@ export async function getViewer(): Promise<Viewer | null> {
   if (!token) return null
   const hash = hashToken(token)
   const now = Date.now()
-  const row = get<UserRow & { last_seen: number }>(
+  const row = await get<UserRow & { last_seen: number }>(
     `SELECT u.*, s.last_seen,
        EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.user_id = u.id AND sub.kind = 'plus' AND sub.status IN ('active', 'trialing')) AS plus_active,
-       (SELECT group_concat(ul.code) FROM user_languages ul WHERE ul.user_id = u.id AND ul.kind = 'speak') AS speaks_codes
+       (SELECT string_agg(ul.code, ',') FROM user_languages ul WHERE ul.user_id = u.id AND ul.kind = 'speak') AS speaks_codes
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND u.deactivated_at IS NULL`,
     hash,
@@ -580,7 +585,7 @@ export async function getViewer(): Promise<Viewer | null> {
   )
   if (!row) return null
   if (now - row.last_seen > LAST_SEEN_EVERY_MS) {
-    run("UPDATE sessions SET last_seen = ? WHERE token_hash = ?", now, hash)
+    await run("UPDATE sessions SET last_seen = ? WHERE token_hash = ?", now, hash)
   }
   return toViewer(row)
 }

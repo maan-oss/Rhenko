@@ -24,8 +24,8 @@ export default function MessagesPage({ searchParams }: { searchParams: SearchPar
 async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const tab = firstParam((await searchParams).tab) === "requests" ? "requests" : "messages"
-  const conversations = conversationSummaries(viewer.id, tab === "requests" ? "requested" : "accepted")
-  const requests = requestCount(viewer.id)
+  const conversations = await conversationSummaries(viewer.id, tab === "requests" ? "requested" : "accepted")
+  const requests = await requestCount(viewer.id)
 
   return (
     <>

@@ -27,10 +27,10 @@ type Params = Promise<{ id: string }>
 type SearchParams = Promise<{ tab?: string | string[] }>
 
 // A list the viewer may open: it exists, it is theirs or public, and its owner is still here and hasn't blocked them.
-function openList(id: string, viewerId: string) {
-  const detail = listDetail(id, viewerId)
+async function openList(id: string, viewerId: string) {
+  const detail = await listDetail(id, viewerId)
   if (!detail) return null
-  if (!detail.list.isOwner && !listOwnersVisibleTo(viewerId, [detail.list.owner.id]).has(detail.list.owner.id)) return null
+  if (!detail.list.isOwner && !(await listOwnersVisibleTo(viewerId, [detail.list.owner.id])).has(detail.list.owner.id)) return null
   return detail
 }
 
@@ -39,20 +39,20 @@ export const instant = false
 
 export default async function ListPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
-  if (!openList((await params).id, viewer.id)) notFound()
+  if (!await openList((await params).id, viewer.id)) notFound()
   return <ListBody params={params} searchParams={searchParams} />
 }
 
 async function ListBody({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const { id } = await params
-  const detail = openList(id, viewer.id)
+  const detail = await openList(id, viewer.id)
   if (!detail) notFound()
   const { list, members } = detail
-  const pinned = isTimelinePinned(viewer.id, list.id)
+  const pinned = await isTimelinePinned(viewer.id, list.id)
   const tab = firstParam((await searchParams).tab) === "members" ? "members" : "posts"
   const spec: FeedSpec = { kind: "list", listId: list.id }
-  const page = tab === "posts" ? feedFor(spec, viewer.id) : null
+  const page = tab === "posts" ? await feedFor(spec, viewer.id) : null
 
   return (
     <>

@@ -15,6 +15,6 @@ export async function loadMoreNotifications(tab: string, before: number): Promis
   if (typeof before !== "number" || !Number.isFinite(before) || before <= 0) {
     return { ok: false, error: "Reload the page to see older notifications." }
   }
-  const page = notificationsPage(viewer.id, tab, before, NOTIFICATION_PAGE_SIZE)
+  const page = await notificationsPage(viewer.id, tab, before, NOTIFICATION_PAGE_SIZE)
   return { ok: true, items: page.items, next: page.next }
 }

@@ -22,11 +22,11 @@ const CHALLENGE_MS = 5 * 60_000
 
 export type PasskeyRow = { id: string; name: string; createdAt: number; lastUsedAt: number | null }
 
-export function passkeysOf(userId: string): PasskeyRow[] {
-  return all<{ id: string; name: string; created_at: number; last_used_at: number | null }>(
+export async function passkeysOf(userId: string): Promise<PasskeyRow[]> {
+  return (await all<{ id: string; name: string; created_at: number; last_used_at: number | null }>(
     "SELECT id, name, created_at, last_used_at FROM passkeys WHERE user_id = ? ORDER BY created_at ASC",
     userId
-  ).map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, lastUsedAt: r.last_used_at }))
+  )).map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, lastUsedAt: r.last_used_at }))
 }
 
 function transportsOf(stored: string): AuthenticatorTransport[] {
@@ -103,7 +103,7 @@ async function takeChallenge(purpose: Purpose): Promise<{ challenge: string; use
 
 export async function registrationOptions(user: { id: string; handle: string; name: string }) {
   const { rpID } = await relyingParty()
-  const existing = all<{ id: string; transports: string }>("SELECT id, transports FROM passkeys WHERE user_id = ?", user.id)
+  const existing = await all<{ id: string; transports: string }>("SELECT id, transports FROM passkeys WHERE user_id = ?", user.id)
   const options = await generateRegistrationOptions({
     rpName: "Rhenko",
     rpID,
@@ -140,7 +140,7 @@ export async function finishRegistration(
   if (!verified.verified || !verified.registrationInfo) return { ok: false, error: "That key couldn't be added. Try again." }
   const { credential } = verified.registrationInfo
   const cleanName = name.replace(/\s+/g, " ").trim().slice(0, MAX_PASSKEY_NAME) || "Passkey"
-  run(
+  await run(
     "INSERT INTO passkeys (id, user_id, public_key, counter, transports, name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     credential.id,
     userId,
@@ -164,7 +164,7 @@ export async function signInOptions() {
 
 // The second step for an account that has two-factor on: any key registered to that account will do.
 export async function secondStepOptions(userId: string) {
-  const keys = all<{ id: string; transports: string }>("SELECT id, transports FROM passkeys WHERE user_id = ?", userId)
+  const keys = await all<{ id: string; transports: string }>("SELECT id, transports FROM passkeys WHERE user_id = ?", userId)
   if (keys.length === 0) return null
   const { rpID } = await relyingParty()
   const options = await generateAuthenticationOptions({
@@ -185,7 +185,7 @@ export async function checkAssertion(
   const pending = await takeChallenge(purpose)
   if (!pending) return { ok: false, error: "That took too long. Try again." }
   if (expectedUserId !== null && pending.userId !== expectedUserId) return { ok: false, error: "That took too long. Try again." }
-  const key = get<{ id: string; user_id: string; public_key: string; counter: number; transports: string }>(
+  const key = await get<{ id: string; user_id: string; public_key: string; counter: number; transports: string }>(
     "SELECT id, user_id, public_key, counter, transports FROM passkeys WHERE id = ?",
     response.id
   )
@@ -216,6 +216,6 @@ export async function checkAssertion(
   // Keys that count their use must count upward. A counter that goes back means the key was copied, so it is refused.
   // Synced passkeys report 0 every time, which is allowed.
   if ((next > 0 || key.counter > 0) && next <= key.counter) return { ok: false, error: "That key didn't work. Try again." }
-  run("UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?", next, Date.now(), key.id)
+  await run("UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?", next, Date.now(), key.id)
   return { ok: true, userId: key.user_id }
 }

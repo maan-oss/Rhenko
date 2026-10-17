@@ -26,12 +26,12 @@ let cached: { at: number; weights: Weights } | null = null
 
 // The weights the feed uses: the fitted ones where a fit was accepted, the hand-set ones otherwise. A row that is missing,
 // unreadable or the wrong length leaves its model on the hand-set weights, so a bad row can never break the feed.
-export function modelWeights(): Weights {
+export async function modelWeights(): Promise<Weights> {
   const now = Date.now()
   if (cached && now - cached.at < WEIGHTS_CACHE_MS) return cached.weights
   const weights: Weights = { engage: PRIOR.engage, dwell: PRIOR.dwell }
   try {
-    for (const row of all<{ name: string; weights: string }>("SELECT name, weights FROM feed_model WHERE accepted = 1")) {
+    for (const row of await all<{ name: string; weights: string }>("SELECT name, weights FROM feed_model WHERE accepted = 1")) {
       const values: unknown = JSON.parse(row.weights)
       if (!Array.isArray(values) || values.length !== PRIOR.engage.length || !values.every((v) => typeof v === "number" && Number.isFinite(v))) continue
       if (row.name === "engage") weights.engage = values as number[]
@@ -45,13 +45,13 @@ export function modelWeights(): Weights {
 }
 
 // Records the posts the For you feed just showed. A failure here is logged and never stops the feed.
-export function recordImpressions(viewerId: string, served: { postId: string; source: Source; features: number[] }[], now: number): void {
+export async function recordImpressions(viewerId: string, served: { postId: string; source: Source; features: number[] }[], now: number): Promise<void> {
   if (served.length === 0) return
   try {
-    transaction(() => {
+    await transaction(async () => {
       for (const s of served) {
         const features = JSON.stringify(s.features.map((v) => Math.round(v * 10000) / 10000))
-        run(
+        await run(
           `INSERT INTO feed_impressions (viewer_id, post_id, source, features, served_at) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(viewer_id, post_id) DO UPDATE SET source = excluded.source, features = excluded.features, served_at = excluded.served_at`,
           viewerId,
@@ -68,25 +68,25 @@ export function recordImpressions(viewerId: string, served: { postId: string; so
 }
 
 // The posts shown to this viewer since `since`.
-export function recentlyServed(viewerId: string, since: number): Set<string> {
-  return new Set(all<{ post_id: string }>("SELECT post_id FROM feed_impressions WHERE viewer_id = ? AND served_at >= ?", viewerId, since).map((r) => r.post_id))
+export async function recentlyServed(viewerId: string, since: number): Promise<Set<string>> {
+  return new Set((await all<{ post_id: string }>("SELECT post_id FROM feed_impressions WHERE viewer_id = ? AND served_at >= ?", viewerId, since)).map((r) => r.post_id))
 }
 
 // Milliseconds each post has been on this viewer's screen, for posts whose dwell was last added to since `since`.
-export function dwellSince(viewerId: string, since: number): Map<string, number> {
-  return new Map(all<{ post_id: string; dwell_ms: number }>("SELECT post_id, dwell_ms FROM post_dwell WHERE viewer_id = ? AND updated_at >= ?", viewerId, since).map((r) => [r.post_id, r.dwell_ms] as const))
+export async function dwellSince(viewerId: string, since: number): Promise<Map<string, number>> {
+  return new Map((await all<{ post_id: string; dwell_ms: number }>("SELECT post_id, dwell_ms FROM post_dwell WHERE viewer_id = ? AND updated_at >= ?", viewerId, since)).map((r) => [r.post_id, r.dwell_ms] as const))
 }
 
-export function hiddenPosts(viewerId: string): Set<string> {
-  return new Set(all<{ post_id: string }>("SELECT post_id FROM feed_hides WHERE viewer_id = ?", viewerId).map((r) => r.post_id))
+export async function hiddenPosts(viewerId: string): Promise<Set<string>> {
+  return new Set((await all<{ post_id: string }>("SELECT post_id FROM feed_hides WHERE viewer_id = ?", viewerId)).map((r) => r.post_id))
 }
 
 export type TrainingReport = { examples: number; engage: Fit; dwell: Fit }
 
 // Refits both models from the history that has matured (served between TRAIN_MS and LABEL_MS ago). Every fit is stored with
 // its numbers, accepted or not, so the outcome can be seen.
-export function trainFeedModel(now: number): TrainingReport {
-  const rows = all<{ features: string; engaged: number; dwelled: number }>(
+export async function trainFeedModel(now: number): Promise<TrainingReport> {
+  const rows = await all<{ features: string; engaged: number; dwelled: number }>(
     `SELECT i.features,
        (EXISTS (SELECT 1 FROM likes l WHERE l.user_id = i.viewer_id AND l.post_id = i.post_id AND l.created_at >= i.served_at AND l.created_at < i.served_at + ?)
         OR EXISTS (SELECT 1 FROM reposts r WHERE r.user_id = i.viewer_id AND r.post_id = i.post_id AND r.created_at >= i.served_at AND r.created_at < i.served_at + ?)
@@ -123,16 +123,16 @@ export function trainFeedModel(now: number): TrainingReport {
   const engage = fitHead(train.map(toExample((e) => e.engaged)), holdout.map(toExample((e) => e.engaged)), PRIOR.engage)
   const dwell = fitHead(train.map(toExample((e) => e.dwelled)), holdout.map(toExample((e) => e.dwelled)), PRIOR.dwell)
 
-  transaction(() => {
-    save("engage", engage, now)
-    save("dwell", dwell, now)
+  await transaction(async () => {
+    await save("engage", engage, now)
+    await save("dwell", dwell, now)
   })
   cached = null
   return { examples: examples.length, engage, dwell }
 }
 
-function save(name: string, fit: Fit, now: number): void {
-  run(
+async function save(name: string, fit: Fit, now: number): Promise<void> {
+  await run(
     `INSERT INTO feed_model (name, weights, accepted, samples, positives, prior_loss, holdout_loss, trained_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(name) DO UPDATE SET weights = excluded.weights, accepted = excluded.accepted, samples = excluded.samples,
@@ -149,7 +149,7 @@ function save(name: string, fit: Fit, now: number): void {
 }
 
 // Removes impressions and dwell too old to learn from. Hides stay until the viewer or the post goes away.
-export function purgeFeedSignals(now: number): void {
-  run("DELETE FROM feed_impressions WHERE served_at < ?", now - KEEP_MS)
-  run("DELETE FROM post_dwell WHERE updated_at < ?", now - KEEP_MS)
+export async function purgeFeedSignals(now: number): Promise<void> {
+  await run("DELETE FROM feed_impressions WHERE served_at < ?", now - KEEP_MS)
+  await run("DELETE FROM post_dwell WHERE updated_at < ?", now - KEEP_MS)
 }

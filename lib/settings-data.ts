@@ -35,17 +35,17 @@ export type SessionRow = {
 }
 
 // Sessions that have not expired, most recently used first.
-export function sessionsFor(userId: string): SessionRow[] {
-  return all<{ token_hash: string; created_at: number; last_seen: number; user_agent: string }>(
+export async function sessionsFor(userId: string): Promise<SessionRow[]> {
+  return (await all<{ token_hash: string; created_at: number; last_seen: number; user_agent: string }>(
     "SELECT token_hash, created_at, last_seen, user_agent FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen DESC",
     userId,
     Date.now()
-  ).map((r) => ({ tokenHash: r.token_hash, createdAt: r.created_at, lastSeen: r.last_seen, userAgent: r.user_agent }))
+  )).map((r) => ({ tokenHash: r.token_hash, createdAt: r.created_at, lastSeen: r.last_seen, userAgent: r.user_agent }))
 }
 
 // Every kind is on unless the person turned it off.
-export function notificationPrefsFor(userId: string): Record<PrefKind, boolean> {
-  const rows = all<{ kind: string; enabled: number }>("SELECT kind, enabled FROM notification_prefs WHERE user_id = ?", userId)
+export async function notificationPrefsFor(userId: string): Promise<Record<PrefKind, boolean>> {
+  const rows = await all<{ kind: string; enabled: number }>("SELECT kind, enabled FROM notification_prefs WHERE user_id = ?", userId)
   const result = Object.fromEntries(NOTIFICATION_KINDS.map((kind) => [kind, true])) as Record<PrefKind, boolean>
   for (const row of rows) {
     if ((NOTIFICATION_KINDS as readonly string[]).includes(row.kind)) result[row.kind as PrefKind] = row.enabled === 1
@@ -53,13 +53,13 @@ export function notificationPrefsFor(userId: string): Record<PrefKind, boolean> 
   return result
 }
 
-export function twoFactorFor(userId: string): SecondFactorState {
-  return secondFactorState(userId)
+export async function twoFactorFor(userId: string): Promise<SecondFactorState> {
+  return await secondFactorState(userId)
 }
 
 // Which code, if any, a sensitive change on the account page asks for.
-export function codeNeedFor(userId: string): CodeNeed {
-  const state = secondFactorState(userId)
+export async function codeNeedFor(userId: string): Promise<CodeNeed> {
+  const state = await secondFactorState(userId)
   if (!state.enabled) return "none"
   return state.usable ? "app" : "recovery"
 }
@@ -73,15 +73,15 @@ export type EmailSettings = {
   ready: boolean
 }
 
-export function emailSettingsFor(userId: string): EmailSettings {
-  const row = get<{ email: string | null; email_verified_at: number | null }>(
+export async function emailSettingsFor(userId: string): Promise<EmailSettings> {
+  const row = await get<{ email: string | null; email_verified_at: number | null }>(
     "SELECT email, email_verified_at FROM users WHERE id = ?",
     userId
   )
   return {
     email: row?.email ?? null,
     verified: typeof row?.email_verified_at === "number",
-    pending: pendingEmailCode(userId, "verify"),
+    pending: await pendingEmailCode(userId, "verify"),
     ready: emailReady(),
   }
 }
