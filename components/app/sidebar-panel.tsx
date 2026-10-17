@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { motion } from "motion/react"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
 import { useLiveCounts } from "@/components/app/live-counts"
 import { SidebarFooter } from "@/components/app/sidebar-footer"
@@ -13,6 +14,8 @@ import type { AccountSummary } from "@/lib/auth"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
 import { cn } from "@/lib/utils"
 
+// The active tint slides from one destination to the next, the same spring the phone dock uses.
+const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
 const OPEN_WIDTH = 264
 const CLOSED_WIDTH = 72
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -137,11 +140,19 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
       <Link
         href={href}
         aria-current={active ? "page" : undefined}
-        className="group relative flex h-11 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group relative isolate flex h-11 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
+        {/* The one active state: a dusk tint that slides between destinations. It sits behind the row's content. */}
+        {active ? (
+          <motion.span layoutId="rail-pill" aria-hidden="true" transition={SPRING} className="absolute inset-0 -z-10 rounded-full bg-dusk/12" />
+        ) : null}
         <span className="relative grid size-11 shrink-0 place-items-center">
           <Icon
-            className={cn("size-[22px] text-foreground transition-transform duration-300 group-hover:scale-110", EASE)}
+            className={cn(
+              "size-[22px] transition-transform duration-300 group-hover:scale-110",
+              active ? "text-dusk" : "text-foreground",
+              EASE
+            )}
             strokeWidth={active ? 2.2 : 1.75}
             fill={active && item.filled ? "currentColor" : "none"}
             aria-hidden="true"

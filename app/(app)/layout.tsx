@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <LiveCountsProvider initial={counts}>
         <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
           <Sidebar />
-          <main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
+          <main className="min-w-0 w-full max-w-[600px] flex-1 bg-background pb-24 lg:pb-0">{children}</main>
           <RightRail />
           <MobileNav />
           <LiveMounts />

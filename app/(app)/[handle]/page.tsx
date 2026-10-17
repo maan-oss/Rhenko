@@ -106,13 +106,13 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
 
       {/* The banner is a rounded panel inside the page's gutter. Its photo, or the drawing made from the handle, is the profile's own. */}
-      <div className="px-4 pt-4">
-        <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-36 rounded-2xl sm:h-44" />
-      </div>
+      {/* Phones: the banner runs edge to edge and the text sits under it. A computer: the banner and the profile are one lifted sheet. */}
+      <div className="sm:depth-sheet sm:mx-2 sm:mt-2 sm:overflow-hidden">
+        <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-44 rounded-none sm:h-56 lg:h-64" />
 
-      <section className="flex flex-col gap-5 px-4 pb-6">
+        <section className="flex flex-col gap-5 px-4 pb-6 sm:px-6">
         {/* The avatar hangs over the banner's lower edge, and is the only thing that crosses from the banner into the text. */}
-        <div className="relative z-10 -mt-12">
+        <div className="relative z-10 -mt-14 sm:-mt-16">
           <div className="inline-block rounded-full bg-background p-1">
             <Avatar user={profile} size={96} />
           </div>
@@ -120,7 +120,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl leading-tight font-semibold tracking-tight">
+            <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[30px] leading-[1.02] font-semibold tracking-[-0.035em] sm:text-[34px]">
               {profile.name}
               {profile.verified ? <VerifiedBadge /> : null}
               {profile.paidVerified ? <SubscriberBadge /> : null}
@@ -136,7 +136,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           </div>
 
           {rel.blockedByMe && !isSelf ? (
-            <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
+            <p className="rounded-2xl bg-muted px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
           ) : null}
           {profile.status ? <p className="text-[15px] leading-6">{profile.status}</p> : null}
           {profile.bio ? <p className="text-[15px] leading-6 whitespace-pre-line">{profile.bio}</p> : null}
@@ -152,7 +152,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
               href="/analytics"
               aria-label="Analytics"
               title="Analytics"
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-background text-foreground transition-colors hover:bg-muted"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-foreground transition-colors hover:bg-secondary"
             >
               <BarChart3 className="size-4" aria-hidden="true" />
             </Link>
@@ -163,7 +163,8 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
 
         <ProfileStats base={base} following={profile.following} followers={profile.followers} />
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
-      </section>
+        </section>
+      </div>
 
       <ProfileTabs
         label="Profile sections"
@@ -232,7 +233,7 @@ function FilterChip({ href, active, children }: { href: string; active: boolean;
 // Followers and Following as two cells: the number on top, its word under it. Each cell opens its list.
 function ProfileStats({ base, following, followers }: { base: string; following: number; followers: number }) {
   return (
-    <nav aria-label="Following and followers" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border">
+    <nav aria-label="Following and followers" className="grid grid-cols-2 overflow-hidden rounded-2xl bg-muted/50">
       <StatCell href={`${base}/followers`} value={followers} label={pluralize(followers, "Follower")} />
       <StatCell href={`${base}/following`} value={following} label="Following" divider />
     </nav>
@@ -241,7 +242,7 @@ function ProfileStats({ base, following, followers }: { base: string; following:
 
 function StatCell({ href, value, label, divider = false }: { href: string; value: number; label: string; divider?: boolean }) {
   return (
-    <Link href={href} className={cn("flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/60", divider && "border-l border-border")}>
+    <Link href={href} className={cn("flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/60", divider && "border-l border-foreground/10")}>
       <span className="text-xl font-semibold tracking-tight tabular-nums">
         <NumberTicker value={value} />
       </span>

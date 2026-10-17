@@ -19,7 +19,7 @@ async function ConnectionsBody() {
   return (
     <>
       <PageHeader title="Connections and languages" backHref="/settings" />
-      <div className="border-b border-border px-4 py-5">
+      <div className="depth-sheet mx-2 mb-3 px-4 py-5">
         <p className="text-[15px] leading-relaxed text-muted-foreground">
           Change any of this at any time. Your town is never shown on your profile.{" "}
           <Link href="/transparency#connections" className="font-semibold text-foreground underline underline-offset-4">

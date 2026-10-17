@@ -170,8 +170,9 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
     )
   }
 
+  // Posts are sheets with a 12px gap between them, not rows divided by rules.
   return (
-    <div>
+    <div className="flex flex-col gap-3 px-2 pb-2">
       {pill}
       {items.map((item, index) => {
         const body = isAdItem(item) ? (
@@ -198,7 +199,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
             type="button"
             onClick={() => void loadMore()}
             disabled={loading}
-            className="h-10 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+            className="h-10 rounded-full bg-muted px-5 text-sm font-semibold transition-colors hover:bg-secondary disabled:opacity-60"
           >
             {loading ? "Loading" : "Show more"}
           </button>

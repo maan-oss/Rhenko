@@ -84,7 +84,7 @@ async function AccountBody() {
 
 function Section({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <section id={id} className="flex scroll-mt-16 flex-col gap-3 border-b border-border px-4 py-6">
+    <section id={id} className="depth-sheet mx-2 mb-3 flex scroll-mt-16 flex-col gap-3 px-4 py-6">
       <h2 className="text-lg font-semibold">{title}</h2>
       {children}
     </section>

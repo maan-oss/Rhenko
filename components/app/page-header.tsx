@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils"
 // One compact row. The title says which page you are on. Tabs sit in the same row when
 // given, and anything in children drops below it. A lead (such as an avatar) and a subtitle
 // let a conversation or profile carry its person in the same bar.
+// On a phone the bar is a floating surface that hovers over the content. On a computer it is a
+// plain translucent row with no rule under it.
 export function PageHeader({
   title,
   subtitle,
@@ -33,37 +35,39 @@ export function PageHeader({
   children?: ReactNode
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className={cn("flex h-14 items-center gap-3 px-4", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
-        {backHref ? (
-          // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
-          <Link
-            href={backHref}
-            aria-label="Back"
-            className="-ml-3.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-95 active:bg-foreground/10 sm:-ml-3 sm:-mr-1 sm:size-9"
-          >
-            <ArrowLeft className="size-5" />
-          </Link>
-        ) : null}
-        {lead}
-        <div className={tabs ? "min-w-0 shrink" : "min-w-0 flex-1"}>
-          <h1
-            className={cn(
-              "text-[18px] leading-tight font-semibold tracking-tight",
-              tabs ? "shrink-0" : "truncate",
-              (hideTitleOnPhone || hideTitle) && "sr-only",
-              hideTitleOnPhone && !hideTitle && "lg:not-sr-only",
-              hideTitleOnDesktop && "lg:sr-only"
-            )}
-          >
-            {title}
-          </h1>
-          {subtitle ? <p className="truncate text-[13px] leading-tight text-muted-foreground">{subtitle}</p> : null}
+    <header className="sticky top-0 z-20 px-2 pt-2 lg:px-0 lg:pt-0">
+      <div className="depth-float rounded-[24px] lg:rounded-none lg:border-0 lg:bg-background/85 lg:shadow-none lg:backdrop-blur-md">
+        <div className={cn("flex h-14 items-center gap-3 px-4", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
+          {backHref ? (
+            // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
+            <Link
+              href={backHref}
+              aria-label="Back"
+              className="-ml-3.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-95 active:bg-foreground/10 sm:-ml-3 sm:-mr-1 sm:size-9"
+            >
+              <ArrowLeft className="size-5" />
+            </Link>
+          ) : null}
+          {lead}
+          <div className={tabs ? "min-w-0 shrink" : "min-w-0 flex-1"}>
+            <h1
+              className={cn(
+                "text-[18px] leading-tight font-semibold tracking-[-0.02em]",
+                tabs ? "shrink-0" : "truncate",
+                (hideTitleOnPhone || hideTitle) && "sr-only",
+                hideTitleOnPhone && !hideTitle && "lg:not-sr-only",
+                hideTitleOnDesktop && "lg:sr-only"
+              )}
+            >
+              {title}
+            </h1>
+            {subtitle ? <p className="truncate text-[13px] leading-tight text-muted-foreground">{subtitle}</p> : null}
+          </div>
+          {tabs ? <div className="flex min-w-0 flex-1 justify-center">{tabs}</div> : null}
+          {actions}
         </div>
-        {tabs ? <div className="flex min-w-0 flex-1 justify-center">{tabs}</div> : null}
-        {actions}
+        {children}
       </div>
-      {children}
     </header>
   )
 }

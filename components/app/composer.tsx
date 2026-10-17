@@ -986,7 +986,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           send(false)
         }}
         aria-busy={pending}
-        className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 pt-3 pb-3")}
+        className={cn("flex gap-3", compact ? "" : "depth-sheet mx-2 mt-2 mb-3 px-5 pt-3 pb-3")}
       >
         <Avatar user={viewer} size={44} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">

@@ -94,9 +94,9 @@
   --glass-edge: rgb(255 255 255 / 0.9);
   --glass-line: rgb(10 10 10 / 0.08);
   --glass-shadow: rgb(10 10 10 / 0.16);
-  --metal-top: #2a2a2a;
-  --metal-mid: #0a0a0a;
-  --metal-bottom: #000000;
+  --metal-top: #0b0b0b;
+  --metal-mid: #0b0b0b;
+  --metal-bottom: #0b0b0b;
   --metal-text: #fafafa;
   --chrome-fill: #ffffff;
   /* Chrome for the sign-in art: a sky, a bright horizon line, a dark ground. Light theme is dark chrome. */
@@ -149,9 +149,9 @@
   --glass-edge: rgb(255 255 255 / 0.1);
   --glass-line: rgb(255 255 255 / 0.08);
   --glass-shadow: rgb(0 0 0 / 0.6);
-  --metal-top: #ffffff;
+  --metal-top: #f2f2f2;
   --metal-mid: #f2f2f2;
-  --metal-bottom: #c8c8c8;
+  --metal-bottom: #f2f2f2;
   --metal-text: #0b0b0b;
   --chrome-fill: #141414;
   /* Dark theme is bright chrome: a white sky over a dark horizon and a light ground. */
@@ -251,13 +251,14 @@ textarea:-webkit-autofill {
 }
 
 /* Metal: a glossy ink (or bright, on charcoal) fill with a bevel. Used for the active and primary controls. */
+/* The one solid fill: ink on paper, paper on ink. It is flat, with a dusk-tinted lift beneath, so the solid control
+   reads as lit from above like every other surface. The name stays for the controls that already use it. */
 @utility metal {
-  background-image: linear-gradient(180deg, var(--metal-top) 0%, var(--metal-mid) 55%, var(--metal-bottom) 100%);
+  background-color: var(--metal-mid);
   color: var(--metal-text);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.3),
-    inset 0 -1px 0 rgb(0 0 0 / 0.3),
-    0 10px 22px -12px rgb(0 0 0 / 0.6);
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 14px 26px -16px color-mix(in oklab, var(--dusk) 85%, transparent);
 }
 
 /* Chrome ring: a thin bright metal border around a surface, with light sweeping round it. */
