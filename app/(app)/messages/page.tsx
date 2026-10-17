@@ -31,7 +31,6 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
     <>
       <PageHeader
         title="Messages"
-        hideTitleOnPhone
         actions={
           <Button variant="outline" size="icon" nativeButton={false} render={<Link href="/messages/new" aria-label="New message" />} className="rounded-full">
             <Plus className="size-4" />

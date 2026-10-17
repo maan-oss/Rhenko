@@ -117,11 +117,12 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         <section className="flex flex-col gap-5 px-4 pb-6 sm:px-6 lg:px-8">
         {/* The avatar hangs over the banner's lower edge. The actions sit on the same edge, so the person and what you can do
             with them read as one line. */}
-        <div className="-mt-14 flex items-end justify-between gap-3 sm:-mt-16 lg:-mt-20">
+        <div className="-mt-14 flex flex-wrap items-end justify-between gap-x-3 gap-y-4 sm:-mt-16 lg:-mt-20">
           <div className="relative z-10 shrink-0 rounded-full bg-background p-1">
             <Avatar user={profile} size={96} />
           </div>
-          <div className="relative z-10 flex min-w-0 flex-1 justify-end pb-1">
+          {/* On a phone the actions take a full line under the avatar; on a computer they sit on the same seam, to the right. */}
+          <div className="relative z-10 flex w-full justify-start pb-1 lg:w-auto lg:justify-end">
             {isSelf ? (
               <div className="flex items-center gap-2">
                 <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
