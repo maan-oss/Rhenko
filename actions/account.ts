@@ -97,7 +97,7 @@ export async function changePassword(_prev: AccountState, formData: FormData): P
   await transaction(async () => {
     await run("UPDATE users SET password_hash = ? WHERE id = ?", hash, viewer.id)
     // Every other signed-in device has to sign in again, and sign-ins waiting for a code start over.
-    await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS NOT ?", viewer.id, keep)
+    await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS DISTINCT FROM ?", viewer.id, keep)
     await run("DELETE FROM login_challenges WHERE user_id = ?", viewer.id)
   })
   return { ok: true }
@@ -120,7 +120,7 @@ export async function revokeOtherSessions(): Promise<VoidResult> {
   const viewer = await getViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const keep = await currentSessionHash()
-  await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS NOT ?", viewer.id, keep)
+  await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS DISTINCT FROM ?", viewer.id, keep)
   refresh()
   return { ok: true }
 }
