@@ -21,15 +21,17 @@ export async function run() {
 }
 
 async function forYouOrder() {
-  const viewer = await createUser({ tag: "rkv" })
   const friend = await createUser({ tag: "rkf" })
   const stranger = await createUser({ tag: "rks" })
-  await follow(viewer.page, friend.handle)
   const friendText = unique("A friend's ranking check")
   const strangerText = unique("A stranger's ranking check, posted later")
   await writePost(friend.page, friendText)
   await sleep(1500)
   await writePost(stranger.page, strangerText)
+  // The reader joins after both posts. A For you ranking is reused for a minute per worker, so a reader whose first
+  // ranking was taken before the posts could see them in different orders on different reloads.
+  const viewer = await createUser({ tag: "rkv" })
+  await follow(viewer.page, friend.handle)
 
   await check("for you lists the followed author's post above the newer stranger's", async () => {
     await openHome(viewer.page)
