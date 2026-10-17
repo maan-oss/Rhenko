@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import { Sora } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
-const sora = Sora({
+// Sora is served from the app (SIL Open Font License, see app/fonts/OFL.txt). Visitors' browsers make no request to Google,
+// and the build does not depend on Google being reachable. The file is the Latin subset, which is what the Google version
+// served for this text.
+const sora = localFont({
+  src: "./fonts/sora-latin.woff2",
   variable: "--font-sora",
-  subsets: ["latin"],
-  weight: ["400", "600"],
+  weight: "400 600",
   display: "swap",
 });
 

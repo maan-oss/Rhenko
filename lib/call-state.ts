@@ -186,13 +186,31 @@ async function saveCalls(state: Working): Promise<void> {
     const doc = encode(entry.call)
     if (doc === entry.doc) continue
     await run(
-      "INSERT INTO calls (id, kind, conversation_id, doc) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET doc = excluded.doc",
+      "INSERT INTO calls (id, kind, conversation_id, doc, due_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET doc = excluded.doc, due_at = excluded.due_at",
       id,
       entry.call.kind,
       entry.call.conversationId,
-      doc
+      doc,
+      dueAt(entry.call)
     )
   }
+}
+
+// The earliest moment expireStaleCalls could end this call, mirroring what it checks: an unanswered one-to-one ring ends at
+// its deadline, an answered one-to-one call and a group call end when a tab's last check-in is too old, and a group call's
+// ring ends at its deadline too. Stored with the call, so the maintenance tick can find due calls with one indexed read.
+function dueAt(call: Call): number | null {
+  if (call.kind === "dm") {
+    if (call.answeredAt === null) return call.ringUntil
+    return earliest([...call.beats.values()].map((beat) => beat + CALL_STALE_MS))
+  }
+  return earliest([call.ringUntil, ...[...call.participants.values()].map((participant) => participant.beat + CALL_STALE_MS)])
+}
+
+function earliest(moments: (number | null)[]): number | null {
+  let first: number | null = null
+  for (const moment of moments) if (moment !== null && (first === null || moment < first)) first = moment
+  return first
 }
 
 async function getCall(id: string): Promise<Call | null> {
@@ -850,7 +868,8 @@ export async function endFromClosingTab(callId: string, device: Device): Promise
 // Runs every second on the process that holds the maintenance lease. An unanswered ring ends at its deadline. An answered
 // call whose tabs stopped checking in ends where it was last heard from.
 export async function expireStaleCalls(now: number): Promise<void> {
-  if (!await anyCalls()) return
+  // Most seconds no call is due, and this reads one indexed value. The lock below is taken only when a call needs ending.
+  if (await get("SELECT 1 AS found FROM calls WHERE due_at <= ? LIMIT 1", now) === undefined) return
   await operate(true, async () => {
     for (const call of await listCalls()) {
       if (!alive(call)) continue

@@ -27,7 +27,7 @@ cp .env.example .env   # then fill in the settings above
 docker compose up -d --build
 ```
 
-The build downloads the Sora font from Google Fonts, so it needs network access. If `npm run build` fails because Turbopack can't load that font, build with `npx next build --webpack`.
+The Sora font is served from the app (`app/fonts/`, under the SIL Open Font License), so the build needs no network access beyond installing packages.
 
 ## Configure
 

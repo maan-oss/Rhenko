@@ -14,7 +14,10 @@ CREATE TABLE calls (
   id text PRIMARY KEY,
   kind text NOT NULL,
   conversation_id text NOT NULL,
-  doc text NOT NULL
+  doc text NOT NULL,
+  -- The earliest moment a call might need ending: an unanswered ring's deadline, or a tab's last check-in plus the stale
+  -- limit. The maintenance tick reads it through calls_due, so it does not load every call every second.
+  due_at bigint
 );
 
 CREATE TABLE events (
@@ -695,6 +698,7 @@ CREATE INDEX ad_decisions_target ON ad_decisions(target, created_at);
 CREATE UNIQUE INDEX ad_ledger_reference ON ad_ledger(kind, reference);
 CREATE INDEX blocks_blocked ON blocks(blocked_id);
 CREATE INDEX calls_conversation ON calls (conversation_id);
+CREATE INDEX calls_due ON calls (due_at) WHERE due_at IS NOT NULL;
 CREATE INDEX chat_messages_conversation ON chat_messages(conversation_id, created_at);
 CREATE UNIQUE INDEX communities_slug ON communities(slug);
 CREATE INDEX community_members_user ON community_members(user_id);
