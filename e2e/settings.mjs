@@ -471,7 +471,7 @@ async function security() {
     await acted(page, () => page.getByRole("button", { name: "Sign out", exact: true }).click())
     await toastText(page, /^That device is signed out\./)
     await page.getByText("1 device is signed in to your account.").waitFor()
-    await second.page.goto("/")
+    await second.page.goto("/settings")
     await second.page.waitForURL((url) => url.pathname === "/login")
     await closeVisitor(second)
     assert.equal(await page.getByRole("button", { name: "Sign out other devices", exact: true }).count(), 0, "Sign out other devices is offered with no other device")
@@ -485,7 +485,7 @@ async function security() {
     await toastText(page, /^Signed out of other devices\./)
     await page.getByText("1 device is signed in to your account.").waitFor()
     for (const other of [b, c]) {
-      await other.page.goto("/")
+      await other.page.goto("/settings")
       await other.page.waitForURL((url) => url.pathname === "/login")
       await closeVisitor(other)
     }
@@ -514,7 +514,7 @@ async function security() {
     await fillField(form, "next", fresh)
     await acted(page, () => form.getByRole("button", { name: "Change password", exact: true }).click())
     await toastText(page, /^Password changed\. Other devices were signed out\./)
-    await other.page.goto("/")
+    await other.page.goto("/settings")
     await other.page.waitForURL((url) => url.pathname === "/login")
     await page.reload()
     await page.getByRole("button", { name: "Change password", exact: true }).waitFor()

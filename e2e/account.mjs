@@ -444,7 +444,7 @@ async function deactivateFlow() {
     await acted(user.page, () => form.getByRole("button", { name: "Deactivate account", exact: true }).click())
     await user.page.waitForURL((url) => url.pathname === "/login")
     await user.page.getByText("Your account is deactivated and hidden.").waitFor()
-    await second.page.goto("/")
+    await second.page.goto("/settings")
     await second.page.waitForURL((url) => url.pathname === "/login")
   })
 

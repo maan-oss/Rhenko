@@ -202,10 +202,11 @@ async function signInAndOut({ phone }) {
 
   await check(`${where}: signing out ends the session`, async () => {
     await signOut(user)
-    await user.page.goto("/")
-    await user.page.waitForURL((url) => url.pathname === "/login")
     await user.page.goto("/settings")
     await user.page.waitForURL((url) => url.pathname === "/login")
+    await user.page.goto("/")
+    await user.page.getByRole("heading", { level: 1 }).first().waitFor({ timeout: TIMEOUT })
+    assert.equal(new URL(user.page.url()).pathname, "/", "the landing page redirected away from /")
   })
 
   await check(`${where}: a wrong password is refused with the same words as an unknown handle`, async () => {
