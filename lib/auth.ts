@@ -251,7 +251,10 @@ export async function currentSessionHash(): Promise<string | null> {
 export async function destroySession(): Promise<void> {
   const store = await cookies()
   const token = store.get(SESSION_COOKIE)?.value
-  if (token) await run("DELETE FROM sessions WHERE token_hash = ?", hashToken(token))
+  if (token) {
+    await run("DELETE FROM sessions WHERE token_hash = ?", hashToken(token))
+    viewerCache.delete(hashToken(token))
+  }
   store.delete(SESSION_COOKIE)
   if (token) saveTokens(store, storedTokens(store).filter((known) => known !== token))
 }
@@ -568,12 +571,21 @@ export async function redeemEmailCode<T>(
   })
 }
 
+// The viewer of a session, remembered for a few seconds. A page makes several requests in quick succession, and each one
+// used to look the session up again. A profile change shows once the window closes. Signing out clears the entry on the
+// server that handled it, and the other servers drop it within the window.
+const VIEWER_TTL_MS = 10_000
+const VIEWER_CACHE_MAX = 20_000
+const viewerCache = new Map<string, { viewer: Viewer; until: number }>()
+
 export async function getViewer(): Promise<Viewer | null> {
   await connection()
   const token = (await cookies()).get(SESSION_COOKIE)?.value
   if (!token) return null
   const hash = hashToken(token)
   const now = Date.now()
+  const cached = viewerCache.get(hash)
+  if (cached && cached.until > now) return cached.viewer
   const row = await get<UserRow & { last_seen: number }>(
     `SELECT u.*, s.last_seen,
        EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.user_id = u.id AND sub.kind = 'plus' AND sub.status IN ('active', 'trialing')) AS plus_active,
@@ -583,11 +595,17 @@ export async function getViewer(): Promise<Viewer | null> {
     hash,
     now
   )
-  if (!row) return null
+  if (!row) {
+    viewerCache.delete(hash)
+    return null
+  }
   if (now - row.last_seen > LAST_SEEN_EVERY_MS) {
     await run("UPDATE sessions SET last_seen = ? WHERE token_hash = ?", now, hash)
   }
-  return toViewer(row)
+  const viewer = toViewer(row)
+  if (viewerCache.size >= VIEWER_CACHE_MAX) viewerCache.clear()
+  viewerCache.set(hash, { viewer, until: now + VIEWER_TTL_MS })
+  return viewer
 }
 
 export async function requireViewer(): Promise<Viewer> {
