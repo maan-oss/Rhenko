@@ -5,8 +5,7 @@ import { requireViewer } from "@/lib/auth"
 import { listsFor, type ListSummary } from "@/lib/data"
 import { formatCount } from "@/lib/format"
 import { listOwnersVisibleTo } from "@/lib/people-state"
-import { CreateListForm } from "@/components/app/list-controls"
-import { PageHeader } from "@/components/app/page-header"
+import { ListsHeader } from "@/components/app/lists-header"
 
 export default function ListsPage() {
   return (
@@ -23,13 +22,12 @@ async function ListsBody() {
   const visible = listOwnersVisibleTo(viewer.id, followed.map((list) => list.owner.id))
   return (
     <>
-      <PageHeader title="Lists" />
-      <CreateListForm />
+      <ListsHeader />
       <Link href="/packs" className="mx-4 mb-2 flex flex-col gap-0.5 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50">
         <span className="font-semibold">Starter packs</span>
         <span className="text-sm text-muted-foreground">Lists of people, published by the people who made them. Follow everyone in one at once.</span>
       </Link>
-      <Section title="Your lists" lists={owned} empty="You haven't made a list yet. Make one above, then add people to it." />
+      <Section title="Your lists" lists={owned} empty="You haven't made a list yet. Use New list at the top to make one, then add people to it." />
       <Section
         title="Lists you follow"
         lists={followed.filter((list) => visible.has(list.owner.id))}

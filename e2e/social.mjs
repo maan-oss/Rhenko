@@ -395,7 +395,10 @@ async function mutedWordsFlow() {
 // ---------------------------------------------------------------------------------------------------------------------
 
 async function createList(page, { name, description, isPrivate = false }) {
-  await go(page, "/lists", page.locator("input[name=name]"))
+  // The form opens from New list in the header, so the page starts with the lists themselves.
+  await go(page, "/lists", page.getByRole("button", { name: "New list", exact: true }))
+  await page.getByRole("button", { name: "New list", exact: true }).click()
+  await page.locator("input[name=name]").waitFor()
   await page.locator("input[name=name]").fill(name)
   if (description) await page.locator("input[name=description]").fill(description)
   if (isPrivate) await page.locator("input[name=private]").check()

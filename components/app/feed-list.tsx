@@ -40,6 +40,8 @@ type Props = {
   emptyTitle: string
   emptyBody: string
   largeEmpty?: boolean
+  // A short empty state, for a place where the page already says what goes there.
+  compactEmpty?: boolean
   // What to offer when the list is empty: a button, a link, a short list of people.
   emptyAction?: ReactNode
   folders?: { id: string; name: string }[]
@@ -48,7 +50,7 @@ type Props = {
 }
 
 // Renders a feed and loads older pages as the reader reaches the end.
-export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders, threadOf, largeEmpty }: Props) {
+export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders, threadOf, largeEmpty, compactEmpty }: Props) {
   const router = useRouter()
   const [items, setItems] = useState(initialItems)
   const [next, setNext] = useState<string | null>(initialNext)
@@ -161,7 +163,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
     return (
       <>
         {pill}
-        <EmptyState title={emptyTitle} body={emptyBody} large={largeEmpty}>
+        <EmptyState title={emptyTitle} body={emptyBody} large={largeEmpty} compact={compactEmpty}>
           {emptyAction}
         </EmptyState>
       </>

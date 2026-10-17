@@ -17,16 +17,19 @@ export function EmptyState({
   children,
   className,
   large = false,
+  compact = false,
 }: {
   title: string
   body: string
   children?: ReactNode
   className?: string
   large?: boolean
+  // A short version for a place where the page already says what goes here, such as a post with no replies yet.
+  compact?: boolean
 }) {
   return (
-    <div className={cn("flex flex-col items-center gap-1.5 px-6 text-center", large ? "pt-20 pb-20" : "pt-14 pb-16", className)}>
-      <p className={cn("max-w-full font-semibold [overflow-wrap:anywhere]", large ? "text-[26px] leading-tight tracking-tight" : "text-lg")}>{title}</p>
+    <div className={cn("flex flex-col items-center gap-1.5 px-6 text-center", large ? "pt-20 pb-20" : compact ? "pt-7 pb-9" : "pt-14 pb-16", className)}>
+      <p className={cn("max-w-full font-semibold [overflow-wrap:anywhere]", large ? "text-[26px] leading-tight tracking-tight" : compact ? "text-[15px]" : "text-lg")}>{title}</p>
       <p className={cn("max-w-sm text-muted-foreground [overflow-wrap:anywhere]", large ? "text-base leading-relaxed" : "text-[15px]")}>{body}</p>
       {children ? <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-2">{children}</div> : null}
     </div>
