@@ -973,7 +973,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     publish(body)
   }
 
-  // On a new post, the "who can reply" pill sits on its own line under the text, as X sets it. There is no character count:
+  // On a new post, a round icon beside the first line of text says who can reply. There is no character count:
   // a post can be as long as the limit allows, and going over it stops the post with a clear message.
   const showReplyPicker = !isReply
 
@@ -1014,6 +1014,11 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               rows={1}
               className="field-sizing-content min-h-[30px] min-w-0 flex-1 resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground max-sm:min-h-10 max-sm:pt-1.5"
             />
+            {showReplyPicker ? (
+              <div className="shrink-0 pt-0.5 max-sm:pt-1">
+                <ReplyPicker value={replySetting} onChange={setReplySetting} />
+              </div>
+            ) : null}
           </div>
           {open ? (
             <ul role="listbox" aria-label="Suggestions" className="glass z-30 w-full max-w-sm overflow-hidden rounded-[22px] py-1">
@@ -1256,11 +1261,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             <p role="alert" className="text-sm text-destructive">
               {`${-remaining} ${pluralize(-remaining, "character")} over the limit. Shorten the post to share it.`}
             </p>
-          ) : null}
-          {showReplyPicker ? (
-            <div className="relative flex">
-              <ReplyPicker value={replySetting} onChange={setReplySetting} />
-            </div>
           ) : null}
           <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
             <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>

@@ -89,7 +89,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       <Composer
         viewer={viewer}
-        placeholder="What's happening?"
+        placeholder="Write something worth reading"
         id="compose"
         circles={(await circlesFor(viewer.id)).map((circle) => ({ id: circle.id, name: circle.name }))}
       />

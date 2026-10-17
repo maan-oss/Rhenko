@@ -172,6 +172,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           href: t === "posts" ? base : `${base}?tab=${t}`,
           label: SECTION_LABEL[t],
           active: t === section,
+          section: t,
         }))}
       />
 
