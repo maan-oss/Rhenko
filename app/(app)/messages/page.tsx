@@ -49,7 +49,7 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
       {tab === "messages" && requests > 0 ? (
         <Link
           href="/messages?tab=requests"
-          className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-[15px] font-semibold transition-colors hover:bg-muted/50"
+          className="depth-sheet mx-2 mt-2 mb-2 flex items-center justify-between gap-3 px-4 py-3.5 text-[15px] font-semibold transition-[box-shadow] duration-300 lg:hover:[box-shadow:var(--depth-lift)]"
         >
           <span>
             {requests} message {pluralize(requests, "request")}
@@ -58,7 +58,7 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
         </Link>
       ) : null}
       {tab === "requests" && conversations.length > 0 ? (
-        <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
+        <p className="px-4 pt-3 pb-1 text-sm text-muted-foreground">
           Messages and group invites from people you don&apos;t follow. Open one to accept or decline it. Until you accept, they can&apos;t see that you&apos;ve
           read it.
         </p>

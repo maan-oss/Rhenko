@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
 import { ProfileActions } from "@/components/app/profile-actions"
 import { ProfileBanner } from "@/components/app/profile-banner"
+import { DepthTilt } from "@/components/app/depth"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { ProfileTabs } from "@/components/app/profile-tabs"
@@ -106,15 +107,36 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
 
       {/* The banner is a rounded panel inside the page's gutter. Its photo, or the drawing made from the handle, is the profile's own. */}
-      {/* Phones: the banner runs edge to edge and the text sits under it. A computer: the banner and the profile are one lifted sheet. */}
-      <div className="sm:depth-sheet sm:mx-2 sm:mt-2 sm:overflow-hidden">
-        <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-44 rounded-none sm:h-56 lg:h-64" />
+      {/* Phones: the banner runs edge to edge, and the avatar and the actions share its lower edge. A computer: the banner and
+          the profile are one lifted sheet, and the banner leans a few degrees toward the pointer. */}
+      <div className="sm:depth-sheet sm:mx-2 sm:mt-2 sm:overflow-hidden lg:depth-stage">
+        <DepthTilt max={3} glare className="rounded-none">
+          <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-44 rounded-none sm:h-56 lg:h-72" />
+        </DepthTilt>
 
-        <section className="flex flex-col gap-5 px-4 pb-6 sm:px-6">
-        {/* The avatar hangs over the banner's lower edge, and is the only thing that crosses from the banner into the text. */}
-        <div className="relative z-10 -mt-14 sm:-mt-16">
-          <div className="inline-block rounded-full bg-background p-1">
+        <section className="flex flex-col gap-5 px-4 pb-6 sm:px-6 lg:px-8">
+        {/* The avatar hangs over the banner's lower edge. The actions sit on the same edge, so the person and what you can do
+            with them read as one line. */}
+        <div className="-mt-14 flex items-end justify-between gap-3 sm:-mt-16 lg:-mt-20">
+          <div className="relative z-10 shrink-0 rounded-full bg-background p-1">
             <Avatar user={profile} size={96} />
+          </div>
+          <div className="relative z-10 flex min-w-0 flex-1 justify-end pb-1">
+            {isSelf ? (
+              <div className="flex items-center gap-2">
+                <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
+                <Link
+                  href="/analytics"
+                  aria-label="Analytics"
+                  title="Analytics"
+                  className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-foreground transition-colors hover:bg-secondary"
+                >
+                  <BarChart3 className="size-4" aria-hidden="true" />
+                </Link>
+              </div>
+            ) : (
+              <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} from={fromPost} />
+            )}
           </div>
         </div>
 
@@ -144,22 +166,6 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             Joined {String(new Date(profile.createdAt).getFullYear())}
           </Link>
         </div>
-
-        {isSelf ? (
-          <div className="flex items-center gap-2">
-            <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
-            <Link
-              href="/analytics"
-              aria-label="Analytics"
-              title="Analytics"
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-foreground transition-colors hover:bg-secondary"
-            >
-              <BarChart3 className="size-4" aria-hidden="true" />
-            </Link>
-          </div>
-        ) : (
-          <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} from={fromPost} />
-        )}
 
         <ProfileStats base={base} following={profile.following} followers={profile.followers} />
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
