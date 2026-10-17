@@ -285,11 +285,11 @@ async function matchedFor(viewerId: string, now: number, perGroup: number): Prom
     for (const row of await all<{ id: string }>(
       `SELECT DISTINCT ul.user_id AS id FROM user_languages ul JOIN users u ON u.id = ul.user_id
        WHERE u.suggest_language = 1 AND u.id <> ? AND (
-         (ul.kind = 'speak' AND ul.code IN (SELECT value FROM jsonb_array_elements_text(?::jsonb)))
-         OR (ul.kind = 'learn' AND ul.code IN (SELECT value FROM jsonb_array_elements_text(?::jsonb)))
+         (ul.kind = 'speak' AND ul.code IN (SELECT value FROM jsonb_array_elements_text(?::text::jsonb)))
+         OR (ul.kind = 'learn' AND ul.code IN (SELECT value FROM jsonb_array_elements_text(?::text::jsonb)))
        ) LIMIT ?`,
       viewerId,
-      JSON.stringify([...new Set([...speaks, ...learns])]),
+      JSON.stringify(learns),
       JSON.stringify(speaks),
       POOL
     )) {
@@ -350,7 +350,7 @@ async function matchedFor(viewerId: string, now: number, perGroup: number): Prom
        u.suggest_nearby, u.suggest_language,
        (SELECT MAX(p.created_at) FROM posts p WHERE p.author_id = u.id AND ${LIVE}) AS active_at
      FROM users u
-     WHERE u.id IN (SELECT value FROM jsonb_array_elements_text(?::jsonb)) AND ${EXCLUDED}`,
+     WHERE u.id IN (SELECT value FROM jsonb_array_elements_text(?::text::jsonb)) AND ${EXCLUDED}`,
     JSON.stringify([...pool]),
     ...excludedParams(viewerId)
   )
@@ -358,7 +358,7 @@ async function matchedFor(viewerId: string, now: number, perGroup: number): Prom
 
   const languagesOf = new Map<string, { speaks: string[]; learns: string[] }>()
   for (const row of await all<{ user_id: string; code: string; kind: string }>(
-    "SELECT user_id, code, kind FROM user_languages WHERE user_id IN (SELECT value FROM jsonb_array_elements_text(?::jsonb))",
+    "SELECT user_id, code, kind FROM user_languages WHERE user_id IN (SELECT value FROM jsonb_array_elements_text(?::text::jsonb))",
     JSON.stringify(people.map((person) => person.id))
   )) {
     const entry = languagesOf.get(row.user_id) ?? { speaks: [], learns: [] }

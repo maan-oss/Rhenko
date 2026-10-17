@@ -48,12 +48,14 @@ async function ownPostLeads() {
 }
 
 async function notInterested() {
-  const viewer = await createUser({ tag: "rfv" })
   const author = await createUser({ tag: "rfa" })
   const text = unique("A post the reader does not want to see")
   await writePost(author.page, text)
   const postId = need(await postIdByBody(author.handle, text), "the post's id")
 
+  // The reader joins after the post. A For you ranking is reused for a minute per server process, so a reader who was
+  // already on the page before the post would not see it straight away.
+  const viewer = await createUser({ tag: "rfv" })
   await openHome(viewer.page)
   const card = await waitForPost(viewer.page, text, { reload: true })
   await check("choosing Not interested takes the post off For you", async () => {
