@@ -60,7 +60,7 @@ export async function run() {
 async function acceptedChat(caller, callee) {
   await follow(callee.page, caller.handle)
   await openProfile(caller.page, callee.handle)
-  await caller.page.getByRole("button", { name: "Message", exact: true }).click()
+  await caller.page.getByRole("button", { name: /^Message @/ }).click()
   return waitForConversation(caller.page)
 }
 
@@ -383,7 +383,7 @@ async function dmFlow({ phone }) {
   await check("computer: a chat the other person has not accepted yet cannot be called, and the caller is told why", async () => {
     const stranger = await createUser({ tag: "cst" })
     await openProfile(caller.page, stranger.handle)
-    await caller.page.getByRole("button", { name: "Message", exact: true }).click()
+    await caller.page.getByRole("button", { name: /^Message @/ }).click()
     await caller.page.waitForURL((url) => /^\/messages\/[^/]+$/.test(url.pathname) && !url.pathname.endsWith(convId))
     await callButton(caller.page, stranger.name).click()
     await toastText(caller.page, /You can call once they accept your message/)

@@ -57,7 +57,7 @@ async function directFlow({ phone }) {
     await idleOnSettings(receiver.page)
     const banner = expectBanner(receiver.page, "Sent you a message request")
     await openProfile(sender.page, receiver.handle)
-    await sender.page.getByRole("button", { name: "Message", exact: true }).click()
+    await sender.page.getByRole("button", { name: /^Message @/ }).click()
     convId = await waitForConversation(sender.page)
     await sender.page.getByText("No messages yet. Say hello.").waitFor()
     await sendChat(sender.page, first)
