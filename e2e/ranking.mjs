@@ -40,6 +40,13 @@ async function forYouOrder() {
     // that minute lets the follow count, the same as a reader who opens For you a while after following.
     await sleep(62 * 1000)
     await openHome(viewer.page)
+    // The composer is ready before the feed streams in behind its skeleton. Read the list only once the feed has ended
+    // (a "Show more" button or the caught-up line), so the first read never sees an empty or partial feed.
+    await viewer.page
+      .getByRole("button", { name: "Show more" })
+      .or(viewer.page.getByText("You're all caught up."))
+      .first()
+      .waitFor({ timeout: 30 * 1000 })
     // A new post, from a friend or a stranger, ranks by its score, so it can sit below older posts on the first page. The
     // feed is read page by page, up to eight pages, until the stranger's post is in it.
     let texts = []
