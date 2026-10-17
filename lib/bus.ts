@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto"
 import { EventEmitter } from "node:events"
-import { all, get, run, transaction } from "@/lib/db"
+import { all, get, listen, run, transaction } from "@/lib/db"
 import { WORKER_ID } from "@/lib/worker"
 
 // The event bus. Server actions publish an event for the people it concerns, and the /api/events stream of each open tab
 // receives it. Several server processes serve one port, so a tab may be connected to any of them. A published event is
-// written to the events table. Every process reads the events it has not passed on yet and hands them to the tabs it
-// holds. A stream is recorded in the database too, so any process can tell whether a person has a tab open anywhere.
+// written to the events table, and Postgres tells every process about it with a NOTIFY (see db/postgres/schema.sql). Each
+// process then reads the events it has not passed on yet and hands them to the tabs it holds. A stream is recorded in the
+// database too, so any process can tell whether a person has a tab open anywhere.
 
-// How often a process reads new events. A tab hears of an event within about this long of it being published.
-const POLL_MS = 150
+// A process reads new events as soon as Postgres says there are some, so a tab hears of an event in milliseconds. The
+// timer below only catches what a missed notification would have left behind.
+const EVENTS_CHANNEL = "rhenko_events"
+const FALLBACK_POLL_MS = 1_000
 // A process checks in on its streams this often. A stream its process has not checked in on for STREAM_STALE_MS is gone.
 const CHECK_IN_MS = 10_000
 const STREAM_STALE_MS = 60_000
@@ -156,22 +159,47 @@ export async function listenerCount(userId: string): Promise<number> {
 
 // Starts the loop that hands events to this process's tabs. It begins after the newest event, so a tab never receives
 // events from before it connected.
+// Two tabs starting at once share one start, so a process never runs two readers that would hand out the same event twice.
+let starting: Promise<void> | null = null
 async function startPoller(): Promise<void> {
   if (globals.__rhenkoBusPoller) return
+  if (!starting) starting = beginPolling().finally(() => (starting = null))
+  await starting
+}
+
+async function beginPolling(): Promise<void> {
   const latest = await get<{ id: number }>("SELECT COALESCE(MAX(id), 0) AS id FROM events")
+  if (globals.__rhenkoBusPoller) return
   const poller: Poller = {
     cursor: latest?.id ?? 0,
     checkedInAt: Date.now(),
-    timer: setInterval(async () => {
+    timer: setInterval(pollSoon, FALLBACK_POLL_MS),
+  }
+  poller.timer.unref?.()
+  globals.__rhenkoBusPoller = poller
+  listen(EVENTS_CHANNEL, pollSoon).catch((error) => console.error("[bus] listening for events failed; checking every second instead", error))
+}
+
+// Reads new events now. A call that comes while a read is running is joined into one more read after it, so two reads
+// never overlap, and no event is handed to a tab twice.
+let reading: Promise<void> | null = null
+let readAgain = false
+function pollSoon(): void {
+  if (reading) {
+    readAgain = true
+    return
+  }
+  reading = (async () => {
+    do {
+      readAgain = false
       try {
         await pollOnce()
       } catch (error) {
         console.error("[bus] reading events failed", error)
       }
-    }, POLL_MS),
-  }
-  poller.timer.unref?.()
-  globals.__rhenkoBusPoller = poller
+    } while (readAgain)
+    reading = null
+  })()
 }
 
 async function pollOnce(): Promise<void> {

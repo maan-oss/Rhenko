@@ -8,7 +8,7 @@
 // Once an hour the models are refit (trainFeedModel) from impressions old enough for what happened next to be known: the
 // likes, reposts, bookmarks and dwell in the three days after a post was shown. The fit is kept only when it beats the
 // hand-set weights on the newer part of that history (fitHead in lib/ranking.ts).
-import { all, run, transaction } from "@/lib/db"
+import { all, run, transaction, type Param } from "@/lib/db"
 import { RETENTION } from "@/lib/legal"
 import { DWELL_MS, fitHead, PRIOR, splitHoldout, type Example, type Fit, type Source, type Weights } from "@/lib/ranking"
 
@@ -47,21 +47,21 @@ export async function modelWeights(): Promise<Weights> {
 // Records the posts the For you feed just showed. A failure here is logged and never stops the feed.
 export async function recordImpressions(viewerId: string, served: { postId: string; source: Source; features: number[] }[], now: number): Promise<void> {
   if (served.length === 0) return
+  // One statement for the whole page, so it costs one round trip rather than one per post. A post listed twice keeps its
+  // last entry, because one statement cannot change the same row twice.
+  const latest = new Map<string, { postId: string; source: Source; features: number[] }>()
+  for (const s of served) latest.set(s.postId, s)
+  const params: Param[] = []
+  for (const s of latest.values()) {
+    params.push(viewerId, s.postId, s.source, JSON.stringify(s.features.map((v) => Math.round(v * 10000) / 10000)), now)
+  }
+  const values = [...latest.values()].map(() => "(?, ?, ?, ?, ?)").join(", ")
   try {
-    await transaction(async () => {
-      for (const s of served) {
-        const features = JSON.stringify(s.features.map((v) => Math.round(v * 10000) / 10000))
-        await run(
-          `INSERT INTO feed_impressions (viewer_id, post_id, source, features, served_at) VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(viewer_id, post_id) DO UPDATE SET source = excluded.source, features = excluded.features, served_at = excluded.served_at`,
-          viewerId,
-          s.postId,
-          s.source,
-          features,
-          now
-        )
-      }
-    })
+    await run(
+      `INSERT INTO feed_impressions (viewer_id, post_id, source, features, served_at) VALUES ${values}
+       ON CONFLICT(viewer_id, post_id) DO UPDATE SET source = excluded.source, features = excluded.features, served_at = excluded.served_at`,
+      ...params
+    )
   } catch (error) {
     console.error("[feed] could not record impressions", error)
   }

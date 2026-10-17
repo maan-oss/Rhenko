@@ -96,3 +96,9 @@ export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
 export async function optimizeDatabase(): Promise<void> {
   await run("analyze")
 }
+
+// Calls onNotify each time Postgres sends a NOTIFY on the channel. postgres.js keeps that connection open on its own and
+// reconnects by itself. It needs a direct connection to Postgres, not a transaction-mode pooler.
+export async function listen(channel: string, onNotify: () => void): Promise<void> {
+  await pool().listen(channel, () => onNotify())
+}

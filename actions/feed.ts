@@ -1,7 +1,7 @@
 "use server"
 
 import { getAgreedViewer } from "@/lib/auth"
-import { get, run } from "@/lib/db"
+import { get, run, type Param } from "@/lib/db"
 import { visiblePostIds } from "@/lib/data"
 
 // How the feed learns how long a post was on screen. The app adds up the time and sends it in small batches. A single
@@ -29,23 +29,23 @@ export async function recordDwell(entries: { postId: string; ms: number }[]): Pr
   }
   if (totals.size === 0) return
   const visible = await visiblePostIds([...totals.keys()], viewer.id, true)
-  const now = Date.now()
-  for (const [postId, ms] of totals) {
-    if (!visible.has(postId)) continue
-    await run(
-      `INSERT INTO post_dwell (viewer_id, post_id, dwell_ms, updated_at)
-       SELECT ?, id, ?, ? FROM posts WHERE id = ? AND author_id <> ?
-       ON CONFLICT(viewer_id, post_id) DO UPDATE SET
-         dwell_ms = MIN(post_dwell.dwell_ms + excluded.dwell_ms, ?),
-         updated_at = excluded.updated_at`,
-      viewer.id,
-      ms,
-      now,
-      postId,
-      viewer.id,
-      MAX_TOTAL_MS
-    )
-  }
+  const rows = [...totals].filter(([postId]) => visible.has(postId))
+  if (rows.length === 0) return
+  // One statement for the whole batch, so it costs one round trip rather than one per post.
+  const params: Param[] = [viewer.id, Date.now()]
+  for (const [postId, ms] of rows) params.push(postId, ms)
+  params.push(viewer.id, MAX_TOTAL_MS)
+  const pairs = rows.map(() => "(?::text, ?::bigint)").join(", ")
+  await run(
+    `INSERT INTO post_dwell (viewer_id, post_id, dwell_ms, updated_at)
+     SELECT ?, p.id, v.ms, ? FROM (VALUES ${pairs}) AS v(post_id, ms)
+     JOIN posts p ON p.id = v.post_id
+     WHERE p.author_id <> ?
+     ON CONFLICT(viewer_id, post_id) DO UPDATE SET
+       dwell_ms = LEAST(post_dwell.dwell_ms + excluded.dwell_ms, ?),
+       updated_at = excluded.updated_at`,
+    ...params
+  )
 }
 
 // "Not interested": the post leaves this viewer's For you and stays out. It does not change what anyone else sees.

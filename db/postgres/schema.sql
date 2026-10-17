@@ -863,3 +863,13 @@ create trigger posts_replies_live after update of is_draft, publish_at on posts 
 
 -- Search. The SQLite build used an FTS5 trigram index; a trigram GIN index gives the same substring matching in Postgres.
 create index posts_body_trigram on posts using gin (body gin_trgm_ops);
+
+-- The event bus. Each server process listens on this channel and reads new events as they are written, instead of
+-- checking the table on a timer. The payload is empty: a listener reads the events table itself.
+create or replace function rhenko_notify_event() returns trigger language plpgsql as $$
+begin
+  perform pg_notify('rhenko_events', '');
+  return null;
+end $$;
+drop trigger if exists events_notify on events;
+create trigger events_notify after insert on events for each row execute function rhenko_notify_event();
