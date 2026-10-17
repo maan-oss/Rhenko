@@ -40,11 +40,8 @@ export function ConversationRow({ conversation }: { conversation: ConversationSu
       ? "Message deleted"
       : "No messages yet"
   return (
-    <li className="px-2 pb-2">
-      <Link
-        href={`/messages/${conversation.id}`}
-        className="depth-sheet flex items-center gap-3 px-4 py-3.5 transition-[box-shadow] duration-300 lg:hover:[box-shadow:var(--depth-lift)]"
-      >
+    <li className="border-b border-border">
+      <Link href={`/messages/${conversation.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
         <ConversationAvatar kind={conversation.kind} people={conversation.others} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">

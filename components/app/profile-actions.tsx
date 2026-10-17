@@ -13,8 +13,45 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// The actions on someone else's profile, in one row under the bio: Follow leads as the filled button, Message sits beside it
-// with its label, and the bell and the menu are square. The buttons share the row's width.
+// Opens a direct message with someone. The profile places it under the stats, as a small outline pill.
+export function MessageButton({ handle }: { handle: string }) {
+  const router = useRouter()
+  const [messaging, startMessaging] = useTransition()
+  const proof = useProofGate()
+
+  // Opens a direct message with this account. The server decides whether it may be sent.
+  function message(answer?: string) {
+    startMessaging(async () => {
+      const result = await startConversation(handle, answer)
+      if (!result.ok) {
+        if (result.proofRequired) {
+          proof.askForProof((passed) => message(passed))
+          return
+        }
+        toast.error(result.error)
+      } else router.push(`/messages/${result.id}`)
+    })
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        aria-label={`Message @${handle}`}
+        disabled={messaging}
+        onClick={() => message()}
+        className="h-9 w-fit rounded-full px-4 font-semibold"
+      >
+        <Mail className="size-4" aria-hidden="true" />
+        Message
+      </Button>
+      {proof.dialog}
+    </>
+  )
+}
+
+// The actions on someone else's profile, in the header row beside the avatar. Follow leads, and the bell and the menu are square.
 export function ProfileActions({
   handle,
   state,
@@ -31,25 +68,8 @@ export function ProfileActions({
   // The post the profile was opened from, if any. A follow made here is credited to it.
   from?: string
 }) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [messaging, startMessaging] = useTransition()
   const [confirmingBlock, setConfirmingBlock] = useState(false)
-  const proof = useProofGate()
-
-  // Opens a direct message with this account. The server decides whether it may be sent.
-  function message(answer?: string) {
-    startMessaging(async () => {
-      const result = await startConversation(handle, answer)
-      if (!result.ok) {
-        if (result.proofRequired) {
-          proof.askForProof((passed) => message(passed))
-          return
-        }
-        toast.error(result.error)
-      } else router.push(`/messages/${result.id}`)
-    })
-  }
 
   function togglePosts() {
     startTransition(async () => {
@@ -92,17 +112,6 @@ export function ProfileActions({
       ) : (
         <>
           <FollowButton handle={handle} state={state} from={from} className="h-11 flex-1 rounded-xl sm:h-11" />
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={`Message @${handle}`}
-            disabled={messaging}
-            onClick={() => message()}
-            className="h-11 flex-1 rounded-xl px-4 font-semibold"
-          >
-            <Mail className="size-4" aria-hidden="true" />
-            Message
-          </Button>
           {state === "following" ? (
             <Button
               type="button"
@@ -146,7 +155,6 @@ export function ProfileActions({
         action={() => toggleBlock(handle, true)}
         onDone={() => toast.success(`Blocked @${handle}.`)}
       />
-      {proof.dialog}
     </div>
   )
 }

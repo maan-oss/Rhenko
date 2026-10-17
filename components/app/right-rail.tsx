@@ -1,5 +1,4 @@
 import Link from "next/link"
-import type { ReactNode } from "react"
 import { connection } from "next/server"
 import { getViewer } from "@/lib/auth"
 import { trendingTags, whoToFollow } from "@/lib/data"
@@ -16,18 +15,6 @@ async function clock(): Promise<number> {
   return Date.now()
 }
 
-// Each block is a sheet at rest: lifted from the page by light, with no hairline frame or divider inside it.
-function Sheet({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="depth-sheet overflow-hidden">
-      <h2 className="px-5 pt-4 pb-2 text-[18px] font-semibold tracking-[-0.02em]">{title}</h2>
-      {children}
-    </section>
-  )
-}
-
-const ROW = "transition-colors duration-200 hover:bg-foreground/5"
-
 export async function RightRail() {
   const viewer = await getViewer()
   const tags = await trendingTags()
@@ -35,7 +22,8 @@ export async function RightRail() {
   const suggestions = connected.length === 0 && viewer ? await whoToFollow(viewer.id) : []
   return (
     <aside className="sticky top-0 hidden h-dvh w-[340px] shrink-0 flex-col gap-4 overflow-y-auto py-3 pr-3 pl-6 xl:flex">
-      <Sheet title="Trending">
+      <section className="overflow-hidden rounded-[24px] border border-border bg-card">
+        <h2 className="px-5 pt-4 pb-2 text-[18px] font-semibold tracking-tight">Trending</h2>
         {tags.length === 0 ? (
           <p className="px-5 pt-1 pb-5 text-sm text-muted-foreground">Nothing is trending yet. Put a #hashtag in a post and it shows up here.</p>
         ) : (
@@ -43,27 +31,28 @@ export async function RightRail() {
             <ul className="pb-1">
               {tags.map((item) => (
                 <li key={item.tag}>
-                  <Link href={`/topics/${encodeURIComponent(item.tag)}`} className={`block px-5 py-2.5 ${ROW}`}>
+                  <Link href={`/topics/${encodeURIComponent(item.tag)}`} className="block px-5 py-2.5 transition-colors duration-200 hover:bg-foreground/5">
                     <p className="text-[15px] font-semibold">#{item.tag}</p>
-                    <p className="text-[13px] text-muted-foreground tabular-nums">
+                    <p className="text-[13px] text-muted-foreground">
                       {formatCount(item.count)} {item.count === 1 ? "post" : "posts"} this week
                     </p>
                   </Link>
                 </li>
               ))}
             </ul>
-            <Link href="/explore?tab=trending" className={`block px-5 py-3 text-sm font-medium ${ROW}`}>
+            <Link href="/explore?tab=trending" className="block border-t border-border px-5 py-3 text-sm font-medium transition-colors duration-200 hover:bg-foreground/5">
               Show more
             </Link>
           </>
         )}
-      </Sheet>
+      </section>
 
       {connected.length > 0 ? (
-        <Sheet title="Who to follow">
+        <section className="overflow-hidden rounded-[24px] border border-border bg-card">
+          <h2 className="px-5 pt-4 pb-2 text-[18px] font-semibold tracking-tight">Who to follow</h2>
           <ul className="pb-2">
             {connected.map((person) => (
-              <li key={person.id} className={`flex items-center gap-3 px-5 py-3 ${ROW}`}>
+              <li key={person.id} className="flex items-center gap-3 px-5 py-3 transition-colors duration-200 hover:bg-foreground/5">
                 <Link href={`/${person.handle}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={40} />
                   <span className="min-w-0">
@@ -75,16 +64,17 @@ export async function RightRail() {
               </li>
             ))}
           </ul>
-          <Link href="/connect" className={`block px-5 py-3 text-sm font-medium ${ROW}`}>
+          <Link href="/connect" className="block border-t border-border px-5 py-3 text-sm font-medium transition-colors duration-200 hover:bg-foreground/5">
             Show more
           </Link>
-        </Sheet>
+        </section>
       ) : null}
       {suggestions.length > 0 ? (
-        <Sheet title="Who to follow">
+        <section className="overflow-hidden rounded-[24px] border border-border bg-card">
+          <h2 className="px-5 pt-4 pb-2 text-[18px] font-semibold tracking-tight">Who to follow</h2>
           <ul className="pb-2">
             {suggestions.map((user) => (
-              <li key={user.id} className={`flex items-center gap-3 px-5 py-3 ${ROW}`}>
+              <li key={user.id} className="flex items-center gap-3 px-5 py-3 transition-colors duration-200 hover:bg-foreground/5">
                 <Link href={`/${user.handle}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <Avatar user={user} size={40} />
                   <span className="min-w-0">
@@ -96,7 +86,7 @@ export async function RightRail() {
               </li>
             ))}
           </ul>
-        </Sheet>
+        </section>
       ) : null}
     </aside>
   )

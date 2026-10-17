@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 // that link, so no anchor is ever placed inside another.
 function QuotedPost({ post }: { post: PostCore }) {
   return (
-    <div className="relative z-10 mt-2 rounded-[20px] bg-background p-3 ring-1 ring-foreground/[0.07] transition-colors hover:bg-muted/50">
+    <div className="relative z-10 mt-2 rounded-2xl border border-border p-3 transition-colors hover:bg-muted/40">
       <Link
         href={`/${post.author.handle}/status/${post.id}`}
         aria-label={`Open ${post.author.name}'s post`}
@@ -54,7 +54,7 @@ function QuotedPost({ post }: { post: PostCore }) {
 // The card says so and nothing more. It never carries the author, the text, the media or a link.
 function UnavailableQuote() {
   return (
-    <div className="mt-2 rounded-[20px] bg-muted/60 px-3 py-3 text-[15px] text-muted-foreground">
+    <div className="mt-2 rounded-2xl border border-border bg-muted/40 px-3 py-3 text-[15px] text-muted-foreground">
       This post isn&apos;t available.
     </div>
   )
@@ -65,7 +65,7 @@ function PendingPoll({ options }: { options: PollOption[] }) {
   return (
     <div className="mt-3 flex flex-col gap-2" role="group" aria-label="Poll">
       {options.map((option) => (
-        <div key={option.id} className="flex h-11 items-center rounded-2xl bg-muted/60 px-4 text-[15px] font-medium">
+        <div key={option.id} className="flex h-11 items-center rounded-xl border border-border px-4 text-[15px] font-medium">
           <span className="truncate">{option.label}</span>
         </div>
       ))}
@@ -107,8 +107,7 @@ export function PostCard({
   const editable = isOwn && !pending && Date.now() - post.createdAt < editWindow
   return (
     // In a feed, a post that is off screen is skipped for layout and paint until it comes near the screen.
-    // A post is a sheet at rest. On a computer it lifts a little under the pointer, so the one being read is the one that rises.
-    <article className={cn("depth-sheet relative px-4 pt-3 pb-2 transition-[box-shadow] duration-300", !detail && "lg:hover:[box-shadow:var(--depth-lift)]")}>
+    <article className={cn("relative border-b border-border px-4 pt-3 pb-2 transition-colors", !detail && "hover:bg-secondary/60 [content-visibility:auto] [contain-intrinsic-size:auto_240px]")}>
       {pending || isOwn ? null : <ViewBeacon postId={post.id} />}
       {threadLine ? <span aria-hidden="true" className="absolute top-14 bottom-[-13px] left-[35px] z-0 w-0.5 rounded-full bg-border" /> : null}
       {pending ? (
@@ -206,7 +205,7 @@ export function PostCard({
             </>
           ) : null}
           {post.madeWithAi ? (
-            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-[12px] text-muted-foreground">
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[12px] text-muted-foreground">
               <Sparkles className="size-3" aria-hidden="true" />
               Made with AI
             </p>
@@ -230,7 +229,7 @@ export function PostCard({
             </Link>
           ) : null}
           {detail && !pending ? (
-            <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-muted/50 px-4 py-3 text-[15px]">
+            <div className="mt-3 flex flex-col gap-3 border-y border-border py-3 text-[15px]">
               <p className="text-muted-foreground">
                 <LocalTime at={post.createdAt} variant="full" />
                 {post.editedAt ? (

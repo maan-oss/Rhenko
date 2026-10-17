@@ -31,11 +31,11 @@ async function NotificationBody() {
       <div className="px-4 py-2">
         <NotificationPrefs rows={rows} />
       </div>
-      <section className="depth-sheet mx-2 mb-3 flex flex-col gap-3 px-4 py-6">
+      <section className="flex flex-col gap-3 border-t border-border px-4 py-6">
         <h2 className="text-lg font-semibold">Mentions</h2>
         <MentionFilterChoice initial={await mentionsVerifiedOnly(viewer.id)} />
       </section>
-      <section className="depth-sheet mx-2 mb-3 flex flex-col gap-3 px-4 py-6">
+      <section className="flex flex-col gap-3 border-t border-border px-4 py-6">
         <h2 className="text-lg font-semibold">Priority</h2>
         <p className="text-sm text-muted-foreground">
           Choose accounts you follow. Their likes, replies, posts, follows and mentions also show in the Priority tab of notifications.

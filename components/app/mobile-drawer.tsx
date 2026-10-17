@@ -113,7 +113,7 @@ export function MobileDrawer({ open, onClose, viewer, accounts, path, notificati
             animate={{ x: 0 }}
             exit={{ x: "-110%" }}
             transition={{ duration: 0.42, ease: EASE }}
-            className="fixed top-2 bottom-2 left-2 z-50 flex w-[min(84vw,330px)] flex-col overflow-hidden rounded-[32px] bg-sidebar p-4 shadow-[var(--depth-float)] lg:hidden"
+            className="fixed top-2 bottom-2 left-2 z-50 flex w-[min(84vw,330px)] flex-col overflow-hidden rounded-[32px] border border-sidebar-border bg-sidebar p-4 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.55)] lg:hidden"
           >
             <div className="flex h-11 items-center justify-between">
               <span className="grid size-11 place-items-center">
@@ -145,17 +145,13 @@ export function MobileDrawer({ open, onClose, viewer, accounts, path, notificati
                         aria-current={active ? "page" : undefined}
                         className={cn(
                           "flex h-12 items-center gap-3 rounded-2xl px-3 text-[16px] transition-colors duration-200 hover:bg-foreground/5",
-                          active ? "bg-dusk/12 font-semibold" : "font-medium"
+                          active ? "font-semibold" : "font-medium"
                         )}
                       >
-                        <item.Icon
-                          className={cn("size-[22px] shrink-0", active && "text-dusk")}
-                          strokeWidth={active ? 2.1 : 1.75}
-                          aria-hidden="true"
-                        />
+                        <item.Icon className="size-[22px] shrink-0" strokeWidth={active ? 2.1 : 1.75} aria-hidden="true" />
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                         {count > 0 ? (
-                          <span className="grid h-5 min-w-5 place-items-center rounded-full bg-dusk px-1.5 text-[11px] font-semibold tabular-nums text-background">
+                          <span className="metal grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
                             {count > 99 ? "99+" : count}
                           </span>
                         ) : null}

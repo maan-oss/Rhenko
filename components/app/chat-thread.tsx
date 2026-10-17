@@ -138,7 +138,7 @@ export function ChatThread({
             onClick={loadEarlier}
             disabled={loading}
             aria-busy={loading}
-            className="glass h-11 rounded-full px-4 text-[14px] font-medium text-foreground sm:h-9 outline-none transition-colors duration-200 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            className="glass h-9 rounded-full px-4 text-[14px] font-medium text-foreground outline-none transition-colors duration-200 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           >
             {loading ? "Loading earlier messages…" : "Load earlier messages"}
           </button>
@@ -349,7 +349,7 @@ function MessageRow({
 
         {!message.deleted ? (
           <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed) && "opacity-100")}>
-            <button type="button" aria-label="Reply" title="Reply" onClick={startReply} className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:size-7">
+            <button type="button" aria-label="Reply" title="Reply" onClick={startReply} className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
               <Reply className="size-4" />
             </button>
             <button
@@ -357,14 +357,14 @@ function MessageRow({
               aria-label="React"
               aria-expanded={pickerOpen}
               onClick={() => setPickerOpen((open) => !open)}
-              className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:size-7"
+              className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
               <SmilePlus className="size-4" />
             </button>
             {message.mine ? (
               <ConfirmDialog
                 trigger={
-                  <button type="button" aria-label="Delete message" className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:size-7">
+                  <button type="button" aria-label="Delete message" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
                     <Trash2 className="size-4" />
                   </button>
                 }
@@ -381,7 +381,7 @@ function MessageRow({
       {pickerOpen ? (
         <div role="group" aria-label="Choose a reaction" className="flex gap-1 rounded-full border border-border bg-background px-1.5 py-1">
           {REACTIONS.map((emoji) => (
-            <button key={emoji} type="button" onClick={() => react(emoji)} className="grid size-11 place-items-center rounded-full text-lg hover:bg-muted sm:size-8">
+            <button key={emoji} type="button" onClick={() => react(emoji)} className="grid size-8 place-items-center rounded-full text-lg hover:bg-muted">
               {emoji}
             </button>
           ))}

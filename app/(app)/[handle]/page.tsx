@@ -13,9 +13,8 @@ import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
-import { ProfileActions } from "@/components/app/profile-actions"
+import { MessageButton, ProfileActions } from "@/components/app/profile-actions"
 import { ProfileBanner } from "@/components/app/profile-banner"
-import { DepthTilt } from "@/components/app/depth"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { ProfileTabs } from "@/components/app/profile-tabs"
@@ -106,44 +105,38 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       <PageHeader title={profile.name} subtitle={`${formatCount(profile.posts)} ${pluralize(profile.posts, "post")}`} backHref="/" />
       {isSelf ? null : <ProfileVisit profileId={profile.id} />}
 
-      {/* The banner is a rounded panel inside the page's gutter. Its photo, or the drawing made from the handle, is the profile's own. */}
-      {/* Phones: the banner runs edge to edge, and the avatar and the actions share its lower edge. A computer: the banner and
-          the profile are one lifted sheet, and the banner leans a few degrees toward the pointer. */}
-      <div className="sm:depth-sheet sm:mx-2 sm:mt-2 sm:overflow-hidden lg:depth-stage">
-        <DepthTilt max={3} glare className="rounded-none">
-          <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-44 rounded-none sm:h-56 lg:h-72" />
-        </DepthTilt>
+      {/* The banner fades into the page along its lower edge. Its photo, or the drawing made from the handle, is the profile's own. */}
+      <div className="px-4 pt-4">
+        <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-36 sm:h-52" />
+      </div>
 
-        <section className="flex flex-col gap-5 px-4 pb-6 sm:px-6 lg:px-8">
-        {/* The avatar hangs over the banner's lower edge. The actions sit on the same edge, so the person and what you can do
-            with them read as one line. */}
-        <div className="-mt-14 flex flex-wrap items-end justify-between gap-x-3 gap-y-4 sm:-mt-16 lg:-mt-20">
-          <div className="relative z-10 shrink-0 rounded-full bg-background p-1">
-            <Avatar user={profile} size={96} />
-          </div>
-          {/* On a phone the actions take a full line under the avatar; on a computer they sit on the same seam, to the right. */}
-          <div className="relative z-10 flex w-full justify-start pb-1 lg:w-auto lg:justify-end">
-            {isSelf ? (
-              <div className="flex items-center gap-2">
-                <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
-                <Link
-                  href="/analytics"
-                  aria-label="Analytics"
-                  title="Analytics"
-                  className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-foreground transition-colors hover:bg-secondary"
-                >
-                  <BarChart3 className="size-4" aria-hidden="true" />
-                </Link>
-              </div>
-            ) : (
-              <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} from={fromPost} />
-            )}
-          </div>
+      {/* The avatar hangs over the banner's lower edge. The buttons sit on the same row, so they never run under it. */}
+      <div className="relative z-10 flex items-end justify-between gap-3 px-4">
+        <div className="-mt-12 rounded-full bg-background p-1.5">
+          <Avatar user={profile} size={96} />
         </div>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 pb-1">
+          {isSelf ? (
+            <>
+              <Link
+                href="/analytics"
+                className="glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
+              >
+                <BarChart3 className="size-4" aria-hidden="true" />
+                <span className="max-[389px]:sr-only">Analytics</span>
+              </Link>
+              <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} />
+            </>
+          ) : (
+            <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} from={fromPost} />
+          )}
+        </div>
+      </div>
 
+      <section className="flex flex-col gap-5 px-4 pt-4 pb-6">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[30px] leading-[1.02] font-semibold tracking-[-0.035em] sm:text-[34px]">
+            <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl leading-tight font-semibold tracking-tight">
               {profile.name}
               {profile.verified ? <VerifiedBadge /> : null}
               {profile.paidVerified ? <SubscriberBadge /> : null}
@@ -153,13 +146,13 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             <p className="flex flex-wrap items-center gap-2 text-[15px] leading-5 text-muted-foreground">
               @{profile.handle}
               {rel.followsMe && !isSelf ? (
-                <span className="rounded-md bg-dusk/10 px-2 py-0.5 text-xs font-medium text-dusk">Follows you</span>
+                <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">Follows you</span>
               ) : null}
             </p>
           </div>
 
           {rel.blockedByMe && !isSelf ? (
-            <p className="rounded-2xl bg-muted px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
+            <p className="glass rounded-2xl px-3 py-2 text-sm">You blocked this account. Unblock it from the menu to see its posts.</p>
           ) : null}
           {profile.status ? <p className="text-[15px] leading-6">{profile.status}</p> : null}
           {profile.bio ? <p className="text-[15px] leading-6 whitespace-pre-line">{profile.bio}</p> : null}
@@ -170,8 +163,8 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
 
         <ProfileStats base={base} following={profile.following} followers={profile.followers} />
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
-        </section>
-      </div>
+        {isSelf ? null : <MessageButton handle={profile.handle} />}
+      </section>
 
       <ProfileTabs
         label="Profile sections"
@@ -197,7 +190,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
 
       {locked ? (
         <div className="mx-4 mt-6 flex flex-col items-start gap-2 rounded-2xl border border-dashed border-border px-5 py-6">
-          <span className="grid size-10 place-items-center rounded-full bg-dusk/10 text-dusk">
+          <span className="grid size-10 place-items-center rounded-full bg-muted text-foreground">
             <Lock className="size-5" aria-hidden="true" />
           </span>
           <p className="mt-2 text-lg font-semibold">This account is protected</p>
@@ -220,7 +213,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
   )
 }
 
-// The two filters under the Posts section. A chosen one is filled in the dusk accent.
+// The two filters under the Posts section. A chosen one is filled in ink, the same as the profile's own tabs.
 function FilterChip({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
   return (
     <Link
@@ -229,7 +222,7 @@ function FilterChip({ href, active, children }: { href: string; active: boolean;
       aria-current={active ? "page" : undefined}
       className={cn(
         "inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active ? "border-dusk bg-dusk text-background" : "border-border text-foreground hover:bg-muted"
+        active ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted"
       )}
     >
       {children}
@@ -240,7 +233,7 @@ function FilterChip({ href, active, children }: { href: string; active: boolean;
 // Followers and Following as two cells: the number on top, its word under it. Each cell opens its list.
 function ProfileStats({ base, following, followers }: { base: string; following: number; followers: number }) {
   return (
-    <nav aria-label="Following and followers" className="grid grid-cols-2 overflow-hidden rounded-2xl bg-muted/50">
+    <nav aria-label="Following and followers" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border">
       <StatCell href={`${base}/followers`} value={followers} label={pluralize(followers, "Follower")} />
       <StatCell href={`${base}/following`} value={following} label="Following" divider />
     </nav>
@@ -249,7 +242,7 @@ function ProfileStats({ base, following, followers }: { base: string; following:
 
 function StatCell({ href, value, label, divider = false }: { href: string; value: number; label: string; divider?: boolean }) {
   return (
-    <Link href={href} className={cn("flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/60", divider && "border-l border-foreground/10")}>
+    <Link href={href} className={cn("flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/60", divider && "border-l border-border")}>
       <span className="text-xl font-semibold tracking-tight tabular-nums">
         <NumberTicker value={value} />
       </span>

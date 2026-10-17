@@ -1,8 +1,8 @@
 import { BANNER_HEIGHT, BANNER_WIDTH, bannerLines } from "@/lib/banner-pattern"
 import { cn } from "@/lib/utils"
 
-// A profile's banner: the owner's photo, or a drawing made from the handle when there is no photo. It is a box with its own
-// edge and no fade, so its colour stays inside it and never runs into the page around it.
+// A profile's banner: the owner's photo, or a drawing made from the handle when there is no photo. Its lower edge fades
+// into the page background, so the banner blends into the page instead of ending in a hard line.
 // A photo the person has just picked, before it is saved, is passed as src and shows in place of the saved one.
 export function ProfileBanner({
   file,
@@ -38,6 +38,7 @@ export function ProfileBanner({
           ))}
         </svg>
       )}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_top,var(--background),transparent)]" />
       {children}
     </div>
   )

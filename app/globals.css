@@ -70,9 +70,9 @@
   --destructive-foreground: #ffffff;
   --border: #e5e5e5;
   --input: #d4d4d4;
-  /* Focus rings and checked controls take the dusk accent, so the one colour shows where the eye should go. */
-  --ring: #3f4a7a;
-  /* The dusk accent: a twilight indigo for focus rings, on-switches, the verified check and the reader's own messages. Text never uses it. */
+  /* Focus rings and checked controls are ink, so a tap or a click never flashes a second colour. */
+  --ring: var(--foreground);
+  /* The dusk accent: a twilight indigo for the verified check and the reader's own messages. Text never uses it. */
   --dusk: #3f4a7a;
   --chart-1: #0a0a0a;
   --chart-2: #5f5f5f;
@@ -94,9 +94,9 @@
   --glass-edge: rgb(255 255 255 / 0.9);
   --glass-line: rgb(10 10 10 / 0.08);
   --glass-shadow: rgb(10 10 10 / 0.16);
-  --metal-top: #0b0b0b;
-  --metal-mid: #0b0b0b;
-  --metal-bottom: #0b0b0b;
+  --metal-top: #2a2a2a;
+  --metal-mid: #0a0a0a;
+  --metal-bottom: #000000;
   --metal-text: #fafafa;
   --chrome-fill: #ffffff;
   /* Chrome for the sign-in art: a sky, a bright horizon line, a dark ground. Light theme is dark chrome. */
@@ -127,7 +127,7 @@
   --destructive-foreground: #0b0b0b;
   --border: #262626;
   --input: #3a3a3a;
-  --ring: #aeb8f2;
+  --ring: var(--foreground);
   /* The same accent lifted for the dark background. */
   --dusk: #aeb8f2;
   --chart-1: #f2f2f2;
@@ -149,9 +149,9 @@
   --glass-edge: rgb(255 255 255 / 0.1);
   --glass-line: rgb(255 255 255 / 0.08);
   --glass-shadow: rgb(0 0 0 / 0.6);
-  --metal-top: #f2f2f2;
+  --metal-top: #ffffff;
   --metal-mid: #f2f2f2;
-  --metal-bottom: #f2f2f2;
+  --metal-bottom: #c8c8c8;
   --metal-text: #0b0b0b;
   --chrome-fill: #141414;
   /* Dark theme is bright chrome: a white sky over a dark horizon and a light ground. */
@@ -181,20 +181,16 @@
   h3 {
     text-wrap: pretty;
   }
-  /* Every button answers the pointer: it eases while hovered or pressed, and a press shrinks it a little. Utilities
-     with their own transition still win over these defaults. */
+  /* Colour and opacity ease on hover. Nothing moves on press, so a tap changes colour only. Utilities with their own
+     transition still win over these defaults. */
   button:not(:disabled),
   [role="button"],
   a[href] {
-    transition-property: scale, background-color, border-color, color, opacity, box-shadow;
+    transition-property: background-color, border-color, color, opacity, box-shadow;
     transition-duration: 180ms;
     transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
   }
-  button:not(:disabled):not([role="tab"]):active,
-  [role="button"]:active {
-    scale: 0.97;
-  }
-  /* Keyboard focus is the dusk ring. Fields keep their border instead (see below). */
+  /* Keyboard focus is an ink ring. Fields keep their border instead (see below). */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
@@ -251,14 +247,13 @@ textarea:-webkit-autofill {
 }
 
 /* Metal: a glossy ink (or bright, on charcoal) fill with a bevel. Used for the active and primary controls. */
-/* The one solid fill: ink on paper, paper on ink. It is flat, with a dusk-tinted lift beneath, so the solid control
-   reads as lit from above like every other surface. The name stays for the controls that already use it. */
 @utility metal {
-  background-color: var(--metal-mid);
+  background-image: linear-gradient(180deg, var(--metal-top) 0%, var(--metal-mid) 55%, var(--metal-bottom) 100%);
   color: var(--metal-text);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.12),
-    0 14px 26px -16px color-mix(in oklab, var(--dusk) 85%, transparent);
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    inset 0 -1px 0 rgb(0 0 0 / 0.3),
+    0 10px 22px -12px rgb(0 0 0 / 0.6);
 }
 
 /* Chrome ring: a thin bright metal border around a surface, with light sweeping round it. */
@@ -377,99 +372,5 @@ input[type="radio"]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .mk-rise, .mk-line, .mk-float, .mk-float-slow, .mk-marquee, .mk-photo, .mk-drift, .mk-reveal, .mk-progress {
     animation: none !important;
-  }
-}
-
-/* ── Depth ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-   Surfaces sit on the page at three heights. A sheet is a post or card at rest. A lifted surface is one step above it
-   (a hovered card, a menu). A floating surface is the dock and the sheets that hover over the content. Shadows are tinted
-   with the dusk accent, so depth reads as light from one direction, not as grey smudges. Every rule here has a flat
-   fallback, so a browser without 3D or blur still shows the layout. */
-:root {
-  --depth-rim: rgb(255 255 255 / 0.7);
-  --depth-sheet: 0 1px 0 rgb(10 10 10 / 0.04), 0 14px 32px -22px color-mix(in oklab, var(--dusk) 65%, transparent);
-  --depth-lift: 0 2px 6px rgb(10 10 10 / 0.05), 0 34px 60px -30px color-mix(in oklab, var(--dusk) 75%, transparent);
-  --depth-float: 0 1px 0 rgb(255 255 255 / 0.7) inset, 0 46px 90px -34px color-mix(in oklab, var(--dusk) 70%, transparent), 0 14px 26px -18px rgb(10 10 10 / 0.3);
-  --depth-glare: rgb(255 255 255 / 0.16);
-}
-.dark {
-  --depth-rim: rgb(255 255 255 / 0.07);
-  --depth-sheet: 0 1px 0 rgb(0 0 0 / 0.5), 0 16px 34px -20px rgb(0 0 0 / 0.8);
-  --depth-lift: 0 2px 6px rgb(0 0 0 / 0.5), 0 36px 64px -30px color-mix(in oklab, var(--dusk) 45%, rgb(0 0 0 / 0.9));
-  --depth-float: 0 1px 0 rgb(255 255 255 / 0.08) inset, 0 50px 96px -34px rgb(0 0 0 / 0.9), 0 14px 26px -18px rgb(0 0 0 / 0.7);
-  --depth-glare: rgb(255 255 255 / 0.06);
-}
-
-/* A sheet: a card at rest, with a light rim on its top edge. */
-@utility depth-sheet {
-  background-color: var(--card);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--depth-sheet), inset 0 1px 0 var(--depth-rim);
-}
-
-/* A floating surface: translucent, blurred, and high above the page. */
-@utility depth-float {
-  background-color: var(--glass);
-  -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  backdrop-filter: blur(28px) saturate(1.6);
-  border: 1px solid var(--glass-line);
-  box-shadow: var(--depth-float);
-}
-
-/* A 3D stage: children that tilt sit inside it, so the perspective is shared by a group. */
-@utility depth-stage {
-  perspective: 1100px;
-}
-
-/* The plane that tilts. Its rotation comes from --rx and --ry, which a pointer sets (see components/app/depth.tsx). */
-@utility depth-plane {
-  position: relative;
-  transform-style: preserve-3d;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition: transform 520ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  will-change: transform;
-}
-
-/* The light that moves across a tilting plane, placed by --hx and --hy. */
-.depth-glare {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(circle at var(--hx, 50%) var(--hy, 50%), var(--depth-glare), transparent 58%);
-  opacity: 0;
-  transition: opacity 320ms ease;
-}
-.depth-plane:hover > .depth-glare {
-  opacity: 1;
-}
-
-/* Things that reveal as they scroll into view. Where scroll-driven animation is not supported the element simply shows. */
-@supports (animation-timeline: view()) {
-  .depth-reveal {
-    animation: depth-reveal-in linear both;
-    animation-timeline: view();
-    animation-range: entry 2% cover 26%;
-  }
-}
-@keyframes depth-reveal-in {
-  from { opacity: 0; transform: translate3d(0, 34px, 0) scale(0.985); }
-  to { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .depth-plane {
-    transform: none;
-    transition: none;
-  }
-  .depth-reveal {
-    animation: none !important;
-  }
-}
-
-/* Tilt is for a mouse. Touch and coarse pointers keep the plane flat, which the media query enforces. */
-@media (hover: none) {
-  .depth-plane {
-    transform: none;
   }
 }

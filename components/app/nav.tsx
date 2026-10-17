@@ -214,7 +214,7 @@ export function MobileTabBar({
           animate={{ width: folded ? FOLDED_WIDTH : navWidth ? expandedWidth : undefined }}
           transition={SPRING}
           className={cn(
-            "depth-float pointer-events-auto flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5",
+            "glass pointer-events-auto flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5",
             !navWidth && "w-[calc(100%-72px)]"
           )}
         >
@@ -234,7 +234,7 @@ export function MobileTabBar({
                   aria-label={label}
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => setPressed({ from: served, to: href })}
-                  className="relative grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.9]"
+                  className="relative grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5"
                 >
                   {/* The current section is marked by a heavier icon, filled where the icon has a filled form. No pill behind it. */}
                   <Icon
@@ -244,18 +244,9 @@ export function MobileTabBar({
                     aria-hidden="true"
                   />
                   {badge && badge > 0 ? (
-                    <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-dusk px-1 text-[10px] font-semibold text-background">
+                    <span className="metal absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold">
                       {badge > 9 ? "9+" : badge}
                     </span>
-                  ) : null}
-                  {/* The section the dock is on is marked by a dusk bead that glides from one section to the next. */}
-                  {isActive ? (
-                    <motion.span
-                      layoutId="dock-bead"
-                      transition={SPRING}
-                      aria-hidden
-                      className="absolute -bottom-0.5 left-1/2 h-[3px] w-4 -translate-x-1/2 rounded-full bg-dusk"
-                    />
                   ) : null}
                 </Link>
               </motion.li>
@@ -273,7 +264,7 @@ export function MobileTabBar({
               aria-label="Open menu"
               aria-expanded={open}
               aria-haspopup="dialog"
-              className="grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.9]"
+              className="grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5"
             >
               <Avatar user={viewer} size={32} />
             </button>
@@ -288,7 +279,7 @@ export function MobileTabBar({
           <Link
             href="/#compose"
             aria-label="Post"
-            className="metal grid size-12 place-items-center rounded-full shadow-[0_14px_28px_-14px_color-mix(in_oklab,var(--dusk)_85%,transparent)] transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.96]"
+            className="metal grid size-12 place-items-center rounded-full transition-[opacity,transform] duration-200 hover:opacity-85"
           >
             <Plus className="size-[22px]" strokeWidth={2.1} aria-hidden="true" />
           </Link>

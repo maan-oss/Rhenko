@@ -17,7 +17,7 @@ export function SearchField({ defaultQuery, type, className = "px-4 pt-3 pb-3" }
           defaultValue={defaultQuery}
           placeholder="Search posts and people"
           autoComplete="off"
-          className="h-12 w-full rounded-full border border-transparent bg-muted pr-4 pl-11 text-[15px] outline-none transition-colors placeholder:text-muted-foreground focus:border-dusk focus:bg-background"
+          className="h-12 w-full rounded-full border border-transparent bg-muted pr-4 pl-11 text-[15px] outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30 focus:bg-background"
         />
       </div>
     </form>

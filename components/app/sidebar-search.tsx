@@ -144,7 +144,7 @@ export function SidebarSearch({ recent, collapsed, onExpand }: Props) {
                 setText("")
                 inputRef.current?.focus()
               }}
-              className={cn("mr-1.5 grid size-8 shrink-0 place-items-center rounded-full hover:scale-110 active:scale-95 transition-transform duration-200", SMOOTH)}
+              className={cn("mr-1.5 grid size-8 shrink-0 place-items-center rounded-full transition-transform duration-200", SMOOTH)}
             >
               <X className="size-4 text-muted-foreground" aria-hidden="true" />
             </button>

@@ -27,7 +27,7 @@ export function SidebarFooter({
         href="/#compose"
         onClick={onNavigate}
         className={cn(
-          "metal flex h-11 items-center justify-center overflow-hidden rounded-full font-semibold transition-[width,opacity,scale] duration-300 hover:opacity-85 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "metal flex h-11 items-center justify-center overflow-hidden rounded-full font-semibold transition-[width,opacity] duration-300 hover:opacity-85 outline-none focus-visible:ring-2 focus-visible:ring-ring",
           EASE,
           collapsed ? "w-11 text-[14px]" : "w-full text-[16px]"
         )}
