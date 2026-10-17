@@ -34,6 +34,9 @@ async function forYouOrder() {
   await follow(viewer.page, friend.handle)
 
   await check("for you lists the followed author's post above the newer stranger's", async () => {
+    // The reader's sign-up opened Home before the follow, and a For you ranking is reused for a minute per reader. Waiting out
+    // that minute lets the follow count, the same as a reader who opens For you a while after following.
+    await sleep(62 * 1000)
     await openHome(viewer.page)
     // A new post, from a friend or a stranger, ranks by its score, so it can sit below older posts on the first page. The
     // feed is read page by page, up to eight pages, until the stranger's post is in it.

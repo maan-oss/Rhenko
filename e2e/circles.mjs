@@ -119,9 +119,10 @@ async function openCircle() {
     const rows = await query("SELECT community_id FROM posts WHERE body = ?", text)
     assert.equal(rows.length, 1, "the open circle's post was deleted with it")
     assert.equal(rows[0].community_id, null, "the open circle's post still names the deleted circle")
-    // The post is public, so it stays on the owner's For you, now without the circle's label.
-    await openHome(owner.page)
-    const card = await waitForPost(owner.page, text, { reload: true })
+    // The post is public, so it stays on its writer's profile for anyone, now without the circle's label. The writer is the
+    // joiner, whom the owner does not follow, so a stranger reads it there.
+    await openProfile(stranger.page, joiner.handle)
+    const card = await waitForPost(stranger.page, text, { reload: true })
     assert.equal(await card.getByRole("link", { name }).count(), 0, "the post still carries the deleted circle's label")
   })
 }
