@@ -2667,25 +2667,23 @@ export async function postAnalytics(postId: string, viewerId: string, now = Date
   }
 }
 
-// A yes from mediaAccess, remembered for a minute in this server process. A feed shows the same photos to the same viewer
-// on every scroll, and each view used to cost several queries. Only a yes is remembered, so a file is refused as soon as
-// it is refused; a file a viewer loses the right to may still load for up to a minute.
-const ACCESS_TTL_MS = 60_000
-const ACCESS_CACHE_MAX = 50_000
-const accessCache = new Map<string, { access: "public" | "private"; until: number }>()
+// A public answer from mediaAccess, remembered for a minute in this server process. It depends on the file alone, so the
+// same answer holds for every viewer. Answers that depend on the viewer are never remembered: a block, a protected
+// account or a removed post must stop the picture at once, and a remembered yes would keep it open for a minute.
+const PUBLIC_TTL_MS = 60_000
+const PUBLIC_CACHE_MAX = 50_000
+const publicUntil = new Map<string, number>()
 
 // Who may load an uploaded file. Avatars and banners are public. A post's photo or video goes to anyone who may see a
 // post that uses it, and a photo sent in a chat goes to the members who may read that conversation. "none" covers
 // everything else, including files nothing uses any more.
 export async function mediaAccess(file: string, viewerId: string | null): Promise<"public" | "private" | "none"> {
-  const key = `${file}|${viewerId ?? ""}`
   const now = Date.now()
-  const cached = accessCache.get(key)
-  if (cached && cached.until > now) return cached.access
+  if ((publicUntil.get(file) ?? 0) > now) return "public"
   const access = await mediaAccessUncached(file, viewerId)
-  if (access !== "none") {
-    if (accessCache.size >= ACCESS_CACHE_MAX) accessCache.clear()
-    accessCache.set(key, { access, until: now + ACCESS_TTL_MS })
+  if (access === "public") {
+    if (publicUntil.size >= PUBLIC_CACHE_MAX) publicUntil.clear()
+    publicUntil.set(file, now + PUBLIC_TTL_MS)
   }
   return access
 }
