@@ -48,7 +48,7 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" className="h-9 rounded-full px-4 font-semibold" />}>Edit profile</DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" className="h-11 flex-1 rounded-xl px-4 font-semibold" />}>Edit profile</DialogTrigger>
       <DialogContent className="max-h-[90dvh] gap-0 overflow-y-auto p-0 sm:max-w-lg" showCloseButton>
         <form action={action} className="flex flex-col gap-4 p-5">
           <DialogTitle className="pr-8 text-lg font-semibold">Edit profile</DialogTitle>

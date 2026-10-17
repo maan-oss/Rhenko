@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// The row of buttons on someone else's profile, in the order X shows them: post notifications and message as icons, then
-// Follow, then the menu with mute and block. Follow is the one filled button, so it reads first.
+// The actions on someone else's profile, in one row under the bio: Follow leads as the filled button, Message sits beside it
+// with its label, and the bell and the menu are square. The buttons share the row's width.
 export function ProfileActions({
   handle,
   state,
@@ -84,13 +84,25 @@ export function ProfileActions({
           disabled={pending}
           onClick={unblock}
           aria-label={`Unblock @${handle}`}
-          className="group h-9 min-w-24 rounded-full px-4 font-semibold text-destructive"
+          className="group h-11 flex-1 rounded-xl px-4 font-semibold text-destructive"
         >
           <span className="group-hover:hidden">Blocked</span>
           <span className="hidden group-hover:inline">Unblock</span>
         </Button>
       ) : (
         <>
+          <FollowButton handle={handle} state={state} from={from} className="h-11 flex-1 rounded-xl sm:h-11" />
+          <Button
+            type="button"
+            variant="outline"
+            aria-label={`Message @${handle}`}
+            disabled={messaging}
+            onClick={() => message()}
+            className="h-11 flex-1 rounded-xl px-4 font-semibold"
+          >
+            <Mail className="size-4" aria-hidden="true" />
+            Message
+          </Button>
           {state === "following" ? (
             <Button
               type="button"
@@ -100,29 +112,17 @@ export function ProfileActions({
               aria-pressed={notifying}
               disabled={pending}
               onClick={togglePosts}
-              className={cn("size-9 rounded-full", notifying && "border-foreground text-foreground")}
+              className={cn("size-11 shrink-0 rounded-xl", notifying && "border-foreground text-foreground")}
             >
               {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label={`Message @${handle}`}
-            disabled={messaging}
-            onClick={() => message()}
-            className="size-9 rounded-full"
-          >
-            <Mail className="size-4" />
-          </Button>
-          <FollowButton handle={handle} state={state} from={from} className="h-9 min-w-24 sm:h-9" />
         </>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="More options"
-          className="grid size-9 place-items-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted"
+          className="grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-background text-foreground transition-colors hover:bg-muted"
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
