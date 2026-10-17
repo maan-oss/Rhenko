@@ -39,6 +39,7 @@ export function PageHeader({
           // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
           <Link
             href={backHref}
+            transitionTypes={["nav-back"]}
             aria-label="Back"
             className="-ml-3.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10 sm:-ml-3 sm:-mr-1 sm:size-9"
           >

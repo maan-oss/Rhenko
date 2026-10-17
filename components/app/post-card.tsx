@@ -26,6 +26,7 @@ function QuotedPost({ post }: { post: PostCore }) {
     <div className="relative z-10 mt-2 rounded-2xl border border-border p-3 transition-colors hover:bg-muted/40">
       <Link
         href={`/${post.author.handle}/status/${post.id}`}
+        transitionTypes={["nav-forward"]}
         aria-label={`Open ${post.author.name}'s post`}
         className="absolute inset-0 z-0 rounded-2xl"
       />
@@ -166,7 +167,7 @@ export function PostCard({
             </ProfileLink>
             <span className="min-w-0 truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
             <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="shrink-0 text-[15px] whitespace-nowrap text-muted-foreground">
-              <Link href={statusHref} className="transition-colors after:absolute after:inset-0 hover:text-foreground">
+              <Link href={statusHref} transitionTypes={["nav-forward"]} className="transition-colors after:absolute after:inset-0 hover:text-foreground">
                 <RelativeTime at={post.createdAt} />
               </Link>
             </time>

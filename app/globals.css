@@ -317,6 +317,51 @@ input[type="radio"]:focus-visible {
   animation: page-in 220ms ease-out both;
 }
 
+/* Route transitions, drawn by the browser from snapshots (see app/(app)/template.tsx). Forward slides in from the right,
+   Back from the left, and anything else rises and fades. The same ease runs through all of them, so they read as one motion. */
+@keyframes vt-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes vt-slide {
+  from { translate: var(--slide-offset); }
+  to { translate: 0; }
+}
+@keyframes vt-rise {
+  from { opacity: 0; translate: 0 14px; }
+  to { opacity: 1; translate: 0 0; }
+}
+::view-transition-old(.nav-forward) {
+  --slide-offset: -56px;
+  animation: 160ms ease-in both vt-fade reverse, 440ms cubic-bezier(0.2, 0.7, 0.1, 1) both vt-slide reverse;
+}
+::view-transition-new(.nav-forward) {
+  --slide-offset: 56px;
+  animation: 260ms ease-out 120ms both vt-fade, 440ms cubic-bezier(0.2, 0.7, 0.1, 1) both vt-slide;
+}
+::view-transition-old(.nav-back) {
+  --slide-offset: 56px;
+  animation: 160ms ease-in both vt-fade reverse, 440ms cubic-bezier(0.2, 0.7, 0.1, 1) both vt-slide reverse;
+}
+::view-transition-new(.nav-back) {
+  --slide-offset: -56px;
+  animation: 260ms ease-out 120ms both vt-fade, 440ms cubic-bezier(0.2, 0.7, 0.1, 1) both vt-slide;
+}
+::view-transition-old(.page-rise) {
+  animation: 140ms ease-in both vt-fade reverse;
+}
+::view-transition-new(.page-rise) {
+  animation: 300ms cubic-bezier(0.2, 0.7, 0.1, 1) both vt-rise;
+}
+/* Reduced motion: the page changes at once, with no slide, rise or fade. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}
+
 /* The feed tabs in the landing page's first step: the pill moves between the two tabs and their labels trade colours. */
 @keyframes feed-tab-slide {
   0%, 40% { transform: translateX(0); }
