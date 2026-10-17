@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import { SettingsLogout } from "@/components/app/account-menu"
 import { PageHeader } from "@/components/app/page-header"
+import { requireViewer } from "@/lib/auth"
 
 // Settings is a list of sections. Each section is its own page, so no page is one long scroll.
 const SECTIONS = [
@@ -20,7 +21,9 @@ const SECTIONS = [
   { href: "/settings/shortcuts", title: "Keyboard shortcuts" },
 ]
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  // A session that was signed out elsewhere goes to the sign-in page, the same as the other settings pages.
+  await requireViewer()
   return (
     <>
       <PageHeader title="Settings" />
