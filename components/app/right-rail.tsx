@@ -77,7 +77,7 @@ export async function RightRail() {
                   </span>
                   <span className="mt-2 block h-1 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
                     <span
-                      className="block h-full rounded-full bg-foreground transition-[width] duration-500 ease-out"
+                      className="block h-full rounded-full bg-foreground/45 transition-[width] duration-500 ease-out"
                       style={{ width: `${Math.max(6, Math.round((item.count / busiest) * 100))}%` }}
                     />
                   </span>
@@ -101,7 +101,7 @@ export async function RightRail() {
               More
             </Link>
           </div>
-          <ul className="-mx-5 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <ul className="-mx-5 mt-3 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {people.map((person) => (
               <PersonCard key={person.id} person={person} />
             ))}
