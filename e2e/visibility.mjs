@@ -179,6 +179,12 @@ async function writePicture(page, text, alt, file) {
   await toastText(page, /^Posted\./)
 }
 
+// A picture seed that is new on every run. Pictures are stored under a name made from their bytes, so a picture that matches
+// an earlier public one shares its file, and a protected picture would then be public too. A fixed seed does that.
+function freshSeed() {
+  return 1 + Math.floor(Math.random() * 1e9)
+}
+
 // The path of a picture on the page, found by its alt text.
 async function mediaPathOf(page, alt) {
   const src = await page.locator(`img[alt="${alt}"]`).first().getAttribute("src")
@@ -256,7 +262,7 @@ async function protectedFlow({ phone }) {
   await check(`${where}: set-up: the owner posts, pins and shares a picture, another account quotes it, and the owner replies under that account's post`, async () => {
     await writePost(owner.page, text.post)
     await writePost(owner.page, text.pinned)
-    await writePicture(owner.page, text.picture, alt, makePng(`protected-${where}.png`, { seed: phone ? 4 : 3 }))
+    await writePicture(owner.page, text.picture, alt, makePng(`protected-${where}.png`, { seed: freshSeed() }))
     c.ids.post = await idOnProfile(owner.page, owner.handle, text.post)
     c.ids.pinned = await idOnProfile(owner.page, owner.handle, text.pinned)
     c.mediaPath = await mediaPathOf(owner.page, alt)
@@ -392,7 +398,7 @@ async function blockedFlow({ phone }) {
 
   await check(`${where}: set-up: both accounts post, and a third account quotes the first one's post`, async () => {
     await writePost(author.page, text.post)
-    await writePicture(author.page, text.picture, alt, makePng(`blocked-${where}.png`, { seed: phone ? 6 : 5 }))
+    await writePicture(author.page, text.picture, alt, makePng(`blocked-${where}.png`, { seed: freshSeed() }))
     await writePost(viewer.page, text.viewer)
     ids.post = await idOnProfile(author.page, author.handle, text.post)
     mediaPath = await mediaPathOf(author.page, alt)
