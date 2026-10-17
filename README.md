@@ -18,10 +18,12 @@ PORT=3100 npm start  # serves the built app on http://localhost:3100
 
 `npm start` runs `server.mjs`, which starts several worker processes on the one port (see `RHENKO_WORKERS` below). They share their state through the database, so any of them can serve any request, and a worker that stops is replaced.
 
-Or with Docker, which keeps the data and the backups in folders on the host:
+For local development, `npm run dev` needs a Postgres database (see `DATABASE_URL` below). Set `RHENKO_STORAGE=local` to keep uploads in `data/uploads/` instead of R2.
+
+Production runs with Docker Compose: Postgres for the data, the app, Caddy for HTTPS, and database backups every six hours, copied to Cloudflare R2. In `.env`, set `RHENKO_DOMAIN` (a domain whose DNS already points at the server), `POSTGRES_PASSWORD`, `RHENKO_SECRET` and the `RHENKO_R2_*` settings, then:
 
 ```bash
-cp .env.example .env   # optional: edit the settings you need
+cp .env.example .env   # then fill in the settings above
 docker compose up -d --build
 ```
 
@@ -31,7 +33,10 @@ The build downloads the Sora font from Google Fonts, so it needs network access.
 
 Every setting is optional. `.env.example` lists them, and a line that starts with `#` is off.
 
-- `RHENKO_SECRET` (16 characters or more) protects the stored two-factor keys. Without it the server makes `data/secret.key` on first use.
+- `DATABASE_URL` points the app at Postgres (version 16 or later; the Compose file runs 17). It must be a direct connection or a session-mode pooler, not a transaction-mode one, because live events use `LISTEN`.
+- `RHENKO_STORAGE` chooses where uploads go: `r2` with the `RHENKO_R2_ENDPOINT`, `RHENKO_R2_BUCKET`, `RHENKO_R2_ACCESS_KEY_ID` and `RHENKO_R2_SECRET_ACCESS_KEY` settings for production, or `local` for development. Without it the app looks for Supabase settings instead.
+- `RHENKO_PUBLIC_URL` is the address people use, with `https`. Passkeys and Stripe checkout links are built from it.
+- `RHENKO_SECRET` (16 characters or more) protects the stored two-factor keys. Without it the server makes `data/secret.key` on first use, and that file is not in the database backups. Set it in production and keep a copy.
 - `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM` send the email codes for address confirmation and password reset. In production, without SMTP, those features say email isn't set up.
 - `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if that service needs one, turn on the translate button through a LibreTranslate-compatible service. Off by default, and only the text a reader asks to translate is sent.
 - `RHENKO_SARVAM_KEY` turns on Sahayak, the AI account that answers a mention of `@sahayak` under a post. It uses Sarvam AI (`RHENKO_SARVAM_URL` and `RHENKO_SARVAM_MODEL` can point it elsewhere). Off by default. When on, only the question and the posts it replies to or quotes that the asker can see are sent, and Sahayak labels its posts and profile as AI.
@@ -40,25 +45,34 @@ Every setting is optional. `.env.example` lists them, and a line that starts wit
 - `RHENKO_PROOF_BITS` sets how hard the built-in puzzle is, from 8 to 22 zero bits (default 16). The end-to-end suite sets it to 8 so each sign-up is quick.
 - `RHENKO_ICE_SERVERS`, or `RHENKO_TURN_SECRET` with `RHENKO_TURN_URLS`, give voice calls a TURN relay for networks that block direct connections. Without them calls use Google's public STUN server.
 - `RHENKO_OPERATOR_NAME` and `RHENKO_CONTACT_EMAIL` appear on the Terms and Privacy pages.
-- `RHENKO_DATA_DIR` moves the data folder (default `./data`). `RHENKO_BACKUP_DIR` moves the backups (default `./backups`). `PORT` sets the port.
+- `RHENKO_DATA_DIR` moves the data folder (default `./data`), which holds the server key when `RHENKO_SECRET` is not set and, with `RHENKO_STORAGE=local`, the uploads. `PORT` sets the port for `npm start`; Compose serves ports 80 and 443 through Caddy.
 - `RHENKO_WORKERS` sets how many worker processes serve the app (default 4, or the number of CPUs when there are fewer). `RHENKO_HOST` sets the address they listen on (default `0.0.0.0`).
 
 Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls need a secure page.
 
 ## Data
 
-- Storage is one SQLite file, `data/rhenko.sqlite`, using Node's built-in `node:sqlite`. It runs in WAL mode with foreign keys on. Schema changes are versioned migrations in `lib/db.ts`.
-- Uploads (avatars, banners, post images and videos, chat photos) are saved under random names in `data/uploads/` and served from `/media/[file]` with byte-range support.
+- Everything is in Postgres. The schema is `db/postgres/schema.sql`. It creates the tables when a database starts empty, and it is not re-runnable, so an existing database is upgraded with the SQL its release notes give, not by running the file again.
+- Uploads (avatars, banners, post images and videos, chat photos) get random names. They are stored in the R2 bucket with `RHENKO_STORAGE=r2`, or in `data/uploads/` with `local`. `/media/[file]` checks who may see a file, then sends the viewer to a link to it that lasts an hour.
 - Photos lose their location, camera and time details when they are uploaded. That covers EXIF, XMP, IPTC, text chunks and comments in JPEG, PNG, WebP and GIF. The picture itself is unchanged. Videos keep their metadata.
-- `npm run backup` writes a folder into `backups/` with a consistent copy of the database, the server key and the uploads. It keeps the newest 14. Copy the backup folder off the machine as well. The script's header has the restore steps.
+- With Compose, the `backup` service writes a `pg_dump` every six hours and keeps the newest 16 (four days). The `backup-upload` service copies them to the R2 bucket, under `db-backups/`, every hour. The uploads are already in R2, and the server key is not in the dumps, so keep `RHENKO_SECRET` (or `data/secret.key`) somewhere safe too.
+- To restore a dump: `pg_restore --no-owner --clean --if-exists --dbname "$DATABASE_URL" rhenko-<time>.dump`. Stop the app first.
 - A background tick runs every 15 seconds. It publishes scheduled posts on time, announces poll results, ends calls that have stopped answering, and removes expired sessions and codes.
 - Retention is enforced by the background tick: views and profile visits after 90 days, For you impressions and time on screen after 30 days, read notifications after 180 days, notices and moderation records after three years, and "Not now" choices on connection suggestions after 180 days. Hidden posts are deleted when their appeal window closes or an appeal fails.
-- Delete the data directory to reset the app to empty.
+- To start an install over, run `docker compose down`, then remove the Postgres volume (the one ending in `_pgdata`, listed by `docker volume ls`). The uploads in R2 stay until they are removed from the bucket.
 
 ## Operations
 
 ```bash
-npm run backup                          # back up now
+docker compose exec backup sh /backup.sh once          # write a database dump now
+docker compose logs -f backup-upload                    # see whether dumps reach R2
+```
+
+Set a lifecycle rule on the bucket that deletes objects under `db-backups/` after 30 days (Cloudflare dashboard → R2 → the bucket → Settings → Object lifecycle rules). Without it the dumps are kept forever.
+
+The moderation, legal and grant commands below run on the server with `docker compose exec app` in front of them, for example `docker compose exec app node scripts/moderation.mjs list`. Without Docker, use `npm run` as shown.
+
+```bash
 npm run moderation -- list                              # open reports, oldest first
 npm run moderation -- resolve <id>                      # close a report, leave the post
 npm run moderation -- hide <postId> --category <id> --explain "<reason>"   # hide, tell the author, allow an appeal
@@ -191,8 +205,10 @@ The scripts read the same database as the app, and the server can keep running w
 
 ## Known limits
 
-- One machine. The worker processes share live events, call state, rate-limit counters and the background-work lease through the SQLite database. Several machines would need a shared store (for example Redis) first. A restart of the server reloads open tabs, so any call in progress ends.
-- SQLite and local uploads need one machine with a persistent disk. They are not built for serverless hosting.
+- The Compose file runs one app container with several worker processes. Live events, call state, rate-limit counters and the background-work lease are in Postgres, so more app servers can share the database and the bucket. That has not been run with more than one server yet. Before adding a second, set the same `RHENKO_BOOT_ID` on every server: each server otherwise sends its own boot id, and a tab that reconnects to another server clears any call in progress.
+- A restart of the server reloads open tabs, so any call in progress ends.
+- A signed-out session, or a profile change, can take up to 10 seconds to take effect on another server, because each server keeps a session's viewer for that long.
+- Local uploads (`RHENKO_STORAGE=local`) live on one machine's disk. They are for development. Production uses R2.
 - A page that doesn't exist, or that the viewer may not see, answers HTTP 200 with the "This page is not here" view and a `noindex` tag. Cache Components sends the page shell before the page's checks run, so the status can't change. The app is behind sign-in, so search engines see only the sign-in, terms and privacy pages. A path with no matching route at all, such as `/nope/a/b`, gets a real 404. A single unknown name is read as a handle, so it gets the same "not here" view as any missing profile.
 - Messages are stored as readable text on the server. They are not end-to-end encrypted.
 - The agreement to the Terms is enforced on every page. A request sent straight to a server action by an account that has not agreed is not refused yet: the actions check that someone is signed in, not that they agreed. Adding that check to each action is the next step.

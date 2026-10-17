@@ -1,48 +1,143 @@
-# Runs Rhenko with its data in ./data and its backups in ./backups.
+# Rhenko in production: Postgres for the data, the app, Caddy for HTTPS, and database backups to Cloudflare R2.
 #
-#   cp .env.example .env      then edit .env (optional, the app starts without it)
+#   cp .env.example .env     then set RHENKO_DOMAIN, POSTGRES_PASSWORD, RHENKO_SECRET and the RHENKO_R2_* settings
 #   docker compose up -d --build
 #
-# Back up while it runs:  docker compose exec app node scripts/backup.mjs
-# Review reports:         docker compose exec app node scripts/moderation.mjs list
-# Grant a verified badge: docker compose exec app node scripts/grant-verified.mjs <handle>
+# The database is created from db/postgres/schema.sql the first time the db service starts with an empty volume. The
+# file is not re-runnable, so an existing database is upgraded by its release notes, not by starting this file again.
+#
+# Review reports:          docker compose exec app node scripts/moderation.mjs list
+# Grant a verified badge:  docker compose exec app node scripts/grant-verified.mjs <handle>
+# Back up the database now: docker compose exec backup sh /backup.sh once
+#
+# The uploads are not in these volumes. They are in the R2 bucket, so the server itself keeps nothing that a rebuild loses.
+
 services:
-  # The app runs as the unprivileged "node" user, and Docker creates ./data and ./backups owned by root.
-  # This hands those folders to "node" before the app starts, then exits.
-  init:
-    build: .
-    image: rhenko
-    user: root
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    # Parallel queries share memory through /dev/shm, which Docker sets to 64 MB by default.
+    shm_size: 256mb
+    environment:
+      POSTGRES_DB: rhenko
+      POSTGRES_USER: rhenko
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    # Sized for a server with 4 GB of memory. Connections come from the app's worker pools, a few at a time.
     command:
-      - sh
+      - postgres
       - -c
-      - chown -R node:node /app/data /app/backups || echo "Could not make node the owner of ./data and ./backups. If the app cannot write to them, change their owner to user id 1000."
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - wal_compression=on
     volumes:
-      - ./data:/app/data
-      - ./backups:/app/backups
-    restart: "no"
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, when the volume is first created.
+      - ./db/postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rhenko -d rhenko"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # No ports are published. Only the other services on this network reach the database.
 
   app:
     build: .
     image: rhenko
+    restart: unless-stopped
     depends_on:
-      init:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     env_file:
       - path: .env
         required: false
     environment:
-      # Fixed here so that a value in .env cannot point the app away from the mounted folders.
+      # Fixed here so a value in .env cannot point the app away from the database that is in this file.
+      DATABASE_URL: postgres://rhenko:${POSTGRES_PASSWORD}@db:5432/rhenko
+      RHENKO_STORAGE: r2
       RHENKO_DATA_DIR: /app/data
-      RHENKO_BACKUP_DIR: /app/backups
-    ports:
-      - "${PORT:-3000}:3000"
+      # Caddy is in front of the app and sets X-Forwarded-For, so rate limits see each visitor's own address.
+      RHENKO_TRUST_PROXY: "1"
+    expose:
+      - "3000"
     volumes:
-      - ./data:/app/data
-      - ./backups:/app/backups
-    restart: unless-stopped
+      - appdata:/app/data
     init: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      RHENKO_DOMAIN: ${RHENKO_DOMAIN:?Set RHENKO_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+
+  # Dumps the database every six hours into the backups volume. It runs as root only so that it can create the folder
+  # in its volume, and it runs nothing else.
+  backup:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    user: root
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGHOST: db
+      PGDATABASE: rhenko
+      PGUSER: rhenko
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_EVERY_SECONDS: "21600"
+      BACKUP_KEEP: "16"
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - backups:/backups
+
+  # Copies the dumps to the R2 bucket every hour, under db-backups/.
+  backup-upload:
+    image: rclone/rclone:latest
+    restart: unless-stopped
+    depends_on:
+      - backup
+    entrypoint: ["sh", "/upload-backups.sh"]
+    environment:
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_REGION: auto
+      RCLONE_CONFIG_R2_ENDPOINT: ${RHENKO_R2_ENDPOINT:?Set RHENKO_R2_ENDPOINT in .env}
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${RHENKO_R2_ACCESS_KEY_ID:?Set RHENKO_R2_ACCESS_KEY_ID in .env}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${RHENKO_R2_SECRET_ACCESS_KEY:?Set RHENKO_R2_SECRET_ACCESS_KEY in .env}
+      RCLONE_S3_NO_CHECK_BUCKET: "true"
+      RHENKO_R2_BUCKET: ${RHENKO_R2_BUCKET:?Set RHENKO_R2_BUCKET in .env}
+      UPLOAD_EVERY_SECONDS: "3600"
+    volumes:
+      - ./deploy/upload-backups.sh:/upload-backups.sh:ro
+      - backups:/backups:ro
+
+volumes:
+  pgdata:
+  appdata:
+  backups:
+  caddydata:
+  caddyconfig:

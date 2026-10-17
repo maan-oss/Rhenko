@@ -1,0 +1,15 @@
+# Caddy takes the HTTPS certificate for RHENKO_DOMAIN from Let's Encrypt and sends every request to the app.
+{$RHENKO_DOMAIN} {
+	# Live events are one long response. Caddy buffers compressed responses, which would hold events back, so the
+	# stream is sent as it is, with nothing held back.
+	handle /api/events {
+		reverse_proxy app:3000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy app:3000
+	}
+}

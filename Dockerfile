@@ -1,12 +1,11 @@
-# Rhenko in a container.
+# Rhenko in a container. The app keeps no state of its own: the data is in Postgres and the uploads are in Cloudflare R2.
+# docker-compose.yml runs it with Postgres, Caddy for HTTPS and the database backups. To run the image alone:
 #
 #   docker build -t rhenko .
-#   docker run -p 3000:3000 -v rhenko-data:/app/data -v rhenko-backups:/app/backups rhenko
+#   docker run --env-file .env -p 3000:3000 rhenko
 #
-# Everything the app keeps (the database, the uploads and the server key) lives in /app/data, so mount a volume
-# there. /app/backups is where scripts/backup.mjs writes, so mount that too or the backups go when the container does.
-# The app runs as the unprivileged "node" user, which must be able to write to both; docker-compose.yml takes care of
-# that for the ./data and ./backups folders. The build downloads the Sora font from Google Fonts, so it needs network access.
+# /app/data holds the server key only when RHENKO_SECRET is not set, so it is a volume. The build downloads the Sora
+# font from Google Fonts, so it needs network access.
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
@@ -30,16 +29,15 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     RHENKO_DATA_DIR=/app/data \
-    RHENKO_BACKUP_DIR=/app/backups \
     NODE_OPTIONS=--max-semi-space-size=64
-RUN mkdir -p /app/data /app/backups && chown node:node /app /app/data /app/backups
+RUN mkdir -p /app/data && chown node:node /app /app/data
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
 COPY --chown=node:node package.json next.config.ts server.mjs ./
 COPY --chown=node:node scripts ./scripts
 USER node
-VOLUME ["/app/data", "/app/backups"]
+VOLUME ["/app/data"]
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1), () => process.exit(1))"]

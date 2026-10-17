@@ -57,9 +57,10 @@ Work through this list in order. Each item names who is responsible.
     **Translation (operator, optional).** Set `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if the service needs a key. The
     service receives the text of each post or message a reader asks to translate, so name it in the Privacy Policy's list of
     recipients and put in place the processing terms the law requires. Without the variable, no translate button appears.
-10. **Hosting and backups (operator).** Serve over HTTPS. Keep off-site copies of `npm run backup` output, and remember that
-    a backup holds deleted content until it is replaced. Keep `RHENKO_SECRET` safe: without it, two-factor keys cannot
-    be read.
+10. **Hosting and backups (operator).** Serve over HTTPS. The Compose file copies database dumps to the R2 bucket every
+    hour (see the README), and remember that a backup holds deleted content until the dump that includes the deletion is
+    replaced. Uploads in R2 are removed when they are deleted from the app. Keep `RHENKO_SECRET` safe: without it,
+    two-factor keys cannot be read, and the key file is not in the dumps.
 11. **Lawyer review (lawyer).** Review every page under `/terms`, `/privacy`, `/rules`, `/copyright`, `/safety` and
     `/legal` for each place the server serves. Record the review date.
 12. **Run the suite (operator).** `ONLY=legal npm run test:e2e` against a staging server, then the full suite.
