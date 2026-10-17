@@ -110,7 +110,8 @@ async function storePicture(name, picture) {
 // Keeps a link's preview as the server would after reading its page: the title, a line, the site and a picture stored
 // under the name the server gives it. The server reads a fresh row and does not fetch the page.
 export async function keepLinkPreview({ link, title, description, site, picture }) {
-  const name = crypto.createHash("sha256").update(link).digest("hex").slice(0, 32) + ".png"
+  // A random name, as the server gives a link picture now. The row keeps the name, so nothing else depends on it.
+  const name = crypto.randomUUID().replace(/-/g, "") + ".png"
   await storePicture(name, picture)
   await withDatabase((sql) =>
     sql.unsafe(

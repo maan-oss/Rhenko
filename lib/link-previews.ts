@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import dns from "node:dns/promises"
 import http from "node:http"
 import https from "node:https"
@@ -233,16 +233,16 @@ export function pictureExtension(body: Buffer): "jpg" | "png" | "gif" | "webp" |
   return null
 }
 
-// Keeps a link's picture on this site. The name comes from the link, so a new fetch replaces the old picture.
+// Keeps a link's picture on this site under a random name. A name made from the link would let anyone who knows the link
+// check whether it was shared here, even in a protected post, by asking for the picture's file. The row keeps the name.
 async function storePicture(link: string, imageUrl: string, previous: string | null): Promise<string | null> {
   const reply = await fetchAccepted(imageUrl, IMAGE_BYTES, "image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1", isImage)
   if (!reply || reply.truncated) return null
   const extension = pictureExtension(reply.body)
   if (!extension) return null
-  const name = `${createHash("sha256").update(link).digest("hex").slice(0, 32)}.${extension}`
-  // The old picture's smaller copies go too, so none of them still shows the previous fetch.
-  await removeUpload(name)
+  const name = `${randomUUID().replace(/-/g, "")}.${extension}`
   await storeObject(name, new Uint8Array(reply.body), contentTypeFor(name))
+  // The previous fetch's picture and its smaller copies go once the new one is stored.
   if (previous && previous !== name) await removeUpload(previous)
   return name
 }
