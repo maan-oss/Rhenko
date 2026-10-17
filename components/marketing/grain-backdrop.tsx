@@ -34,7 +34,7 @@ export function GrainBackdrop({
   const layer = useRef<HTMLDivElement>(null)
   const onScreen = useOnScreen(layer)
   const webgl = useWebGL()
-  const shader = onScreen && webgl
+  const shader = onScreen && webgl === true
 
   return (
     <div className={cn("relative isolate overflow-hidden", className)}>
@@ -81,10 +81,10 @@ function flatGround(palette: { back: string; colors: readonly string[] }) {
   return `radial-gradient(90% 70% at 18% 8%, ${palette.colors[0]}40, transparent 62%), ${palette.back}`
 }
 
-// Whether this browser can draw WebGL. It starts true, so the first paint matches the server's, and changes once the
-// browser has been asked.
-function useWebGL() {
-  const [supported, setSupported] = useState(true)
+// Whether this browser can draw WebGL. It is null until the browser has been asked, so the server's HTML and the first
+// paint show the flat ground, and the shader is never mounted where WebGL is missing.
+function useWebGL(): boolean | null {
+  const [supported, setSupported] = useState<boolean | null>(null)
   useEffect(() => {
     try {
       const probe = document.createElement("canvas")
