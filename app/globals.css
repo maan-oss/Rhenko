@@ -320,3 +320,61 @@ input[type="radio"]:focus-visible {
 @utility page-in {
   animation: page-in 220ms ease-out both;
 }
+
+/* The feed tabs in the landing page's first step: the pill moves between the two tabs and their labels trade colours. */
+@keyframes feed-tab-slide {
+  0%, 40% { transform: translateX(0); }
+  50%, 90% { transform: translateX(100%); }
+  100% { transform: translateX(0); }
+}
+@keyframes feed-tab-first {
+  0%, 40% { color: var(--background); }
+  50%, 90% { color: var(--muted-foreground); }
+  100% { color: var(--background); }
+}
+@keyframes feed-tab-second {
+  0%, 40% { color: var(--muted-foreground); }
+  50%, 90% { color: var(--background); }
+  100% { color: var(--muted-foreground); }
+}
+
+/* Landing page motion. Scroll-linked effects run only where the browser supports scroll-driven animations, and the
+   content sits at rest everywhere else. Reduced motion turns all of them off. */
+@keyframes mk-rise {
+  from { opacity: 0; transform: translate3d(0, 26px, 0); filter: blur(10px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes mk-reveal {
+  from { opacity: 0; transform: translate3d(0, 56px, 0); filter: blur(10px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes mk-marquee { to { transform: translate3d(-50%, 0, 0); } }
+@keyframes mk-float { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -12px, 0); } }
+@keyframes mk-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mk-drift { from { transform: translate3d(0, -7%, 0) scale(1.1); } to { transform: translate3d(0, 7%, 0) scale(1.1); } }
+@keyframes mk-photo-in { from { transform: scale(1.14); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+@keyframes mk-line { from { transform: translate3d(0, 105%, 0); } to { transform: none; } }
+
+.mk-rise { animation: mk-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.mk-line { display: block; animation: mk-line 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.mk-delay-1 { animation-delay: 120ms; }
+.mk-delay-2 { animation-delay: 240ms; }
+.mk-delay-3 { animation-delay: 380ms; }
+.mk-delay-4 { animation-delay: 520ms; }
+.mk-float { animation: mk-float 7s ease-in-out infinite; }
+.mk-float-slow { animation: mk-float 11s ease-in-out infinite; animation-delay: -4s; }
+.mk-marquee { animation: mk-marquee 46s linear infinite; }
+.mk-marquee-band:hover .mk-marquee { animation-play-state: paused; }
+
+@supports (animation-timeline: view()) {
+  .mk-reveal { animation: mk-reveal linear both; animation-timeline: view(); animation-range: entry 4% cover 34%; }
+  .mk-photo { animation: mk-photo-in linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+  .mk-drift { animation: mk-drift linear both; animation-timeline: view(); }
+  .mk-progress { animation: mk-grow linear both; animation-timeline: scroll(root); transform-origin: left center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-rise, .mk-line, .mk-float, .mk-float-slow, .mk-marquee, .mk-photo, .mk-drift, .mk-reveal, .mk-progress {
+    animation: none !important;
+  }
+}

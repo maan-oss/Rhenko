@@ -23,6 +23,9 @@ export const instant = false
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await getViewer()
   if (viewer && viewer.termsVersion !== TERMS_VERSION) redirect("/accept-terms")
+  // Someone who is not signed in sees the page alone, without the app's frame. The home page shows the landing page to
+  // them, and every other page sends them to sign in.
+  if (!viewer) return <>{children}</>
   // The badge numbers. A new object on each render, so the badges take the numbers the server now has.
   const counts = viewer
     ? { notifications: await unreadNotificationCount(viewer.id), messages: await unreadMessageCount(viewer.id) }

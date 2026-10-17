@@ -1,0 +1,41 @@
+# Adds PgBouncer between the app and Postgres, for when the app runs on more than one server (see docs/scaling-plan.md,
+# step 3). Use it with the main file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.pooler.yml up -d --build
+#
+# The app's queries go through PgBouncer in transaction mode, which lets many app connections share a few database
+# connections. The app does not use prepared statements, which transaction mode needs. LISTEN does not work through
+# transaction mode, so the event bus connects to Postgres directly (RHENKO_LISTEN_URL).
+#
+# The image is pinned by digest. Its tag moves, and the digest is PgBouncer 1.26.0.
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer@sha256:9c78945868a6a142c7fc40ccd843bbe5a606df163c7ffce4de70e0d628d696a2
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://rhenko:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/rhenko
+      # At start, the image writes the app's login into PgBouncer's user file inside its own container. The password is
+      # not on a command line and is not written to the host.
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      LISTEN_PORT: "6432"
+      MAX_CLIENT_CONN: "400"
+      DEFAULT_POOL_SIZE: "20"
+      IGNORE_STARTUP_PARAMETERS: "extra_float_digits"
+    expose:
+      - "6432"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    depends_on:
+      pgbouncer:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://rhenko:${POSTGRES_PASSWORD}@pgbouncer:6432/rhenko
+      RHENKO_LISTEN_URL: postgres://rhenko:${POSTGRES_PASSWORD}@db:5432/rhenko

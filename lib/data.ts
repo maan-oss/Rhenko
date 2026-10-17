@@ -1,4 +1,4 @@
-import { all, get, type Param } from "@/lib/db"
+import { all, get, readAll, replicaConfigured, type Param } from "@/lib/db"
 import { clickCountsByPost, clickCountsFor, emptyClickCounts, type ClickCounts } from "@/lib/post-clicks"
 import { snoozedTopics } from "@/lib/topic-snoozes"
 import {
@@ -601,24 +601,49 @@ type Arm = {
   reposter: string
 }
 
-async function timelinePage(
-  arms: Arm[],
-  cursor: string | undefined,
-  limit: number,
-  viewerId: string,
-  postFilter?: (post: PostView, row: FeedRow) => boolean
-): Promise<Page<FeedItem>> {
-  const [cursorAt, cursorKey] = parseCursor(cursor)
-  const parts = arms.map(
-    (arm) => `SELECT * FROM (
+// A post the viewer wrote this recently is read from the primary even when the page is read from the replica, so a person
+// always sees their own new post at once. Replication normally trails by well under a second; this window covers the rest.
+const RECENT_OWN_MS = 2 * 60 * 1000
+
+function armSql(arm: Arm, cursorAt: number, cursorKey: string, limit: number): string {
+  return `SELECT * FROM (
       SELECT ${arm.key} AS key, ${arm.postId} AS post_id, ${arm.sortAt} AS sort_at, ${arm.reposter} AS reposter_id, NULL AS folder_id
       FROM ${arm.from}
       WHERE ${arm.where} AND ${arm.sortAt} <= ? AND (${arm.sortAt} < ? OR (${arm.sortAt} = ? AND ${arm.key} < ?))
       ORDER BY sort_at DESC, key DESC
       LIMIT ?)`
-  )
-  const params = arms.flatMap((arm) => [...arm.params, cursorAt, cursorAt, cursorAt, cursorKey, limit + 1])
-  const rows = await all<FeedRow>(`${parts.join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`, ...params, limit + 1)
+}
+
+// Runs the arms of a timeline as one query. With fromReplica, the shared rows come from the replica, and the viewer's own
+// posts from the last two minutes come from the primary and replace any copy of them the replica returned.
+async function timelinePage(
+  arms: Arm[],
+  cursor: string | undefined,
+  limit: number,
+  viewerId: string,
+  postFilter?: (post: PostView, row: FeedRow) => boolean,
+  fromReplica = false
+): Promise<Page<FeedItem>> {
+  const [cursorAt, cursorKey] = parseCursor(cursor)
+  const armParams = (arm: Arm) => [...arm.params, cursorAt, cursorAt, cursorAt, cursorKey, limit + 1]
+  const parts = arms.map((arm) => armSql(arm, cursorAt, cursorKey, limit))
+  const params = arms.flatMap(armParams)
+  const union = `${parts.join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`
+  if (!fromReplica || !replicaConfigured()) {
+    const rows = await all<FeedRow>(union, ...params, limit + 1)
+    return await pageOf(rows, limit, viewerId, postFilter)
+  }
+  const shared = await readAll<FeedRow>(union, ...params, limit + 1)
+  const own = arms
+    .filter((arm) => arm.reposter === "NULL" && arm.from.startsWith("posts p "))
+    .map((arm) => ({ ...arm, where: `${arm.where} AND p.author_id = ? AND p.created_at >= ?`, params: [...arm.params, viewerId, Date.now() - RECENT_OWN_MS] }))
+  let rows = shared
+  if (own.length > 0) {
+    const ownParams = own.flatMap(armParams)
+    const fresh = await all<FeedRow>(`${own.map((arm) => armSql(arm, cursorAt, cursorKey, limit)).join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`, ...ownParams, limit + 1)
+    const keys = new Set(fresh.map((row) => row.key))
+    rows = [...fresh, ...shared.filter((row) => !keys.has(row.key))].sort((a, b) => b.sort_at - a.sort_at || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0)).slice(0, limit + 1)
+  }
   return await pageOf(rows, limit, viewerId, postFilter)
 }
 
@@ -729,7 +754,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
      FROM likes l JOIN posts p ON p.id = l.post_id JOIN users au ON au.id = p.author_id
      WHERE l.user_id IN (${FOLLOWING}) AND l.created_at >= ? AND l.created_at <= ?
        AND p.author_id <> ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
-     GROUP BY p.id ORDER BY social_count DESC, MAX(l.created_at) DESC LIMIT ?`,
+     GROUP BY p.id, au.id ORDER BY social_count DESC, MAX(l.created_at) DESC LIMIT ?`,
     viewerId,
     since,
     at,
@@ -754,7 +779,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
   // Reposts by people the viewer follows, with the same blocks and mutes that the Following feed applies to a reposter.
   const repostRows = await all<CandidatePost & { reposter_id: string; reposted_at: number }>(
     `SELECT ${CANDIDATE_COLUMNS}, r.user_id AS reposter_id, r.created_at AS reposted_at
-     FROM reposts r INDEXED BY reposts_created JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id
+     FROM reposts r JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id
      WHERE r.created_at >= ? AND r.created_at <= ? AND r.user_id IN (${FOLLOWING}) AND ${vis.sql} AND ${NOT_RESTRICTED}
        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = ?))
        AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = r.user_id)
@@ -819,7 +844,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
     POOL_SIZE.explore
   )
   const freshPosts = await all<CandidatePost>(
-    `SELECT ${CANDIDATE_COLUMNS} FROM posts p INDEXED BY posts_created JOIN users au ON au.id = p.author_id
+    `SELECT ${CANDIDATE_COLUMNS} FROM posts p JOIN users au ON au.id = p.author_id
      WHERE p.created_at >= ? AND p.created_at <= ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
      ORDER BY p.created_at DESC LIMIT ?`,
     since,
@@ -1022,7 +1047,7 @@ export async function homeFeed(mode: "for-you" | "following", viewerId: string, 
   const vis = await visibilityClause(viewerId)
   // A post arm: `where` is the arm's own condition, placed before the visibility rules.
   const postArm = (where: string, params: Param[]): Arm => ({
-    from: "posts p INDEXED BY posts_created JOIN users au ON au.id = p.author_id",
+    from: "posts p JOIN users au ON au.id = p.author_id",
     where: `${where} AND ${vis.sql}`,
     params: [...params, ...vis.params],
     key: "'post:' || p.id",
@@ -1032,7 +1057,7 @@ export async function homeFeed(mode: "for-you" | "following", viewerId: string, 
   })
   // A repost arm: a repost by someone the viewer has not blocked or muted, of a post the viewer may see.
   const repostArm = (where: string, params: Param[]): Arm => ({
-    from: "reposts r INDEXED BY reposts_created JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id",
+    from: "reposts r JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id",
     where: `${where} AND ${vis.sql}
       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = ?))
       AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = r.user_id)`,
@@ -1050,7 +1075,7 @@ export async function homeFeed(mode: "for-you" | "following", viewerId: string, 
     postArm(`${AUTHORED} AND (p.author_id = ? OR p.author_id IN (${FOLLOWING}))`, [viewerId, viewerId]),
     repostArm(`(r.user_id = ? OR r.user_id IN (${FOLLOWING}))`, [viewerId, viewerId]),
   ]
-  if (tags.size === 0) return await timelinePage(arms, cursor, limit, viewerId)
+  if (tags.size === 0) return await timelinePage(arms, cursor, limit, viewerId, undefined, true)
 
   // Posts that use a followed #tag, from accounts the viewer does not follow. SQL finds a substring; a tag that only
   // starts the same way (#art in #artist) is dropped afterwards by reading the post's hashtags exactly.
@@ -1066,7 +1091,8 @@ export async function homeFeed(mode: "for-you" | "following", viewerId: string, 
     row.reposter_id !== null ||
     post.author.id === viewerId ||
     followed.has(post.author.id) ||
-    extractHashtags(post.body).some((tag) => tags.has(tag))
+    extractHashtags(post.body).some((tag) => tags.has(tag)),
+    true
   )
 }
 
@@ -1076,7 +1102,7 @@ export type ProfileTab = "posts" | "highlights" | "replies" | "media" | "reposts
 // Each tab is one arm of the timeline, reading the index of its own table in time order.
 export async function profileFeed(tab: ProfileTab, userId: string, viewerId: string, cursor?: string, limit = 25): Promise<Page<FeedItem>> {
   const vis = await visibilityClause(viewerId)
-  const byAuthor = "posts p INDEXED BY posts_author JOIN users au ON au.id = p.author_id"
+  const byAuthor = "posts p JOIN users au ON au.id = p.author_id"
   let arm: Arm
   switch (tab) {
     case "replies":
@@ -1103,7 +1129,7 @@ export async function profileFeed(tab: ProfileTab, userId: string, viewerId: str
       break
     case "likes":
       arm = {
-        from: "likes l INDEXED BY likes_user JOIN posts p ON p.id = l.post_id JOIN users au ON au.id = p.author_id",
+        from: "likes l JOIN posts p ON p.id = l.post_id JOIN users au ON au.id = p.author_id",
         where: `l.user_id = ? AND ${vis.sql}`,
         params: [userId, ...vis.params],
         key: "'like:' || l.post_id || ':' || l.user_id",
@@ -1125,7 +1151,7 @@ export async function profileFeed(tab: ProfileTab, userId: string, viewerId: str
       break
     case "reposts":
       arm = {
-        from: "reposts r INDEXED BY reposts_user JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id",
+        from: "reposts r JOIN posts p ON p.id = r.post_id JOIN users au ON au.id = p.author_id",
         where: `r.user_id = ? AND ${vis.sql}`,
         params: [userId, ...vis.params],
         key: "'repost:' || r.post_id || ':' || r.user_id",
@@ -1138,7 +1164,7 @@ export async function profileFeed(tab: ProfileTab, userId: string, viewerId: str
       // Original posts only: reposts have their own tab, and the pinned post is shown above the list.
       arm = {
         from: byAuthor,
-        where: `p.author_id = ? AND ${AUTHORED} AND p.id IS NOT (SELECT pinned_post_id FROM users WHERE id = ?) AND ${vis.sql}`,
+        where: `p.author_id = ? AND ${AUTHORED} AND p.id IS DISTINCT FROM (SELECT pinned_post_id FROM users WHERE id = ?) AND ${vis.sql}`,
         params: [userId, userId, ...vis.params],
         key: "'post:' || p.id",
         postId: "p.id",
@@ -1323,7 +1349,7 @@ export async function searchPostFeed(
   const vis = await visibilityClause(viewerId)
   const top = sort === "top"
   const arm: Arm = {
-    from: `posts p INDEXED BY ${top ? "posts_engagement" : "posts_created"} JOIN users au ON au.id = p.author_id`,
+    from: `posts p JOIN users au ON au.id = p.author_id`,
     where: `${clauses.join(" AND ")} AND ${vis.sql}`,
     params: [...params, ...vis.params],
     key: "'post:' || p.id",
@@ -1331,7 +1357,7 @@ export async function searchPostFeed(
     sortAt: top ? "p.engagement" : "p.created_at",
     reposter: "NULL",
   }
-  return await timelinePage([arm], cursor, limit, viewerId)
+  return await timelinePage([arm], cursor, limit, viewerId, undefined, true)
 }
 
 // Drafts and scheduled posts belong to their author, so they skip the public visibility rules.
@@ -1568,7 +1594,7 @@ const NOT_HIDDEN = `u.deactivated_at IS NULL
 
 export async function searchUsers(query: string, viewerId: string, limit = 20): Promise<UserCard[]> {
   const pattern = likePattern(query)
-  return (await all<CardRow>(
+  return (await readAll<CardRow>(
     `${CARD_SQL}
      WHERE (u.handle ILIKE ? ESCAPE '\\' OR u.name ILIKE ? ESCAPE '\\') AND u.id <> ? AND ${NOT_HIDDEN}
      ORDER BY u.followers_count DESC, u.created_at DESC
@@ -1664,7 +1690,7 @@ export async function trendingTags(limit = 6): Promise<{ tag: string; count: num
   const generation = (await get<{ generation: number | null }>("SELECT MAX(created_at) AS generation FROM posts"))?.generation ?? 0
   if (!trending || trending.generation !== generation || now - trending.at > TRENDING_TTL_MS) {
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000
-    const rows = await all<{ body: string }>(
+    const rows = await readAll<{ body: string }>(
       `SELECT p.body FROM posts p JOIN users u ON u.id = p.author_id
        WHERE p.created_at > ? AND ${LIVE} AND u.deactivated_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND c.access = 'closed')

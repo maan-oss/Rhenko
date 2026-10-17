@@ -1,7 +1,8 @@
 import { Suspense } from "react"
 import Link from "next/link"
+import type { Metadata } from "next"
 import { connection } from "next/server"
-import { requireViewer } from "@/lib/auth"
+import { getViewer, requireViewer } from "@/lib/auth"
 import { circlesFor } from "@/lib/circles"
 import { suggestionsFor, topPeople } from "@/lib/connections"
 import { followedTopics, whoToFollow } from "@/lib/data"
@@ -23,11 +24,28 @@ import { FeedSkeleton } from "@/components/app/feed-skeleton"
 import { FollowButton } from "@/components/app/follow-button"
 import { SetupBanner } from "@/components/app/setup-banner"
 import { TopicChips } from "@/components/app/topic-chips"
+import { Landing } from "@/components/marketing/landing"
 
 type SearchParams = Promise<{ tab?: string | string[]; topic?: string | string[] }>
 
 // Most topic chips shown above For you.
 const TOPIC_CHIPS = 12
+
+// The home address is the landing page for someone who is not signed in, so that one is indexable. Signed-in pages keep the
+// site-wide rule that nothing is indexed.
+export async function generateMetadata(): Promise<Metadata> {
+  if (await getViewer()) return {}
+  return {
+    title: "Rhenko · Public conversation, on your terms",
+    description: "Post, reply and talk out loud. A For you feed you can steer, calls, circles and written rules.",
+    robots: { index: true, follow: true },
+    openGraph: {
+      title: "Rhenko · Public conversation, on your terms",
+      description: "Post, reply and talk out loud. A For you feed you can steer, calls, circles and written rules.",
+      type: "website",
+    },
+  }
+}
 
 export default function HomePage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -38,6 +56,7 @@ export default function HomePage({ searchParams }: { searchParams: SearchParams 
 }
 
 async function Home({ searchParams }: { searchParams: SearchParams }) {
+  if (!(await getViewer())) return <Landing />
   const viewer = await requireViewer()
   const params = await searchParams
   const tab = firstParam(params.tab)
