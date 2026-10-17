@@ -35,9 +35,8 @@ async function forYouOrder() {
 
   await check("for you lists the followed author's post above the newer stranger's", async () => {
     await openHome(viewer.page)
-    await waitForPost(viewer.page, friendText, { reload: true })
-    // A new post from a stranger ranks by its score, so it can sit below older posts on the first page. The feed is read
-    // page by page, up to eight pages, until the stranger's post is in it.
+    // A new post, from a friend or a stranger, ranks by its score, so it can sit below older posts on the first page. The
+    // feed is read page by page, up to eight pages, until the stranger's post is in it.
     let texts = []
     for (let pages = 1; ; pages++) {
       texts = await viewer.page.locator("article").allInnerTexts()
