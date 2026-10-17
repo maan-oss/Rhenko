@@ -2,7 +2,7 @@
 // spammy post is held: hidden from others, and its author gets a notice. A post the checks limit stays on its author's
 // profile but is kept off other people's For you feeds and sends no notification. An ordinary post is untouched.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, randomWord, sleep } from "./lib/env.mjs"
+import { BASE, RUN_ID, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { databaseProblem, postIdByBody, query } from "./lib/db.mjs"
 import { noPost, openHome, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
@@ -23,15 +23,17 @@ export async function run() {
 async function forYouOrder() {
   const friend = await createUser({ tag: "rkf" })
   const stranger = await createUser({ tag: "rks" })
+  const viewer = await createUser({ tag: "rkv" })
+  // The reader follows the friend before either post exists, so neither post has been shown to the reader yet.
+  await follow(viewer.page, friend.handle)
+  // The reader then leaves the friend's profile. A post on screen for a while counts as read and is ranked down, so the
+  // wait below must not leave the friend's profile in view.
+  await viewer.page.goto(`${BASE}/settings/shortcuts`, { waitUntil: "load" })
   const friendText = unique("A friend's ranking check")
   const strangerText = unique("A stranger's ranking check, posted later")
   await writePost(friend.page, friendText)
   await sleep(1500)
   await writePost(stranger.page, strangerText)
-  // The reader joins after both posts. A For you ranking is reused for a minute per worker, so a reader whose first
-  // ranking was taken before the posts could see them in different orders on different reloads.
-  const viewer = await createUser({ tag: "rkv" })
-  await follow(viewer.page, friend.handle)
 
   await check("for you lists the followed author's post above the newer stranger's", async () => {
     // The reader's sign-up opened Home before the follow, and a For you ranking is reused for a minute per reader. Waiting out
@@ -41,7 +43,8 @@ async function forYouOrder() {
     // A new post, from a friend or a stranger, ranks by its score, so it can sit below older posts on the first page. The
     // feed is read page by page, up to eight pages, until the stranger's post is in it.
     let texts = []
-    for (let pages = 1; ; pages++) {
+    let pages = 1
+    for (;; pages++) {
       texts = await viewer.page.locator("article").allInnerTexts()
       if (texts.some((text) => text.includes(strangerText)) || pages >= 8) break
       const more = viewer.page.getByRole("button", { name: "Show more" })
@@ -51,7 +54,9 @@ async function forYouOrder() {
     }
     const friendAt = texts.findIndex((text) => text.includes(friendText))
     const strangerAt = texts.findIndex((text) => text.includes(strangerText))
-    assert.ok(friendAt >= 0 && strangerAt >= 0, "both posts are on the For you feed")
+    // The message says what was seen, so a failure shows which post is missing and how far the feed was read.
+    const seen = `${texts.length} posts over ${pages} page(s); the friend's post ${friendAt >= 0 ? `is at ${friendAt + 1}` : "is missing"}, the stranger's ${strangerAt >= 0 ? `is at ${strangerAt + 1}` : "is missing"}`
+    assert.ok(friendAt >= 0 && strangerAt >= 0, `both posts are on the For you feed (${seen})`)
     assert.ok(friendAt < strangerAt, `the friend's post (position ${friendAt + 1}) is above the stranger's (position ${strangerAt + 1})`)
   })
 }
