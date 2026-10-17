@@ -36,8 +36,17 @@ async function forYouOrder() {
   await check("for you lists the followed author's post above the newer stranger's", async () => {
     await openHome(viewer.page)
     await waitForPost(viewer.page, friendText, { reload: true })
-    await waitForPost(viewer.page, strangerText)
-    const texts = await viewer.page.locator("article").allInnerTexts()
+    // A new post from a stranger ranks by its score, so it can sit below older posts on the first page. The feed is read
+    // page by page, up to eight pages, until the stranger's post is in it.
+    let texts = []
+    for (let pages = 1; ; pages++) {
+      texts = await viewer.page.locator("article").allInnerTexts()
+      if (texts.some((text) => text.includes(strangerText)) || pages >= 8) break
+      const more = viewer.page.getByRole("button", { name: "Show more" })
+      if ((await more.count()) === 0) break
+      await more.first().click()
+      await sleep(1500)
+    }
     const friendAt = texts.findIndex((text) => text.includes(friendText))
     const strangerAt = texts.findIndex((text) => text.includes(strangerText))
     assert.ok(friendAt >= 0 && strangerAt >= 0, "both posts are on the For you feed")
