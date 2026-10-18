@@ -35,7 +35,7 @@ async function forYouOrder() {
   await sleep(1500)
   await writePost(stranger.page, strangerText)
 
-  await check("for you lists the followed author's post above the newer stranger's", async () => {
+  await check("for you lists the followed author's post, above a newer stranger's when both are on the feed", async () => {
     // The reader's sign-up opened Home before the follow, and a For you ranking is reused for a minute per reader. Waiting out
     // that minute lets the follow count, the same as a reader who opens For you a while after following.
     await sleep(62 * 1000)
@@ -47,12 +47,13 @@ async function forYouOrder() {
       .or(viewer.page.getByText("You're all caught up."))
       .first()
       .waitFor({ timeout: 30 * 1000 })
-    // A new post, from a friend or a stranger, ranks by its score, so it can sit below older posts on the first page. The
-    // feed is read page by page, up to eight pages, until the stranger's post is in it.
+    // A new post ranks by its score, and a brand-new stranger's post has no likes yet, so on a busy site it can sit below the
+    // first eight pages. The feed is read page by page, up to eight pages, until the stranger's post is in it. The text is
+    // read as textContent: innerText leaves out the cards the reader has scrolled past (they use content-visibility).
     let texts = []
     let pages = 1
     for (;; pages++) {
-      texts = await viewer.page.locator("article").allInnerTexts()
+      texts = await viewer.page.locator("article").allTextContents()
       if (texts.some((text) => text.includes(strangerText)) || pages >= 8) break
       const more = viewer.page.getByRole("button", { name: "Show more" })
       if ((await more.count()) === 0) break
@@ -63,8 +64,10 @@ async function forYouOrder() {
     const strangerAt = texts.findIndex((text) => text.includes(strangerText))
     // The message says what was seen, so a failure shows which post is missing and how far the feed was read.
     const seen = `${texts.length} posts over ${pages} page(s); the friend's post ${friendAt >= 0 ? `is at ${friendAt + 1}` : "is missing"}, the stranger's ${strangerAt >= 0 ? `is at ${strangerAt + 1}` : "is missing"}`
-    assert.ok(friendAt >= 0 && strangerAt >= 0, `both posts are on the For you feed (${seen})`)
-    assert.ok(friendAt < strangerAt, `the friend's post (position ${friendAt + 1}) is above the stranger's (position ${strangerAt + 1})`)
+    assert.ok(friendAt >= 0, `the followed author's post is on the For you feed (${seen})`)
+    if (strangerAt >= 0) {
+      assert.ok(friendAt < strangerAt, `the friend's post (position ${friendAt + 1}) is above the stranger's (position ${strangerAt + 1})`)
+    }
   })
 }
 

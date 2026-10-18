@@ -4,13 +4,27 @@ import { area, assert, check, guard, need } from "./lib/harness.mjs"
 import { RUN_ID, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { postIdByBody, query } from "./lib/db.mjs"
-import { cardMenu, likeButton, noPost, openHome, openProfile, repostTrigger, waitForPost, writePost } from "./lib/posts.mjs"
+import { cardMenu, likeButton, openHome, openProfile, repostTrigger, waitForPost, writePost } from "./lib/posts.mjs"
 import { follow } from "./lib/people.mjs"
 import { go } from "./lib/ui.mjs"
 
 // Unique text for one run, so the checks never find an old post.
 function unique(text) {
   return `${text} ${RUN_ID}${randomWord(3)}`
+}
+
+// The For you card with this text, or null. A new post can rank well below the first page, so the reader pages down through
+// the ranking (up to 16 pages, all of it) before giving up.
+async function forYouCard(page, text) {
+  await page.getByRole("button", { name: "Show more" }).or(page.getByText("You're all caught up.")).first().waitFor({ timeout: 30 * 1000 })
+  for (let read = 1; ; read++) {
+    const card = page.locator("article").filter({ hasText: text }).first()
+    if ((await card.count()) > 0) return card
+    const more = page.getByRole("button", { name: "Show more" })
+    if (read >= 16 || (await more.count()) === 0) return null
+    await more.first().click()
+    await sleep(1500)
+  }
 }
 
 // Waits until no post with this text is on the page. Removing a card is asynchronous (the server saves the choice, then the
@@ -41,7 +55,8 @@ async function ownPostLeads() {
   await openHome(viewer.page)
   await waitForPost(viewer.page, text, { reload: true })
   await check("a post the reader has just written is first on For you, and appears once", async () => {
-    const texts = await viewer.page.locator("article").allInnerTexts()
+    // textContent, not innerText: innerText leaves out the cards the reader has scrolled past (they use content-visibility).
+    const texts = await viewer.page.locator("article").allTextContents()
     assert.ok(texts[0]?.includes(text), "the reader's new post is not the first post on For you")
     assert.equal(texts.filter((body) => body.includes(text)).length, 1, "the new post appears more than once on For you")
   })
@@ -50,21 +65,23 @@ async function ownPostLeads() {
 async function notInterested() {
   const author = await createUser({ tag: "rfa" })
   const text = unique("A post the reader does not want to see")
+  // The reader follows the author before the post is written. For You ranks a post by when it was written relative to the
+  // follow, so the reader waits out the ranking's minute, then pages down to the post.
+  const viewer = await createUser({ tag: "rfv" })
+  await follow(viewer.page, author.handle)
   await writePost(author.page, text)
   const postId = need(await postIdByBody(author.handle, text), "the post's id")
-
-  // The reader joins after the post. A For you ranking is reused for a minute per server process, so a reader who was
-  // already on the page before the post would not see it straight away.
-  const viewer = await createUser({ tag: "rfv" })
+  await sleep(62 * 1000)
   await openHome(viewer.page)
-  const card = await waitForPost(viewer.page, text, { reload: true })
+  const card = await forYouCard(viewer.page, text)
   await check("choosing Not interested takes the post off For you", async () => {
+    assert.ok(card, "the post is not on For you (its first 16 pages were read)")
     await cardMenu(viewer.page, card, "Not interested")
     assert.equal(await gone(viewer.page, text), true, "the post is still on For you ten seconds after the choice")
   })
   await check("the post stays off For you after a reload, and the choice is saved", async () => {
     await openHome(viewer.page)
-    assert.equal(await noPost(viewer.page, text.slice(0, 40), 2500), true, "the post came back after a reload")
+    assert.equal(await forYouCard(viewer.page, text), null, "the post came back after a reload")
     const rows = await query(
       "SELECT COUNT(*) AS n FROM feed_hides h JOIN users u ON u.id = h.viewer_id WHERE u.handle = ? AND h.post_id = ?",
       viewer.handle,
@@ -87,11 +104,13 @@ async function notInterested() {
 async function dwellCounts() {
   const viewer = await createUser({ tag: "rfd" })
   const author = await createUser({ tag: "rfw" })
+  // A followed author's new post is the newest thing on Following, so it sits on the first screen of that tab.
+  await follow(viewer.page, author.handle)
   const text = unique("A short post to read while it stays on screen")
   await writePost(author.page, text)
   const postId = need(await postIdByBody(author.handle, text), "the post's id")
 
-  await openHome(viewer.page)
+  await openHome(viewer.page, "following")
   const card = await waitForPost(viewer.page, text, { reload: true })
   await card.scrollIntoViewIfNeeded()
   await check("a post that stays on screen is counted as read", async () => {
