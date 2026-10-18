@@ -37,7 +37,7 @@ export function EmojiPicker({ onPick, className }: { onPick: (emoji: string) => 
         onClick={() => setOpen((value) => !value)}
         aria-label="Add emoji"
         aria-expanded={open}
-        className="grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 sm:size-9"
+        className="tap-44 grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5 sm:size-9"
       >
         <Smile className="size-5" />
       </button>
@@ -55,7 +55,7 @@ export function EmojiPicker({ onPick, className }: { onPick: (emoji: string) => 
                 onPick(emoji)
                 setOpen(false)
               }}
-              className="grid size-10 place-items-center rounded-lg text-xl transition-colors hover:bg-muted sm:size-9"
+              className="tap-44 grid size-10 place-items-center rounded-lg text-xl transition-colors hover:bg-muted sm:size-9"
               aria-label={`Insert ${emoji}`}
             >
               {emoji}

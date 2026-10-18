@@ -99,10 +99,9 @@ async function settingsPages({ phone }) {
     await go(page, "/settings", page.getByRole("navigation", { name: "Settings sections" }))
     const nav = page.getByRole("navigation", { name: "Settings sections" })
     const titles = (await nav.getByRole("link").allInnerTexts()).map((text) => text.trim())
-    // Notices and Legal are their own pages, reached from this list, so they are listed (after Privacy and safety) but not
+    // Notices and Legal are their own pages, reached from this list (last, under Policies), so they are listed but not
     // opened as sections.
-    const expected = SECTIONS.map((section) => section.title)
-    expected.splice(expected.indexOf("Privacy and safety") + 1, 0, "Notices and appeals", "Legal")
+    const expected = [...SECTIONS.map((section) => section.title), "Notices and appeals", "Legal"]
     assert.deepEqual(titles, expected, "the Settings page lists different sections than expected")
     await page.locator("main").getByRole("button", { name: "Log out", exact: true }).waitFor()
     for (const section of SECTIONS) {

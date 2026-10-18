@@ -283,7 +283,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
               aria-selected={active}
               onClick={() => setTab(item.id)}
               className={cn(
-                "relative h-10 rounded-full text-[14px] font-semibold transition-colors duration-200",
+                "tap-44 relative h-10 rounded-full text-[14px] font-semibold transition-colors duration-200",
                 active ? "text-background" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -319,7 +319,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
                   aria-pressed={inTab}
                   onClick={() => toggle(language.code)}
                   className={cn(
-                    "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition-[background-color,border-color,color] duration-200",
+                    "tap-44 inline-flex h-10 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition-[background-color,border-color,color] duration-200",
                     inTab
                       ? "border-foreground bg-foreground text-background"
                       : inOther

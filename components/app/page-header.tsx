@@ -16,10 +16,13 @@ export function PageHeader({
   hideTitleOnPhone = false,
   hideTitle = false,
   hideTitleOnDesktop = false,
+  hideSubtitleOnPhone = false,
   children,
 }: {
   title: string
   subtitle?: string
+  // A subtitle can make a phone's bar cramped next to an action. On a phone it can be left out; a computer keeps it.
+  hideSubtitleOnPhone?: boolean
   lead?: ReactNode
   backHref?: string
   actions?: ReactNode
@@ -41,7 +44,7 @@ export function PageHeader({
             href={backHref}
             transitionTypes={["nav-back"]}
             aria-label="Back"
-            className="-ml-3.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10 sm:-ml-3 sm:-mr-1 sm:size-9"
+            className="tap-44 -ml-3.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10 sm:-ml-3 sm:-mr-1 sm:size-9"
           >
             <ArrowLeft className="size-5" />
           </Link>
@@ -59,7 +62,9 @@ export function PageHeader({
           >
             {title}
           </h1>
-          {subtitle ? <p className="truncate text-[13px] leading-tight text-muted-foreground">{subtitle}</p> : null}
+          {subtitle ? (
+            <p className={cn("truncate text-[13px] leading-tight text-muted-foreground", hideSubtitleOnPhone && "hidden sm:block")}>{subtitle}</p>
+          ) : null}
         </div>
         {tabs ? <div className="flex min-w-0 flex-1 justify-center">{tabs}</div> : null}
         {actions}

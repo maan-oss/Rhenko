@@ -34,7 +34,7 @@ export function ConnectionCard({ person, compact = false }: { person: SuggestedP
                 if (result.ok) setHidden(true)
               })
             }
-            className="-mt-1 -mr-2 inline-flex h-8 shrink-0 items-center rounded-full px-2.5 text-[14px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
+            className="tap-44 -mt-1 -mr-2 inline-flex h-8 shrink-0 items-center rounded-full px-2.5 text-[14px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
           >
             Not now
           </button>
@@ -47,7 +47,7 @@ export function ConnectionCard({ person, compact = false }: { person: SuggestedP
           {compact ? null : (
             <Link
               href={`/messages/new?with=${encodeURIComponent(person.handle)}`}
-              className="inline-flex h-9 items-center rounded-full border border-border px-4 text-[14px] font-semibold transition-colors duration-200 hover:border-foreground/30 hover:bg-foreground/5"
+              className="tap-44 inline-flex h-9 items-center rounded-full border border-border px-4 text-[14px] font-semibold transition-colors duration-200 hover:border-foreground/30 hover:bg-foreground/5"
             >
               Message
             </Link>

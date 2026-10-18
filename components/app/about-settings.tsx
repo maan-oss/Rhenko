@@ -71,7 +71,7 @@ export function AboutSettings({ initial, handle }: { initial: Initial; handle: s
           </p>
         ) : null}
         <div className="flex justify-end">
-          <Button type="submit" disabled={pending} className="h-10 rounded-lg px-5">
+          <Button type="submit" disabled={pending} className="tap-44 h-10 rounded-lg px-5">
             {pending ? "Saving" : "Save details"}
           </Button>
         </div>

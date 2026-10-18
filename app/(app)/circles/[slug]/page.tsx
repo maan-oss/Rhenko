@@ -59,9 +59,19 @@ async function CircleBody({ params, searchParams }: { params: Params; searchPara
   const spec: FeedSpec = { kind: "circle", circleId: circle.id }
   const page = tab === "posts" && !hidden ? await feedFor(spec, viewer.id) : null
 
+  const tabs = [
+    { href: `/circles/${circle.slug}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
+    { href: `/circles/${circle.slug}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
+    ...(owner
+      ? [{ href: `/circles/${circle.slug}?tab=settings`, label: "Settings", icon: <Settings />, active: tab === "settings" }]
+      : []),
+  ]
+
   return (
     <>
-      <PageHeader title={circle.name} backHref="/circles" />
+      <PageHeader title={circle.name} backHref="/circles">
+        {hidden ? null : <TabLinks items={tabs} />}
+      </PageHeader>
       <div className="flex flex-col gap-3 px-4 py-4">
         {circle.tagline ? <p className="text-[15px]">{circle.tagline}</p> : null}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -102,24 +112,6 @@ async function CircleBody({ params, searchParams }: { params: Params; searchPara
         />
       ) : (
         <>
-          <div className="px-4 pt-3">
-            <TabLinks
-              items={[
-                { href: `/circles/${circle.slug}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
-                { href: `/circles/${circle.slug}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
-                ...(owner
-                  ? [
-                      {
-                        href: `/circles/${circle.slug}?tab=settings`,
-                        label: "Settings",
-                        icon: <Settings />,
-                        active: tab === "settings",
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </div>
           {tab === "posts" && page ? (
             <FeedList
               items={page.items}

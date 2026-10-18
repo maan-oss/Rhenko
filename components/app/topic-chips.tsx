@@ -2,7 +2,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 
 const CHIP =
-  "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  "tap-44 inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 // The topics the viewer follows, as chips above For you. One is active at a time. All goes back to the whole feed.
 export function TopicChips({ topics, active }: { topics: string[]; active: string | null }) {

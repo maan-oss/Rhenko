@@ -78,7 +78,7 @@ async function ConnectBody() {
             {missing.map((item) => (
               <li key={item.text} className="flex items-center justify-between gap-4 px-4 py-3.5">
                 <span className="text-[14px] leading-snug">{item.text}</span>
-                <Link href="/settings/connections" className="shrink-0 text-[14px] font-semibold underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
+                <Link href="/settings/connections" className="tap-44 shrink-0 text-[14px] font-semibold underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
                   {item.action}
                 </Link>
               </li>
@@ -91,4 +91,4 @@ async function ConnectBody() {
 }
 
 const PILL =
-  "inline-flex h-9 items-center rounded-full border border-border px-4 text-[14px] font-semibold transition-colors duration-200 hover:border-foreground/30 hover:bg-foreground/5"
+  "tap-44 inline-flex h-9 items-center rounded-full border border-border px-4 text-[14px] font-semibold transition-colors duration-200 hover:border-foreground/30 hover:bg-foreground/5"

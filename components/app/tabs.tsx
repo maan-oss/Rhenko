@@ -59,7 +59,7 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
             aria-current={active ? "page" : undefined}
             onClick={() => press(item.href)}
             className={cn(
-              "flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold whitespace-nowrap outline-none transition-[background-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring",
+              "tap-44 flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold whitespace-nowrap outline-none transition-[background-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring",
               active
                 ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.14),0_4px_12px_-6px_rgba(0,0,0,0.28)]"
                 : "text-muted-foreground hover:text-foreground"

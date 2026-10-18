@@ -37,7 +37,7 @@ export async function RightRail() {
   const namesLine = names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
 
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[340px] shrink-0 flex-col gap-4 overflow-y-auto py-4 pr-4 pl-8 xl:flex">
+    <aside data-right-rail className="sticky top-0 hidden h-dvh w-[340px] shrink-0 flex-col gap-4 overflow-y-auto py-4 pr-4 pl-8 xl:flex">
       <section aria-labelledby="moving-title">
         <h2 id="moving-title" className="text-[18px] font-semibold tracking-tight">
           Moving now

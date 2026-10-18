@@ -245,6 +245,32 @@ textarea:-webkit-autofill {
   background-color: var(--background);
 }
 
+/* On a phone, a control keeps the size it is drawn at and takes taps across at least 44px in both directions. */
+@media (max-width: 639px) {
+  .tap-44:not(.absolute, .fixed, .sticky) {
+    position: relative;
+  }
+  .tap-44::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* Settings on a computer: no right-hand rail, and a column wide enough for the section list beside its forms. */
+@media (min-width: 1280px) {
+  .app-canvas:has([data-settings-shell]) > [data-right-rail] {
+    display: none;
+  }
+  .app-canvas:has([data-settings-shell]) > main {
+    max-width: 720px;
+  }
+}
+
 /* Glass: a translucent surface with a blur, a light top edge and a soft shadow. */
 @utility glass {
   background-color: var(--glass);

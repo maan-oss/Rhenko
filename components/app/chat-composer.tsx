@@ -66,7 +66,7 @@ function SendButton({ disabled }: { disabled: boolean }) {
       disabled={pending || disabled}
       aria-label={pending ? "Sending" : "Send"}
       title="Send"
-      className="grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.96] disabled:opacity-35"
+      className="tap-44 grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.96] disabled:opacity-35"
     >
       <ArrowUp className="size-[19px]" strokeWidth={2.3} aria-hidden="true" />
     </button>
@@ -341,7 +341,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photoUrl} alt="Photo to send" className="size-14 shrink-0 rounded-xl object-cover" />
           <span className="min-w-0 truncate text-muted-foreground">{fileName}</span>
-          <button type="button" onClick={removePhoto} className="ml-auto shrink-0 rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+          <button type="button" onClick={removePhoto} className="tap-44 ml-auto shrink-0 rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
             Remove
           </button>
         </div>
@@ -357,7 +357,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
             aria-label="Cancel reply"
             title="Cancel reply"
             onClick={() => setReplyTo(null)}
-            className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="tap-44 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
@@ -373,10 +373,10 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-destructive" />
           <span className="tabular-nums">{clock(elapsed)}</span>
           <span className="min-w-0 text-muted-foreground">Recording a voice message</span>
-          <button type="button" onClick={() => finishRecording(true)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+          <button type="button" onClick={() => finishRecording(true)} className="tap-44 ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
             Discard
           </button>
-          <button type="button" onClick={() => finishRecording(false)} className="rounded-full bg-foreground px-3 py-1 font-semibold text-background">
+          <button type="button" onClick={() => finishRecording(false)} className="tap-44 rounded-full bg-foreground px-3 py-1 font-semibold text-background">
             Stop
           </button>
         </div>
@@ -385,7 +385,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         <div className="flex flex-wrap items-center gap-3 px-4 pt-2 text-sm lg:px-4">
           <audio controls preload="metadata" src={voice.url} aria-label="Voice message preview" className="h-9 max-w-[260px]" />
           <span className="text-muted-foreground">Voice message · {clock(voice.seconds)}</span>
-          <button type="button" onClick={() => setVoice(null)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+          <button type="button" onClick={() => setVoice(null)} className="tap-44 ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
             Remove
           </button>
         </div>
@@ -404,7 +404,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         <input type="hidden" name="replyTo" value={replyTo?.id ?? ""} />
         <input ref={voiceInputRef} type="file" name="voice" accept="audio/webm,audio/mp4,audio/ogg" className="sr-only" tabIndex={-1} aria-hidden="true" />
         <label
-          className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
+          className="tap-44 grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
           title={fileName ? `Photo: ${fileName}` : "Add a photo"}
         >
           <ImagePlus className="size-[20px]" aria-hidden="true" />
@@ -460,7 +460,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               onClick={() => void startRecording()}
               aria-label="Record a voice message"
               title="Record a voice message"
-              className="relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
+              className="tap-44 relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
             >
               <AudioLines className="size-[18px]" strokeWidth={2} aria-hidden="true" />
             </button>
@@ -472,7 +472,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               aria-label={listening ? "Stop dictation" : "Dictate a message"}
               aria-pressed={listening}
               title={listening ? "Stop dictation" : "Dictate"}
-              className="relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="tap-44 relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <AnimatePresence>
                 {listening ? (

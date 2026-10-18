@@ -2,20 +2,20 @@
 import { escapeRegExp } from "./env.mjs"
 import { acted, go, ready, toastText } from "./ui.mjs"
 
-// The sections in the order the Settings page lists them: the link text, the path, and one thing that proves the page is
-// there and ready.
+// The sections in the order the Settings page lists them, in its groups: the link text, the path, and one thing that proves
+// the page is there and ready. Notices and appeals and Legal are listed last too, but they are their own pages.
 export const SECTIONS = [
-  { title: "Appearance", path: "/settings/appearance", ready: (page) => page.getByRole("radiogroup", { name: "Theme" }) },
   { title: "Account", path: "/settings/account", ready: (page) => page.locator("#account-status") },
   { title: "About you", path: "/settings/about", ready: (page) => page.locator("input[name=location]") },
   { title: "Connections and languages", path: "/settings/connections", ready: (page) => page.locator("#where-area") },
   { title: "Security", path: "/settings/security", ready: (page) => page.locator("input[name=current]") },
   { title: "Privacy and safety", path: "/settings/privacy", ready: (page) => page.getByRole("switch", { name: "Protect my posts" }) },
+  { title: "Appearance", path: "/settings/appearance", ready: (page) => page.getByRole("radiogroup", { name: "Theme" }) },
   { title: "Notifications", path: "/settings/notifications", ready: (page) => page.getByRole("switch", { name: "Likes", exact: true }) },
   { title: "For you", path: "/settings/for-you", ready: (page) => page.getByRole("heading", { name: "Snoozed topics", exact: true }) },
+  { title: "Keyboard shortcuts", path: "/settings/shortcuts", ready: (page) => page.locator("dl kbd").first() },
   { title: "Subscriptions and tips", path: "/settings/billing", ready: (page) => page.getByRole("heading", { name: "Rhenko Plus" }) },
   { title: "Advertising", path: "/advertise", ready: (page) => page.getByRole("heading", { name: "Set up advertising" }) },
-  { title: "Keyboard shortcuts", path: "/settings/shortcuts", ready: (page) => page.locator("dl kbd").first() },
 ]
 
 // The nine kinds of notification, by the title of their switch. Each one has a line under it that says when it applies.

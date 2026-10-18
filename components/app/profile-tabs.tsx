@@ -50,7 +50,7 @@ export function ProfileTabs({ items, label }: { items: ProfileTabItem[]; label: 
               press(item.href)
             }}
             className={cn(
-              "relative inline-flex h-10 shrink-0 items-center justify-center rounded-full outline-none transition-colors duration-200",
+              "tap-44 relative inline-flex h-10 shrink-0 items-center justify-center rounded-full outline-none transition-colors duration-200",
               active ? "pr-4 pl-3 text-background" : "w-10 text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
             )}
           >

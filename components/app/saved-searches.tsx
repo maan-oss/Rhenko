@@ -32,7 +32,7 @@ export function SaveSearchButton({ query, saved }: { query: string; saved: boole
             }
           })
         }
-        className="inline-flex h-9 items-center gap-2 rounded-full border border-border px-3.5 text-sm font-semibold transition-colors hover:bg-foreground/5"
+        className="tap-44 inline-flex h-9 items-center gap-2 rounded-full border border-border px-3.5 text-sm font-semibold transition-colors hover:bg-foreground/5"
       >
         <Bookmark className={state ? "size-4 fill-current" : "size-4"} aria-hidden="true" />
         {state ? "Saved" : "Save search"}

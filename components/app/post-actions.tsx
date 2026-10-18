@@ -61,11 +61,11 @@ type Props = {
 // the bookmark, share and more controls stay together at its right. When the counts get long, those three drop to a line
 // of their own, so nothing overflows.
 const BUTTON =
-  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
+  "tap-44 inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
 
 // Reply, repost and like are words with their counts, so the row reads as type. Bookmark and share sit in the ⋯ menu.
 const TEXT_ACTION =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:h-10"
+  "tap-44 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:h-10"
 
 const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 

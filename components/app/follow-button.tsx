@@ -56,7 +56,7 @@ export function FollowButton({ handle, state, className, from }: { handle: strin
           disabled={pending}
           aria-busy={pending}
           aria-label={`Follow @${handle}`}
-          className={cn("h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
+          className={cn("tap-44 h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
         >
           Follow
         </Button>
@@ -75,7 +75,7 @@ export function FollowButton({ handle, state, className, from }: { handle: strin
         disabled={pending}
         aria-busy={pending}
         aria-label={requested ? `Withdraw follow request to @${handle}` : `Unfollow @${handle}`}
-        className={cn("group h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
+        className={cn("tap-44 group h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
       >
         <span className="group-hover:hidden">{requested ? "Requested" : "Following"}</span>
         <span className="hidden group-hover:inline">{requested ? "Withdraw" : "Unfollow"}</span>

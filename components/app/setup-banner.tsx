@@ -15,11 +15,11 @@ export function SetupBanner() {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <form action={skipSetup}>
-          <button type="submit" className="h-9 rounded-full px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground">
+          <button type="submit" className="tap-44 h-9 rounded-full px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground">
             Not now
           </button>
         </form>
-        <Link href="/welcome" className="inline-flex h-9 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-opacity hover:opacity-90">
+        <Link href="/welcome" className="tap-44 inline-flex h-9 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-opacity hover:opacity-90">
           Set up
         </Link>
       </div>

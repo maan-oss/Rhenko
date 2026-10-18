@@ -36,7 +36,7 @@ export function HideCountsSwitch({ initial }: { initial: boolean }) {
           }
         })
       }}
-      className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-border transition-colors duration-200 disabled:opacity-60 aria-checked:bg-foreground"
+      className="tap-44 relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-border transition-colors duration-200 disabled:opacity-60 aria-checked:bg-foreground"
     >
       <span className={cn("absolute left-0.5 size-6 rounded-full bg-background transition-transform duration-200", on ? "translate-x-5" : "translate-x-0")} aria-hidden="true" />
       <span className="sr-only">Hide counts on my posts</span>
@@ -76,7 +76,7 @@ export function ProtectedSwitch({ initial }: { initial: boolean }) {
         })
       }}
       className={cn(
-        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors",
+        "tap-44 relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors",
         on ? "border-dusk bg-dusk" : "border-border bg-muted"
       )}
     >

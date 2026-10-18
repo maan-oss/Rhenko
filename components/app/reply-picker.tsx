@@ -85,7 +85,7 @@ export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange
         aria-label={`Who can reply: ${current.title}`}
         title={`Who can reply: ${current.title}`}
         onClick={() => setOpen((value) => !value)}
-        className="glass grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
+        className="tap-44 glass grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
       >
         <current.Icon className="size-[16px]" strokeWidth={2} aria-hidden="true" />
       </button>

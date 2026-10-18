@@ -79,7 +79,7 @@ export default async function AboutPage({ params }: { params: Params }) {
           </p>
         )}
         {isSelf ? (
-          <Link href="/settings/about" className="self-start text-[15px] font-semibold underline underline-offset-4">
+          <Link href="/settings/about" className="tap-44 self-start text-[15px] font-semibold underline underline-offset-4">
             Edit about you
           </Link>
         ) : null}

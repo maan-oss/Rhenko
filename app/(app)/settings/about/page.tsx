@@ -21,7 +21,7 @@ export default async function AboutSettingsPage() {
         handle={profile?.handle ?? ""}
       />
       <div className="flex flex-col gap-2 px-4 pt-5 pb-6 text-[15px]">
-        <Link href="/settings/connections" className="font-semibold underline underline-offset-4">
+        <Link href="/settings/connections" className="tap-44 self-start font-semibold underline underline-offset-4">
           Where you are for suggestions, and your languages
         </Link>
       </div>

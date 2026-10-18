@@ -1,6 +1,5 @@
 import { Suspense, type ReactNode } from "react"
 import Link from "next/link"
-import { CircleDot } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { circlesFor, discoverCircles, type Circle } from "@/lib/circles"
 import { firstParam } from "@/lib/params"
@@ -29,8 +28,9 @@ async function CirclesBody({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader
         title="Circles"
         subtitle="Small groups, each with its own charter"
+        hideSubtitleOnPhone
         actions={
-          <Link href="/circles/new" className={cn(emptyActionClass("primary"), "h-9 px-4 text-sm")}>
+          <Link href="/circles/new" className={cn(emptyActionClass("primary"), "tap-44 h-9 px-4 text-sm")}>
             Start a circle
           </Link>
         }
@@ -48,12 +48,7 @@ async function CirclesBody({ searchParams }: { searchParams: SearchParams }) {
       <Section
         title="Your circles"
         circles={mine}
-        empty={
-          <span className="flex items-center gap-2">
-            <CircleDot className="size-4" aria-hidden="true" />
-            You are not in any circle yet. Join one below, or start your own.
-          </span>
-        }
+        empty="You are not in any circle yet. Join one below, or start your own."
       />
       <Section
         title={query ? "Circles that match" : "Find a circle"}

@@ -22,9 +22,12 @@ export function RankingButton({ href, sort }: { href: string; sort: "top" | "lat
       scroll={false}
       aria-label={label}
       title={label}
-      className="glass grid size-12 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-foreground/5"
+      className="tap-44 glass inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold text-foreground transition-colors duration-200 hover:bg-foreground/5"
     >
-      <Pending>{top ? <Sparkles className="size-[18px]" aria-hidden="true" /> : <Clock className="size-[18px]" aria-hidden="true" />}</Pending>
+      <Pending className="flex items-center gap-1.5">
+        {top ? <Sparkles className="size-4" aria-hidden="true" /> : <Clock className="size-4" aria-hidden="true" />}
+        {top ? "Ranked" : "Latest"}
+      </Pending>
     </Link>
   )
 }

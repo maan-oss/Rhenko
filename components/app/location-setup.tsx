@@ -55,7 +55,7 @@ export function LocationSetup({ initial }: { initial: LocationStart }) {
             <p className="text-[13px] text-muted-foreground">Shown on your profile, in any words you like.</p>
           </div>
           <input
-            aria-label="Location"
+            aria-labelledby="location-title"
             name="location"
             maxLength={MAX_LOCATION}
             value={location}

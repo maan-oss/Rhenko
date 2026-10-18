@@ -26,7 +26,7 @@ export function ExpandableText({ children }: { children: ReactNode }) {
           event.stopPropagation()
           setOpen((value) => !value)
         }}
-        className="relative z-10 text-sm font-medium text-foreground hover:underline"
+        className="tap-44 relative z-10 text-sm font-medium text-foreground hover:underline"
       >
         {open ? "Show less" : "Show more"}
       </button>

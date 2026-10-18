@@ -150,7 +150,7 @@ const POLL_DEFAULT_MINUTES = 1440
 // Controls are 40px tall on a phone and smaller on a computer.
 // Pills carry their own surface (glass, or metal when active), so the base has no colour or ring.
 const PILL =
-  "inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
+  "tap-44 inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
 const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline-none transition-colors focus:border-foreground sm:h-9"
 // The emoji list is a component of its own, so its phone sizes are set from here: 40px buttons, and an emoji list that
 // opens from the toolbar's left edge so it stays on the screen.
@@ -250,7 +250,7 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled && hint ? hint : label}
       className={cn(
-        "grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[429px]:size-8 sm:size-8",
+        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[429px]:size-8 sm:size-8",
         pressed && "bg-foreground/5"
       )}
     >
@@ -386,7 +386,7 @@ function MediaTile({
           type="button"
           onClick={onRemove}
           aria-label="Remove media"
-          className="absolute top-2 right-2 grid size-10 place-items-center rounded-full bg-background/85 text-foreground transition-colors duration-200 hover:bg-transparent sm:size-8"
+          className="tap-44 absolute top-2 right-2 grid size-10 place-items-center rounded-full bg-background/85 text-foreground transition-colors duration-200 hover:bg-transparent sm:size-8"
         >
           <X className="size-4" />
         </button>
@@ -1103,7 +1103,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                       type="button"
                       aria-label={`Remove choice ${index + 1}`}
                       onClick={() => setPollOptions((current) => current.filter((_, i) => i !== index))}
-                      className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
+                      className="tap-44 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -1222,7 +1222,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                       type="button"
                       aria-label={`Remove part ${index + 2}`}
                       onClick={() => setExtra((current) => current.filter((_, i) => i !== index))}
-                      className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
+                      className="tap-44 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground sm:size-9"
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -1322,7 +1322,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                   disabled={!canDraft}
                   aria-label="Save draft"
                   title="Save draft"
-                  className="chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                  className="tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
                 >
                   <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
                   <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
@@ -1332,7 +1332,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 type="submit"
                 disabled={!canPost}
                 className={cn(
-                  "metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
+                  "tap-44 metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
                   iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : "px-3.5"
                 )}
               >

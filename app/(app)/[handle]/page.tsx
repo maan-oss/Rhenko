@@ -120,7 +120,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
             <>
               <Link
                 href="/analytics"
-                className="glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
+                className="tap-44 glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
               >
                 <BarChart3 className="size-4" aria-hidden="true" />
                 <span className="max-sm:sr-only">Analytics</span>
@@ -227,7 +227,7 @@ function FilterChip({ href, active, children }: { href: string; active: boolean;
       scroll={false}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "tap-44 inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted"
       )}
     >

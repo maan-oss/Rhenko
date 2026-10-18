@@ -58,14 +58,14 @@ export default async function AnalyticsPage() {
       <div className="flex flex-wrap gap-2 px-4 pt-5">
         <Link
           href="/analytics/posts"
-          className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
+          className="tap-44 inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
         >
           See every post
         </Link>
         <a
           href="/analytics/export"
           download
-          className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
+          className="tap-44 inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
         >
           Download last 28 days as CSV
         </a>

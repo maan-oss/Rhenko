@@ -50,7 +50,7 @@ function PrefRow({ row }: { row: Row }) {
             }
           })
         }}
-        className={cn("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors", on ? "border-dusk bg-dusk" : "border-border bg-muted")}
+        className={cn("tap-44 relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors", on ? "border-dusk bg-dusk" : "border-border bg-muted")}
       >
         <span className={cn("size-5 rounded-full bg-background shadow transition-transform", on ? "translate-x-[22px]" : "translate-x-[3px]")} />
       </button>
