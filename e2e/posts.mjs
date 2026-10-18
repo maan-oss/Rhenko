@@ -10,6 +10,7 @@ import {
   COMPOSER_TEXT,
   addAlt,
   attach,
+  bookmarkButton,
   card,
   cardMenu,
   cardPostId,
@@ -425,14 +426,13 @@ async function postFlows({ phone }) {
   await check(`${where}: a bookmark is listed on the Bookmarks page and can be removed`, async () => {
     await openProfile(reader.page, author.handle)
     const target = await waitForPost(reader.page, plain)
-    // Bookmark is in the post's ⋯ menu.
-    await acted(reader.page, () => cardMenu(reader.page, target, "Bookmark"))
+    await acted(reader.page, () => bookmarkButton(target).click())
     await toastText(reader.page, /Saved to bookmarks/)
     await go(reader.page, "/bookmarks", reader.page.locator("main"))
     const saved = await waitForPost(reader.page, plain)
     // The page is hydrated before its buttons are: a click that lands first does nothing, so wait for this one.
-    await ready(saved.getByRole("button", { name: "More options" }))
-    await acted(reader.page, () => cardMenu(reader.page, saved, "Remove bookmark"))
+    await ready(bookmarkButton(saved))
+    await acted(reader.page, () => bookmarkButton(saved).click())
     await toastText(reader.page, /Removed from bookmarks/)
     await reader.page.reload()
     assert.equal(await noPost(reader.page, plain), true, "the post is still on the Bookmarks page after it was removed")

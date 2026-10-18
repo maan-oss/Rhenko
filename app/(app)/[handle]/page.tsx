@@ -200,16 +200,19 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           </p>
         </div>
       ) : (
-        // Keyed by the section, so each section settles in as it is chosen, the way the pill slides across to it.
-        <div key={tab} className="settle">
-          <FeedList
-            items={page.items}
-            next={page.next}
-            spec={spec}
-            viewer={viewer}
-            emptyTitle={EMPTY[tab][0]}
-            emptyBody={EMPTY[tab][1]}
-          />
+        // Keyed by the section, so each section slides in as it is chosen, the way the pill slides across to it. The slide
+        // starts past the edge, so the clip around it keeps the page from widening.
+        <div className="overflow-x-clip">
+          <div key={tab} className="tab-in">
+            <FeedList
+              items={page.items}
+              next={page.next}
+              spec={spec}
+              viewer={viewer}
+              emptyTitle={EMPTY[tab][0]}
+              emptyBody={EMPTY[tab][1]}
+            />
+          </div>
         </div>
       )}
     </>

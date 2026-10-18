@@ -99,6 +99,10 @@ export function likeButton(cardLocator) {
   return cardLocator.getByRole("button", { name: /^(Like|Unlike), / })
 }
 
+export function bookmarkButton(cardLocator) {
+  return cardLocator.getByRole("button", { name: /^(Bookmark|Remove bookmark)$/ })
+}
+
 export function replyButton(cardLocator) {
   return cardLocator.getByRole("button", { name: /^Reply, / })
 }

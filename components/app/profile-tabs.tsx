@@ -42,7 +42,13 @@ export function ProfileTabs({ items, label }: { items: ProfileTabItem[]; label: 
             aria-label={item.label}
             title={item.label}
             aria-current={active ? "page" : undefined}
-            onClick={() => press(item.href)}
+            onClick={() => {
+              // The section content slides in the way the pill moved: right for a later section, left for an earlier one.
+              const from = items.findIndex((other) => other.href === current)
+              const to = items.findIndex((other) => other.href === item.href)
+              if (from !== -1 && to !== -1 && from !== to) document.documentElement.style.setProperty("--tab-dir", to > from ? "1" : "-1")
+              press(item.href)
+            }}
             className={cn(
               "relative inline-flex h-10 shrink-0 items-center justify-center rounded-full outline-none transition-colors duration-200",
               active ? "pr-4 pl-3 text-background" : "w-10 text-muted-foreground hover:bg-foreground/5 hover:text-foreground"

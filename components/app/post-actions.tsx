@@ -61,11 +61,11 @@ type Props = {
 // the bookmark, share and more controls stay together at its right. When the counts get long, those three drop to a line
 // of their own, so nothing overflows.
 const BUTTON =
-  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
+  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
 
 // Reply, repost and like are words with their counts, so the row reads as type. Bookmark and share sit in the ⋯ menu.
 const TEXT_ACTION =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-sm:h-10"
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:h-10"
 
 const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
@@ -90,6 +90,82 @@ function Count({ value }: { value: number }) {
         </motion.span>
       </AnimatePresence>
     </span>
+  )
+}
+
+// The row's icons move when they are pressed. A spring with a little overshoot makes a tap read as a press, and reduced
+// motion makes every change instant.
+const POP = { type: "spring", stiffness: 520, damping: 15, mass: 0.6 } as const
+const SPIN = { type: "spring", stiffness: 170, damping: 19 } as const
+const SPREAD = 20
+const DOTS = [0, 45, 90, 135, 180, 225, 270, 315]
+
+// Six dots that fly out from the heart when it is liked, then fade. Each like mounts a new burst, so it plays every time.
+function Burst() {
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+      {DOTS.map((degrees) => {
+        const radians = (degrees * Math.PI) / 180
+        return (
+          <motion.span
+            key={degrees}
+            className="absolute top-1/2 left-1/2 size-1 rounded-full bg-destructive"
+            style={{ marginTop: -2, marginLeft: -2 }}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 0.4 }}
+            animate={{ x: Math.cos(radians) * SPREAD, y: Math.sin(radians) * SPREAD, opacity: 0, scale: 1.2 }}
+            transition={{ duration: 0.6, ease: [0.2, 0.7, 0.2, 1] }}
+          />
+        )
+      })}
+    </span>
+  )
+}
+
+// The outline heart shrinks away and the filled one springs in. Each like throws a burst of dots from it.
+function HeartIcon({ active, likes, reduce }: { active: boolean; likes: number; reduce: boolean }) {
+  const instant = { duration: 0 }
+  return (
+    <span className="relative inline-grid size-[18px] place-items-center">
+      <motion.span
+        className="[grid-area:1/1]"
+        initial={false}
+        animate={{ scale: active ? 0.5 : 1, opacity: active ? 0 : 1 }}
+        transition={reduce ? instant : POP}
+      >
+        <Heart size={18} strokeWidth={2} aria-hidden="true" />
+      </motion.span>
+      <motion.span
+        className="text-destructive [grid-area:1/1]"
+        initial={false}
+        animate={active ? { scale: [0.2, 1.3, 1], opacity: 1 } : { scale: 0.2, opacity: 0 }}
+        transition={reduce ? instant : POP}
+      >
+        <Heart size={18} strokeWidth={2} fill="currentColor" aria-hidden="true" />
+      </motion.span>
+      {active && likes > 0 && !reduce ? <Burst key={likes} /> : null}
+    </span>
+  )
+}
+
+// The outline bookmark fills from the bottom up, and the icon pops as it does.
+function BookmarkIcon({ saved, reduce }: { saved: boolean; reduce: boolean }) {
+  return (
+    <motion.span
+      className="relative inline-grid size-[18px] place-items-center"
+      initial={false}
+      animate={{ scale: saved ? [0.78, 1.14, 1] : [0.9, 1] }}
+      transition={reduce ? { duration: 0 } : POP}
+    >
+      <Bookmark size={18} strokeWidth={2} className="[grid-area:1/1]" aria-hidden="true" />
+      <motion.span
+        className="grid place-items-center [grid-area:1/1]"
+        initial={false}
+        animate={{ clipPath: saved ? "inset(0% 0% 0% 0%)" : "inset(100% 0% 0% 0%)" }}
+        transition={reduce ? { duration: 0 } : { duration: 0.32, ease: [0.2, 0.7, 0.2, 1] }}
+      >
+        <Bookmark size={18} strokeWidth={2} fill="currentColor" aria-hidden="true" />
+      </motion.span>
+    </motion.span>
   )
 }
 
@@ -123,6 +199,9 @@ export function PostActions(props: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const reduceMotion = useReducedMotion()
+  // Counters the icons animate from: a like starts a burst, and each repost turns the icon once more.
+  const [likeBursts, setLikeBursts] = useState(0)
+  const [repostTurns, setRepostTurns] = useState(0)
   // What the server last confirmed, and what the reader sees while a tap is on its way. A tap does not re-render the page
   // (that would send the whole page back), so the confirmed value lives here. It follows the props when they change.
   const [likeConfirmed, setLikeConfirmed] = useState({ active: liked, count: likes })
@@ -156,6 +235,7 @@ export function PostActions(props: Props) {
   // A failed tap is not confirmed, so the reader's view falls back to what the server last said once the tap ends.
   function onLike() {
     const next = { active: !likeState.active, count: likeState.count + (likeState.active ? -1 : 1) }
+    if (next.active) setLikeBursts((n) => n + 1)
     startTransition(async () => {
       setLikeState(next)
       const result = await toggleLike(postId)
@@ -169,6 +249,7 @@ export function PostActions(props: Props) {
 
   function onRepost() {
     const next = { active: !repostState.active, count: repostState.count + (repostState.active ? -1 : 1) }
+    setRepostTurns((n) => n + 1)
     startTransition(async () => {
       setRepostState(next)
       const result = await toggleRepost(postId)
@@ -325,9 +406,10 @@ export function PostActions(props: Props) {
       ]
     : []
 
+  const instant = reduceMotion === true
   return (
     <div className="mt-2 -ml-2 flex items-center text-muted-foreground max-sm:-mr-2">
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 sm:flex-none">
+      <div className="flex flex-auto items-center justify-between sm:flex-none sm:justify-start sm:gap-1">
         <button
           type="button"
           onClick={onReply}
@@ -343,9 +425,16 @@ export function PostActions(props: Props) {
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`Repost, ${repostState.count} ${pluralize(repostState.count, "repost", "reposts")}`}
-            className={cn(TEXT_ACTION, "relative z-10", repostState.active && "font-semibold text-foreground")}
+            className={cn(BUTTON, "relative z-10", repostState.active && "text-foreground")}
           >
-            Repost
+            <motion.span
+              className="inline-flex"
+              initial={false}
+              animate={{ rotate: repostTurns * 360 }}
+              transition={instant ? { duration: 0 } : SPIN}
+            >
+              <Repeat2 className="size-[18px]" strokeWidth={repostState.active ? 2.4 : 2} aria-hidden="true" />
+            </motion.span>
             <Count value={repostState.count} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-44">
@@ -362,51 +451,53 @@ export function PostActions(props: Props) {
 
         <button
           type="button"
+          onClick={onBookmark}
+          aria-pressed={bookmarkState}
+          aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
+          title={bookmarkState ? "Remove bookmark" : "Bookmark"}
+          className={cn(BUTTON, "relative z-10", bookmarkState && "text-foreground")}
+        >
+          <BookmarkIcon saved={bookmarkState} reduce={instant} />
+        </button>
+
+        <button
+          type="button"
           onClick={onLike}
           aria-pressed={likeState.active}
           aria-label={likeState.active ? `Unlike, ${likeState.count} ${pluralize(likeState.count, "like")}` : `Like, ${likeState.count} ${pluralize(likeState.count, "like")}`}
-          className={cn(TEXT_ACTION, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
+          className={cn(BUTTON, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
         >
-          {/* A like pops the heart out and fills it. The pop replays on each like, and an unlike just clears it. */}
-          <motion.span
-            key={likeState.active ? "liked" : "unliked"}
-            initial={likeState.active && !reduceMotion ? { scale: 0.55 } : false}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 520, damping: 13 }}
-            className="inline-flex"
-          >
-            <Heart size={16} className={cn(likeState.active && "fill-current")} />
-          </motion.span>
-          Like
+          <HeartIcon active={likeState.active} likes={likeBursts} reduce={instant} />
           <Count value={likeState.count} />
         </button>
-
       </div>
-      <div className="ml-auto flex items-center">
+      <div className="ml-auto flex items-center sm:gap-1">
         {isOwn ? (
           // The author's view count opens the post's analytics.
           <Link
             href={`${statusHref}/analytics`}
             aria-label={`${views} ${pluralize(views, "view")}, post analytics`}
             title="Post analytics"
-            className="inline-flex h-9 items-center px-2 text-[13px] tabular-nums outline-none hover:text-foreground max-sm:h-10"
+            className={cn(BUTTON, "relative z-10")}
           >
-            {views} {pluralize(views, "view")}
+            <Eye className="size-[18px]" aria-hidden="true" />
+            <span>{shortCount(views)}</span>
           </Link>
         ) : (
-          <span className="inline-flex h-9 items-center px-2 text-[13px] tabular-nums max-sm:h-10" title={`${views} ${pluralize(views, "view")}`}>
-            {views} {pluralize(views, "view")}
+          <span className={cn(BUTTON, "cursor-default hover:bg-transparent hover:text-muted-foreground")} title={`${views} ${pluralize(views, "view")}`}>
+            <Eye className="size-[18px]" aria-hidden="true" />
+            <span>{shortCount(views)}</span>
+            <span className="sr-only">
+              {views} {pluralize(views, "view")}
+            </span>
           </span>
         )}
+
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="More options" className={cn(BUTTON, "relative z-10")}>
             <MoreHorizontal className="size-[18px]" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-52">
-            <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={onBookmark}>
-              <Bookmark className={cn("size-4", bookmarkState && "fill-current")} />
-              {bookmarkState ? "Remove bookmark" : "Bookmark"}
-            </DropdownMenuItem>
             <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setShareOpen(true)}>
               <Share2 className="size-4" />
               Share
