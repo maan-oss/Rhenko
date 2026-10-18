@@ -21,9 +21,9 @@ export function CommunityNotes({ postId, notes, signedIn }: { postId: string; no
   // No notes yet: one line, so the replies are the next thing on the page. The form opens only when asked for.
   if (notes.length === 0) {
     return (
-      <section id="notes" aria-label="Community notes" className="flex flex-col gap-2 border-b border-border px-4 py-2.5 scroll-mt-16">
+      <section id="notes" aria-label="Notes from readers" className="flex flex-col gap-2 border-b border-border px-4 py-2.5 scroll-mt-16">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[13px] text-muted-foreground">No community notes on this post yet.</p>
+          <p className="text-[13px] text-muted-foreground">No notes from readers on this post yet.</p>
           {signedIn && !writing ? (
             <Button type="button" variant="outline" onClick={() => setWriting(true)} className="h-8 shrink-0 rounded-full px-3.5 text-[13px] font-semibold">
               Write a note
@@ -39,7 +39,7 @@ export function CommunityNotes({ postId, notes, signedIn }: { postId: string; no
     <section id="notes" aria-labelledby="notes-heading" className="flex flex-col gap-3 border-b border-border px-4 py-4 scroll-mt-16">
       <div className="flex flex-col gap-1">
         <h2 id="notes-heading" className="text-base font-semibold">
-          Community notes
+          Notes from readers
         </h2>
         <p className="text-sm text-muted-foreground">
           Added by people on Rhenko to give context. A note is shown to everyone once readers rate it helpful.

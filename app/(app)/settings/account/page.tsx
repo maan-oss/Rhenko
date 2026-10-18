@@ -48,7 +48,7 @@ async function AccountBody() {
             <span className="font-mono text-[14px] text-foreground">data.json</span>: your profile and email, every post
             and reply you wrote (each marked draft, scheduled or published), likes, reposts, bookmarks with their folders,
             highlights, who you follow and who follows you, follow requests, blocked and muted accounts, muted words, lists
-            you made and lists you follow, topics you follow, poll votes, community notes you wrote, notification settings,
+            you made and lists you follow, topics you follow, poll votes, notes from readers you wrote, notification settings,
             recent searches, the language each post and message was written in, where you are (country and city or town),
             your languages and how well you speak them, your connection choices, the people you chose &quot;Not now&quot; on,
             and the messages in every conversation you&apos;re in, with who sent each one.

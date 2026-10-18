@@ -226,7 +226,7 @@ export function PostCard({
               className="relative z-10 mt-2 flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
             >
               <Info className="size-4 shrink-0" />
-              <span>Readers added context to this post. See the community note.</span>
+              <span>Readers added a note to this post. Read it below.</span>
             </Link>
           ) : null}
           {detail && !pending ? (

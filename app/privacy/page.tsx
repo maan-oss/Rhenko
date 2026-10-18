@@ -106,7 +106,7 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             <B>Posts and activity.</B> Your posts and replies, including drafts and scheduled posts, your polls and votes, likes,
-            reposts, bookmarks and their folders, highlights, lists, followed topics, and the community notes you write or rate.
+            reposts, bookmarks and their folders, highlights, lists, followed topics, and the notes from readers you write or rate.
             A post can be edited for {EDIT_MINUTES} minutes after it goes out, a reply for {REPLY_EDIT_MINUTES} minutes, and each earlier version is kept.
           </li>
           <li>

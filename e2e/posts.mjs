@@ -312,13 +312,13 @@ async function postFlows({ phone }) {
   })
 
   const noteText = uniq("Context a reader adds")
-  await check(`${where}: a post with no community notes is one line, and a note is written from it`, async () => {
+  await check(`${where}: a post with no notes from readers is one line, and a note is written from it`, async () => {
     await openProfile(reader.page, author.handle)
     const target = await waitForPost(reader.page, plain)
     const id = await cardPostId(target)
     await go(reader.page, `/${author.handle}/status/${id}`, reader.page.locator("#notes"))
     const notes = reader.page.locator("#notes")
-    await notes.getByText("No community notes on this post yet.", { exact: true }).waitFor()
+    await notes.getByText("No notes from readers on this post yet.", { exact: true }).waitFor()
     const box = await notes.boundingBox()
     assert.ok(box && box.height < 110, `the empty notes take ${Math.round(box?.height ?? 0)}px, more than one line`)
     // The replies come right after the line, so the reply box is directly below it.
