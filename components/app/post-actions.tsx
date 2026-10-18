@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
+import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { markNotInterested } from "@/actions/feed"
 import { snoozeForYouTopic } from "@/actions/topic-snoozes"
@@ -62,6 +62,10 @@ type Props = {
 // of their own, so nothing overflows.
 const BUTTON =
   "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
+
+// Reply, repost and like are words with their counts, so the row reads as type. Bookmark and share sit in the ⋯ menu.
+const TEXT_ACTION =
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-sm:h-10"
 
 const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
@@ -322,26 +326,26 @@ export function PostActions(props: Props) {
     : []
 
   return (
-    <div className="mt-2 -ml-2 flex flex-wrap items-center text-muted-foreground max-sm:-mr-2">
-      <div className="flex flex-auto items-center justify-between sm:flex-none sm:justify-start sm:gap-1">
+    <div className="mt-2 -ml-2 flex items-center text-muted-foreground max-sm:-mr-2">
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 sm:flex-none">
         <button
           type="button"
           onClick={onReply}
           aria-disabled={canReply ? undefined : true}
           aria-label={`Reply, ${replies} ${pluralize(replies, "reply", "replies")}`}
           title={replyReason ?? "Reply"}
-          className={cn(BUTTON, "group relative z-10", !canReply && "opacity-60")}
+          className={cn(TEXT_ACTION, "relative z-10", !canReply && "opacity-60")}
         >
-          <MessageCircle size={18} />
+          Reply
           <Count value={replies} />
         </button>
 
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`Repost, ${repostState.count} ${pluralize(repostState.count, "repost", "reposts")}`}
-            className={cn(BUTTON, "relative z-10", repostState.active && "text-foreground font-semibold")}
+            className={cn(TEXT_ACTION, "relative z-10", repostState.active && "font-semibold text-foreground")}
           >
-            <Repeat2 className="size-[18px]" />
+            Repost
             <Count value={repostState.count} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-44">
@@ -361,7 +365,7 @@ export function PostActions(props: Props) {
           onClick={onLike}
           aria-pressed={likeState.active}
           aria-label={likeState.active ? `Unlike, ${likeState.count} ${pluralize(likeState.count, "like")}` : `Like, ${likeState.count} ${pluralize(likeState.count, "like")}`}
-          className={cn(BUTTON, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
+          className={cn(TEXT_ACTION, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
         >
           {/* A like pops the heart out and fills it. The pop replays on each like, and an unlike just clears it. */}
           <motion.span
@@ -371,55 +375,43 @@ export function PostActions(props: Props) {
             transition={{ type: "spring", stiffness: 520, damping: 13 }}
             className="inline-flex"
           >
-            <Heart size={18} className={cn(likeState.active && "fill-current")} />
+            <Heart size={16} className={cn(likeState.active && "fill-current")} />
           </motion.span>
+          Like
           <Count value={likeState.count} />
         </button>
 
+      </div>
+      <div className="ml-auto flex items-center">
         {isOwn ? (
           // The author's view count opens the post's analytics.
           <Link
             href={`${statusHref}/analytics`}
             aria-label={`${views} ${pluralize(views, "view")}, post analytics`}
             title="Post analytics"
-            className={cn(BUTTON, "relative z-10")}
+            className="inline-flex h-9 items-center px-2 text-[13px] tabular-nums outline-none hover:text-foreground max-sm:h-10"
           >
-            <Eye className="size-[18px]" />
-            <Count value={views} />
+            {views} {pluralize(views, "view")}
           </Link>
         ) : (
-          <span
-            className="inline-flex shrink-0 items-center justify-center gap-1 px-0.5 text-[13px] tabular-nums max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
-            title={`${views} ${pluralize(views, "view")}`}
-          >
-            <Eye className="size-[18px]" aria-hidden="true" />
-            <Count value={views} />
-            <span className="sr-only">
-              {views} {pluralize(views, "view")}
-            </span>
+          <span className="inline-flex h-9 items-center px-2 text-[13px] tabular-nums max-sm:h-10" title={`${views} ${pluralize(views, "view")}`}>
+            {views} {pluralize(views, "view")}
           </span>
         )}
-      </div>
-      <div className="ml-auto flex items-center sm:gap-1">
-        <button
-          type="button"
-          onClick={onBookmark}
-          aria-pressed={bookmarkState}
-          aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
-          className={cn(BUTTON, "relative z-10", bookmarkState && "text-amber-400 [&_svg]:fill-current")}
-        >
-          <Bookmark size={18} />
-        </button>
-
-        <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" title="Share" className={cn(BUTTON, "relative z-10")}>
-          <Share2 className="size-[18px]" />
-        </button>
-
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="More options" className={cn(BUTTON, "relative z-10")}>
             <MoreHorizontal className="size-[18px]" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-52">
+            <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={onBookmark}>
+              <Bookmark className={cn("size-4", bookmarkState && "fill-current")} />
+              {bookmarkState ? "Remove bookmark" : "Bookmark"}
+            </DropdownMenuItem>
+            <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setShareOpen(true)}>
+              <Share2 className="size-4" />
+              Share
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {replyItems}
             {replyItems.length > 0 ? <DropdownMenuSeparator key="sep-reply" /> : null}
             {isOwn ? ownItems : otherItems}

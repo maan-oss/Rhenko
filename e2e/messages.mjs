@@ -19,7 +19,7 @@ import {
 import { makePng } from "./lib/files.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
 import { block, follow } from "./lib/people.mjs"
-import { cardPostId, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
+import { cardMenu, cardPostId, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
 import { acted, alertText, bodyText, go, missingId, notHere, ready, toastText } from "./lib/ui.mjs"
 
 function uniq(label) {
@@ -150,7 +150,8 @@ async function directFlow({ phone }) {
     await openProfile(sender.page, sender.handle)
     const shown = await waitForPost(sender.page, shareText)
     const postId = await cardPostId(shown)
-    await shown.getByRole("button", { name: "Share", exact: true }).click()
+    // Share is in the post's ⋯ menu.
+    await cardMenu(sender.page, shown, "Share")
     const dialog = sender.page.getByRole("dialog", { name: "Share post" })
     await dialog.waitFor()
     await dialog.getByRole("textbox", { name: "Search people" }).fill(receiver.handle)
