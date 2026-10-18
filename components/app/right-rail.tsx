@@ -17,9 +17,10 @@ async function clock(): Promise<number> {
 
 type Person = { id: string; handle: string; name: string; avatarFile: string | null }
 
-// Words run from 14px to 28px. A topic with no posts is still a word, so the cloud never has a gap in it.
+// Words run from 13px to 22px. The range is narrow on purpose: the busiest word leads without pushing the others onto lines
+// of their own, so the set reads as a cloud rather than a column.
 function wordSize(count: number, busiest: number): string {
-  return `${Math.round(14 + 14 * (count / busiest))}px`
+  return `${Math.round(13 + 9 * (count / busiest))}px`
 }
 
 export async function RightRail() {
@@ -71,14 +72,14 @@ export async function RightRail() {
           <h2 id="meet-title" className="text-[18px] font-semibold tracking-tight">
             Writers to meet
           </h2>
-          <div className="mt-4 flex -space-x-2.5">
+          <div className="mt-4 flex gap-2.5">
             {people.map((person) => (
               <Link
                 key={person.id}
                 href={`/${person.handle}`}
                 className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={44} className="ring-2 ring-background" />
+                <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={44} />
               </Link>
             ))}
           </div>
