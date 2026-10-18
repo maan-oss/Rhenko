@@ -6,7 +6,7 @@ export default function AppearanceSettingsPage() {
   return (
     <>
       <PageHeader title="Appearance" backHref="/settings" />
-      <section className="px-4 py-6">
+      <section className="px-4 py-4">
         <ThemeChoice />
       </section>
     </>

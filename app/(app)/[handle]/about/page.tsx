@@ -61,7 +61,7 @@ export default async function AboutPage({ params }: { params: Params }) {
   return (
     <>
       <PageHeader title={`About ${profile.name}`} backHref={base} />
-      <div className="flex flex-col gap-4 px-4 pt-4 pb-10">
+      <div className="flex flex-col gap-4 px-4 pt-4 pb-6">
         {shown.length > 0 ? (
           <dl className="grid divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
             {shown.map((row) => (
@@ -74,7 +74,7 @@ export default async function AboutPage({ params }: { params: Params }) {
             ))}
           </dl>
         ) : (
-          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-[15px] text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-center text-[15px] text-muted-foreground">
             {profile.name} hasn&apos;t added anything here yet.
           </p>
         )}

@@ -31,7 +31,7 @@ export function AboutSettings({ initial, handle }: { initial: Initial; handle: s
 
   return (
     <>
-      <form onSubmit={save} className="flex flex-col gap-5 border-b border-border px-4 py-6">
+      <form onSubmit={save} className="flex flex-col gap-5 border-b border-border px-4 py-4">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-lg font-semibold">Details on your profile</h2>
           <p className="text-[14px] leading-relaxed text-muted-foreground">
@@ -76,7 +76,7 @@ export function AboutSettings({ initial, handle }: { initial: Initial; handle: s
           </Button>
         </div>
       </form>
-      <div className="border-b border-border px-4 py-6">
+      <div className="border-b border-border px-4 py-4">
         <TopicPicker initial={initial.topics} />
         <p className="mt-3 text-[13px] text-muted-foreground">Interests are private. Only you see them.</p>
       </div>

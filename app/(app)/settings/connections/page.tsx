@@ -34,7 +34,7 @@ async function ConnectionsBody() {
         }}
         dismissed={await dismissedCount(viewer.id)}
       />
-      <div className="px-4 pt-2 pb-10">
+      <div className="px-4 pt-2 pb-6">
         <Link href="/welcome" className="text-sm font-semibold underline underline-offset-4">
           Go through the setup steps again
         </Link>

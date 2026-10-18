@@ -208,7 +208,7 @@ async function SettingsPanel({ circle }: { circle: Circle }) {
           )}
         </section>
       ) : null}
-      <section className="px-4 py-6">
+      <section className="px-4 py-4">
         <h2 className="pb-2 text-lg font-semibold">Delete this circle</h2>
         <p className="pb-4 text-[15px] text-muted-foreground">
           {circle.access === "closed"

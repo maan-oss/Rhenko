@@ -52,7 +52,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
   const series = current.map((day) => ({ label: day.label, value: measure.pick(day) }))
 
   return (
-    <div className="flex flex-col gap-6 px-4 pt-4">
+    <div className="flex flex-col gap-4 px-4 pt-4">
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="What to show">
         {MEASURES.map((item, index) => {
           const isSelected = index === measureIndex

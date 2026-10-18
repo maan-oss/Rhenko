@@ -190,7 +190,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       {pinned ? <PostCard post={pinned} viewer={viewer} showPinned /> : null}
 
       {locked ? (
-        <div className="mx-4 mt-6 flex flex-col items-start gap-2 rounded-2xl border border-dashed border-border px-5 py-6">
+        <div className="mx-4 mt-4 flex flex-col items-start gap-2 rounded-2xl border border-dashed border-border px-5 py-4">
           <span className="grid size-10 place-items-center rounded-full bg-muted text-foreground">
             <Lock className="size-5" aria-hidden="true" />
           </span>

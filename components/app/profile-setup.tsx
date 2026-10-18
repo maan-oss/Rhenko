@@ -89,7 +89,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       <OnboardingSteps current={SETUP_STEPS.profile} total={SETUP_STEPS.total} />
 
       <div className="flex flex-col gap-2">
@@ -97,7 +97,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
         <p className="text-[15px] leading-relaxed text-muted-foreground">This is how people see you. Tap anything to change it.</p>
       </div>
 
-      <form onSubmit={save} className="flex flex-col gap-8">
+      <form onSubmit={save} className="flex flex-col gap-5">
         <div className="flex flex-col gap-4">
           <ProfileBanner file={initial.bannerFile} src={bannerUrl} handle={initial.handle} className="h-36 sm:h-44">
             <button

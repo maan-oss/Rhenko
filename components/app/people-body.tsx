@@ -26,8 +26,7 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: Kind 
   const page = hidden ? null : await peopleOfPage(kind, profile.id, viewer.id, null, PEOPLE_PAGE)
   return (
     <>
-      <PageHeader title={profile.name} backHref={base} />
-      <div className="px-4 pt-3">
+      <PageHeader title={profile.name} backHref={base}>
         <TabLinks
           items={[
             {
@@ -39,7 +38,7 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: Kind 
             { href: `${base}/following`, label: `${formatCount(profile.following)} Following`, icon: <UserCheck />, active: kind === "following" },
           ]}
         />
-      </div>
+      </PageHeader>
       {page === null ? (
         <ProtectedNotice handle={profile.handle} kind={kind} requested={profile.relationship.requested} />
       ) : (
@@ -63,7 +62,7 @@ export async function PeopleBody({ handle, kind }: { handle: string; kind: Kind 
 function ProtectedNotice({ handle, kind, requested }: { handle: string; kind: Kind; requested: boolean }) {
   const reveal = kind === "followers" ? "who follows it" : "who it follows"
   return (
-    <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
+    <div className="flex flex-col items-center gap-1.5 px-6 pt-10 pb-6 text-center">
       <Lock className="size-6" aria-hidden="true" />
       <p className="text-lg font-semibold">This account is protected</p>
       <p className="max-w-sm text-[15px] text-muted-foreground">

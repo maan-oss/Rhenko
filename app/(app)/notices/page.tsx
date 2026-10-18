@@ -92,7 +92,7 @@ async function NoticesBody() {
   return (
     <>
       <PageHeader title="Notices" backHref="/settings" />
-      <section className="flex flex-col gap-4 border-b border-border px-4 py-6">
+      <section className="flex flex-col gap-4 border-b border-border px-4 py-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">About your posts</h2>
           <p className="text-[15px] leading-relaxed text-muted-foreground">
@@ -123,7 +123,7 @@ async function NoticesBody() {
           )
         })}
       </section>
-      <section className="flex flex-col gap-4 px-4 py-6">
+      <section className="flex flex-col gap-4 px-4 py-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Your reports</h2>
           <p className="text-[15px] leading-relaxed text-muted-foreground">Reports you have sent, and what came of each.</p>

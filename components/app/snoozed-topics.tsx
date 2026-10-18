@@ -11,7 +11,7 @@ export function SnoozedTopics({ rows }: { rows: { tag: string; untilAt: number }
   const [pending, start] = useTransition()
 
   if (list.length === 0) {
-    return <p className="border-t border-border py-6 text-sm text-muted-foreground">No topics are snoozed.</p>
+    return <p className="border-t border-border py-4 text-sm text-muted-foreground">No topics are snoozed.</p>
   }
 
   return (

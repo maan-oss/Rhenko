@@ -337,7 +337,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         </p>
       ) : null}
       {photoUrl ? (
-        <div className="flex items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
+        <div className="flex items-center gap-3 px-4 pt-2 text-sm lg:px-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photoUrl} alt="Photo to send" className="size-14 shrink-0 rounded-xl object-cover" />
           <span className="min-w-0 truncate text-muted-foreground">{fileName}</span>
@@ -347,7 +347,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
       {replyTo ? (
-        <div className="flex items-center gap-3 border-l-2 border-foreground px-[72px] pt-2 text-sm lg:px-4">
+        <div className="flex items-center gap-3 border-l-2 border-foreground px-4 pt-2 text-sm lg:px-4">
           <div className="min-w-0 flex-1">
             <p className="truncate font-semibold text-foreground">Replying to {replyTo.name}</p>
             <p className="truncate text-muted-foreground">{replyTo.snippet || "Message"}</p>
@@ -364,12 +364,12 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
       {text.length > MAX_DM * 0.9 ? (
-        <p className="px-[72px] pt-1 text-right text-xs tabular-nums text-muted-foreground lg:px-4" aria-live="polite">
+        <p className="px-4 pt-1 text-right text-xs tabular-nums text-muted-foreground lg:px-4" aria-live="polite">
           {[...text].length} / {MAX_DM}
         </p>
       ) : null}
       {recording !== null ? (
-        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-[72px] pt-2 text-sm lg:px-4">
+        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pt-2 text-sm lg:px-4">
           <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-destructive" />
           <span className="tabular-nums">{clock(elapsed)}</span>
           <span className="min-w-0 text-muted-foreground">Recording a voice message</span>
@@ -382,7 +382,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
       {voice ? (
-        <div className="flex flex-wrap items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
+        <div className="flex flex-wrap items-center gap-3 px-4 pt-2 text-sm lg:px-4">
           <audio controls preload="metadata" src={voice.url} aria-label="Voice message preview" className="h-9 max-w-[260px]" />
           <span className="text-muted-foreground">Voice message · {clock(voice.seconds)}</span>
           <button type="button" onClick={() => setVoice(null)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
@@ -398,7 +398,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           setFileName(null)
           setPhotoUrl(null)
         }}
-        className="flex items-center gap-2 pt-3 pr-3 pb-6 pl-[72px] lg:pt-2.5 lg:pb-3 lg:pl-3"
+        className="flex items-center gap-2 pt-3 pr-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-2 lg:pt-2.5 lg:pb-3 lg:pl-3"
       >
         <input type="hidden" name="conversationId" value={conversationId} />
         <input type="hidden" name="replyTo" value={replyTo?.id ?? ""} />
@@ -423,8 +423,9 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           />
         </label>
 
-        <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-colors focus-within:bg-background">
+        <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-[background-color,box-shadow] focus-within:bg-background focus-within:shadow-[0_0_0_3px_var(--halo)]">
           <textarea
+            data-composer-field
             ref={textRef}
             name="body"
             rows={1}

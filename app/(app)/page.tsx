@@ -76,16 +76,22 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   const active = pin ? pin.id : topic ? `topic:${topic}` : mode
   return (
     <>
-      <PageHeader title="Home" hideTitle lead={<MenuButton viewer={viewer} />}>
-        <TabLinks
-          label="Home sections"
-          items={[
-            { href: "/", label: "For you", active: !following && !pin },
-            { href: "/?tab=following", label: "Following", active: following },
-            ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, active: pin?.id === item.id })),
-          ]}
-        />
-      </PageHeader>
+      <PageHeader
+        title="Home"
+        hideTitleOnPhone
+        lead={<MenuButton viewer={viewer} />}
+        tabs={
+          <TabLinks
+            label="Home sections"
+            className="mx-0 my-0 w-full"
+            items={[
+              { href: "/", label: "For you", active: !following && !pin },
+              { href: "/?tab=following", label: "Following", active: following },
+              ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, active: pin?.id === item.id })),
+            ]}
+          />
+        }
+      />
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       <Composer
         viewer={viewer}

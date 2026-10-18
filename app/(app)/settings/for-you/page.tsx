@@ -13,7 +13,7 @@ export default async function ForYouSettingsPage() {
   return (
     <>
       <PageHeader title="For you" backHref="/settings" />
-      <section aria-labelledby="snoozed" className="flex flex-col px-4 pt-5 pb-8">
+      <section aria-labelledby="snoozed" className="flex flex-col px-4 pt-5 pb-5">
         <h2 id="snoozed" className="text-base font-semibold">
           Snoozed topics
         </h2>

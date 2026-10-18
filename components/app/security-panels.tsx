@@ -201,7 +201,7 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
   const need = usable ? "app" : "recovery"
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <p className="text-[15px]">
           Two-factor sign-in is on. You have <span className="font-semibold">{codesLeft}</span> unused recovery{" "}
@@ -230,7 +230,7 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
           </div>
         </form>
       )}
-      <form action={disableAction} className="flex flex-col gap-3 border-t border-border pt-6">
+      <form action={disableAction} className="flex flex-col gap-3 border-t border-border pt-4">
         <p className="font-semibold">Turn off two-factor sign-in</p>
         <PasswordField />
         {stuck ? null : <CodeField need={need} />}

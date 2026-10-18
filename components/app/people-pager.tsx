@@ -81,7 +81,7 @@ export function PeoplePager({
         ))}
       </ul>
       {next !== null ? (
-        <div className="flex flex-col items-center gap-2 px-4 py-8">
+        <div className="flex flex-col items-center gap-2 px-4 py-5">
           <button
             type="button"
             onClick={() => void showMore()}

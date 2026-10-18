@@ -31,15 +31,14 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
 
   return (
     <>
-      <PageHeader title="Drafts" />
-      <div className="px-4 pt-3">
+      <PageHeader title="Drafts">
         <TabLinks
           items={[
             { href: "/drafts", label: "Drafts", icon: <PenLine />, active: tab === "drafts" },
             { href: "/drafts?tab=scheduled", label: "Scheduled", icon: <CalendarClock />, active: tab === "scheduled" },
           ]}
         />
-      </div>
+      </PageHeader>
       {posts.length === 0 ? (
         <EmptyState
           title={tab === "drafts" ? "No drafts" : "Nothing scheduled"}

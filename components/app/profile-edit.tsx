@@ -73,7 +73,7 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="outline" className="h-11 flex-1 rounded-full px-5 font-semibold" />}>Edit profile</DialogTrigger>
       <DialogContent className="max-h-[90dvh] gap-0 overflow-y-auto p-0 sm:max-w-lg" showCloseButton>
-        <form action={action} className="flex flex-col gap-6 p-6">
+        <form action={action} className="flex flex-col gap-4 p-6">
           <DialogTitle className="pr-8 text-lg font-semibold">Edit profile</DialogTitle>
           <Field label="Name">
             <input name="name" required maxLength={MAX_NAME} defaultValue={defaults.name} className={FIELD} />

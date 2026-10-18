@@ -5,7 +5,7 @@ export default function ShortcutsSettingsPage() {
   return (
     <>
       <PageHeader title="Keyboard shortcuts" backHref="/settings" />
-      <section className="px-4 py-6">
+      <section className="px-4 py-4">
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-[15px]">
           {SHORTCUTS.map((shortcut) => (
             <div key={shortcut.keys} className="contents">

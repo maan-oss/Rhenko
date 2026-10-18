@@ -38,7 +38,7 @@ export function LocationSetup({ initial }: { initial: LocationStart }) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       <OnboardingSteps current={SETUP_STEPS.location} total={SETUP_STEPS.total} />
 
       <div className="flex flex-col gap-2">
@@ -46,7 +46,7 @@ export function LocationSetup({ initial }: { initial: LocationStart }) {
         <p className="text-[15px] leading-relaxed text-muted-foreground">Your location and the place you are in. You can change any of it later in Settings.</p>
       </div>
 
-      <form onSubmit={save} className="flex flex-col gap-8">
+      <form onSubmit={save} className="flex flex-col gap-5">
         <section aria-labelledby="location-title" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <h2 id="location-title" className="text-[15px] font-semibold">

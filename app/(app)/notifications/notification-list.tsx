@@ -92,7 +92,7 @@ export function NotificationList({ initial, tab, viewerHandle }: Props) {
   if (items.length === 0 && next === null) {
     const empty = EMPTY[tab]
     return (
-      <div className="flex flex-col items-center gap-1.5 px-6 pt-14 pb-16 text-center">
+      <div className="flex flex-col items-center gap-1.5 px-6 pt-10 pb-6 text-center">
         <p className="text-lg font-semibold">{empty.title}</p>
         <p className="max-w-sm text-muted-foreground">{empty.body}</p>
       </div>
@@ -107,7 +107,7 @@ export function NotificationList({ initial, tab, viewerHandle }: Props) {
         ))}
       </ul>
       {next !== null ? (
-        <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-8">
+        <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-5">
           <button
             type="button"
             onClick={loadMore}

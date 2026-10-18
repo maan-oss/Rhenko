@@ -24,7 +24,7 @@ export function InterestsSetup({ initial }: { initial: string[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       <OnboardingSteps current={SETUP_STEPS.interests} total={SETUP_STEPS.total} />
 
       <div className="flex flex-col gap-2">

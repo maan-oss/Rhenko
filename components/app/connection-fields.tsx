@@ -179,12 +179,12 @@ function CountryPicker({ id, value, onChange }: { id: string; value: string; onC
 // Where someone is for suggestions: the country from a popup, then the city and the state or region it sits in.
 export function WhereFields({ value, onChange }: { value: WhereValue; onChange: (next: WhereValue) => void }) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="where-country">Country</Label>
         <CountryPicker id="where-country" value={value.country} onChange={(country) => onChange({ ...value, country })} />
       </div>
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label
             htmlFor="where-area"
@@ -271,7 +271,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
   ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div role="tablist" aria-label="Language lists" className="grid grid-cols-2 gap-1 rounded-full border border-border p-1">
         {tabs.map((item) => {
           const active = tab === item.id

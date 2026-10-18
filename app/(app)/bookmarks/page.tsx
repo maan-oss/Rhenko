@@ -37,10 +37,9 @@ async function BookmarksBody({ searchParams }: { searchParams: SearchParams }) {
 
   return (
     <>
-      <PageHeader title="Bookmarks" actions={<FolderManager folders={folders} />} />
-      <div className="px-4 pt-3">
+      <PageHeader title="Bookmarks" actions={<FolderManager folders={folders} />}>
         <TabLinks items={tabs} />
-      </div>
+      </PageHeader>
       <FeedList
         key={folder ?? "all"}
         items={page.items}

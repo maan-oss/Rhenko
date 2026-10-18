@@ -27,13 +27,13 @@ async function AcceptTermsBody() {
   if (viewer.termsVersion === TERMS_VERSION) redirect("/")
   return (
     <>
-      <div className="settle mb-8 flex flex-col gap-2">
+      <div className="settle mb-5 flex flex-col gap-2">
         <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Updated terms</h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground">
           Changed on {LEGAL_UPDATED}. Read them, then agree to keep using Rhenko.
         </p>
       </div>
-      <div className="settle mb-8 grid grid-cols-2 gap-3" style={{ animationDelay: "60ms" }}>
+      <div className="settle mb-5 grid grid-cols-2 gap-3" style={{ animationDelay: "60ms" }}>
         <Link
           href="/terms"
           className="flex h-12 items-center justify-center rounded-full border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"

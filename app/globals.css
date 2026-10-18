@@ -202,6 +202,11 @@
   outline-offset: 2px;
 }
 
+/* A composer's text field sits inside its own pill, and the pill shows the focus instead of the field. */
+[data-composer-field]:focus-visible {
+  outline: none;
+}
+
 /* The browser's own reveal and clear buttons would sit beside the form's button, so they are hidden. The form draws its own. */
 input::-ms-reveal,
 input::-ms-clear {

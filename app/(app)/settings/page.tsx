@@ -71,7 +71,7 @@ export default async function SettingsPage() {
           </li>
         </ul>
       </nav>
-      <div className="px-4 pt-6 pb-10">
+      <div className="px-4 pt-4 pb-6">
         <SettingsLogout />
       </div>
     </>

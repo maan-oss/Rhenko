@@ -23,7 +23,7 @@ async function PrivacyBody() {
   return (
     <>
       <PageHeader title="Privacy and safety" backHref="/settings" />
-      <section className="flex items-start justify-between gap-4 border-b border-border px-4 py-6">
+      <section className="flex items-start justify-between gap-4 border-b border-border px-4 py-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Protect your posts</h2>
           <p className="text-[15px] text-muted-foreground">
@@ -33,7 +33,7 @@ async function PrivacyBody() {
         {/* Read from the database, not the viewer, which is cached for a few seconds per worker: after a change, the switch shows the saved value. */}
         <ProtectedSwitch initial={(await get<{ prot: number }>("SELECT protected AS prot FROM users WHERE id = ?", viewer.id))?.prot === 1} />
       </section>
-      <section className="flex items-start justify-between gap-4 border-b border-border px-4 py-6">
+      <section className="flex items-start justify-between gap-4 border-b border-border px-4 py-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Hide counts on my posts</h2>
           <p className="text-[15px] text-muted-foreground">
@@ -53,7 +53,7 @@ async function PrivacyBody() {
           <PersonRow key={user.id} user={user} action={<ReleaseButton handle={user.handle} mode="mute" />} />
         ))}
       </Section>
-      <section className="flex flex-col gap-3 px-4 py-6">
+      <section className="flex flex-col gap-3 px-4 py-4">
         <h2 className="text-lg font-semibold">Muted words</h2>
         <MutedWordsPanel words={words} />
       </section>
@@ -64,7 +64,7 @@ async function PrivacyBody() {
 function Section({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
   const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children)
   return (
-    <section className="flex flex-col gap-2 border-b border-border px-4 py-6">
+    <section className="flex flex-col gap-2 border-b border-border px-4 py-4">
       <h2 className="text-lg font-semibold">{title}</h2>
       {hasChildren ? <ul className="flex flex-col divide-y divide-border">{children}</ul> : <p className="text-[15px] text-muted-foreground">{empty}</p>}
     </section>

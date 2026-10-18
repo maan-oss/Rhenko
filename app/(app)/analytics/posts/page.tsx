@@ -165,7 +165,7 @@ export default async function PostsAnalyticsPage({
         </p>
       ) : null}
 
-      <dl className="flex flex-col gap-4 px-4 pt-8 pb-8 text-sm">
+      <dl className="flex flex-col gap-4 px-4 pt-5 pb-5 text-sm">
         {SORT_KEYS.map((key) => (
           <div key={key}>
             <dt className="font-semibold">{key === "date" ? "Post" : COUNTS.find((column) => column.key === key)?.label}</dt>

@@ -193,7 +193,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
         return <Fragment key={item.key}>{body}</Fragment>
       })}
       {next ? (
-        <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-8">
+        <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-5">
           <button
             type="button"
             onClick={() => void loadMore()}

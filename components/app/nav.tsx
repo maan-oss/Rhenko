@@ -207,7 +207,7 @@ export function MobileTabBar({
         }}
         // The bar spans the width of the screen, but only the pill and the Post button take taps. The space between
         // them passes through to the page, so the composer's Send button stays reachable under the dock.
-        className="pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden"
+        className={cn("pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden", conversation && "hidden")}
       >
         <motion.ul
           initial={false}

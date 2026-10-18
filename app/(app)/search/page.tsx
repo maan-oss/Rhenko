@@ -194,7 +194,7 @@ const OPERATORS: { syntax: string; meaning: string }[] = [
 
 function SearchHelp({ recent, saved }: { recent: string[]; saved: string[] }) {
   return (
-    <div className="flex flex-col gap-6 px-4 py-6">
+    <div className="flex flex-col gap-4 px-4 py-4">
       <SavedSearches queries={saved} />
       <RecentSearches queries={recent} />
       <div className="flex flex-col gap-3">

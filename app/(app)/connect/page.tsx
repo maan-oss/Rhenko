@@ -58,7 +58,7 @@ async function ConnectBody() {
 
       {groups.map((group) => (
         <section key={group.group} aria-labelledby={`group-${group.group}`} className="border-b border-border">
-          <div className="px-4 pt-6 pb-2">
+          <div className="px-4 pt-4 pb-2">
             <h2 id={`group-${group.group}`} className="text-[17px] font-semibold tracking-tight">
               {group.title}
             </h2>
@@ -73,7 +73,7 @@ async function ConnectBody() {
       ))}
 
       {missing.length > 0 ? (
-        <section aria-label="To finish" className="px-4 pt-6 pb-10">
+        <section aria-label="To finish" className="px-4 pt-4 pb-6">
           <ul className="divide-y divide-border rounded-2xl border border-border">
             {missing.map((item) => (
               <li key={item.text} className="flex items-center justify-between gap-4 px-4 py-3.5">

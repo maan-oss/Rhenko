@@ -425,10 +425,10 @@ function SignupForm() {
   const screen = (index: number) => cn("col-start-1 row-start-1 flex flex-col gap-7", step === index ? "settle" : "invisible")
 
   return (
-    <div className="flex w-full flex-col gap-8">
+    <div className="flex w-full flex-col gap-5">
       <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} />
 
-      <form ref={formRef} action={formAction} onSubmit={onSubmit} className="flex w-full flex-col gap-8" noValidate>
+      <form ref={formRef} action={formAction} onSubmit={onSubmit} className="flex w-full flex-col gap-5" noValidate>
         <div className="grid">
         <section data-step={0} className={screen(0)}>
           <div className="flex flex-col gap-2">

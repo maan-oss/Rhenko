@@ -43,7 +43,7 @@ export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props)
         <p className="mx-4 mt-4 text-[15px] text-muted-foreground">Payments are not set up on this server yet. Nothing here can be bought until they are.</p>
       ) : null}
 
-      <section className="flex flex-col gap-3 border-b border-border px-4 py-6" aria-labelledby="plus-heading">
+      <section className="flex flex-col gap-3 border-b border-border px-4 py-4" aria-labelledby="plus-heading">
         <h2 id="plus-heading" className="text-lg font-semibold">
           Rhenko Plus
         </h2>
@@ -86,7 +86,7 @@ export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props)
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 border-b border-border px-4 py-6" aria-labelledby="verified-heading">
+      <section className="flex flex-col gap-3 border-b border-border px-4 py-4" aria-labelledby="verified-heading">
         <h2 id="verified-heading" className="text-lg font-semibold">
           Paid subscriber badge
         </h2>
@@ -121,7 +121,7 @@ export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props)
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 px-4 py-6" aria-labelledby="tips-heading">
+      <section className="flex flex-col gap-3 px-4 py-4" aria-labelledby="tips-heading">
         <h2 id="tips-heading" className="text-lg font-semibold">
           Tips and payouts
         </h2>

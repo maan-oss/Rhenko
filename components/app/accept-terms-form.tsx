@@ -11,8 +11,8 @@ import { logout } from "@/actions/auth"
 export function AcceptTermsForm({ logoutButton }: { logoutButton?: ReactNode }) {
   const [state, formAction] = useActionState(acceptTerms, {} as LegalState)
   return (
-    <div className="settle flex flex-col gap-6" style={{ animationDelay: "120ms" }}>
-      <form action={formAction} className="flex flex-col gap-6">
+    <div className="settle flex flex-col gap-4" style={{ animationDelay: "120ms" }}>
+      <form action={formAction} className="flex flex-col gap-4">
         <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed">
           <input type="checkbox" name="agree" required className="mt-[3px] size-4 shrink-0 cursor-pointer accent-dusk" />
           <span>

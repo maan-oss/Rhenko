@@ -20,7 +20,7 @@ export default async function AnalyticsPage() {
 
       <AnalyticsOverview days={stats.days} followers={stats.followers} />
 
-      <section aria-labelledby="top" className="mt-8 flex flex-col border-t border-border">
+      <section aria-labelledby="top" className="mt-5 flex flex-col border-t border-border">
         <div className="px-4 pt-5 pb-1">
           <h2 id="top" className="text-base font-semibold">
             Top posts
@@ -55,7 +55,7 @@ export default async function AnalyticsPage() {
         )}
       </section>
 
-      <div className="flex flex-wrap gap-2 px-4 pt-8">
+      <div className="flex flex-wrap gap-2 px-4 pt-5">
         <Link
           href="/analytics/posts"
           className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
@@ -71,7 +71,7 @@ export default async function AnalyticsPage() {
         </a>
       </div>
 
-      <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
+      <p className="px-4 py-5 text-sm leading-relaxed text-muted-foreground">
         A view counts once per person for each post, when the post scrolls into view. A profile visit counts each person once every six hours. A new follower
         counts the day they followed. Your own views and visits are never counted. Days run from midnight to midnight UTC.
       </p>

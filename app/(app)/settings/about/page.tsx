@@ -20,7 +20,7 @@ export default async function AboutSettingsPage() {
         initial={{ location: profile?.location ?? "", website: profile?.website ?? "", topics }}
         handle={profile?.handle ?? ""}
       />
-      <div className="flex flex-col gap-2 px-4 pt-5 pb-10 text-[15px]">
+      <div className="flex flex-col gap-2 px-4 pt-5 pb-6 text-[15px]">
         <Link href="/settings/connections" className="font-semibold underline underline-offset-4">
           Where you are for suggestions, and your languages
         </Link>

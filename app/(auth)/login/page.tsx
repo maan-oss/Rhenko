@@ -32,11 +32,11 @@ async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
   if (!adding && (await getViewer())) redirect("/")
   return (
     <>
-      <div className="settle mb-8 flex flex-col gap-2">
+      <div className="settle mb-5 flex flex-col gap-2">
         <h1 className="text-[30px] leading-tight font-semibold tracking-tight">{adding ? "Add an account" : "Welcome back"}</h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground">Use your handle and password.</p>
       </div>
-      {notice ? <div className="mb-6"><AuthNotice>{notice}</AuthNotice></div> : null}
+      {notice ? <div className="mb-4"><AuthNotice>{notice}</AuthNotice></div> : null}
       <AuthForm mode="login" />
       {adding ? (
         <p className="text-center text-sm text-muted-foreground">
@@ -45,7 +45,7 @@ async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
           </Link>
         </p>
       ) : (
-        <p className="mt-8 text-center text-sm text-muted-foreground">
+        <p className="mt-5 text-center text-sm text-muted-foreground">
           New here?{" "}
           <Link href="/signup" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
             Create an account

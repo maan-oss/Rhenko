@@ -101,7 +101,7 @@ export function ChatThread({
   }, [conversationId])
 
   if (shown.length === 0) {
-    return <p className="px-6 pt-14 pb-16 text-center text-muted-foreground">No messages yet. Say hello.</p>
+    return <p className="px-6 pt-10 pb-6 text-center text-muted-foreground">No messages yet. Say hello.</p>
   }
 
   const canLoad = (mayHaveEarlier || earlier.length > 0) && !atStart

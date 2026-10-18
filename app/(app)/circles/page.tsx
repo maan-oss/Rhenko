@@ -67,7 +67,7 @@ async function CirclesBody({ searchParams }: { searchParams: SearchParams }) {
 function Section({ title, circles, empty }: { title: string; circles: Circle[]; empty: ReactNode }) {
   return (
     <section>
-      <h2 className="px-4 pt-6 pb-2 text-lg font-semibold">{title}</h2>
+      <h2 className="px-4 pt-4 pb-2 text-lg font-semibold">{title}</h2>
       {circles.length === 0 ? (
         <p className="px-4 pb-6 text-muted-foreground">{empty}</p>
       ) : (

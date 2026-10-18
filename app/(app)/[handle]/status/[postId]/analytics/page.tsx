@@ -72,7 +72,7 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
         />
       </section>
 
-      <section aria-labelledby="breakdown" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">
+      <section aria-labelledby="breakdown" className="mt-5 flex flex-col border-t border-border px-4 pt-5 pb-2">
         <h2 id="breakdown" className="pb-2 text-base font-semibold">
           Actions
         </h2>
@@ -86,7 +86,7 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
         </ul>
       </section>
 
-      <section aria-labelledby="follows" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">
+      <section aria-labelledby="follows" className="mt-5 flex flex-col border-t border-border px-4 pt-5 pb-2">
         <h2 id="follows" className="pb-2 text-base font-semibold">
           Follows
         </h2>
@@ -97,7 +97,7 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
         <p className="pt-1 text-sm text-muted-foreground">{DEFINITIONS.followsFromPost}</p>
       </section>
 
-      <section aria-labelledby="clicks" className="mt-8 flex flex-col border-t border-border px-4 pt-5 pb-2">
+      <section aria-labelledby="clicks" className="mt-5 flex flex-col border-t border-border px-4 pt-5 pb-2">
         <h2 id="clicks" className="pb-2 text-base font-semibold">
           Clicks
         </h2>
@@ -111,7 +111,7 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
         </ul>
       </section>
 
-      <p className="px-4 py-8 text-sm leading-relaxed text-muted-foreground">
+      <p className="px-4 py-5 text-sm leading-relaxed text-muted-foreground">
         A view counts once per person, when the post scrolls into view. Your own views and clicks are never counted. Engagement is the likes, reposts, quotes, replies and
         bookmarks the post has received, divided by its views. A click counts each time someone opens a link, a profile, the post, a photo or a
         hashtag from it. Days run from midnight to midnight UTC.

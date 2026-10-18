@@ -27,7 +27,7 @@ async function PacksBody() {
         Lists of people, published by the people who made them. Follow everyone in one at once, or open it to see who is in it.
       </p>
       {shown.length === 0 ? (
-        <p className="px-4 pt-6 pb-16 text-muted-foreground">
+        <p className="px-4 pt-4 pb-6 text-muted-foreground">
           No starter packs yet. Make a public list, add people to it, then publish it as a starter pack.
         </p>
       ) : (

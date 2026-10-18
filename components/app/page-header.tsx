@@ -34,7 +34,7 @@ export function PageHeader({
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className={cn("flex h-14 items-center gap-3 px-4", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
+      <div className={cn("flex h-12 items-center gap-3 px-4 sm:h-14", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
         {backHref ? (
           // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
           <Link

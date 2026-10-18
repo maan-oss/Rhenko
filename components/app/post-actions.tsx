@@ -409,7 +409,7 @@ export function PostActions(props: Props) {
   const instant = reduceMotion === true
   return (
     <div className="mt-2 -ml-2 flex items-center text-muted-foreground max-sm:-mr-2">
-      <div className="flex flex-auto items-center justify-between sm:flex-none sm:justify-start sm:gap-1">
+      <div className="flex flex-auto items-center gap-4 sm:flex-none sm:gap-1">
         <button
           type="button"
           onClick={onReply}

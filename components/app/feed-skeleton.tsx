@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 // status line says what is loading.
 export function FeedSkeleton() {
   return (
-    <div aria-hidden="true" className="flex flex-col gap-5 px-4 py-6">
+    <div aria-hidden="true" className="flex flex-col gap-5 px-4 py-4">
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className="flex gap-3">
           <Skeleton className="size-10 shrink-0 rounded-full" />

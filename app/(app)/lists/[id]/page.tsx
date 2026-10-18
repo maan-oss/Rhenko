@@ -56,7 +56,14 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
 
   return (
     <>
-      <PageHeader title={list.name} backHref="/lists" />
+      <PageHeader title={list.name} backHref="/lists">
+        <TabLinks
+          items={[
+            { href: `/lists/${list.id}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
+            { href: `/lists/${list.id}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
+          ]}
+        />
+      </PageHeader>
       <div className="flex flex-col gap-3 px-4 py-4">
         {list.description ? <p className="text-[15px]">{list.description}</p> : null}
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -88,15 +95,6 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
           <ListMemberForm listId={list.id} />
         </div>
       ) : null}
-
-      <div className="px-4 pt-3">
-        <TabLinks
-          items={[
-            { href: `/lists/${list.id}`, label: "Posts", icon: <FileText />, active: tab === "posts" },
-            { href: `/lists/${list.id}?tab=members`, label: "Members", icon: <Users />, active: tab === "members" },
-          ]}
-        />
-      </div>
 
       {tab === "posts" && page ? (
         <FeedList

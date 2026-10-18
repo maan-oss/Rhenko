@@ -51,13 +51,13 @@ function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }
 // that the server checks again, so nothing relies on this page alone.
 export function AdvertisePanel({ data }: { data: AdvertiseData }) {
   if (!data.adult) {
-    return <p className="px-4 py-6 text-[15px] text-muted-foreground">Advertising is for adults with a birthday on their account.</p>
+    return <p className="px-4 py-4 text-[15px] text-muted-foreground">Advertising is for adults with a birthday on their account.</p>
   }
   return (
     <div className="flex flex-col">
       {data.account ? <Balance data={data} /> : <AccountForm />}
       {data.account ? <Campaigns data={data} /> : null}
-      <section className="flex flex-col gap-2 px-4 py-6 text-[15px] text-muted-foreground">
+      <section className="flex flex-col gap-2 px-4 py-4 text-[15px] text-muted-foreground">
         <p>
           Ads are shown in the home feeds, one after every eight posts, to adults who do not pay for Plus. A campaign is charged per
           thousand impressions from its balance, and it stops at its budget. Read the{" "}
@@ -74,7 +74,7 @@ export function AdvertisePanel({ data }: { data: AdvertiseData }) {
 function AccountForm() {
   const [state, action] = useActionState<FormState, FormData>(createAdAccount, {})
   return (
-    <section className="flex flex-col gap-4 border-b border-border px-4 py-6" aria-labelledby="set-up-heading">
+    <section className="flex flex-col gap-4 border-b border-border px-4 py-4" aria-labelledby="set-up-heading">
       <h2 id="set-up-heading" className="text-lg font-semibold">
         Set up advertising
       </h2>
@@ -119,7 +119,7 @@ function Balance({ data }: { data: AdvertiseData }) {
       else toast.error(result.error)
     })
   return (
-    <section className="flex flex-col gap-4 border-b border-border px-4 py-6" aria-labelledby="balance-heading">
+    <section className="flex flex-col gap-4 border-b border-border px-4 py-4" aria-labelledby="balance-heading">
       <div className="flex flex-col gap-1">
         <h2 id="balance-heading" className="text-lg font-semibold">
           {account.businessName}
@@ -185,13 +185,13 @@ function CampaignForm() {
 function Campaigns({ data }: { data: AdvertiseData }) {
   return (
     <>
-      <section className="flex flex-col gap-4 border-b border-border px-4 py-6" aria-labelledby="new-campaign-heading">
+      <section className="flex flex-col gap-4 border-b border-border px-4 py-4" aria-labelledby="new-campaign-heading">
         <h2 id="new-campaign-heading" className="text-lg font-semibold">
           New campaign
         </h2>
         <CampaignForm />
       </section>
-      <section className="flex flex-col gap-2 px-4 py-6" aria-labelledby="campaigns-heading">
+      <section className="flex flex-col gap-2 px-4 py-4" aria-labelledby="campaigns-heading">
         <h2 id="campaigns-heading" className="text-lg font-semibold">
           Campaigns
         </h2>

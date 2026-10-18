@@ -33,7 +33,7 @@ function WhereSection({ initial }: { initial: WhereValue }) {
     })
   }
   return (
-    <section aria-labelledby="where-heading" className="flex flex-col gap-5 border-b border-border px-4 py-6">
+    <section aria-labelledby="where-heading" className="flex flex-col gap-5 border-b border-border px-4 py-4">
       <div className="flex flex-col gap-1.5">
         <h2 id="where-heading" className="text-lg font-semibold">
           Where you are
@@ -68,7 +68,7 @@ function LanguageSection({ initial }: { initial: LanguageValue }) {
     })
   }
   return (
-    <section aria-labelledby="languages-heading" className="flex flex-col gap-5 border-b border-border px-4 py-6">
+    <section aria-labelledby="languages-heading" className="flex flex-col gap-5 border-b border-border px-4 py-4">
       <div className="flex flex-col gap-1.5">
         <h2 id="languages-heading" className="text-lg font-semibold">
           Languages
@@ -98,7 +98,7 @@ function DismissedSection({ count }: { count: number }) {
   const [pending, startTransition] = useTransition()
   if (shown === 0) return null
   return (
-    <section aria-labelledby="dismissed-heading" className="flex items-start justify-between gap-4 px-4 py-6">
+    <section aria-labelledby="dismissed-heading" className="flex items-start justify-between gap-4 px-4 py-4">
       <div className="flex flex-col gap-1">
         <h2 id="dismissed-heading" className="text-lg font-semibold">
           Not now
