@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }]
   },
+  async redirects() {
+    // The setup used to be one page called About you. Its place part is now Where you are, at /welcome/location.
+    return [{ source: "/welcome/about", destination: "/welcome/location", permanent: false }]
+  },
 }
 
 export default nextConfig
