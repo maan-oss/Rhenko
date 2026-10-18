@@ -41,18 +41,25 @@ export function LocationSetup({ initial }: { initial: LocationStart }) {
     <div className="flex flex-col gap-5">
       <OnboardingSteps current={SETUP_STEPS.location} total={SETUP_STEPS.total} />
 
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Where you are</h1>
-        <p className="text-[15px] leading-relaxed text-muted-foreground">Your location and the place you are in. You can change any of it later in Settings.</p>
-      </div>
+      <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Where you are</h1>
 
       <form onSubmit={save} className="flex flex-col gap-5">
+        <section aria-labelledby="where-title" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 id="where-title" className="text-[15px] font-semibold">
+              Where are you, for suggestions?
+            </h2>
+            <p className="text-[13px] text-muted-foreground">Only used to suggest people nearby. Never shown, never your street.</p>
+          </div>
+          <WhereFields value={where} onChange={setWhere} />
+        </section>
+
         <section aria-labelledby="location-title" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <h2 id="location-title" className="text-[15px] font-semibold">
               Location
             </h2>
-            <p className="text-[13px] text-muted-foreground">Shown on your profile, in any words you like.</p>
+            <p className="text-[13px] text-muted-foreground">Shown on your profile.</p>
           </div>
           <input
             aria-labelledby="location-title"
@@ -63,16 +70,6 @@ export function LocationSetup({ initial }: { initial: LocationStart }) {
             placeholder="A city, a region, or nothing at all"
             className={SETUP_INPUT}
           />
-        </section>
-
-        <section aria-labelledby="where-title" className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 id="where-title" className="text-[15px] font-semibold">
-              Where are you, for suggestions?
-            </h2>
-            <p className="text-[13px] text-muted-foreground">Your country, city or town, and region. It is only used to suggest people nearby, and never shown. Never your street.</p>
-          </div>
-          <WhereFields value={where} onChange={setWhere} />
         </section>
 
         {error ? (
