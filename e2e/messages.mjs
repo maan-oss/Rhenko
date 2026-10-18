@@ -105,6 +105,10 @@ async function directFlow({ phone }) {
 
   await check(`${where}: a photo can be sent and loads for both people`, async () => {
     await sender.page.locator("input[name=image]").setInputFiles(makePng(`chat-${where}.png`, { seed: 5 }))
+    // A photo opens the framing step first, so it is kept as framed before it is previewed.
+    const framing = sender.page.getByRole("dialog", { name: "Frame your photo" })
+    await framing.getByRole("button", { name: "Use this", exact: true }).click()
+    await framing.waitFor({ state: "detached" })
     await sender.page.getByAltText("Photo to send").waitFor()
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
     for (const person of [sender, receiver]) {

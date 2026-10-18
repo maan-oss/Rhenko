@@ -218,7 +218,7 @@ export function MobileTabBar({
             !navWidth && "w-[calc(100%-72px)]"
           )}
         >
-          {items.map(({ href, label, Icon, badge, filled }) => {
+          {items.map(({ href, label, Icon, badge }) => {
             const isActive = href === currentHref
             const hidden = folded && href !== visibleHref
             return (
@@ -239,7 +239,7 @@ export function MobileTabBar({
                   {/* The current section is marked by a heavier icon, filled where the icon has a filled form. No pill behind it. */}
                   <Icon
                     className={cn("relative size-[22px]", isActive ? "text-foreground" : "text-foreground/80")}
-                    fill={isActive && filled ? "currentColor" : "none"}
+                    fill={isActive ? "currentColor" : "none"}
                     strokeWidth={isActive ? 2.2 : 1.75}
                     aria-hidden="true"
                   />

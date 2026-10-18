@@ -4,8 +4,9 @@ import { useEffect, useId, useRef, useState } from "react"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// A date picker with its own calendar, so it looks the same on every browser. The value
-// is submitted as YYYY-MM-DD in a hidden input.
+// A date picker that opens from its own field, the way search suggestions open from the search bar. The field is the same
+// pill as every other field; while the calendar is open, the field and the calendar are one shape, joined along the seam.
+// The value is submitted as YYYY-MM-DD in a hidden input.
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
@@ -116,12 +117,13 @@ export function DateField({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
-        className="group flex h-12 w-full items-center gap-3 rounded-xl border border-border bg-card px-4 text-left text-base outline-none transition-[border-color,box-shadow] duration-200 hover:border-foreground/30 focus-visible:border-foreground focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)] aria-expanded:border-foreground aria-expanded:shadow-[0_0_0_3px_color-mix(in_oklab,var(--dusk)_22%,transparent)]"
+        className={cn(
+          "flex h-12 w-full items-center gap-3 px-5 text-left text-base outline-none transition-[background-color,border-radius] duration-200",
+          open ? "rounded-t-[26px] rounded-b-none bg-background" : "rounded-full bg-muted hover:bg-foreground/[0.06] focus:bg-background"
+        )}
       >
-        <CalendarDays className="size-[18px] text-muted-foreground" aria-hidden="true" />
-        <span className={cn("flex-1", selected ? "text-foreground" : "text-muted-foreground")}>
-          {selected ? readable(selected) : placeholder}
-        </span>
+        <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className={cn("flex-1 truncate", selected ? "text-foreground" : "text-muted-foreground")}>{selected ? readable(selected) : placeholder}</span>
       </button>
 
       {open ? (
@@ -129,7 +131,7 @@ export function DateField({
           id={panelId}
           role="dialog"
           aria-label="Choose a date"
-          className="absolute top-full left-0 z-50 mt-2 w-[320px] max-w-[calc(100vw-2rem)] rounded-3xl border border-border bg-popover p-4 shadow-xl animate-in fade-in-0 zoom-in-95 duration-150"
+          className="settle absolute inset-x-0 top-full z-50 rounded-b-[26px] border border-t-0 border-border bg-background px-4 pt-3 pb-4 shadow-[0_18px_40px_-18px_rgb(0_0_0/0.35)]"
         >
           <div className="mb-3 flex items-center justify-between">
             <button

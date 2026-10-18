@@ -123,6 +123,18 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   redirect("/welcome")
 }
 
+// The sign-up form asks as the person pauses in the email field, so a taken address is named before the screen can go on.
+// It gives the same answer, in the same words, as sign-up does. Each network can ask a limited number of times an hour.
+export async function checkEmailFree(email: string): Promise<{ taken?: boolean; problem?: string }> {
+  const clean = cleanEmail(email)
+  if (!clean) return {}
+  const problem = emailProblem(clean)
+  if (problem) return { problem }
+  const limit = await consume(`email-check:${await clientIp()}`, 60, 10 * MINUTE)
+  if (!limit.ok) return { problem: `Too many checks. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
+  return { taken: Boolean(await get("SELECT id FROM users WHERE email = ?", clean)) }
+}
+
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const handle = cleanHandle(formData.get("handle"))
   const password = String(formData.get("password") ?? "")

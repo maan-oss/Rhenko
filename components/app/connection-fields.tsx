@@ -1,21 +1,20 @@
 "use client"
 
-import { useId, useMemo, useState } from "react"
-import { Check, ChevronDown } from "lucide-react"
-import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { Check } from "lucide-react"
 import { TabFill } from "@/components/app/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { COMMON_LANGUAGE_CODES, LANGUAGES, SPEAK_LEVELS, type SpeakLevel } from "@/lib/languages"
 import { AREA_MAX, COUNTRIES, REGION_MAX } from "@/lib/places"
 import { cn } from "@/lib/utils"
 
 // The fields for where someone is and what they speak. Used by sign-up setup and by Settings, so both read the same.
 
+// The same pill as the search bar, on the muted surface. Focus is the halo, from the global rule.
 export const FIELD =
-  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground"
+  "h-12 w-full min-w-0 rounded-full bg-muted px-5 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
 
 export const SMALL_FIELD =
-  "h-11 w-full min-w-0 rounded-xl border border-border bg-card px-3.5 text-base outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground"
+  "h-11 w-full min-w-0 rounded-full bg-muted px-4 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
 
 export function Label({ htmlFor, children, aside }: { htmlFor?: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
@@ -74,69 +73,106 @@ export function SwitchRow({
 
 export type WhereValue = { country: string; area: string; region: string; suggestNearby: boolean }
 
-// The country, chosen from a popup with a search box. The popup closes as soon as a country is picked.
+// The country, typed into a field. The list opens from underneath the field, the way search suggestions open from the search
+// bar. Pick one and the list closes and the field shows it. Arrow keys move through the list, Enter picks, Escape closes.
 function CountryPicker({ id, value, onChange }: { id: string; value: string; onChange: (code: string) => void }) {
+  const listId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const name = COUNTRIES.find((country) => country.code === value)?.name ?? null
+  const [active, setActive] = useState(0)
+  const name = COUNTRIES.find((country) => country.code === value)?.name ?? ""
   const shown = useMemo(() => {
     const text = query.trim().toLowerCase()
-    return text === "" ? COUNTRIES : COUNTRIES.filter((country) => country.name.toLowerCase().includes(text))
+    const list = text === "" ? COUNTRIES : COUNTRIES.filter((country) => country.name.toLowerCase().includes(text))
+    return list.slice(0, 80)
   }, [query])
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onPointer)
+    return () => document.removeEventListener("mousedown", onPointer)
+  }, [open])
+
+  function pick(code: string) {
+    onChange(code)
+    setOpen(false)
+    setQuery("")
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      setOpen(true)
+      const step = event.key === "ArrowDown" ? 1 : -1
+      setActive((current) => (shown.length === 0 ? 0 : (current + step + shown.length) % shown.length))
+    } else if (event.key === "Enter" && open && shown[active]) {
+      event.preventDefault()
+      pick(shown[active].code)
+    } else if (event.key === "Escape") {
+      setOpen(false)
+    }
+  }
+
   return (
-    <>
-      <button
+    <div ref={rootRef} className="relative">
+      <input
         id={id}
-        type="button"
-        aria-haspopup="dialog"
+        role="combobox"
         aria-expanded={open}
-        onClick={() => {
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && shown[active] ? `${listId}-${shown[active].code}` : undefined}
+        autoComplete="off"
+        placeholder="Type a country"
+        value={open ? query : name}
+        onFocus={() => {
           setQuery("")
+          setActive(0)
           setOpen(true)
         }}
-        className={cn(FIELD, "flex items-center justify-between gap-3 text-left")}
-      >
-        <span className={cn("truncate", name === null && "text-muted-foreground/70")}>{name ?? "Choose a country"}</span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.9} aria-hidden="true" />
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className={cn("sm:max-w-md", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
-          <DialogTitle className="text-base font-semibold">Choose a country</DialogTitle>
-          <DialogDescription className="sr-only">Type to narrow the list, then pick your country.</DialogDescription>
-          <input
-            type="search"
-            aria-label="Search countries"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            autoComplete="off"
-            className={SMALL_FIELD}
-          />
-          <ul aria-label="Countries" className="-mx-2 flex max-h-[52dvh] flex-col overflow-y-auto">
-            {shown.map((country) => {
-              const chosen = country.code === value
-              return (
-                <li key={country.code}>
-                  <button
-                    type="button"
-                    aria-pressed={chosen}
-                    onClick={() => {
-                      onChange(country.code)
-                      setOpen(false)
-                    }}
-                    className="flex h-11 w-full items-center justify-between gap-3 rounded-xl px-3 text-left text-[15px] transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="truncate">{country.name}</span>
-                    {chosen ? <Check className="size-4 shrink-0" strokeWidth={2.2} aria-hidden="true" /> : null}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          {shown.length === 0 ? <p className="px-3 py-2 text-sm text-muted-foreground">No country matches that.</p> : null}
-        </DialogContent>
-      </Dialog>
-    </>
+        onChange={(event) => {
+          setQuery(event.target.value)
+          setActive(0)
+          setOpen(true)
+        }}
+        onKeyDown={onKeyDown}
+        className={FIELD}
+      />
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Countries"
+          className="settle absolute inset-x-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-3xl border border-border bg-popover p-2 shadow-[0_18px_40px_-18px_rgb(0_0_0/0.35)]"
+        >
+          {shown.map((country, index) => {
+            const chosen = country.code === value
+            return (
+              <li key={country.code} id={`${listId}-${country.code}`} role="option" aria-selected={chosen}>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => pick(country.code)}
+                  className={cn(
+                    "flex h-11 w-full items-center justify-between gap-3 rounded-full px-4 text-left text-[15px] transition-colors duration-200",
+                    index === active ? "bg-muted" : "hover:bg-muted"
+                  )}
+                >
+                  <span className="truncate">{country.name}</span>
+                  {chosen ? <Check className="size-4 shrink-0" strokeWidth={2.2} aria-hidden="true" /> : null}
+                </button>
+              </li>
+            )
+          })}
+          {shown.length === 0 ? <li className="px-4 py-3 text-sm text-muted-foreground">No country matches that.</li> : null}
+        </ul>
+      ) : null}
+    </div>
   )
 }
 
@@ -320,7 +356,7 @@ export function LanguageFields({ value, onChange }: { value: LanguageValue; onCh
                   id={`level-${item.code}`}
                   value={item.level}
                   onChange={(event) => setLevel(item.code, event.target.value as SpeakLevel)}
-                  className="h-9 rounded-lg border border-border bg-background px-2.5 text-[14px] outline-none transition-colors hover:border-foreground/30 focus:border-foreground"
+                  className="h-9 rounded-full border border-border bg-background px-3 text-[14px] outline-none transition-colors hover:border-foreground/30 focus:border-foreground"
                 >
                   {SPEAK_LEVELS.map((level) => (
                     <option key={level.id} value={level.id}>

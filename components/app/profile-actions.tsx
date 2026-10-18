@@ -104,14 +104,14 @@ export function ProfileActions({
           disabled={pending}
           onClick={unblock}
           aria-label={`Unblock @${handle}`}
-          className="group h-11 flex-1 rounded-xl px-4 font-semibold text-destructive"
+          className="group h-11 flex-1 rounded-full px-4 font-semibold text-destructive"
         >
           <span className="group-hover:hidden">Blocked</span>
           <span className="hidden group-hover:inline">Unblock</span>
         </Button>
       ) : (
         <>
-          <FollowButton handle={handle} state={state} from={from} className="h-11 flex-1 rounded-xl sm:h-11" />
+          <FollowButton handle={handle} state={state} from={from} className="h-11 flex-1 rounded-full sm:h-11" />
           {state === "following" ? (
             <Button
               type="button"

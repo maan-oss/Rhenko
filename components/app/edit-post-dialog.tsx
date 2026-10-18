@@ -88,7 +88,7 @@ function EditForm({ postId, body, title, media, onDone }: { postId: string; body
             value={heading}
             onChange={(event) => setHeading(event.target.value)}
             maxLength={MAX_TITLE * 2}
-            className="h-10 rounded-xl border border-border bg-background px-3 text-[15px] font-semibold outline-none focus:border-dusk"
+            className="h-10 rounded-full border border-border bg-background px-4 text-[15px] font-semibold outline-none"
           />
         </label>
       ) : null}
@@ -98,7 +98,7 @@ function EditForm({ postId, body, title, media, onDone }: { postId: string; body
           onChange={(event) => setText(event.target.value)}
           aria-label="Post text"
           rows={4}
-          className="field-sizing-content max-h-[40dvh] min-h-24 w-full resize-none overflow-y-auto rounded-xl border border-border bg-background p-3 text-[15px] leading-relaxed outline-none focus:border-dusk"
+          className="field-sizing-content max-h-[40dvh] min-h-24 w-full resize-none overflow-y-auto rounded-xl border border-border bg-background p-3 text-[15px] leading-relaxed outline-none"
         />
         <p className={cn("text-right text-sm tabular-nums", remaining < 0 ? "text-destructive" : "text-muted-foreground")}>{remaining}</p>
       </div>
@@ -110,7 +110,7 @@ function EditForm({ postId, body, title, media, onDone }: { postId: string; body
             maxLength={MAX_ALT}
             rows={2}
             onChange={(event) => setAlts((current) => ({ ...current, [item.id]: event.target.value }))}
-            className="resize-none rounded-lg border border-border bg-background p-2 text-sm outline-none focus:border-dusk"
+            className="resize-none rounded-lg border border-border bg-background p-2 text-sm outline-none"
           />
         </label>
       ))}

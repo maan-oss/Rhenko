@@ -8,7 +8,7 @@ export const SETUP_PRIMARY =
   "flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
 export const SETUP_GHOST =
   "h-11 w-full rounded-full text-[15px] font-semibold text-muted-foreground transition-colors duration-200 hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
-export const SETUP_INPUT = "h-12 w-full rounded-xl border border-border bg-card px-4 text-[15px] outline-none transition-colors focus-visible:border-foreground/50"
+export const SETUP_INPUT = "h-12 w-full rounded-full bg-muted px-5 text-[15px] outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
 
 // The steps of sign-up and setup. Every dot is the same size. The current step is stretched into a pill, and the steps
 // before it are filled in. The row is announced to screen readers as a progress bar.

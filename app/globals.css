@@ -50,7 +50,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
 }
 
-/* Light: black and white. Ink is pure black, the page is a near-white, and nothing is tinted. Dusk is the one colour. */
+/* Light: black and white. Ink is pure black, the page is a near-white, and nothing is tinted. There is no second colour. */
 :root {
   --background: #fafafa;
   --foreground: #0a0a0a;
@@ -72,8 +72,10 @@
   --input: #d4d4d4;
   /* Focus rings and checked controls are ink, so a tap or a click never flashes a second colour. */
   --ring: var(--foreground);
-  /* The dusk accent: a twilight indigo for the verified check and the reader's own messages. Text never uses it. */
-  --dusk: #3f4a7a;
+  /* The accent is the ink itself: the verified check, the reader's own messages and on-switches are black. */
+  --dusk: var(--foreground);
+  /* Focus halo: a soft ring of the ink, never a dark or coloured outline. */
+  --halo: rgb(10 10 10 / 0.2);
   --chart-1: #0a0a0a;
   --chart-2: #5f5f5f;
   --chart-3: #8a8a8a;
@@ -87,7 +89,7 @@
   --sidebar-accent: #e8e8e8;
   --sidebar-accent-foreground: #0a0a0a;
   --sidebar-border: #e5e5e5;
-  --sidebar-ring: #3f4a7a;
+  --sidebar-ring: var(--foreground);
   /* Glass is white over the page, and metal is black with a bright top edge. */
   --sheen: #ffffff;
   --glass: rgb(255 255 255 / 0.72);
@@ -107,7 +109,7 @@
   --art-base: #4a4a4a;
 }
 
-/* Dark: black and white inverted. The page is near-black, ink is near-white, and the dusk accent is lifted. */
+/* Dark: black and white inverted. The page is near-black and ink is near-white. Still no second colour. */
 .dark {
   --background: #0b0b0b;
   --foreground: #f2f2f2;
@@ -128,8 +130,9 @@
   --border: #262626;
   --input: #3a3a3a;
   --ring: var(--foreground);
-  /* The same accent lifted for the dark background. */
-  --dusk: #aeb8f2;
+  /* The accent is the ink, as in light. */
+  --dusk: var(--foreground);
+  --halo: rgb(242 242 242 / 0.22);
   --chart-1: #f2f2f2;
   --chart-2: #a0a0a0;
   --chart-3: #6e6e6e;
@@ -142,7 +145,7 @@
   --sidebar-accent: #1c1c1c;
   --sidebar-accent-foreground: #f2f2f2;
   --sidebar-border: #1f1f1f;
-  --sidebar-ring: #aeb8f2;
+  --sidebar-ring: var(--foreground);
   /* Metallic glass on black: a lifted tint, a light top edge, and a bright metal button. */
   --sheen: #161616;
   --glass: rgb(20 20 20 / 0.72);
@@ -190,19 +193,22 @@
     transition-duration: 180ms;
     transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
   }
-  /* Keyboard focus is an ink ring. Fields keep their border instead (see below). */
-  :focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
 }
 
-/* Fields show no browser outline, and browser autofill keeps the page's own colours. Focus is the border. */
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none;
+/* Focus is one soft halo for keyboard and pointer alike: no dark outline and no coloured border on fields. It sits outside
+   the cascade layers, so a utility such as outline-none on a field cannot remove it. */
+:focus-visible {
+  outline: 3px solid var(--halo);
+  outline-offset: 2px;
 }
+
+/* The browser's own reveal and clear buttons would sit beside the form's button, so they are hidden. The form draws its own. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* Browser autofill keeps the page's own colours. Fields take the same halo as every other control (see the base layer). */
 input:-webkit-autofill,
 input:-webkit-autofill:focus,
 textarea:-webkit-autofill {
@@ -276,10 +282,10 @@ textarea:-webkit-autofill {
   }
 }
 
-/* Checkboxes and radios are not fields, so they keep a focus ring. */
+/* Checkboxes and radios take the same halo as fields. */
 input[type="checkbox"]:focus-visible,
 input[type="radio"]:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 3px solid var(--halo);
   outline-offset: 2px;
 }
 

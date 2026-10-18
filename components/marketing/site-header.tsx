@@ -91,7 +91,7 @@ export function SiteHeader() {
 
   return (
     <>
-      <span aria-hidden className="mk-progress pointer-events-none fixed inset-x-0 top-0 z-[60] block h-[2px] origin-left bg-[#3f4a7a] dark:bg-[#aeb8f2]" />
+      <span aria-hidden className="mk-progress pointer-events-none fixed inset-x-0 top-0 z-[60] block h-[2px] origin-left bg-foreground" />
       <header className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 sm:top-4">
         <nav
           aria-label="Main"

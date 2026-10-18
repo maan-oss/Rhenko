@@ -28,7 +28,7 @@ export function MoveBookmark({
             else toast.success("Bookmark moved.")
           })
         }}
-        className="h-8 rounded-lg border border-border bg-background px-2 text-[13px] text-foreground outline-none focus:border-dusk"
+        className="h-8 rounded-lg border border-border bg-background px-2 text-[13px] text-foreground outline-none"
       >
         <option value="">Unfiled</option>
         {folders.map((folder) => (

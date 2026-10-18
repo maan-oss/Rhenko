@@ -49,7 +49,7 @@ async function setLanguages(page, { speak = [], learn = [] }) {
 }
 
 // Finishes the setup screens after sign-up and opens Home. Continue on the profile moves on to Where you are, where the
-// country is picked from its popup and the city and region are typed in. Continue there moves on to What you're into,
+// country is picked from the list under its field and the city and region are typed in. Continue there moves on to What you're into,
 // where topics are picked. Languages are set in Settings first, when a check gives any.
 async function setUp(page, { city, region = "", country = "Australia", speak = [], learn = [], topics = [] }) {
   if (speak.length > 0 || learn.length > 0) await setLanguages(page, { speak, learn })
@@ -59,8 +59,11 @@ async function setUp(page, { city, region = "", country = "Australia", speak = [
   await page.getByRole("heading", { name: "Where you are", exact: true }).waitFor()
   if (city) {
     await ready(page.locator("#where-country"))
+    // The country is typed into a box that opens its list under the field. The chosen name then shows in the field.
     await page.locator("#where-country").click()
-    await page.getByRole("dialog").getByRole("button", { name: country, exact: true }).click()
+    await page.locator("#where-country").fill(country)
+    await page.getByRole("listbox", { name: "Countries" }).getByRole("button", { name: country, exact: true }).click()
+    await page.getByRole("listbox", { name: "Countries" }).waitFor({ state: "detached" })
     await page.locator("#where-area").fill(city)
     if (region) await page.locator("#where-region").fill(region)
   }

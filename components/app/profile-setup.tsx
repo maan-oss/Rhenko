@@ -31,7 +31,7 @@ const GHOST =
 
 // A field that reads as plain text until someone points at it. Hover and focus show a light well, and focus adds a ring.
 const INLINE =
-  "w-full rounded-lg bg-transparent px-2 -mx-2 py-1 outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-dusk/40"
+  "w-full rounded-lg bg-transparent px-2 -mx-2 py-1 outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:bg-foreground/5 focus:bg-foreground/5"
 
 export function ProfileSetup({ initial }: { initial: ProfileStart }) {
   const router = useRouter()
@@ -115,7 +115,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
               type="button"
               onClick={() => avatarInput.current?.click()}
               aria-label="Change profile photo"
-              className="group relative -mt-16 block size-28 rounded-full bg-background p-1.5 focus-visible:outline-2 focus-visible:outline-dusk"
+              className="group relative -mt-16 block size-28 rounded-full bg-background p-1.5"
             >
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element

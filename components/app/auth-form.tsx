@@ -3,11 +3,12 @@
 import Link from "next/link"
 import { useActionState, useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
 import { useFormStatus } from "react-dom"
-import { Check, Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
 import { requestStamp } from "@/actions/proof"
 import { ProofCheck } from "@/components/app/proof-check"
 import { PasskeyLoginButton, SecurityKeyButton } from "@/components/app/passkey-panel"
 import {
+  checkEmailFree,
   login,
   requestPasswordReset,
   resetPassword,
@@ -23,11 +24,12 @@ import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
-// One field shape everywhere. Focus turns the border ink; an error turns the border red. No glow around the field.
+// One field shape everywhere, the same pill as the search bar. Focus is the halo; an error is a thin red edge.
 // Inputs are 16px so phones do not zoom in when they are tapped.
 const FIELD =
-  "h-12 w-full min-w-0 rounded-xl border border-border bg-card px-4 text-base outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:border-foreground/30 focus:border-foreground"
-const FIELD_ERROR = "border-destructive hover:border-destructive focus:border-destructive"
+  "h-12 w-full min-w-0 rounded-full bg-muted px-5 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
+const FIELD_ERROR = "shadow-[inset_0_0_0_1px_var(--destructive)]"
+const EMAIL_TAKEN = "That email is already used by another account. Use a different one, or leave it blank."
 
 const LINK = "font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground"
 
@@ -142,7 +144,7 @@ function PasswordField({
           aria-label={shown ? "Hide password" : "Show password"}
           aria-pressed={shown}
           tabIndex={-1}
-          className="absolute top-1/2 right-1.5 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+          className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
         >
           {shown ? <EyeOff className="size-[18px]" aria-hidden="true" /> : <Eye className="size-[18px]" aria-hidden="true" />}
         </button>
@@ -174,7 +176,7 @@ function HandleField({
       <div
         className={cn(
           FIELD,
-          "flex items-center gap-1 px-4 focus-within:border-foreground",
+          "flex items-center gap-1 focus-within:bg-background",
           problem && FIELD_ERROR
         )}
       >
@@ -223,16 +225,22 @@ function ErrorText({ message }: { message?: string }) {
   )
 }
 
-// The rule as a line that ticks itself once it is met. Met is ink, not colour, so the text stays the same tone as the page.
-function Rule({ met, children }: { met: boolean; children: ReactNode }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 transition-colors duration-200", met ? "text-foreground" : "text-muted-foreground")}>
-      <span className={cn("grid size-4 place-items-center rounded-full border transition-colors duration-200", met ? "border-foreground bg-foreground text-background" : "border-border")}>
-        {met ? <Check className="size-3" strokeWidth={3} aria-hidden="true" /> : null}
-      </span>
-      {children}
-    </span>
-  )
+// The value as it stands a moment after the person stops typing, so the rule does not flash red on every letter.
+function useSettled<T>(value: T, delay: number): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return settled
+}
+
+// The password rule. It is plain text. It turns red only when the settled password is too short; empty and long enough are
+// the same neutral tone, and nothing ticks.
+function PasswordRule({ value }: { value: string }) {
+  const settled = useSettled(value, 700)
+  const short = settled.length > 0 && settled.length < MIN_PASSWORD
+  return <span className={cn("transition-colors duration-200", short ? "text-destructive" : "text-muted-foreground")}>{PASSWORD_RULE}</span>
 }
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -359,9 +367,28 @@ function SignupForm() {
     }
   }, [])
 
+  // The email is checked a moment after the person stops typing, so a taken address is named before the screen can go on.
+  // The answer is kept with the address it was for, so an answer for an old address never counts for a new one.
+  const [checked, setChecked] = useState<{ email: string; taken: boolean } | null>(null)
+  const emailChecking = email !== "" && EMAIL_SHAPE.test(email) && checked?.email !== email
+  const emailTaken = Boolean(checked && checked.email === email && checked.taken)
+  useEffect(() => {
+    if (email === "" || !EMAIL_SHAPE.test(email)) return
+    let live = true
+    const timer = setTimeout(() => {
+      checkEmailFree(email).then((result) => {
+        if (live) setChecked({ email, taken: result.taken === true })
+      })
+    }, 600)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [email])
+
   const valid = [
     name.trim().length > 0 && name.length <= MAX_NAME && handle.length > 0 && !handleProblem(handle),
-    isOldEnough(birthday) && (email === "" || EMAIL_SHAPE.test(email)),
+    isOldEnough(birthday) && (email === "" || (EMAIL_SHAPE.test(email) && !emailChecking && !emailTaken)),
     password.length >= MIN_PASSWORD && password.length <= MAX_PASSWORD && agree,
   ]
 
@@ -449,8 +476,8 @@ function SignupForm() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             aside={<span className="text-[13px] text-muted-foreground">Optional</span>}
-            help="Only for resetting your password."
-            error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : null}
+            help={emailChecking ? "Checking that it is free…" : "Only for resetting your password."}
+            error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : emailTaken ? EMAIL_TAKEN : null}
           />
           <div className="flex flex-col gap-3">
             <Button onClick={() => setStep(2)} disabled={!valid[1]}>
@@ -472,7 +499,7 @@ function SignupForm() {
             autoComplete="new-password"
             value={password}
             onChange={setPassword}
-            help={<Rule met={password.length >= MIN_PASSWORD}>{PASSWORD_RULE}</Rule>}
+            help={<PasswordRule value={password} />}
           />
           <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed">
             <input
@@ -659,7 +686,7 @@ export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
         autoComplete="new-password"
         value={password}
         onChange={setPassword}
-        help={<Rule met={password.length >= MIN_PASSWORD}>{PASSWORD_RULE}</Rule>}
+        help={<PasswordRule value={password} />}
       />
       <ErrorText message={state.error} />
       <SubmitButton label="Set new password" pendingLabel="Saving" disabled={!ready} />

@@ -179,7 +179,7 @@ export function Landing() {
               {MARQUEE.map((item) => (
                 <li key={item} className="flex items-center gap-10 pr-10 text-[clamp(1.5rem,3.4vw,2.6rem)] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap">
                   {item}
-                  <span aria-hidden className="size-2.5 rounded-full bg-[#aeb8f2]" />
+                  <span aria-hidden className="size-2.5 rounded-full bg-foreground" />
                 </li>
               ))}
             </ul>

@@ -10,10 +10,10 @@ import { cn } from "@/lib/utils"
 // screen. Under reduced motion the gradient holds one frame and the points stay still.
 
 const PALETTE = {
-  light: { colors: ["#3f4a7a", "#8f97bd", "#e7e8ef", "#0a0a0a"], back: "#fafafa", dots: "10, 10, 10" },
+  light: { colors: ["#2a2a2a", "#8a8a8a", "#e5e5e5", "#0a0a0a"], back: "#fafafa", dots: "10, 10, 10" },
   // Calm light: the same dusk, lifted, so a line of text on it keeps its contrast.
-  lightCalm: { colors: ["#3f4a7a", "#b9bfd8", "#f1f2f6", "#fafafa"], back: "#fafafa", dots: "10, 10, 10" },
-  dark: { colors: ["#3f4a7a", "#5a6596", "#1c1d24", "#f5f5f5"], back: "#0a0a0a", dots: "245, 245, 245" },
+  lightCalm: { colors: ["#2a2a2a", "#bcbcbc", "#f1f1f1", "#fafafa"], back: "#fafafa", dots: "10, 10, 10" },
+  dark: { colors: ["#2a2a2a", "#4a4a4a", "#1c1c1c", "#f5f5f5"], back: "#0a0a0a", dots: "245, 245, 245" },
 } as const
 
 // `calm` lowers the grain for a band of text; `fade` softens the edges the gradient meets the page with.

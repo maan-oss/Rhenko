@@ -95,7 +95,7 @@ export function IntroLoader() {
                 {String(count).padStart(3, "0")}
               </p>
               <div className="h-px w-56 overflow-hidden bg-white/15">
-                <div className="h-full bg-[#aeb8f2] transition-[width] duration-100 ease-linear" style={{ width: `${count}%` }} />
+                <div className="h-full bg-foreground transition-[width] duration-100 ease-linear" style={{ width: `${count}%` }} />
               </div>
               <p className="text-[13px] text-white/55">Public conversation, on your terms.</p>
             </div>

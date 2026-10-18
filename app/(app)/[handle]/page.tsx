@@ -200,15 +200,17 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           </p>
         </div>
       ) : (
-        <FeedList
-          key={tab}
-          items={page.items}
-          next={page.next}
-          spec={spec}
-          viewer={viewer}
-          emptyTitle={EMPTY[tab][0]}
-          emptyBody={EMPTY[tab][1]}
-        />
+        // Keyed by the section, so each section settles in as it is chosen, the way the pill slides across to it.
+        <div key={tab} className="settle">
+          <FeedList
+            items={page.items}
+            next={page.next}
+            spec={spec}
+            viewer={viewer}
+            emptyTitle={EMPTY[tab][0]}
+            emptyBody={EMPTY[tab][1]}
+          />
+        </div>
       )}
     </>
   )
@@ -222,7 +224,7 @@ function FilterChip({ href, active, children }: { href: string; active: boolean;
       scroll={false}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted"
       )}
     >

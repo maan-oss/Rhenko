@@ -69,7 +69,7 @@ export function StickerTray({
               onClick={() => pick({ kind: "emoji", code: sticker.code })}
               aria-label={`Add ${sticker.name}`}
               title={sticker.name}
-              className="grid aspect-square place-items-center rounded-xl transition-colors duration-200 hover:bg-muted focus-visible:outline-2 focus-visible:outline-dusk"
+              className="grid aspect-square place-items-center rounded-xl transition-colors duration-200 hover:bg-muted"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={emojiFile(sticker.code)} alt="" loading="lazy" className="size-9" />

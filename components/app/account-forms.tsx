@@ -144,7 +144,7 @@ export function DataExportButton() {
 
   return (
     <div>
-      <Button type="button" variant="outline" disabled={busy} onClick={download} className="h-10 rounded-lg px-4 font-semibold">
+      <Button type="button" variant="outline" disabled={busy} onClick={download} className="h-10 rounded-full px-4 font-semibold">
         {busy ? "Preparing your file" : "Download your data"}
       </Button>
     </div>

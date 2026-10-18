@@ -66,7 +66,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
               aria-pressed={isSelected}
               title={item.definition}
               onClick={() => setMeasureIndex(index)}
-              className="group relative flex min-w-0 flex-col gap-2.5 rounded-2xl px-2.5 py-3 text-left outline-none transition-transform duration-150 select-none active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-dusk/50"
+              className="group relative flex min-w-0 flex-col gap-2.5 rounded-2xl px-2.5 py-3 text-left outline-none transition-transform duration-150 select-none active:scale-[0.97]"
             >
               {isSelected ? (
                 <motion.span layoutId="analytics-measure" className="absolute inset-0 rounded-2xl border border-foreground bg-foreground/[0.03]" transition={TAB_FILL} />
@@ -112,7 +112,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
                   type="button"
                   aria-pressed={on}
                   onClick={() => setRange(option)}
-                  className="relative h-8 rounded-full px-3 text-[13px] font-semibold tabular-nums outline-none select-none focus-visible:ring-2 focus-visible:ring-dusk/50"
+                  className="relative h-8 rounded-full px-3 text-[13px] font-semibold tabular-nums outline-none select-none"
                 >
                   {on ? <motion.span layoutId="analytics-range" className="absolute inset-0 rounded-full bg-foreground" transition={TAB_FILL} /> : null}
                   <span className={cn("relative transition-colors duration-200", on ? "text-background" : "text-muted-foreground hover:text-foreground")}>

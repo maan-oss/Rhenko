@@ -1,18 +1,18 @@
 # Rhenko design direction
 
-The app and the marketing site share one identity: black and white first, one accent, one typeface, and depth from
-layers rather than decoration.
+The app and the marketing site share one identity: black and white, one typeface, and depth from layers rather than
+decoration. There is no second colour anywhere, and no indigo, blue or purple tint on any surface, shape or text.
 
 ## Identity
 
 - Ink is `#0b0b0b` in dark mode and `#fafafa` on paper in light mode. Neutrals stay neutral. Gradients are not used as
   decoration.
-- The one colour is dusk, `#3f4a7a`. It marks focus, on-switches, the verified mark and the reader's own messages. Text
-  never uses it.
+- The accent is the ink itself. The verified mark, on-switches and the reader's own messages are black in light mode and
+  white in dark mode. Focus is a soft neutral halo, never a coloured or dark outline.
 - Sora is the only typeface. Body text is 400 and 600. Display headings are 600 with slightly tight tracking. No second
   family and no italic accent words.
 - Depth comes from three surface levels (ground, raised, overlay), a one-pixel inner highlight on raised surfaces, and
-  soft neutral shadows. Dusk is not used for shadows or for anything that reads as a tint on a surface.
+  soft neutral shadows. No surface, shadow or outline takes a tint.
 
 ## Two shells, built separately
 
@@ -36,7 +36,7 @@ layers rather than decoration.
 ## Rules that hold on every page
 
 - Touch targets are at least 44px.
-- Keyboard focus is always visible, in dusk.
+- Keyboard focus is always visible, as the neutral halo.
 - Reduced motion turns off every non-essential animation.
 - Text labels, accessible names and headings stay as the end-to-end checks read them (`e2e/`). A change that renames
   one of them is a change to the check as well, and it is made in the same commit.

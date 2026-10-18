@@ -111,7 +111,7 @@ export function ProofCheck({ onReady, quiet = false }: { onReady: (proof: string
                 setMessage("")
                 setAttempt((count) => count + 1)
               }}
-              className="rounded-full border border-border px-3 py-1 text-[12px] font-semibold text-foreground transition-colors duration-200 hover:bg-muted focus-visible:outline-2 focus-visible:outline-dusk"
+              className="rounded-full border border-border px-3 py-1 text-[12px] font-semibold text-foreground transition-colors duration-200 hover:bg-muted"
             >
               Try again
             </button>

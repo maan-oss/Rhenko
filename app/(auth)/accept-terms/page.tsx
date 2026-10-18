@@ -36,13 +36,13 @@ async function AcceptTermsBody() {
       <div className="settle mb-8 grid grid-cols-2 gap-3" style={{ animationDelay: "60ms" }}>
         <Link
           href="/terms"
-          className="flex h-12 items-center justify-center rounded-xl border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
+          className="flex h-12 items-center justify-center rounded-full border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
         >
           Terms
         </Link>
         <Link
           href="/privacy"
-          className="flex h-12 items-center justify-center rounded-xl border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
+          className="flex h-12 items-center justify-center rounded-full border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
         >
           Privacy Policy
         </Link>

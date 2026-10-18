@@ -167,7 +167,7 @@ export function TrendChart({
           setActive(null)
         }}
         onPointerLeave={onPointerLeave}
-        className="relative touch-pan-y cursor-crosshair rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-dusk/50"
+        className="relative touch-pan-y cursor-crosshair rounded-xl outline-none"
         style={{ height: HEIGHT }}
       >
         <svg width={width} height={HEIGHT} className="block overflow-visible text-foreground" aria-hidden="true">

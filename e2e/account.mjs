@@ -7,7 +7,7 @@ import fs from "node:fs"
 import { area, assert, check, guard, need, note } from "./lib/harness.mjs"
 import { BASE, PASSWORD, RUN_ID, escapeRegExp, randomHandle, randomWord, sleep } from "./lib/env.mjs"
 import { closeVisitor, newVisitor } from "./lib/browser.mjs"
-import { GROWN_UP, createUser, signIn, signInElsewhere, signUp, trySignIn, trySignUp } from "./lib/accounts.mjs"
+import { GROWN_UP, createUser, pickBirthday, signIn, signInElsewhere, signUp, trySignIn, trySignUp } from "./lib/accounts.mjs"
 import { makePng, readZip } from "./lib/files.mjs"
 import { mailCount, mailReadable, mailedCode, markLog } from "./lib/mail.mjs"
 import { addMutedWord, follow, unfollowButton } from "./lib/people.mjs"
@@ -151,9 +151,23 @@ async function emailFlow() {
 
   await check("email: an address that is verified on one account is refused for another", async () => {
     const visitor = await newVisitor({ label: "same-address" })
-    const result = await trySignUp(visitor.page, { name: `Same ${RUN_ID}`, handle: randomHandle("same"), birthday: GROWN_UP, password: PASSWORD, email: address })
-    assert.equal(result.ok, false, "a second account was made with an address that is already verified")
-    assert.match(result.error, /already used by another account/)
+    const page = visitor.page
+    const screenButton = (name) => page.locator("[data-step]:visible").getByRole("button", { name, exact: true })
+    await go(page, "/signup", page.locator("input[name=handle]"))
+    await page.locator("input[name=name]").fill(`Same ${RUN_ID}`)
+    await page.locator("input[name=handle]").fill(randomHandle("same"))
+    await screenButton("Continue").click()
+    await page.locator("#field-birthday").waitFor()
+    await pickBirthday(page, GROWN_UP)
+    await page.locator("input[name=email]").fill(address)
+    // The address is checked while it is typed: the field says it is taken, and Continue stays off until it is free.
+    await page.getByText(/already used by another account/).first().waitFor()
+    assert.equal(await screenButton("Continue").isDisabled(), true, "Continue is on for an address that is already verified")
+    // Pressed past the check, the form still holds the person on this screen: the password screen does not open.
+    await screenButton("Continue").evaluate((element) => (element.disabled = false))
+    await screenButton("Continue").click()
+    await sleep(400)
+    assert.equal(await page.locator("input[name=password]").isVisible(), false, "the form moved on from an address that is already verified")
     await closeVisitor(visitor)
   })
 

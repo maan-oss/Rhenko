@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, AudioLines, ImagePlus, Mic, X } from "lucide-react"
 import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
-import { shrinkPhoto } from "@/components/app/photo-crop"
+import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { MAX_DM, MAX_IMAGE_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
@@ -98,6 +98,8 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   const lastSignal = useRef(0)
   const [fileName, setFileName] = useState<string | null>(null)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  // A photo waiting to be framed in the crop dialog. Only the framed part is attached.
+  const [framing, setFraming] = useState<File | null>(null)
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
@@ -198,18 +200,34 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   }
 
   // A photo over the upload limit is made smaller before it is sent, so a phone photo is never refused for its size.
-  async function pickPhoto(event: ChangeEvent<HTMLInputElement>) {
+  // A chosen photo is framed first, so the person picks the part they send. A GIF keeps its movement and is not framed.
+  function pickPhoto(event: ChangeEvent<HTMLInputElement>) {
     const picked = event.currentTarget.files?.[0]
-    if (!picked || picked.type === "image/gif" || picked.size <= MAX_IMAGE_BYTES) return attachPhoto(picked)
+    if (picked && picked.type !== "image/gif") return setFraming(picked)
+    void attachPicked(event.currentTarget, picked)
+  }
+
+  function keepFramed(picture: File) {
+    setFraming(null)
+    const input = imageRef.current
+    if (!input) return
+    const transfer = new DataTransfer()
+    transfer.items.add(picture)
+    input.files = transfer.files
+    void attachPicked(input, picture)
+  }
+
+  async function attachPicked(input: HTMLInputElement, picked: File | undefined) {
+    if (!picked || picked.size <= MAX_IMAGE_BYTES) return attachPhoto(picked)
     try {
       const smaller = await shrinkPhoto(picked)
       const transfer = new DataTransfer()
       transfer.items.add(smaller)
-      event.currentTarget.files = transfer.files
+      input.files = transfer.files
       attachPhoto(smaller)
     } catch {
       toast.error("That picture could not be made small enough to send.")
-      event.currentTarget.value = ""
+      input.value = ""
       attachPhoto(undefined)
     }
   }
@@ -351,10 +369,10 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
         </p>
       ) : null}
       {recording !== null ? (
-        <div role="status" className="flex items-center gap-3 px-[72px] pt-2 text-sm lg:px-4">
+        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-[72px] pt-2 text-sm lg:px-4">
           <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-destructive" />
           <span className="tabular-nums">{clock(elapsed)}</span>
-          <span className="text-muted-foreground">Recording a voice message</span>
+          <span className="min-w-0 text-muted-foreground">Recording a voice message</span>
           <button type="button" onClick={() => finishRecording(true)} className="ml-auto rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
             Discard
           </button>
@@ -405,7 +423,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           />
         </label>
 
-        <div className="relative flex min-w-0 flex-1 items-center rounded-[22px] border border-input bg-background transition-colors focus-within:border-foreground/50">
+        <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-colors focus-within:bg-background">
           <textarea
             ref={textRef}
             name="body"
@@ -417,20 +435,21 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
             onKeyDown={onKeyDown}
             placeholder="Start a message"
             aria-label="Message"
-            className="field-sizing-content max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2.5 pl-4 text-[15px] outline-none"
+            className="field-sizing-content max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2.5 pl-4 text-[15px] outline-none placeholder:text-muted-foreground"
           />
           <AnimatePresence>
             {listening && text === "" ? (
+              // The label stops short of the two buttons on the right, so it never runs under them.
               <motion.div
                 key="listening"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="pointer-events-none absolute inset-y-0 left-4 flex items-center gap-2.5 text-[15px] text-muted-foreground"
+                className="pointer-events-none absolute inset-y-0 left-4 right-[72px] flex min-w-0 items-center gap-2.5 text-[15px] text-muted-foreground"
               >
                 <Waveform />
-                Listening
+                <span className="truncate">Listening</span>
               </motion.div>
             ) : null}
           </AnimatePresence>
@@ -440,7 +459,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               onClick={() => void startRecording()}
               aria-label="Record a voice message"
               title="Record a voice message"
-              className="relative mr-1 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
+              className="relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
             >
               <AudioLines className="size-[18px]" strokeWidth={2} aria-hidden="true" />
             </button>
@@ -452,7 +471,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               aria-label={listening ? "Stop dictation" : "Dictate a message"}
               aria-pressed={listening}
               title={listening ? "Stop dictation" : "Dictate"}
-              className="relative mr-1 grid size-9 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <AnimatePresence>
                 {listening ? (
@@ -469,7 +488,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               </AnimatePresence>
               <span
                 className={cn(
-                  "relative grid size-9 place-items-center rounded-full transition-colors duration-200",
+                  "relative grid size-8 place-items-center rounded-full transition-colors duration-200",
                   listening ? "bg-foreground text-background" : "text-foreground hover:bg-muted"
                 )}
               >
@@ -481,6 +500,20 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
 
         <SendButton disabled={!canSend} />
       </form>
+      {framing ? (
+        <PhotoCrop
+          key={`${framing.name}-${framing.size}`}
+          file={framing}
+          title="Frame your photo"
+          aspect={null}
+          busyLabel="Attaching…"
+          onCancel={() => {
+            setFraming(null)
+            if (imageRef.current) imageRef.current.value = ""
+          }}
+          onApply={keepFramed}
+        />
+      ) : null}
     </div>
   )
 }

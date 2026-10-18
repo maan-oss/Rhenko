@@ -1,9 +1,11 @@
 "use client"
 
+import { useId } from "react"
 import Link from "next/link"
+import { AnimatePresence, motion } from "motion/react"
 import { Heart, Images, Reply, Repeat2, Rows3, Sparkles, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePressedTab } from "@/components/app/tabs"
+import { TabFill, usePressedTab } from "@/components/app/tabs"
 
 export type ProfileSection = "posts" | "highlights" | "replies" | "media" | "reposts" | "likes"
 
@@ -18,11 +20,12 @@ const ICONS: Record<ProfileSection, LucideIcon> = {
 
 export type ProfileTabItem = { href: string; label: string; active: boolean; section: ProfileSection }
 
-// A profile's sections as a row of round icons. The chosen section opens out into a filled pill that carries its name, and
-// the name closes again when another section is chosen: the old name shrinks away first, then the new one opens. Each
-// section is still a link with its own address, and its name is the link's accessible name.
+// A profile's sections as one row of round icons. The chosen section is the only one with a name: its filled pill slides
+// across from the last choice when it is pressed, and the name opens beside the icon. Each section is still a link with its
+// own address, and its name is the link's accessible name.
 export function ProfileTabs({ items, label }: { items: ProfileTabItem[]; label: string }) {
   const { current, press } = usePressedTab(items)
+  const id = useId()
   return (
     <nav
       aria-label={label}
@@ -41,22 +44,28 @@ export function ProfileTabs({ items, label }: { items: ProfileTabItem[]; label: 
             aria-current={active ? "page" : undefined}
             onClick={() => press(item.href)}
             className={cn(
-              "inline-flex h-10 shrink-0 items-center rounded-full transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              active
-                ? "bg-foreground pr-4 pl-3 text-background"
-                : "w-10 justify-center text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+              "relative inline-flex h-10 shrink-0 items-center justify-center rounded-full outline-none transition-colors duration-200",
+              active ? "pr-4 pl-3 text-background" : "w-10 text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
             )}
           >
-            <Icon className="size-[18px] shrink-0" strokeWidth={2} aria-hidden="true" />
-            <span
-              className={cn(
-                "grid transition-[grid-template-columns,opacity,padding] ease-[cubic-bezier(0.2,0.7,0.2,1)]",
-                active ? "grid-cols-[1fr] pl-2 opacity-100 delay-100 duration-300" : "grid-cols-[0fr] pl-0 opacity-0 duration-150"
-              )}
-            >
-              <span aria-hidden={!active} className="min-w-0 overflow-hidden text-[14px] font-semibold whitespace-nowrap">
-                {item.label}
-              </span>
+            {active ? <TabFill layoutId={`${id}-section`} /> : null}
+            <span className="relative inline-flex items-center">
+              <Icon className="size-[18px] shrink-0" strokeWidth={2} aria-hidden="true" />
+              <AnimatePresence initial={false}>
+                {active ? (
+                  <motion.span
+                    key="name"
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: "auto" }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.22, ease: [0.2, 0.7, 0.2, 1] }}
+                    aria-hidden="true"
+                    className="overflow-hidden pl-2 text-[14px] font-semibold whitespace-nowrap"
+                  >
+                    {item.label}
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
             </span>
           </Link>
         )
