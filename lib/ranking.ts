@@ -10,8 +10,10 @@
 //    when they predict held-out behaviour better than PRIOR does (see fitHead).
 // 2. Penalties. A post the viewer has already kept on screen for three seconds counts for a tenth. A post already shown to
 //    them in the last three days counts for 15%. A post they have liked, reposted or bookmarked counts for 30%.
-// 3. Ordering. Ties go to the newer item. No author takes more than PER_AUTHOR of the top places, and no more than
-//    SOURCE_RUN places in a row come from one source, so the list does not turn into one kind of post.
+// 3. Ordering. Ties go to the newer item. From the eleventh place on, every tenth place goes to the best new voice (a brand-
+//    new post from a small account the viewer does not follow), so new people are seen without outranking the first ten.
+//    No author takes more than PER_AUTHOR of the top places, and no more than SOURCE_RUN places in a row come from one
+//    source, so the list does not turn into one kind of post.
 
 const HOUR = 60 * 60 * 1000
 
@@ -19,6 +21,13 @@ export const RANK_WINDOW_MS = 72 * HOUR
 export const HALF_LIFE_MS = 12 * HOUR
 export const PER_AUTHOR = 2
 export const SOURCE_RUN = 3
+// A followed author's post fades over a day and a half, not half a day, so it stays in contention for its whole window.
+export const FOLLOWED_HALF_LIFE_MS = 36 * HOUR
+// A new voice is a post under six hours old from an account with few followers, which the viewer does not follow. From
+// NEW_VOICE_FIRST on, every NEW_VOICE_EVERY-th place goes to the best new voice there is.
+export const NEW_VOICE_MS = 6 * HOUR
+export const NEW_VOICE_FIRST = 11
+export const NEW_VOICE_EVERY = 10
 // Time on screen at which a post counts as read. A post read this way is pushed well down.
 export const DWELL_MS = 3000
 // An author with fewer followers than this is a small account. The explore pool and one feature look at them.
@@ -71,8 +80,8 @@ export function engagement(c: Pick<Candidate, "likes" | "reposted" | "replies" |
   return Math.log2(1 + weighted)
 }
 
-export function recencyOf(at: number, now: number): number {
-  return Math.pow(0.5, Math.max(0, now - at) / HALF_LIFE_MS)
+export function recencyOf(at: number, now: number, halfLife = HALF_LIFE_MS): number {
+  return Math.pow(0.5, Math.max(0, now - at) / halfLife)
 }
 
 // The features the models read. The order matches FEATURE_NAMES and the weight vectors below.
@@ -95,7 +104,7 @@ export const FEATURE_NAMES = [
 export function featuresOf(c: Candidate, now: number): number[] {
   return [
     1,
-    recencyOf(c.at, now),
+    recencyOf(c.at, now, c.followed ? FOLLOWED_HALF_LIFE_MS : HALF_LIFE_MS),
     Math.min(engagement(c) / 8, 2),
     c.followed ? 1 : 0,
     c.reposterId !== null ? 1 : 0,
@@ -136,6 +145,38 @@ export function score(c: Candidate, now: number, weights: Weights = PRIOR): numb
   if (c.seen) value *= 0.15
   if (c.engagedByViewer) value *= 0.3
   return value
+}
+
+// A brand-new post from an account the viewer does not follow and that has few followers. Reposts are not new voices.
+export function isNewVoice(c: Candidate, now: number): boolean {
+  return !c.followed && c.reposterId === null && now - c.at <= NEW_VOICE_MS && c.authorFollowers < SMALL_AUTHOR
+}
+
+// Puts the best new voices into the reserved places. `list` is in score order. A reserved place takes the best new voice not
+// yet placed, if there is one, and every other place takes the next item in score order. Nothing is dropped.
+export function withNewVoices(list: Candidate[], now: number): Candidate[] {
+  const voices = list.filter((c) => isNewVoice(c, now))
+  if (voices.length === 0) return list
+  const out: Candidate[] = []
+  const used = new Set<string>()
+  let next = 0
+  let voice = 0
+  while (out.length < list.length) {
+    const reserved = out.length >= NEW_VOICE_FIRST - 1 && (out.length - (NEW_VOICE_FIRST - 1)) % NEW_VOICE_EVERY === 0
+    if (reserved) {
+      while (voice < voices.length && used.has(voices[voice].key)) voice++
+      if (voice < voices.length) {
+        out.push(voices[voice])
+        used.add(voices[voice].key)
+        continue
+      }
+    }
+    // Every item before `next` is already placed, so the item at `next` (if it is placed) is skipped and the next is taken.
+    while (used.has(list[next].key)) next++
+    out.push(list[next])
+    used.add(list[next].key)
+  }
+  return out
 }
 
 // Whether the run of the last SOURCE_RUN places in `head` all come from `source`.
@@ -186,7 +227,7 @@ export function rank(candidates: Candidate[], now: number, limit: number, weight
     }
   }
 
-  for (const { candidate } of order) {
+  for (const candidate of withNewVoices(order.map((entry) => entry.candidate), now)) {
     if (authorCount(candidate.authorId) >= PER_AUTHOR) later.push(candidate)
     else if (runsOn(head, candidate.source)) blocked.push(candidate)
     else {

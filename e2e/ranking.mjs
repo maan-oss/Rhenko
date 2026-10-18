@@ -47,8 +47,8 @@ async function forYouOrder() {
       .or(viewer.page.getByText("You're all caught up."))
       .first()
       .waitFor({ timeout: 30 * 1000 })
-    // A new post ranks by its score, and a brand-new stranger's post has no likes yet, so on a busy site it can sit below the
-    // first eight pages. The feed is read page by page, up to eight pages, until the stranger's post is in it. The text is
+    // A brand-new stranger's post has no likes yet, so it ranks by score until its place comes up: from the eleventh place on,
+    // every tenth place is reserved for the best new voice. The feed is read page by page, up to eight pages, until it is in. The text is
     // read as textContent: innerText leaves out the cards the reader has scrolled past (they use content-visibility).
     let texts = []
     let pages = 1

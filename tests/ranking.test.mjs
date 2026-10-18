@@ -18,6 +18,10 @@ import {
   SOURCE_RUN,
   HALF_LIFE_MS,
   MIN_GAIN,
+  NEW_VOICE_FIRST,
+  NEW_VOICE_EVERY,
+  isNewVoice,
+  withNewVoices,
 } from "../lib/ranking.ts"
 
 const NOW = Date.UTC(2026, 9, 12, 12, 0, 0)
@@ -250,4 +254,59 @@ test("splitHoldout keeps the older part to train on and the newer part to check"
   const { train, holdout } = splitHoldout([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   assert.deepEqual(train, [1, 2, 3, 4, 5, 6, 7, 8])
   assert.deepEqual(holdout, [9, 10])
+})
+
+test("a followed post from a day ago still beats a stranger's post from the same day", () => {
+  const followed = score(post("a", "x", { followed: true, likes: 2, at: NOW - 24 * HOUR }), NOW)
+  const stranger = score(post("b", "y", { likes: 2, at: NOW - 24 * HOUR }), NOW)
+  assert.ok(followed > stranger, `followed ${followed} vs stranger ${stranger}`)
+})
+
+test("a brand-new post from a small account is placed at the first reserved place, ahead of older popular posts", () => {
+  const sources = ["popular", "social", "affinity", "topic"]
+  const popular = Array.from({ length: 30 }, (_, i) =>
+    post(`hot${i}`, `h${i}`, { at: NOW - 2 * HOUR, likes: 50 + i, authorFollowers: 5000, source: sources[i % sources.length] })
+  )
+  const voice = post("voice", "new", { at: NOW - 5 * 60 * 1000, authorFollowers: 12 })
+  assert.ok(score(voice, NOW) < score(popular[0], NOW), "the new post would otherwise sit well down")
+  const ranked = rank([...popular, voice], NOW, 40)
+  assert.equal(ranked.findIndex((c) => c.postId === "voice"), NEW_VOICE_FIRST - 1)
+})
+
+test("new voices never take the first ten places", () => {
+  const top = Array.from({ length: 12 }, (_, i) =>
+    post(`t${i}`, `ta${i}`, { followed: true, likes: 30, at: NOW - HOUR, source: ["follow", "social", "popular"][i % 3] })
+  )
+  const voice = post("voice", "new", { at: NOW - 60 * 1000, authorFollowers: 3 })
+  const ranked = rank([...top, voice], NOW, 13)
+  assert.ok(ranked.slice(0, NEW_VOICE_FIRST - 1).every((c) => c.postId !== "voice"))
+  assert.equal(ranked.findIndex((c) => c.postId === "voice"), NEW_VOICE_FIRST - 1)
+})
+
+test("a reserved place can be used once per new voice, and every tenth place after the first is reserved too", () => {
+  const sources = ["popular", "social", "affinity"]
+  const hot = Array.from({ length: 40 }, (_, i) =>
+    post(`hot${i}`, `h${i}`, { at: NOW - 2 * HOUR, likes: 80 - i, authorFollowers: 5000, source: sources[i % sources.length] })
+  )
+  const voices = [0, 1].map((i) => post(`v${i}`, `vn${i}`, { at: NOW - (i + 1) * 60 * 1000, authorFollowers: 4 }))
+  const ranked = rank([...hot, ...voices], NOW, 60)
+  assert.equal(ranked.findIndex((c) => c.postId === "v0"), NEW_VOICE_FIRST - 1)
+  assert.equal(ranked.findIndex((c) => c.postId === "v1"), NEW_VOICE_FIRST - 1 + NEW_VOICE_EVERY)
+})
+
+test("isNewVoice is for brand-new posts from small accounts the viewer does not follow", () => {
+  assert.equal(isNewVoice(post("a", "x", { at: NOW - 60 * 1000, authorFollowers: 5 }), NOW), true)
+  assert.equal(isNewVoice(post("a", "x", { at: NOW - 60 * 1000, authorFollowers: 5, followed: true }), NOW), false, "followed")
+  assert.equal(isNewVoice(post("a", "x", { at: NOW - 7 * HOUR, authorFollowers: 5 }), NOW), false, "older than six hours")
+  assert.equal(isNewVoice(post("a", "x", { at: NOW - 60 * 1000, authorFollowers: 5000 }), NOW), false, "a large account")
+  assert.equal(isNewVoice(post("a", "x", { at: NOW - 60 * 1000, authorFollowers: 5, reposterId: "r" }), NOW), false, "a repost")
+})
+
+test("withNewVoices keeps every candidate exactly once", () => {
+  const list = Array.from({ length: 25 }, (_, i) =>
+    post(`p${i}`, `a${i}`, { at: NOW - (i % 3 === 0 ? 60 * 1000 : 2 * HOUR), authorFollowers: i % 2 === 0 ? 4 : 900, likes: 25 - i })
+  )
+  const out = withNewVoices(list, NOW)
+  assert.equal(out.length, list.length)
+  assert.deepEqual(out.map((c) => c.key).sort(), list.map((c) => c.key).sort())
 })
