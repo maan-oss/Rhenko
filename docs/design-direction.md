@@ -12,7 +12,7 @@ layers rather than decoration.
 - Sora is the only typeface. Body text is 400 and 600. Display headings are 600 with slightly tight tracking. No second
   family and no italic accent words.
 - Depth comes from three surface levels (ground, raised, overlay), a one-pixel inner highlight on raised surfaces, and
-  shadows tinted with the dusk hue instead of grey.
+  soft neutral shadows. Dusk is not used for shadows or for anything that reads as a tint on a surface.
 
 ## Two shells, built separately
 

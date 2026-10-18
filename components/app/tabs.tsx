@@ -39,9 +39,9 @@ export function usePressedTab(items: Pick<TabItem, "href" | "active">[]): { curr
   return { current, press: (href) => setPressed({ from: served, to: href }) }
 }
 
-// The tabs at the top of a page: one track of words, with the chosen tab lifted onto a raised surface. The surface is
-// shaded with the dusk hue rather than grey, so it reads as a layer on the track rather than a rule under the words. Each
-// tab is a link, so every section keeps its own address.
+// The tabs at the top of a page: one track of words, with the chosen tab lifted onto a raised surface. The surface casts a
+// soft neutral shadow, so it reads as a layer on the track rather than a rule under the words. Each tab is a link, so every
+// section keeps its own address.
 export function TabLinks({ items, label = "Sections", className }: { items: TabItem[]; label?: string; className?: string }) {
   const { current, press } = usePressedTab(items)
   return (
@@ -61,7 +61,7 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
             className={cn(
               "flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold whitespace-nowrap outline-none transition-[background-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring",
               active
-                ? "bg-background text-foreground shadow-[0_1px_2px_rgba(63,74,122,0.22),0_4px_12px_-6px_rgba(63,74,122,0.35)]"
+                ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.14),0_4px_12px_-6px_rgba(0,0,0,0.28)]"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
