@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { Captions, SceneLayout, SPRING_SOFT, STAGE, useStep, type Beat, type SceneProps } from "@/components/marketing/chapter"
+import { Landscape } from "@/components/marketing/landscape"
 
 // What a photo carries about itself, removed one line at a time on upload. The picture on the right is what stays.
 
@@ -79,7 +80,7 @@ export function PhotoLabel({ progress, reduced }: SceneProps) {
         </ul>
 
         <div className={cn("relative aspect-[4/3] overflow-hidden rounded-2xl border border-border")}>
-          <Picture />
+          <Landscape />
           <span className="absolute bottom-3 left-3 rounded-full bg-background px-3 py-1 text-[12.5px] font-semibold">Ready to post</span>
         </div>
       </div>
@@ -87,16 +88,4 @@ export function PhotoLabel({ progress, reduced }: SceneProps) {
   )
 
   return <SceneLayout captions={<Captions beats={BEATS} progress={progress} reduced={reduced} />} stage={stage} />
-}
-
-// A plain landscape drawn in the page's own ink. It stands for the picture; it is not a photograph.
-function Picture() {
-  return (
-    <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" className="size-full" aria-hidden>
-      <rect width="400" height="300" style={{ fill: "var(--muted)" }} />
-      <circle cx="292" cy="104" r="36" style={{ fill: "var(--foreground)" }} opacity="0.85" />
-      <path d="M0 214 C 90 160, 160 182, 232 198 S 360 168, 400 182 L400 300 L0 300Z" style={{ fill: "var(--foreground)" }} opacity="0.18" />
-      <path d="M0 252 C 80 214, 170 232, 250 246 S 360 228, 400 240 L400 300 L0 300Z" style={{ fill: "var(--foreground)" }} opacity="0.4" />
-    </svg>
-  )
 }

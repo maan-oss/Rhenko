@@ -9,11 +9,11 @@ import { Magnetic } from "@/components/marketing/magnetic"
 import { Faq } from "@/components/marketing/faq"
 import { SiteFooter } from "@/components/marketing/site-footer"
 import { HeroWindow } from "@/components/marketing/hero-window"
+import { FeaturesShowcase } from "@/components/marketing/features-showcase"
 import { RhenkoMotion, Reveal } from "@/components/marketing/chapter"
 import {
   CallsChapter,
   CirclesChapter,
-  FeaturesChapter,
   FeedChapter,
   ManifestoChapter,
   PhotosChapter,
@@ -162,7 +162,7 @@ export function Landing() {
           </Reveal>
         </section>
 
-        <FeaturesChapter />
+        <FeaturesShowcase />
 
         <section id="faq" className={cn(WRAP, "grid gap-14 py-28 sm:py-40 lg:grid-cols-[0.8fr_1.2fr]")}>
           <Reveal className="grid content-start gap-5">

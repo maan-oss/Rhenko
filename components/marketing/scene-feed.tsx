@@ -105,8 +105,8 @@ function FeedRow({ id, open, highlight }: { id: PersonId; open: boolean; highlig
             </p>
             <span
               className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
-                open ? "bg-foreground text-background" : "text-muted-foreground"
+                "flex size-8 shrink-0 items-center justify-center rounded-full transition-[background-color,color,box-shadow] duration-300",
+                open ? "bg-muted text-foreground shadow-[inset_0_0_0_1px_var(--border)]" : "text-muted-foreground"
               )}
             >
               <MoreHorizontal className="size-4" aria-hidden />

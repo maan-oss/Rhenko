@@ -433,14 +433,12 @@ input[type="radio"]:focus-visible {
   100% { color: var(--muted-foreground); }
 }
 
-/* Marketing page motion that is not scroll-driven: the hero's entrance, the FAQ answers, the ticker and the header's
-   progress line. The pinned scenes are driven by the reader's scroll in JavaScript. Reduced motion turns these off. */
+/* Marketing page motion that is not scroll-driven: the hero's entrance, the FAQ answers and the ticker. The pinned scenes are driven by the reader's scroll in JavaScript. Reduced motion turns these off. */
 @keyframes mk-rise {
   from { opacity: 0; transform: translate3d(0, 26px, 0); filter: blur(10px); }
   to { opacity: 1; transform: none; filter: blur(0); }
 }
 @keyframes mk-marquee { to { transform: translate3d(-50%, 0, 0); } }
-@keyframes mk-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes mk-line { from { transform: translate3d(0, 105%, 0); } to { transform: none; } }
 
 .mk-rise { animation: mk-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
@@ -452,12 +450,8 @@ input[type="radio"]:focus-visible {
 .mk-marquee { animation: mk-marquee 46s linear infinite; }
 .mk-marquee-band:hover .mk-marquee { animation-play-state: paused; }
 
-@supports (animation-timeline: view()) {
-  .mk-progress { animation: mk-grow linear both; animation-timeline: scroll(root); transform-origin: left center; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .mk-rise, .mk-line, .mk-marquee, .mk-progress {
+  .mk-rise, .mk-line, .mk-marquee {
     animation: none !important;
   }
 }
