@@ -63,11 +63,32 @@ critically damped or close to it.
   arrows and the "1 / 2" counter sit on the photo's own edges and corner, not on the dialog.
 - Post composer: keyboard and pointer focus shows as one soft halo around the text row, the same as the messages
   composer, instead of a square outline around the text field.
+- Analytics tiles: the change line under each number wraps at 360 px instead of cutting "No change" short.
+- Landing in dark theme: the hero backdrop was drawn in its light colours. React does not correct a style attribute that
+  differs from the server's markup during hydration, and the backdrop picked its colours from the theme on the client. The
+  flat backdrop now reads two theme tokens (`--grain-back`, `--grain-glow`) in CSS, so the server and the client agree.
+- Composer: a post that never reaches the server, such as on a dropped connection, used to replace the page with an error
+  screen and lose the text. It now keeps the text and says the post did not send. A failed Undo says so too.
 
 Verified in this pass: a horizontal-overflow check at 360, 390, 430, 768, 1024, 1440 and 1920 px across eight main
 routes (light theme) reports no overflow. A route audit of 104 visits (about 50 routes, signed-out and signed-in, at 360px,
 phone and desktop) reports no overflow, no HTTP errors and no console errors. The e2e suites for auth, feed, posts and
 social pass (211 checks, 0 failures).
+
+Verified in the latest round:
+
+- Route review from screenshots, not only overflow: 13 signed-in routes (home, explore, search, notifications, messages,
+  bookmarks, lists, drafts, circles, analytics, settings, own profile, a post) and the signed-out landing at 360, 768 and
+  1440 px, light and dark. Four routes at 1024 px in light and at 1920 px in dark. The analytics tiles were the only
+  defect found, and they are fixed.
+- Landing in dark theme at 360, 390, 768, 1024, 1440 and 1920 px after the fix. Light theme at 360 and 390 px after the
+  fix. The headless browser did not mount the WebGL shader, so the page drew the flat backdrop. The shader's dark palette
+  has not been seen.
+- Composer while a post is in flight and after a failed one, at phone and desktop widths, light and dark: the text box is
+  read-only and marked busy, the button reads Posting, and a failed send keeps the text and shows the message.
+- E2E: posts 67 of 67 after the composer change. Auth 57 of 57 on a rerun. The first auth run had one failure, a 404
+  console error during two-factor sign-in, which did not come back.
+- TypeScript passes for the project, ESLint passes on the changed files, and the production build passes.
 
 ## Measured in this pass
 
@@ -102,13 +123,15 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 
 ## Still to do
 
-- Review every route visually at each width, not just the list above. Nearly all screens are checked only for overflow
-  and errors so far.
+- About 40 routes have only been checked for overflow and console errors, not looked at.
+- The composer's states were not checked with reduced motion on.
+- The landing's WebGL shader has not been seen in a browser that draws it.
 - Very small photos (about 100px wide) are cramped: the caption wraps narrowly, and the arrows, counter and close button
   touch one another. Decided: no minimum viewer size. Phone photos are large, and a minimum would be an invented rule
   that changes how the photo sits. Revisit only if small images turn up in real use.
-- Review the composer's loading and error states with the reduced-motion and dark-theme settings on.
-- Rebuild the product previews on the landing from the real components. They are still hand-built miniatures.
+- The landing's product previews are still hand-built miniatures. Rebuilding them from the real post, poll and composer
+  components was not done on purpose: those components import the composer, dialogs and server actions, which would add
+  to the public landing's first load. Decide whether the previews must be the real components anyway.
 - Measure frame timing and Core Web Vitals on a real low-end phone.
 
 ## References

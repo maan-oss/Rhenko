@@ -77,7 +77,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
               <span className="relative text-[22px] leading-none font-semibold tabular-nums">{exact(total.now)}</span>
               <span className={cn("relative flex items-center gap-1 text-xs tabular-nums", cardShift.direction === "up" ? "text-foreground" : "text-muted-foreground")}>
                 <Arrow className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{cardShift.text}</span>
+                <span className="min-w-0 leading-snug">{cardShift.text}</span>
               </span>
             </button>
           )

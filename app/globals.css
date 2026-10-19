@@ -53,6 +53,9 @@
 /* Light: black and white. Ink is pure black, the page is a near-white, and nothing is tinted. There is no second colour. */
 :root {
   --background: #fafafa;
+  /* The flat ground of the landing backdrop, drawn in CSS so the server's markup and the client agree on every theme. */
+  --grain-back: #fafafa;
+  --grain-glow: #2a2a2a40;
   --foreground: #0a0a0a;
   --card: #ffffff;
   --card-foreground: #0a0a0a;
@@ -112,6 +115,8 @@
 /* Dark: black and white inverted. The page is near-black and ink is near-white. Still no second colour. */
 .dark {
   --background: #0b0b0b;
+  --grain-back: #0b0b0b;
+  --grain-glow: #2a2a2a40;
   --foreground: #f2f2f2;
   --card: #141414;
   --card-foreground: #f2f2f2;

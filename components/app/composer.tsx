@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
-import { createPost, undoPost } from "@/actions/posts"
+import { createPost, undoPost, type CreateResult } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
 import type { Ratio } from "@/components/app/photo-crop"
@@ -553,6 +553,19 @@ function tokenBefore(text: string, caret: number): { token: string; start: numbe
   return { token: match[2], start: caret - match[2].length }
 }
 
+// What the person is told when a post never reaches the server, such as a dropped connection. The text stays in the composer.
+const NOT_SENT = "Your post did not send. Check your connection, then try again. Your text is still here."
+
+// A send that gets no answer throws rather than returning a result, and an uncaught throw would replace the whole page with an
+// error screen and lose the text. It becomes a refusal instead, so the composer keeps what was written and says why.
+async function submitPost(form: FormData): Promise<CreateResult> {
+  try {
+    return await createPost(form)
+  } catch {
+    return { ok: false, error: NOT_SENT }
+  }
+}
+
 export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeholder, id, compact = false, autoFocus = false, onPosted }: ComposerProps) {
   const router = useRouter()
   const [text, setText] = useState("")
@@ -878,7 +891,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     // A check asked for by the server is run, and the same part is sent again with its answer.
     const start = (form: FormData) =>
       startTransition(async () => {
-      const first = await createPost(form)
+      const first = await submitPost(form)
       if (!first.ok) {
         if (first.proofRequired) {
           proof.askForProof((passed) => {
@@ -897,7 +910,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
         part.set("body", parts[index])
         part.set("replyTo", previous)
         part.set("threadOf", first.id)
-        const next = await createPost(part)
+        const next = await submitPost(part)
         if (!next.ok) {
           toast.error(`Posted ${index} of ${parts.length} parts. ${next.error}`)
           setText(parts[index])
@@ -934,7 +947,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     // A check asked for by the server is run, and the post is sent again with its answer.
     const publish = (form: FormData) =>
       startTransition(async () => {
-      const result = await createPost(form)
+      const result = await submitPost(form)
       if (!result.ok) {
         if (result.proofRequired) {
           proof.askForProof((passed) => {
@@ -960,10 +973,12 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           action: {
             label: "Undo",
             onClick: () => {
-              undoPost(postId).then((undone) => {
-                if (undone.ok) toast.success("Post deleted.")
-                else toast.error(undone.error)
-              })
+              undoPost(postId)
+                .then((undone) => {
+                  if (undone.ok) toast.success("Post deleted.")
+                  else toast.error(undone.error)
+                })
+                .catch(() => toast.error("The post could not be deleted. Check your connection, then try again."))
             },
           },
         })

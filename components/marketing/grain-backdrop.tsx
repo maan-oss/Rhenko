@@ -29,7 +29,10 @@ export function GrainBackdrop({
   fade?: "bottom" | "both"
 }) {
   const { resolvedTheme } = useTheme()
-  const palette = resolvedTheme === "dark" ? PALETTE.dark : calm ? PALETTE.lightCalm : PALETTE.light
+  // The palette's name is the shader's key. The theme is only known after mount, so the shader is mounted again when the
+  // name changes; otherwise it keeps the colours it was first drawn with (light, on a dark theme).
+  const paletteName = resolvedTheme === "dark" ? "dark" : calm ? "lightCalm" : "light"
+  const palette = PALETTE[paletteName]
   const reduced = useReducedMotion()
   const layer = useRef<HTMLDivElement>(null)
   const onScreen = useOnScreen(layer)
@@ -52,6 +55,7 @@ export function GrainBackdrop({
             the browser can draw WebGL. Otherwise a flat grey ground stands in, which costs nothing. */}
         {shader ? (
           <GrainGradient
+            key={paletteName}
             width="100%"
             height="100%"
             colors={[...palette.colors]}
@@ -67,7 +71,7 @@ export function GrainBackdrop({
             style={{ opacity: resolvedTheme === "dark" ? 0.55 : 0.8 }}
           />
         ) : (
-          <div className="absolute inset-0" style={{ background: flatGround(palette) }} />
+          <div className="absolute inset-0" style={{ background: FLAT_GROUND }} />
         )}
       </div>
       <PointField dots={palette.dots} reduced={reduced} />
@@ -77,9 +81,10 @@ export function GrainBackdrop({
 }
 
 // The stand-in for the shader: the paper colour with a soft grey glow in the top left.
-function flatGround(palette: { back: string; colors: readonly string[] }) {
-  return `radial-gradient(90% 70% at 18% 8%, ${palette.colors[0]}40, transparent 62%), ${palette.back}`
-}
+// The flat ground reads its colours from the theme's tokens, not from the resolved theme. The server cannot know the theme,
+// and React does not correct a style attribute that differs from the server's markup during hydration, so a palette chosen
+// in render would stay light on a dark theme.
+const FLAT_GROUND = "radial-gradient(90% 70% at 18% 8%, var(--grain-glow), transparent 62%), var(--grain-back)"
 
 // Whether this browser can draw WebGL. It is null until the browser has been asked, so the server's HTML and the first
 // paint show the flat ground, and the shader is never mounted where WebGL is missing.
