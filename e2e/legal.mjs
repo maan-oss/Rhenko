@@ -14,6 +14,7 @@ import { execute, postIdByBody, query } from "./lib/db.mjs"
 import { mailCount, markLog } from "./lib/mail.mjs"
 import { writePost } from "./lib/posts.mjs"
 import { acted, bodyText, go, ready } from "./lib/ui.mjs"
+import { allowNoise } from "./lib/watch.mjs"
 
 const execFileAsync = promisify(execFile)
 const PUBLIC_PAGES = ["/terms", "/privacy", "/rules", "/copyright", "/safety", "/transparency", "/legal", "/notice"]
@@ -74,6 +75,19 @@ async function sendNotice(page, { kind, email, url = "", work = "", description,
   await acted(page, () => page.getByRole("button", { name: "Send notice", exact: true }).click())
 }
 
+// A hidden post is answered 404. The author's own pages still hold its card for a while, and the card prefetches the post's
+// page, so that prefetch is answered 404 and Chromium logs it. Nothing shows it. Allowed for this author's status pages only,
+// for as long as the check runs.
+function allowHiddenPrefetch(handle) {
+  return allowNoise({
+    id: "prefetch-of-hidden-post",
+    kind: "console",
+    text: /Failed to load resource: the server responded with a status of 404/,
+    url: new RegExp(`^https?://[^/]+/${handle}/status/`),
+    reason: "A hidden post's card still shows on its author's pages, and its prefetch of the post is answered 404.",
+  })
+}
+
 function noticeAddress(tag) {
   return `${tag}-${RUN_ID.toLowerCase()}-${randomWord(4).toLowerCase()}@example.com`
 }
@@ -96,7 +110,8 @@ async function publicPages() {
   try {
     for (const pagePath of PUBLIC_PAGES) {
       await check(`${pagePath} opens for someone who is not signed in`, async () => {
-        const response = await visitor.page.request.get(`${BASE}${pagePath}`)
+        // No redirects: a public page that sends a visitor to the sign-in page is not open to them.
+        const response = await visitor.page.request.get(`${BASE}${pagePath}`, { maxRedirects: 0 })
         assert.equal(response.status(), 200, `${pagePath} answered ${response.status()}`)
       })
     }
@@ -181,6 +196,7 @@ async function agreementScreen() {
 async function notices() {
   const author = await createUser({ tag: "author" })
   const sender = await newVisitor({ label: "notice-sender" })
+  const endAllow = allowHiddenPrefetch(author.handle)
   try {
     const body = `My own work, posted in ${RUN_ID} ${randomWord(4)}`
     await writePost(author.page, body)
@@ -241,6 +257,7 @@ async function notices() {
       assert.equal(rows.length, 0, "a notice from a form that filled the hidden field was kept")
     })
   } finally {
+    endAllow()
     await closeVisitor(sender)
     await closeVisitor(author)
   }
@@ -248,6 +265,7 @@ async function notices() {
 
 async function appeals() {
   const author = await createUser({ tag: "moderate" })
+  const endAllow = allowHiddenPrefetch(author.handle)
   try {
     const body = `A post for the command line ${RUN_ID} ${randomWord(4)}`
     await writePost(author.page, body)
@@ -294,6 +312,7 @@ async function appeals() {
       assert.match(again.text, /already decided/)
     })
   } finally {
+    endAllow()
     await closeVisitor(author)
   }
 }
@@ -301,6 +320,7 @@ async function appeals() {
 async function legalDecisions() {
   const author = await createUser({ tag: "copied" })
   const sender = await newVisitor({ label: "copyright-sender" })
+  const endAllow = allowHiddenPrefetch(author.handle)
   try {
     const body = `A photograph I took in ${RUN_ID} ${randomWord(4)}`
     await writePost(author.page, body)
@@ -376,6 +396,7 @@ async function legalDecisions() {
       assert.match(result.text, /Recorded request/)
     })
   } finally {
+    endAllow()
     await closeVisitor(sender)
     await closeVisitor(author)
   }
@@ -398,7 +419,7 @@ async function searchesAndSettings() {
     })
     await check("the search results offer a Lists tab, which finds lists by name", async () => {
       // The search tabs are their own list, so the Lists link in the main menu is not the one meant here.
-      const tabs = user.page.getByRole("navigation", { name: "Sections" })
+      const tabs = user.page.getByRole("navigation", { name: "Search results" })
       await go(user.page, `/search?q=${word}&f=top`, tabs.getByRole("link", { name: "Lists", exact: true }))
       await tabs.getByRole("link", { name: "Lists", exact: true }).click()
       await user.page.waitForURL((url) => new URL(url).searchParams.get("f") === "lists", { timeout: TIMEOUT })
@@ -421,18 +442,18 @@ async function transparency() {
     await check("the transparency page shows the counts of reports, notices and hidden posts", async () => {
       await visitor.page.goto(`${BASE}/transparency`, { waitUntil: "domcontentloaded" })
       await visitor.page.getByRole("heading", { level: 1, name: "Transparency" }).waitFor({ timeout: TIMEOUT })
-      // The figures are streamed after the heading, so wait for the first of them before reading the page.
-      await visitor.page.getByText("Reports received", { exact: true }).waitFor({ timeout: TIMEOUT })
-      const text = await bodyText(visitor.page)
-      for (const label of [
+      const labels = [
         "Reports received",
         "Notices received through the notice form",
         "Posts hidden, with a notice sent to the author",
         "Appeals reversed",
         "Orders and requests from courts or authorities",
-      ]) {
-        assert.match(text, new RegExp(label), `the figure "${label}" is missing`)
-      }
+      ]
+      // The figures stream in sections after the heading (each section waits on its own queries), so every label is
+      // waited for before the page is read.
+      for (const label of labels) await visitor.page.getByText(label).first().waitFor({ timeout: TIMEOUT })
+      const text = await bodyText(visitor.page)
+      for (const label of labels) assert.match(text, new RegExp(label), `the figure "${label}" is missing`)
     })
   } finally {
     await closeVisitor(visitor)

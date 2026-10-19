@@ -22,6 +22,15 @@ export function configureNoise(list) {
   state.noise = list
 }
 
+// A rule that applies only while one check runs. It returns the function that takes the rule out again, so it covers nothing
+// that the check did not ask for.
+export function allowNoise(rule) {
+  state.noise = [...state.noise, rule]
+  return () => {
+    state.noise = state.noise.filter((item) => item !== rule)
+  }
+}
+
 export function noiseTally() {
   return [...state.ignoredCount.entries()].map(([id, count]) => ({ id, count }))
 }

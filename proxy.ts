@@ -1,11 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { MISSING_PAGE, pageMissing } from "@/lib/route-gate"
 
 // Every page of the app needs a signed-in person, except the few that anyone may read: the landing page at the root,
 // the sign-in and account pages, the policy pages, and the offline page. A visitor without a session cookie is sent to
 // the sign-in page. The page itself still checks the session, so a stale cookie is refused there.
 const SESSION_COOKIE = "rhenko_session"
 
-const PUBLIC_PAGES = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/rules", "/safety", "/transparency", "/privacy", "/terms", "/legal", "/advertise", "/offline", "/copyright"])
+// Next sends this header with the requests it makes to warm a link before a click. A prefetch shows nothing, so it is not
+// checked here; the navigation that follows it is.
+const PREFETCH_HEADER = "next-router-prefetch"
+
+// /notice is public: anyone may tell us about content, with or without an account (app/notice/page.tsx says so).
+const PUBLIC_PAGES = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/rules", "/safety", "/transparency", "/privacy", "/terms", "/legal", "/advertise", "/offline", "/copyright", "/notice"])
 const PUBLIC_PREFIXES = ["/login/", "/signup/", "/forgot-password/", "/reset-password/", "/rules/", "/safety/", "/transparency/", "/privacy/", "/terms/", "/legal/", "/api/"]
 
 function isPublic(pathname: string) {
@@ -13,10 +19,16 @@ function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
-export default function proxy(request: NextRequest) {
+// A profile, a post or a list that does not exist, or that this person may not see, gets a real 404. The check runs here,
+// before the page streams, because a page cannot send a 404 once it has begun (see lib/route-gate.ts).
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  if (isPublic(pathname) || request.cookies.has(SESSION_COOKIE)) return NextResponse.next()
-  return NextResponse.redirect(new URL("/login", request.url))
+  if (isPublic(pathname)) return NextResponse.next()
+  const token = request.cookies.get(SESSION_COOKIE)?.value
+  if (!token) return NextResponse.redirect(new URL("/login", request.url))
+  if (request.headers.get(PREFETCH_HEADER) === "1") return NextResponse.next()
+  if (await pageMissing(pathname, token)) return NextResponse.rewrite(new URL(MISSING_PAGE, request.url))
+  return NextResponse.next()
 }
 
 export const config = {

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt, randomUUID, scrypt as scryptCb, timingSafeEqual } from "node:crypto"
+import { randomBytes, randomInt, randomUUID, scrypt as scryptCb, timingSafeEqual } from "node:crypto"
 import { cookies, headers } from "next/headers"
 import { connection } from "next/server"
 import { redirect } from "next/navigation"
@@ -6,6 +6,7 @@ import { cache } from "react"
 import { change, get, run, transaction, type Param } from "@/lib/db"
 import { TERMS_VERSION } from "@/lib/legal"
 import { consume } from "@/lib/rate-limit"
+import { hashToken } from "@/lib/session-hash"
 import { decryptText, encryptText, isEncrypted, keyedHash } from "@/lib/secrets"
 import {
   hashRecoveryCode,
@@ -168,10 +169,6 @@ export async function clientIp(): Promise<string> {
   const forwarded = list.get("x-forwarded-for")?.split(",").map((part) => part.trim()).filter(Boolean).pop()
   if (forwarded) return forwarded.slice(0, 100)
   return "local"
-}
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex")
 }
 
 export async function findUserByHandleWithSecret(handle: string): Promise<UserRow | undefined> {

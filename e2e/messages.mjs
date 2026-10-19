@@ -17,6 +17,7 @@ import {
   threadText,
 } from "./lib/chat.mjs"
 import { makePng } from "./lib/files.mjs"
+import { allowNoise } from "./lib/watch.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
 import { block, follow } from "./lib/people.mjs"
 import { cardMenu, cardPostId, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
@@ -356,25 +357,38 @@ async function groupFlow({ phone }) {
 
   await check(`${where}: the creator removes a person after a question, and that person loses the group`, async () => {
     need(groupId, "the group")
-    const dialog = await openGroupInfo(creator.page)
-    await dialog.getByRole("button", { name: `Remove @${two.handle} from the group` }).click()
-    const confirm = creator.page.getByRole("dialog", { name: `Remove ${two.name} from the group?` })
-    await confirm.waitFor()
-    await confirm.getByRole("button", { name: "Cancel" }).click()
-    await confirm.waitFor({ state: "detached" })
-    await dialog.getByText(`@${two.handle}`).waitFor()
-    await dialog.getByRole("button", { name: `Remove @${two.handle} from the group` }).click()
-    await confirm.waitFor()
-    await acted(creator.page, () => confirm.getByRole("button", { name: "Remove", exact: true }).click())
-    await toastText(creator.page, new RegExp(`^Removed @${two.handle} from the group`, "i"))
-    await dialog.getByText(`@${two.handle}`).waitFor({ state: "detached" })
-    await closeGroupInfo(creator.page)
+    // The removed member's list still shows the group until it reloads, and Next prefetches the link. That prefetch is answered
+    // 404 now that the member is out, and Chromium logs it. Nothing shows it. Allowed for this group's page during this check only.
+    const endAllow = allowNoise({
+      id: "prefetch-of-removed-group",
+      kind: "console",
+      text: /Failed to load resource: the server responded with a status of 404/,
+      url: new RegExp(`^https?://[^/]+/messages/${escapeRegExp(groupId)}`),
+      reason: "A removed member's list still links to the group until it reloads, so the prefetch of that page is answered 404.",
+    })
+    try {
+      const dialog = await openGroupInfo(creator.page)
+      await dialog.getByRole("button", { name: `Remove @${two.handle} from the group` }).click()
+      const confirm = creator.page.getByRole("dialog", { name: `Remove ${two.name} from the group?` })
+      await confirm.waitFor()
+      await confirm.getByRole("button", { name: "Cancel" }).click()
+      await confirm.waitFor({ state: "detached" })
+      await dialog.getByText(`@${two.handle}`).waitFor()
+      await dialog.getByRole("button", { name: `Remove @${two.handle} from the group` }).click()
+      await confirm.waitFor()
+      await acted(creator.page, () => confirm.getByRole("button", { name: "Remove", exact: true }).click())
+      await toastText(creator.page, new RegExp(`^Removed @${two.handle} from the group`, "i"))
+      await dialog.getByText(`@${two.handle}`).waitFor({ state: "detached" })
+      await closeGroupInfo(creator.page)
 
-    const removedAnswer = await notHere(two.page, `/messages/${groupId}`)
-    const unknownAnswer = await notHere(two.page, `/messages/${missingId()}`)
-    assert.equal(removedAnswer, unknownAnswer, "a removed member gets a different answer from a group that does not exist")
-    await openMessages(two.page)
-    assert.equal(await two.page.locator("main").getByRole("link").filter({ hasText: renamed }).count(), 0, "a removed member still has the group in the list")
+      const removedAnswer = await notHere(two.page, `/messages/${groupId}`)
+      const unknownAnswer = await notHere(two.page, `/messages/${missingId()}`)
+      assert.equal(removedAnswer, unknownAnswer, "a removed member gets a different answer from a group that does not exist")
+      await openMessages(two.page)
+      assert.equal(await two.page.locator("main").getByRole("link").filter({ hasText: renamed }).count(), 0, "a removed member still has the group in the list")
+    } finally {
+      endAllow()
+    }
   })
 
   await check(`${where}: Leave group asks first, sends the person back to Messages, and the others see them gone`, async () => {

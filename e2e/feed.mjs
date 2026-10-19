@@ -147,7 +147,10 @@ async function socialPick() {
 
   await check("a post a followed person liked is on For you, recorded as a social pick", async () => {
     await openHome(viewer.page)
-    await waitForPost(viewer.page, text, { reload: true })
+    // A stranger's post can rank below the first page of For you on a busy test database, so the reader pages down to it
+    // as the other For you checks do.
+    const card = await forYouCard(viewer.page, text)
+    assert.ok(card, "the post a followed person liked is not on For you, even after paging down")
     const rows = await query(
       "SELECT i.source FROM feed_impressions i JOIN users u ON u.id = i.viewer_id WHERE u.handle = ? AND i.post_id = ?",
       viewer.handle,

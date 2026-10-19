@@ -3,6 +3,7 @@
 import { area, assert, check, guard, need, note } from "./lib/harness.mjs"
 import { BASE, RUN_ID, randomWord, sleep } from "./lib/env.mjs"
 import { closeVisitor, newTab } from "./lib/browser.mjs"
+import { allowNoise } from "./lib/watch.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { databaseProblem, keepLinkPreview, moveSchedule, postIdByBody, postState } from "./lib/db.mjs"
 import { makeExifJpeg, makeFakePng, makePng } from "./lib/files.mjs"
@@ -525,16 +526,29 @@ async function postFlows({ phone }) {
 
   await check(`${where}: Undo right after posting takes the post back`, async () => {
     const oops = uniq("Posted by mistake")
-    await openHome(author.page)
-    const form = homeComposer(author.page)
-    await typeIn(form, oops)
-    await acted(author.page, () => form.getByRole("button", { name: "Post", exact: true }).click())
-    const toast = author.page.locator("[data-sonner-toast]").filter({ hasText: /^Posted\./ }).first()
-    await toast.waitFor()
-    await acted(author.page, () => toast.getByRole("button", { name: "Undo" }).click())
-    await toastText(author.page, /Post deleted/)
-    await openProfile(reader.page, author.handle)
-    assert.equal(await noPost(reader.page, oops), true, "a post that was undone is still shown")
+    // The new post's card prefetches its page as it appears. Undo can reach the server first, so that prefetch is answered
+    // 404 and Chromium logs it. Nothing shows it, and the card is gone. Allowed for this author's pages during this check only.
+    const endAllow = allowNoise({
+      id: "prefetch-of-undone-post",
+      kind: "console",
+      text: /Failed to load resource: the server responded with a status of 404/,
+      url: new RegExp(`^https?://[^/]+/${author.handle}/status/`),
+      reason: "A post's card prefetches its page as it appears. Undo can land first, so the prefetch is answered 404.",
+    })
+    try {
+      await openHome(author.page)
+      const form = homeComposer(author.page)
+      await typeIn(form, oops)
+      await acted(author.page, () => form.getByRole("button", { name: "Post", exact: true }).click())
+      const toast = author.page.locator("[data-sonner-toast]").filter({ hasText: /^Posted\./ }).first()
+      await toast.waitFor()
+      await acted(author.page, () => toast.getByRole("button", { name: "Undo" }).click())
+      await toastText(author.page, /Post deleted/)
+      await openProfile(reader.page, author.handle)
+      assert.equal(await noPost(reader.page, oops), true, "a post that was undone is still shown")
+    } finally {
+      endAllow()
+    }
   })
 }
 

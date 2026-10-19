@@ -2,10 +2,9 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { FileText, Lock, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
-import { listDetail } from "@/lib/data"
+import { openList } from "@/lib/access"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
-import { listOwnersVisibleTo } from "@/lib/people-state"
 import { Avatar } from "@/components/app/avatar"
 import { EmptyState } from "@/components/app/empty-state"
 import { FeedList } from "@/components/app/feed-list"
@@ -26,15 +25,7 @@ import { formatCount } from "@/lib/format"
 type Params = Promise<{ id: string }>
 type SearchParams = Promise<{ tab?: string | string[] }>
 
-// A list the viewer may open: it exists, it is theirs or public, and its owner is still here and hasn't blocked them.
-async function openList(id: string, viewerId: string) {
-  const detail = await listDetail(id, viewerId)
-  if (!detail) return null
-  if (!detail.list.isOwner && !(await listOwnersVisibleTo(viewerId, [detail.list.owner.id])).has(detail.list.owner.id)) return null
-  return detail
-}
-
-// Existence checks run before anything streams, so a missing record gets a real 404.
+// The existence check also runs in the proxy (lib/route-gate.ts), before anything streams, so a missing list gets a real 404.
 export const instant = false
 
 export default async function ListPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {

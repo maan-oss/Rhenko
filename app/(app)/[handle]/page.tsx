@@ -57,7 +57,7 @@ const EMPTY: Record<ProfileTab, [string, string]> = {
   likes: ["No likes yet", "Posts this person likes show up here."],
 }
 
-// Nothing here streams: the existence checks run first, so a missing account gets a real 404.
+// The existence checks also run in the proxy (lib/route-gate.ts), before anything streams, so a missing account gets a real 404.
 export const instant = false
 
 export default async function ProfilePage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {

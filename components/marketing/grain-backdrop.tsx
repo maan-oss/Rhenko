@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { GrainGradient } from "@paper-design/shaders-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -29,9 +29,12 @@ export function GrainBackdrop({
   fade?: "bottom" | "both"
 }) {
   const { resolvedTheme } = useTheme()
+  const narrow = useNarrowScreen()
+  // Phones get the calm grain too. Their hero copy is smaller and sits on the grain, where the lighter grain keeps it readable.
+  const quiet = calm || (narrow && resolvedTheme !== "dark")
   // The palette's name is the shader's key. The theme is only known after mount, so the shader is mounted again when the
   // name changes; otherwise it keeps the colours it was first drawn with (light, on a dark theme).
-  const paletteName = resolvedTheme === "dark" ? "dark" : calm ? "lightCalm" : "light"
+  const paletteName = resolvedTheme === "dark" ? "dark" : quiet ? "lightCalm" : "light"
   const palette = PALETTE[paletteName]
   const reduced = useReducedMotion()
   const layer = useRef<HTMLDivElement>(null)
@@ -62,8 +65,8 @@ export function GrainBackdrop({
             colorBack={palette.back}
             shape="corners"
             softness={0.7}
-            intensity={calm ? 0.2 : 0.35}
-            noise={calm ? 0.08 : 0.22}
+            intensity={quiet ? 0.2 : 0.35}
+            noise={quiet ? 0.08 : 0.22}
             speed={reduced ? 0 : 0.35}
             minPixelRatio={1}
             maxPixelCount={1600 * 1000}
@@ -114,6 +117,21 @@ function useOnScreen(ref: React.RefObject<HTMLElement | null>) {
     return () => observer.disconnect()
   }, [ref])
   return visible
+}
+
+// Whether the screen is phone width (below the small breakpoint, 640px). The server cannot know the screen, so it answers no.
+// That changes nothing it draws: the shader is only mounted after the browser has been checked, which is after mount.
+const NARROW_QUERY = "(max-width: 639px)"
+function useNarrowScreen() {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = window.matchMedia(NARROW_QUERY)
+      query.addEventListener("change", notify)
+      return () => query.removeEventListener("change", notify)
+    },
+    () => window.matchMedia(NARROW_QUERY).matches,
+    () => false
+  )
 }
 
 function useReducedMotion() {

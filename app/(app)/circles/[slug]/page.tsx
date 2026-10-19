@@ -2,10 +2,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { FileText, Settings, Users } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
-import { circleBySlug, circleMembers, circleRequests, type Circle } from "@/lib/circles"
+import { circleMembers, circleRequests, type Circle } from "@/lib/circles"
+import { openCircle } from "@/lib/access"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { firstParam } from "@/lib/params"
-import { listOwnersVisibleTo } from "@/lib/people-state"
 import { ACCESS_LABEL } from "@/components/app/circle-bits"
 import { Avatar } from "@/components/app/avatar"
 import { Composer } from "@/components/app/composer"
@@ -26,16 +26,7 @@ import { formatCount } from "@/lib/format"
 type Params = Promise<{ slug: string }>
 type SearchParams = Promise<{ tab?: string | string[] }>
 
-// The circle the viewer may open: it exists, and its owner is not blocked by or blocking the viewer.
-async function openCircle(slug: string, viewerId: string): Promise<Circle | null> {
-  const circle = await circleBySlug(slug.toLowerCase(), viewerId)
-  if (!circle) return null
-  if (circle.owner && circle.owner.id !== viewerId && !(await listOwnersVisibleTo(viewerId, [circle.owner.id])).has(circle.owner.id))
-    return null
-  return circle
-}
-
-// Existence checks run before anything streams, so a missing circle gets a real 404.
+// The existence check also runs in the proxy (lib/route-gate.ts), before anything streams, so a missing circle gets a real 404.
 export const instant = false
 
 export default async function CirclePage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
