@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { MotionRoot } from "@/components/app/motion-root";
 import { Toaster } from "@/components/ui/sonner";
+import { OPENING_SCRIPT } from "@/lib/opening";
 
 // Sora is served from the app (SIL Open Font License, see app/fonts/OFL.txt). Visitors' browsers make no request to Google,
 // and the build does not depend on Google being reachable. The file is the Latin subset, which is what the Google version
@@ -37,6 +38,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${sora.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Runs before the first paint, so a first visit's opening is on screen from the start (see lib/opening.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: OPENING_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <MotionRoot>{children}</MotionRoot>

@@ -146,6 +146,9 @@ async function socialPick() {
   await sleep(1500)
 
   await check("a post a followed person liked is on For you, recorded as a social pick", async () => {
+    // For you reuses the reader's ranking for a minute, and the reader's first ranking was made when the account was created,
+    // before this like. The reader waits out that minute, so the next ranking includes the like.
+    await sleep(62 * 1000)
     await openHome(viewer.page)
     // A stranger's post can rank below the first page of For you on a busy test database, so the reader pages down to it
     // as the other For you checks do.

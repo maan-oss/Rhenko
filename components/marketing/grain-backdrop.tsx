@@ -39,11 +39,13 @@ export function GrainBackdrop({
   const reduced = useReducedMotion()
   const layer = useRef<HTMLDivElement>(null)
   const onScreen = useOnScreen(layer)
-  const webgl = useWebGL()
+  const hero = useRef<HTMLDivElement>(null)
+  const settled = useSettledAfterPaint(hero)
+  const webgl = useWebGL(settled)
   const shader = onScreen && webgl === true
 
   return (
-    <div className={cn("relative isolate overflow-hidden", className)}>
+    <div ref={hero} className={cn("relative isolate overflow-hidden", className)}>
       <div
         ref={layer}
         aria-hidden
@@ -89,24 +91,105 @@ export function GrainBackdrop({
 // in render would stay light on a dark theme.
 const FLAT_GROUND = "radial-gradient(90% 70% at 18% 8%, var(--grain-glow), transparent 62%), var(--grain-back)"
 
-// Whether this browser can draw WebGL. It is null until the browser has been asked, so the server's HTML and the first
-// paint show the flat ground, and the shader is never mounted where WebGL is missing.
-function useWebGL(): boolean | null {
+// Whether this browser can draw the shader on its graphics hardware. It is null until the browser is asked, so the server's
+// HTML and the first paint show the flat ground, and the shader is never mounted where it cannot run well. The question is
+// asked only once `enabled` is set, which is after the hero has painted. Creating a WebGL context is itself costly, and it
+// should not hold back the words. A browser that draws WebGL on the processor instead (SwiftShader, llvmpipe) cannot run the
+// grain at a usable frame rate, so it gets the flat ground too. The answer is kept for the page, so each backdrop on it does
+// not create its own context to ask.
+let webglAnswer: boolean | null = null
+function useWebGL(enabled: boolean): boolean | null {
   const [supported, setSupported] = useState<boolean | null>(null)
   useEffect(() => {
-    try {
-      const probe = document.createElement("canvas")
-      // A one-time check of the browser after mount, which the server cannot make. It cannot be done during render.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSupported(probe.getContext("webgl2") !== null || probe.getContext("webgl") !== null)
-    } catch {
-      setSupported(false)
+    if (!enabled) return
+    if (webglAnswer === null) {
+      try {
+        const probe = document.createElement("canvas")
+        const gl = (probe.getContext("webgl2") ?? probe.getContext("webgl")) as WebGLRenderingContextBase | null
+        if (gl === null) {
+          webglAnswer = false
+        } else {
+          // The renderer's name says whether the work is done on the processor. Without the extension, the name is not known,
+          // and the shader is allowed to run.
+          const info = gl.getExtension("WEBGL_debug_renderer_info")
+          const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : ""
+          webglAnswer = !/swiftshader|llvmpipe|software/i.test(renderer)
+        }
+      } catch {
+        webglAnswer = false
+      }
     }
-  }, [])
+    // A one-time check of the browser after mount, which the server cannot make. It cannot be done during render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSupported(webglAnswer)
+  }, [enabled])
   return supported
 }
 
-// Whether the element is within about a screen's worth of the viewport. It starts true, so the first paint has the shader.
+// Whether the page is ready for the shader: the hero's words have been painted and the page has loaded. The shader's set-up
+// and its frames are the heaviest work on the landing, and on a slow device they hold back the words, which matter more than
+// the grain arriving a moment later. The browser reports the words' paint as a largest-contentful-paint entry for an element
+// inside the hero; entries for anything else (the header, the opening) do not count. Where the browser reports no such
+// entries (Safari, Firefox), load alone is the signal. If no hero entry comes within six seconds of load, the shader goes
+// ahead anyway, so the grain never waits on a page that does not report. Until then the flat ground stands in.
+function useSettledAfterPaint(hero: React.RefObject<HTMLElement | null>) {
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    let painted = false
+    let loaded = false
+    let done = false
+    let observer: PerformanceObserver | null = null
+    let frame = 0
+    let idle = 0
+    let timer = 0
+    let fallback = 0
+    // Both signals are in: one frame after the paint, then a quiet moment for the browser, so the set-up starts after the
+    // words are up. The timer is for browsers that lack idle callbacks.
+    const begin = () => {
+      if (done || !painted || !loaded) return
+      done = true
+      observer?.disconnect()
+      window.clearTimeout(fallback)
+      frame = requestAnimationFrame(() => {
+        if (typeof window.requestIdleCallback === "function") idle = window.requestIdleCallback(() => setSettled(true), { timeout: 1000 })
+        else timer = window.setTimeout(() => setSettled(true), 0)
+      })
+    }
+    if (typeof PerformanceObserver !== "undefined" && PerformanceObserver.supportedEntryTypes?.includes("largest-contentful-paint")) {
+      observer = new PerformanceObserver((list) => {
+        const latest = list.getEntries().at(-1) as PerformanceEntry & { element?: Element | null }
+        if (latest?.element && hero.current?.contains(latest.element)) {
+          painted = true
+          begin()
+        }
+      })
+      observer.observe({ type: "largest-contentful-paint", buffered: true })
+    } else {
+      painted = true
+    }
+    const onLoad = () => {
+      fallback = window.setTimeout(() => {
+        painted = true
+        begin()
+      }, 6000)
+      loaded = true
+      begin()
+    }
+    if (document.readyState === "complete") onLoad()
+    else window.addEventListener("load", onLoad, { once: true })
+    return () => {
+      observer?.disconnect()
+      cancelAnimationFrame(frame)
+      if (idle) window.cancelIdleCallback(idle)
+      window.clearTimeout(timer)
+      window.clearTimeout(fallback)
+      window.removeEventListener("load", onLoad)
+    }
+  }, [hero])
+  return settled
+}
+
+// Whether the element is within about a screen's worth of the viewport. It starts true, so nothing waits on the observer.
 function useOnScreen(ref: React.RefObject<HTMLElement | null>) {
   const [visible, setVisible] = useState(true)
   useEffect(() => {

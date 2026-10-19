@@ -605,7 +605,8 @@ type Arm = {
 // always sees their own new post at once. Replication normally trails by well under a second; this window covers the rest.
 const RECENT_OWN_MS = 2 * 60 * 1000
 
-function armSql(arm: Arm, cursorAt: number, cursorKey: string, limit: number): string {
+// The SQL for one arm of a timeline. Its values (the cursor and the limit) are bound by the caller, in armParams order.
+function armSql(arm: Arm): string {
   return `SELECT * FROM (
       SELECT ${arm.key} AS key, ${arm.postId} AS post_id, ${arm.sortAt} AS sort_at, ${arm.reposter} AS reposter_id, NULL AS folder_id
       FROM ${arm.from}
@@ -626,7 +627,7 @@ async function timelinePage(
 ): Promise<Page<FeedItem>> {
   const [cursorAt, cursorKey] = parseCursor(cursor)
   const armParams = (arm: Arm) => [...arm.params, cursorAt, cursorAt, cursorAt, cursorKey, limit + 1]
-  const parts = arms.map((arm) => armSql(arm, cursorAt, cursorKey, limit))
+  const parts = arms.map((arm) => armSql(arm))
   const params = arms.flatMap(armParams)
   const union = `${parts.join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`
   if (!fromReplica || !replicaConfigured()) {
@@ -640,7 +641,7 @@ async function timelinePage(
   let rows = shared
   if (own.length > 0) {
     const ownParams = own.flatMap(armParams)
-    const fresh = await all<FeedRow>(`${own.map((arm) => armSql(arm, cursorAt, cursorKey, limit)).join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`, ...ownParams, limit + 1)
+    const fresh = await all<FeedRow>(`${own.map((arm) => armSql(arm)).join(" UNION ALL ")} ORDER BY sort_at DESC, key DESC LIMIT ?`, ...ownParams, limit + 1)
     const keys = new Set(fresh.map((row) => row.key))
     rows = [...fresh, ...shared.filter((row) => !keys.has(row.key))].sort((a, b) => b.sort_at - a.sort_at || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0)).slice(0, limit + 1)
   }
@@ -748,13 +749,15 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
   )
   const affinity = new Map(affinityRows.map((r) => [r.author_id, r.n] as const))
 
-  // Posts that people the viewer follows liked, and how many of them liked each one.
+  // Posts that people the viewer follows liked, and how many of them liked each one. The pool keeps the newest of these
+  // likes first: ordered by how many liked a post, an old popular post crowds a brand-new one out of a busy pool, and a
+  // friend's like of a new post is exactly the signal For you should show. The count still feeds the ranking.
   const socialRows = await all<CandidatePost & { social_count: number }>(
     `SELECT ${CANDIDATE_COLUMNS}, COUNT(DISTINCT l.user_id) AS social_count
      FROM likes l JOIN posts p ON p.id = l.post_id JOIN users au ON au.id = p.author_id
      WHERE l.user_id IN (${FOLLOWING}) AND l.created_at >= ? AND l.created_at <= ?
        AND p.author_id <> ? AND ${AUTHORED} AND ${vis.sql} AND ${NOT_RESTRICTED}
-     GROUP BY p.id, au.id ORDER BY social_count DESC, MAX(l.created_at) DESC LIMIT ?`,
+     GROUP BY p.id, au.id ORDER BY MAX(l.created_at) DESC, social_count DESC LIMIT ?`,
     viewerId,
     since,
     at,

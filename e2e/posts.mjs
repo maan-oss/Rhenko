@@ -508,20 +508,33 @@ async function postFlows({ phone }) {
 
   // -------------------------------------------------------------------------------------------------- delete and undo
   await check(`${where}: deleting a post asks first, then removes it everywhere`, async () => {
-    await openProfile(author.page, author.handle)
-    const target = await waitForPost(author.page, edited)
-    await cardMenu(author.page, target, "Delete post")
-    const dialog = author.page.getByRole("dialog", { name: "Delete post?" })
-    await dialog.waitFor()
-    await dialog.getByRole("button", { name: "Cancel" }).click()
-    await dialog.waitFor({ state: "detached" })
-    await waitForPost(author.page, edited)
-    await cardMenu(author.page, target, "Delete post")
-    await dialog.waitFor()
-    await acted(author.page, () => dialog.getByRole("button", { name: "Delete", exact: true }).click())
-    await author.page.locator("article").filter({ hasText: edited }).waitFor({ state: "detached" })
-    await openProfile(reader.page, author.handle)
-    assert.equal(await noPost(reader.page, edited), true, "the deleted post is still shown to another person")
+    // Deleting refreshes the profile, and links to the post still on the page can prefetch its address. The page answers 404
+    // now, which Chromium logs. Nothing shows it, and the card is gone. Allowed for this author's pages during this check only.
+    const endAllow = allowNoise({
+      id: "prefetch-of-deleted-post",
+      kind: "console",
+      text: /Failed to load resource: the server responded with a status of 404/,
+      url: new RegExp(`^https?://[^/]+/${author.handle}/status/`),
+      reason: "Deleting refreshes the profile, and a link to the deleted post can still prefetch its page, which now answers 404.",
+    })
+    try {
+      await openProfile(author.page, author.handle)
+      const target = await waitForPost(author.page, edited)
+      await cardMenu(author.page, target, "Delete post")
+      const dialog = author.page.getByRole("dialog", { name: "Delete post?" })
+      await dialog.waitFor()
+      await dialog.getByRole("button", { name: "Cancel" }).click()
+      await dialog.waitFor({ state: "detached" })
+      await waitForPost(author.page, edited)
+      await cardMenu(author.page, target, "Delete post")
+      await dialog.waitFor()
+      await acted(author.page, () => dialog.getByRole("button", { name: "Delete", exact: true }).click())
+      await author.page.locator("article").filter({ hasText: edited }).waitFor({ state: "detached" })
+      await openProfile(reader.page, author.handle)
+      assert.equal(await noPost(reader.page, edited), true, "the deleted post is still shown to another person")
+    } finally {
+      endAllow()
+    }
   })
 
   await check(`${where}: Undo right after posting takes the post back`, async () => {

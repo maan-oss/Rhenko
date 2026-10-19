@@ -455,6 +455,16 @@ input[type="radio"]:focus-visible {
 .mk-marquee { animation: mk-marquee 46s linear infinite; }
 .mk-marquee-band:hover .mk-marquee { animation-play-state: paused; }
 
+/* The landing's opening (components/marketing/intro-loader.tsx). It is in the markup but hidden. The head script sets
+   data-opening on a first visit before the first paint, which shows it at once, so the page is never seen under it first. */
+.intro-opening { display: none; }
+html[data-opening="on"] .intro-opening { display: flex; }
+.intro-opening .intro-inner { animation: intro-in 600ms ease-out backwards; }
+@keyframes intro-in {
+  from { opacity: 0; filter: blur(8px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mk-rise, .mk-line, .mk-marquee {
     animation: none !important;

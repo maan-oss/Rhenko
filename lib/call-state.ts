@@ -701,13 +701,17 @@ export async function startGroupCall(conversationId: string, device: Device, per
     if (busy === "talking") return { ok: false, error: "You're already on a call." }
     if (busy === "ringing") return { ok: false, error: "Answer or decline the incoming call first." }
 
-    const others = (await acceptedMembers(conversationId)).filter(
-      async (member) =>
-        member.user_id !== device.userId &&
-        await busyState(member.user_id) === null &&
-        await listenerCount(member.user_id) > 0 &&
-        !await blockedEitherWay(member.user_id, device.userId)
-    )
+    // Who is rung: accepted members other than the starter, who are free, who have a page open to hear the ring, and who
+    // have not blocked either person. Each check is awaited in turn. A predicate that is itself async would always count as
+    // true, which rang everyone, the starter included, and ended the call for the starter when the ring ran out.
+    const others: { user_id: string; muted: number }[] = []
+    for (const member of await acceptedMembers(conversationId)) {
+      if (member.user_id === device.userId) continue
+      if ((await busyState(member.user_id)) !== null) continue
+      if ((await listenerCount(member.user_id)) === 0) continue
+      if (await blockedEitherWay(member.user_id, device.userId)) continue
+      others.push(member)
+    }
     const now = Date.now()
     const me: Participant = { ...device, seq: 1, person, beat: now }
     const call: GroupCall = {
