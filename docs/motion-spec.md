@@ -105,7 +105,8 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 - Review every route visually at each width, not just the list above. Nearly all screens are checked only for overflow
   and errors so far.
 - Very small photos (about 100px wide) are cramped: the caption wraps narrowly, and the arrows, counter and close button
-  touch one another. Real photos are much larger. Decide whether a minimum viewer size is wanted.
+  touch one another. Decided: no minimum viewer size. Phone photos are large, and a minimum would be an invented rule
+  that changes how the photo sits. Revisit only if small images turn up in real use.
 - Review the composer's loading and error states with the reduced-motion and dark-theme settings on.
 - Rebuild the product previews on the landing from the real components. They are still hand-built miniatures.
 - Measure frame timing and Core Web Vitals on a real low-end phone.
