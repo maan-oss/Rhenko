@@ -221,42 +221,45 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
       ) : null}
 
       <Dialog open={open !== null} onOpenChange={(value) => !value && setOpen(null)}>
-        <DialogContent className="max-w-[min(92vw,960px)] border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-[min(92vw,960px)]" showCloseButton>
+        <DialogContent
+          className="w-fit max-w-[min(92vw,960px)] gap-3 rounded-none border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-[min(92vw,960px)] max-sm:top-1/2 max-sm:bottom-auto max-sm:left-1/2 max-sm:max-w-[min(92vw,960px)] max-sm:translate-x-[-50%] max-sm:translate-y-[-50%] max-sm:rounded-none max-sm:pt-0 max-sm:pb-0 max-sm:before:hidden"
+          showCloseButton
+        >
           <DialogTitle className="sr-only">{media.length > 1 && openIndex >= 0 ? `Image ${openIndex + 1} of ${media.length}` : "Image"}</DialogTitle>
           {open ? (
             // The box is the size of the photo itself, so the stickers line up with it exactly.
             <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/media/${open.file}`} alt={open.alt} className="block h-auto max-h-[85dvh] max-w-full" />
+              <img src={`/media/${open.file}`} alt={open.alt} className="block h-auto max-h-[78dvh] max-w-full" />
               {open.stickers ? <StickerLayer set={open.stickers} linkHashtags /> : null}
+            {media.length > 1 && openIndex > 0 ? (
+              <button
+                type="button"
+                onClick={() => setOpen(media[openIndex - 1])}
+                aria-label="Previous photo"
+                className="absolute top-1/2 left-2 z-30 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </button>
+            ) : null}
+            {media.length > 1 && openIndex >= 0 && openIndex < media.length - 1 ? (
+              <button
+                type="button"
+                onClick={() => setOpen(media[openIndex + 1])}
+                aria-label="Next photo"
+                className="absolute top-1/2 right-2 z-30 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </button>
+            ) : null}
+            {media.length > 1 && openIndex >= 0 ? (
+              <p className="absolute top-2 left-2 z-30 rounded-full bg-background/90 px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground">
+                {openIndex + 1} / {media.length}
+              </p>
+            ) : null}
             </div>
           ) : null}
-          {media.length > 1 && openIndex > 0 ? (
-            <button
-              type="button"
-              onClick={() => setOpen(media[openIndex - 1])}
-              aria-label="Previous photo"
-              className="absolute top-1/2 left-2 z-30 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronLeft className="size-4" aria-hidden="true" />
-            </button>
-          ) : null}
-          {media.length > 1 && openIndex >= 0 && openIndex < media.length - 1 ? (
-            <button
-              type="button"
-              onClick={() => setOpen(media[openIndex + 1])}
-              aria-label="Next photo"
-              className="absolute top-1/2 right-2 z-30 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronRight className="size-4" aria-hidden="true" />
-            </button>
-          ) : null}
-          {media.length > 1 && openIndex >= 0 ? (
-            <p className="text-center text-xs font-semibold tabular-nums text-white/90">
-              {openIndex + 1} / {media.length}
-            </p>
-          ) : null}
-          {open?.alt ? <p className="rounded-lg bg-background/90 px-3 py-2 text-sm text-foreground">{open.alt}</p> : null}
+          {open?.alt ? <p className="w-0 min-w-full rounded-lg bg-background/90 px-3 py-2 text-sm break-words text-foreground">{open.alt}</p> : null}
         </DialogContent>
       </Dialog>
     </div>

@@ -1000,8 +1000,9 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
             />
           ) : null}
-          <div className="flex items-start gap-2">
+          <div className="-mx-2 flex items-start gap-2 rounded-2xl px-2 transition-shadow duration-200 focus-within:shadow-[0_0_0_3px_var(--halo)]">
             <textarea
+              data-composer-field
               ref={textareaRef}
               value={text}
               onChange={onChangeText}

@@ -57,6 +57,12 @@ critically damped or close to it.
   no progress line, no search control, and a soft pressed state on the feed's ellipsis.
 - Phone fit at 360px: the post action row is tighter on phones, and the composer's tool row wraps below 390px, which
   removes the horizontal overflow on home.
+- Photo viewer: the dialog shrinks to the photo, so the close button sits on the photo's corner. On phones it centres
+  like a lightbox instead of a bottom sheet with a grab handle. The alt caption matches the photo's width, and the photo
+  is capped at 78% of the screen height so the caption stays on screen. With several photos, the previous and next
+  arrows and the "1 / 2" counter sit on the photo's own edges and corner, not on the dialog.
+- Post composer: keyboard and pointer focus shows as one soft halo around the text row, the same as the messages
+  composer, instead of a square outline around the text field.
 
 Verified in this pass: a horizontal-overflow check at 360, 390, 430, 768, 1024, 1440 and 1920 px across eight main
 routes (light theme) reports no overflow. A route audit of 104 visits (about 50 routes, signed-out and signed-in, at 360px,
@@ -77,6 +83,12 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 - Dark theme (set through the app's theme setting): home at desktop and phone, notifications, settings, and the landing
   at 390 and 1440. No token inconsistencies were seen in those screens.
 - Reduced motion: every landing heading is at full opacity at 390px, so the scenes read without animation.
+- Calls, one to one, reviewed on desktop and phone, light and dark, and with reduced motion: outgoing, incoming, active,
+  muted and ended states. Each state changes through its fill and label, not through motion alone.
+- Photo viewer checked with 96 px and 80 px test images on desktop and phone, light and dark. Escape closes it and
+  focus returns to the photo's button. A large photo was not reached, because the seeded and test images are small.
+- Post "More options" on phone opens as a bottom sheet in dark theme, and Escape returns focus to the button.
+- E2E posts suite passes after the viewer and composer changes: 67 checks, 0 failures, run on the first, second and final builds.
 
 ## Known trade-offs, left as they are
 
@@ -88,8 +100,10 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 
 - Review every route visually at each width, not just the list above. Nearly all screens are checked only for overflow
   and errors so far.
-- Review the calls, photo label and composer states against the real flows, including reduced motion and dark theme.
-  The calls and photo flows were not driven in this pass.
+- Check the photo viewer with a large photo, where the caption and close button sit against a full-width image.
+- Very small photos (about 100px wide) are cramped: the caption wraps narrowly, and the arrows, counter and close button
+  touch one another. Real photos are much larger. Decide whether a minimum viewer size is wanted.
+- Review the composer's loading and error states with the reduced-motion and dark-theme settings on.
 - Rebuild the product previews on the landing from the real components. They are still hand-built miniatures.
 - Measure frame timing and Core Web Vitals on a real low-end phone.
 
