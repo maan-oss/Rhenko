@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { MotionRoot } from "@/components/app/motion-root";
 import { Toaster } from "@/components/ui/sonner";
 
 // Sora is served from the app (SIL Open Font License, see app/fonts/OFL.txt). Visitors' browsers make no request to Google,
@@ -38,7 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
-          {children}
+          <MotionRoot>{children}</MotionRoot>
           <Toaster position="top-center" />
         </ThemeProvider>
       </body>

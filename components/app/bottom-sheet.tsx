@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from "motion/react"
+import { SPRING_SHEET } from "@/components/app/motion"
 
 const noopSubscribe = () => () => {}
 function useMounted(): boolean {
@@ -63,7 +64,7 @@ export function BottomSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 42, mass: 0.9 }}
+            transition={reduce ? { duration: 0 } : SPRING_SHEET}
             drag="y"
             dragControls={controls}
             dragListener={false}

@@ -1262,7 +1262,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               {`${-remaining} ${pluralize(-remaining, "character")} over the limit. Shorten the post to share it.`}
             </p>
           ) : null}
-          <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[359px]:flex-wrap max-[359px]:gap-y-1">
+          <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[389px]:flex-wrap max-[389px]:gap-y-1">
             <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
               <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>

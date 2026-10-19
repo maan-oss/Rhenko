@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
+import { SPRING_SELECT } from "@/components/app/motion"
 
 export type TabItem = {
   href: string
@@ -15,16 +16,18 @@ export type TabItem = {
   badge?: number
 }
 
-// The one motion for an active fill that slides between items. Used where a fill moves, not on the page tabs.
-export const TAB_FILL = { type: "spring", stiffness: 520, damping: 42 } as const
+// The one motion for an active fill that slides between items.
+export const TAB_FILL = SPRING_SELECT
 
-// A solid fill in the text colour, for a choice that is marked by a fill rather than a rule.
-export function TabFill({ layoutId }: { layoutId: string }) {
+// The selected choice's surface. It is shared by layoutId, so it travels from the last choice to this one rather than
+// fading out and in. By default it is a solid fill in the text colour; a caller can pass its own surface.
+export function TabFill({ layoutId, className }: { layoutId: string; className?: string }) {
   return (
     <motion.span
+      aria-hidden
       layoutId={layoutId}
-      className="absolute inset-0 rounded-full"
-      style={{ backgroundColor: "var(--tab-fill, var(--foreground))" }}
+      className={cn("absolute inset-0 rounded-full", className)}
+      style={className ? undefined : { backgroundColor: "var(--tab-fill, var(--foreground))" }}
       transition={TAB_FILL}
     />
   )
@@ -39,11 +42,12 @@ export function usePressedTab(items: Pick<TabItem, "href" | "active">[]): { curr
   return { current, press: (href) => setPressed({ from: served, to: href }) }
 }
 
-// The tabs at the top of a page: one track of words, with the chosen tab lifted onto a raised surface. The surface casts a
-// soft neutral shadow, so it reads as a layer on the track rather than a rule under the words. Each tab is a link, so every
-// section keeps its own address.
+// The tabs at the top of a page: one track of words, with the chosen tab lifted onto a raised surface. The raised surface
+// is one shared element that slides between the words, and it casts a soft neutral shadow, so it reads as a layer on the
+// track rather than a rule under the words. Each tab is a link, so every section keeps its own address.
 export function TabLinks({ items, label = "Sections", className }: { items: TabItem[]; label?: string; className?: string }) {
   const { current, press } = usePressedTab(items)
+  const id = useId()
   return (
     <nav
       aria-label={label}
@@ -59,12 +63,16 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
             aria-current={active ? "page" : undefined}
             onClick={() => press(item.href)}
             className={cn(
-              "tap-44 flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold whitespace-nowrap outline-none transition-[background-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring",
-              active
-                ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.14),0_4px_12px_-6px_rgba(0,0,0,0.28)]"
-                : "text-muted-foreground hover:text-foreground"
+              "tap-44 relative isolate flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold whitespace-nowrap outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring",
+              active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
+            {active ? (
+              <TabFill
+                layoutId={`${id}-tab`}
+                className="-z-10 bg-background shadow-[0_1px_2px_rgba(0,0,0,0.14),0_4px_12px_-6px_rgba(0,0,0,0.28)]"
+              />
+            ) : null}
             {item.label}
             {item.badge ? (
               <span className="grid min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-[11px] leading-5 font-semibold text-background">
