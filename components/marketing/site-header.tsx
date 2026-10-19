@@ -60,6 +60,7 @@ export function SiteHeader() {
   // button that opened it.
   useEffect(() => {
     if (!menuOpen) return
+    const opener = openerRef.current
     const { overflow } = document.body.style
     document.body.style.overflow = "hidden"
     const first = sheetRef.current?.querySelector<HTMLElement>("a, button")
@@ -85,7 +86,7 @@ export function SiteHeader() {
     return () => {
       document.body.style.overflow = overflow
       window.removeEventListener("keydown", onKey)
-      openerRef.current?.focus()
+      opener?.focus()
     }
   }, [menuOpen])
 

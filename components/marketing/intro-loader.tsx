@@ -33,6 +33,8 @@ export function IntroLoader() {
 
   useEffect(() => {
     if (seen() || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    // Whether to open is only known in the browser, after mount, so the server's HTML leaves the opening out.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(true)
     document.documentElement.setAttribute("data-opening", "on")
 

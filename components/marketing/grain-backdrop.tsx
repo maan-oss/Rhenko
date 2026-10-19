@@ -5,13 +5,13 @@ import { GrainGradient } from "@paper-design/shaders-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
-// The hero's backdrop: a slow grain gradient in dusk tones, with a sparse field of points that drift and move away from
+// The hero's backdrop: a slow grain gradient in greys, with a sparse field of points that drift and move away from
 // the pointer. Both are decoration only, so they sit behind the content, do not take input, and stop when they are off
 // screen. Under reduced motion the gradient holds one frame and the points stay still.
 
 const PALETTE = {
   light: { colors: ["#2a2a2a", "#8a8a8a", "#e5e5e5", "#0a0a0a"], back: "#fafafa", dots: "10, 10, 10" },
-  // Calm light: the same dusk, lifted, so a line of text on it keeps its contrast.
+  // Calm light: the same greys, lifted, so a line of text on it keeps its contrast.
   lightCalm: { colors: ["#2a2a2a", "#bcbcbc", "#f1f1f1", "#fafafa"], back: "#fafafa", dots: "10, 10, 10" },
   dark: { colors: ["#2a2a2a", "#4a4a4a", "#1c1c1c", "#f5f5f5"], back: "#0a0a0a", dots: "245, 245, 245" },
 } as const
@@ -49,7 +49,7 @@ export function GrainBackdrop({
         )}
       >
         {/* The shader animates continuously, so it runs only while this part of the page is near the screen, and only where
-            the browser can draw WebGL. Otherwise a flat dusk ground stands in, which costs nothing. */}
+            the browser can draw WebGL. Otherwise a flat grey ground stands in, which costs nothing. */}
         {shader ? (
           <GrainGradient
             width="100%"
@@ -76,7 +76,7 @@ export function GrainBackdrop({
   )
 }
 
-// The stand-in for the shader: the paper colour with a soft dusk glow in the top left.
+// The stand-in for the shader: the paper colour with a soft grey glow in the top left.
 function flatGround(palette: { back: string; colors: readonly string[] }) {
   return `radial-gradient(90% 70% at 18% 8%, ${palette.colors[0]}40, transparent 62%), ${palette.back}`
 }
@@ -88,6 +88,8 @@ function useWebGL(): boolean | null {
   useEffect(() => {
     try {
       const probe = document.createElement("canvas")
+      // A one-time check of the browser after mount, which the server cannot make. It cannot be done during render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSupported(probe.getContext("webgl2") !== null || probe.getContext("webgl") !== null)
     } catch {
       setSupported(false)
