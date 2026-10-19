@@ -59,13 +59,39 @@ critically damped or close to it.
   removes the horizontal overflow on home.
 
 Verified in this pass: a horizontal-overflow check at 360, 390, 430, 768, 1024, 1440 and 1920 px across eight main
-routes (light theme) reports no overflow, and the e2e suites for auth, feed, posts and social pass (211 checks).
+routes (light theme) reports no overflow. A route audit of 104 visits (about 50 routes, signed-out and signed-in, at 360px,
+phone and desktop) reports no overflow, no HTTP errors and no console errors. The e2e suites for auth, feed, posts and
+social pass (211 checks, 0 failures).
+
+## Measured in this pass
+
+These come from headless Chromium in the build container, against the production build. They are not measurements on a
+real phone, and the frame cadence is the headless compositor's, so treat them as a floor, not a device result.
+
+- Landing, 390px: LCP 588 ms, CLS 0.
+- Landing, 1440px: LCP 760 to 776 ms, CLS 0.
+- Signed-in home, 390px: LCP 724 ms, CLS 0.003. Worst event latency after a menu open and a tab tap: 48 to 96 ms.
+- Tab selection slide: 41 frames over 700 ms, median 16.7 ms, no frame over 33 ms.
+- Post menu opening: median 16.7 ms; at most one frame over 33 ms across runs.
+- Post menu: Escape closes it, and focus returns to its "More options" trigger.
+- Dark theme (set through the app's theme setting): home at desktop and phone, notifications, settings, and the landing
+  at 390 and 1440. No token inconsistencies were seen in those screens.
+- Reduced motion: every landing heading is at full opacity at 390px, so the scenes read without animation.
+
+## Known trade-offs, left as they are
+
+- The phone header is fully transparent, as requested, so scrolled text can sit under the logo mid-page. A soft top
+  fade would fix that, if wanted.
+- The floating bottom bar is glass at 72% opacity. Scrolled text shows faintly behind it, but its icons stay readable.
 
 ## Still to do
 
-- Audit the remaining routes one by one (about 50 are not yet reviewed at phone width).
-- Measure real frame timing on a low-end device. Current timings come from the table above and are not yet measured.
-- Review the calls, photo label and composer states against the actual product flows.
+- Review every route visually at each width, not just the list above. Nearly all screens are checked only for overflow
+  and errors so far.
+- Review the calls, photo label and composer states against the real flows, including reduced motion and dark theme.
+  The calls and photo flows were not driven in this pass.
+- Rebuild the product previews on the landing from the real components. They are still hand-built miniatures.
+- Measure frame timing and Core Web Vitals on a real low-end phone.
 
 ## References
 
