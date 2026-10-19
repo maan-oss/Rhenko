@@ -90,6 +90,17 @@ Verified in the latest round:
   console error during two-factor sign-in, which did not come back.
 - TypeScript passes for the project, ESLint passes on the changed files, and the production build passes.
 
+Verified in the route review that followed:
+
+- Every signed-in route and public page (82 captures) at 390 px. Signed-in routes in light and dark, public pages in light.
+  No overflow, console errors or HTTP errors. Looked at as contact sheets; no layout defect found.
+- Post analytics as the post's owner, light and dark: the post, its views and the empty engagement state. Another account
+  sees "This page is not here".
+- The landing with the WebGL shader on, at 390 and 1440 px, light and dark. The e2e helpers turn 3D APIs off, so the
+  captures in this section used the flat backdrop. Here the shader was drawn: the dark landing has its dark grain, and the
+  light landing its grey grain, with the text readable.
+- The composer's pending and failed states under reduced motion: the same states as without it.
+
 ## Measured in this pass
 
 These come from headless Chromium in the build container, against the production build. They are not measurements on a
@@ -123,9 +134,12 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 
 ## Still to do
 
-- About 40 routes have only been checked for overflow and console errors, not looked at.
-- The composer's states were not checked with reduced motion on.
-- The landing's WebGL shader has not been seen in a browser that draws it.
+- At 1440 px, only 13 signed-in routes and the landing have been looked at. The other routes were looked at at 390 px only.
+- Soft 404: when signed in, a missing page returns HTTP 200 with the "This page is not here" screen, not 404. Signed out, a
+  missing page redirects to /login. The cause has not been traced.
+- The legal pages say "Draft. This text has not yet been reviewed by a qualified lawyer". That must be settled before launch.
+- On a 390 px phone in light theme, the hero's body copy sits over dense grain. It is readable but busier than on desktop.
+  The calm grain variant is an option for phones.
 - Very small photos (about 100px wide) are cramped: the caption wraps narrowly, and the arrows, counter and close button
   touch one another. Decided: no minimum viewer size. Phone photos are large, and a minimum would be an invented rule
   that changes how the photo sits. Revisit only if small images turn up in real use.
