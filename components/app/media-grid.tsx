@@ -222,7 +222,7 @@ export function MediaGrid({ media, sensitive = false }: { media: MediaItem[]; se
 
       <Dialog open={open !== null} onOpenChange={(value) => !value && setOpen(null)}>
         <DialogContent
-          className="w-fit max-w-[min(92vw,960px)] gap-3 rounded-none border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-[min(92vw,960px)] max-sm:top-1/2 max-sm:bottom-auto max-sm:left-1/2 max-sm:max-w-[min(92vw,960px)] max-sm:translate-x-[-50%] max-sm:translate-y-[-50%] max-sm:rounded-none max-sm:pt-0 max-sm:pb-0 max-sm:before:hidden"
+          className="mx-auto w-fit max-w-[min(92vw,960px)] gap-3 rounded-none border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-[min(92vw,960px)] left-0 right-0 translate-x-0 max-sm:top-1/2 max-sm:bottom-auto max-sm:left-0 max-sm:right-0 max-sm:max-w-[min(92vw,960px)] max-sm:translate-x-0 max-sm:translate-y-[-50%] max-sm:rounded-none max-sm:pt-0 max-sm:pb-0 max-sm:before:hidden"
           showCloseButton
         >
           <DialogTitle className="sr-only">{media.length > 1 && openIndex >= 0 ? `Image ${openIndex + 1} of ${media.length}` : "Image"}</DialogTitle>

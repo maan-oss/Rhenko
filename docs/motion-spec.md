@@ -86,9 +86,13 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 - Calls, one to one, reviewed on desktop and phone, light and dark, and with reduced motion: outgoing, incoming, active,
   muted and ended states. Each state changes through its fill and label, not through motion alone.
 - Photo viewer checked with 96 px and 80 px test images on desktop and phone, light and dark. Escape closes it and
-  focus returns to the photo's button. A large photo was not reached, because the seeded and test images are small.
+  focus returns to the photo's button.
+- Photo viewer with a large photo (1200 × 800, stored at full size). On desktop at 1440px the dialog is 960 px wide,
+  the photo is 960 × 640 and centred, the caption is 36 px tall beneath it, and the close button sits on the photo's
+  top-right corner. On a 390px phone in dark theme the photo is 359 × 239, the caption is the same 359 px wide and runs
+  to two lines, and the close button sits on the photo's corner. Escape closes the viewer in both.
 - Post "More options" on phone opens as a bottom sheet in dark theme, and Escape returns focus to the button.
-- E2E posts suite passes after the viewer and composer changes: 67 checks, 0 failures, run on the first, second and final builds.
+- E2E posts suite passes after the viewer and composer changes, including the viewer anchoring fix: 67 checks, 0 failures.
 
 ## Known trade-offs, left as they are
 
@@ -100,7 +104,6 @@ real phone, and the frame cadence is the headless compositor's, so treat them as
 
 - Review every route visually at each width, not just the list above. Nearly all screens are checked only for overflow
   and errors so far.
-- Check the photo viewer with a large photo, where the caption and close button sit against a full-width image.
 - Very small photos (about 100px wide) are cramped: the caption wraps narrowly, and the arrows, counter and close button
   touch one another. Real photos are much larger. Decide whether a minimum viewer size is wanted.
 - Review the composer's loading and error states with the reduced-motion and dark-theme settings on.
