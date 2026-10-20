@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { motion } from "motion/react"
 import { Bell, Bookmark, ChartNoAxesColumn, CircleDot, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -10,6 +10,7 @@ import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
 import { useLiveCounts } from "@/components/app/live-counts"
 import type { AccountSummary } from "@/lib/auth"
+import { getCallState, getServerCallState, subscribeCall } from "@/lib/call-engine"
 import { cn } from "@/lib/utils"
 
 export type NavItemConfig = {
@@ -42,6 +43,8 @@ export function buildItems(notifications: number, messages: number): NavItemConf
 }
 
 const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
+// The bar slides down out of sight in a chat, a new message or a call, and back up when the person leaves.
+const BAR_SPRING = { type: "spring", stiffness: 340, damping: 38 } as const
 const DOCK_ITEM = 48
 const POST_SIZE = 62
 const FOLDED_WIDTH = DOCK_ITEM + 12
@@ -72,6 +75,10 @@ export function MobileTabBar({
   const path = usePathname()
   const [open, setOpen] = useState(false)
   const conversation = isConversation(path)
+  // A call in progress or ringing (anything but idle or ended) takes the bar away as well.
+  const call = useSyncExternalStore(subscribeCall, getCallState, getServerCallState)
+  const inCall = call.status !== "idle" && call.status !== "ended"
+  const away = conversation || path === "/messages/new" || inCall
   const [folded, setFolded] = useState(conversation)
   // A new page starts with the dock folded only if it is a conversation. Adjusted during render, so it never flashes.
   const [seenPath, setSeenPath] = useState(path)
@@ -98,6 +105,11 @@ export function MobileTabBar({
   useEffect(() => {
     conversationRef.current = conversation
   }, [conversation])
+
+  // Lets the page drop the bottom room it keeps for the bar while the bar is away.
+  useEffect(() => {
+    document.documentElement.dataset.navAway = away ? "true" : "false"
+  }, [away])
 
   // Scrolling down folds the dock; scrolling up opens it. The distance is added up per direction, so a small wobble never
   // flickers it. At the top of the page it opens, except in a conversation, where the composer owns the bottom.
@@ -193,8 +205,13 @@ export function MobileTabBar({
 
   return (
     <>
-      <nav
+      <motion.nav
         ref={navRef}
+        initial={false}
+        animate={{ y: away ? 140 : 0, opacity: away ? 0 : 1 }}
+        transition={BAR_SPRING}
+        inert={away}
+        aria-hidden={away || undefined}
         aria-label="Main"
         // A folded dock does not navigate on a tap. Elsewhere the first tap shows the sections. In a conversation the
         // dock stays folded, because the composer needs the bottom row, so the tap opens the left panel, which has every section.
@@ -207,7 +224,7 @@ export function MobileTabBar({
         }}
         // The bar spans the width of the screen, but only the pill and the Post button take taps. The space between
         // them passes through to the page, so the composer's Send button stays reachable under the dock.
-        className={cn("pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden", conversation && "hidden")}
+        className="pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden"
       >
         <motion.ul
           initial={false}
@@ -284,7 +301,7 @@ export function MobileTabBar({
             <Plus className="size-[22px]" strokeWidth={2.1} aria-hidden="true" />
           </Link>
         </motion.div>
-      </nav>
+      </motion.nav>
       <MobileDrawer
         open={open}
         onClose={() => setOpen(false)}

@@ -2,10 +2,12 @@
 
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent, type KeyboardEvent } from "react"
 import { useFormStatus } from "react-dom"
+import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, AudioLines, ImagePlus, Mic, X } from "lucide-react"
 import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
+import { addPending, removePending } from "@/components/app/pending-messages"
 import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { MAX_DM, MAX_IMAGE_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
@@ -120,6 +122,18 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   const discardRef = useRef(false)
   const canRecord = useSyncExternalStore(noopSubscribe, recordingSupported, () => false)
   const canSend = recording === null && (text.trim().length > 0 || fileName !== null || voice !== null)
+  const router = useRouter()
+  // The key of the text message waiting for the server, when one was sent as text alone.
+  const pendingKey = useRef<string | null>(null)
+
+  // Shows text at once, before the server answers. Photos, voice messages and replies wait for the server as before.
+  function queueOptimistic() {
+    const body = text.trim()
+    if (!body || fileName !== null || voice !== null || replyTo !== null || photoUrl !== null) return
+    const key = crypto.randomUUID()
+    pendingKey.current = key
+    addPending(conversationId, { key, body, createdAt: Date.now() })
+  }
 
   // A confirmed send clears the composer. Adjusted during render, so the text clears on the same frame.
   const [seenState, setSeenState] = useState(state)
@@ -136,6 +150,16 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   useEffect(() => {
     if (state.sent) formRef.current?.reset()
   }, [state])
+
+  // A sent text stays in the thread until the saved message arrives; a refresh brings it in. A failed send takes the
+  // waiting message away, and the text stays in the box with the error.
+  useEffect(() => {
+    const key = pendingKey.current
+    if (!key) return
+    pendingKey.current = null
+    if (state.sent) router.refresh()
+    else if (state.error) removePending(conversationId, key)
+  }, [state, conversationId, router])
 
   // Stop listening and recording when the composer goes away. A recording that is still running is thrown away.
   useEffect(() => {
@@ -393,7 +417,10 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
       <form
         ref={formRef}
         action={action}
-        onSubmit={() => stopDictation()}
+        onSubmit={() => {
+          stopDictation()
+          queueOptimistic()
+        }}
         onReset={() => {
           setFileName(null)
           setPhotoUrl(null)

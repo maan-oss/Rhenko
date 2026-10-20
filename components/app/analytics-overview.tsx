@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { motion } from "motion/react"
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
+import { CountUp } from "@/components/app/count-up"
 import { exact } from "@/components/app/analytics-bits"
 import { TAB_FILL } from "@/components/app/tabs"
 import { TrendChart } from "@/components/app/trend-chart"
@@ -74,7 +75,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
                 <span className="absolute inset-0 rounded-2xl border border-border transition-colors duration-200 group-hover:border-foreground/30 group-hover:bg-foreground/[0.02]" />
               )}
               <span className="relative text-[12px] leading-tight whitespace-nowrap text-muted-foreground">{item.label}</span>
-              <span className="relative text-[22px] leading-none font-semibold tabular-nums">{exact(total.now)}</span>
+              <span className="relative text-[22px] leading-none font-semibold tabular-nums"><CountUp value={total.now} /></span>
               <span className={cn("relative flex items-center gap-1 text-xs tabular-nums", cardShift.direction === "up" ? "text-foreground" : "text-muted-foreground")}>
                 <Arrow className="size-3.5 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 leading-snug">{cardShift.text}</span>
@@ -87,7 +88,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
       <div className="flex flex-col gap-4">
         <div className="flex items-end justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-2">
-            <p className="text-[44px] leading-none font-semibold tracking-tight tabular-nums">{exact(selected.now)}</p>
+            <p className="text-[44px] leading-none font-semibold tracking-tight tabular-nums"><CountUp value={selected.now} /></p>
             <p className="flex flex-wrap items-center gap-x-1.5 text-sm">
               <span
                 className={cn(

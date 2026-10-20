@@ -174,6 +174,20 @@
   * {
     @apply border-border outline-ring/40;
   }
+  /* Every enabled button gives a small press when it is pressed. Utilities set on a button still win over this. */
+  button:not(:disabled):not([aria-disabled="true"]) {
+    transition-property: transform, background-color, color, border-color, box-shadow, opacity;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(0.2, 0.7, 0.1, 1);
+  }
+  button:not(:disabled):not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button:not(:disabled):active {
+      transform: none;
+    }
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -468,5 +482,19 @@ html[data-opening="on"] .intro-opening { display: flex; }
 @media (prefers-reduced-motion: reduce) {
   .mk-rise, .mk-line, .mk-marquee {
     animation: none !important;
+  }
+}
+
+/* While the phone's bottom bar is away (a chat, a new message or a call), the page drops the room it keeps for the bar, so a
+   composer sits on the bottom edge. The room comes back with the bar. */
+[data-app-main] {
+  transition: padding-bottom 320ms cubic-bezier(0.2, 0.7, 0.1, 1);
+}
+html[data-nav-away="true"] [data-app-main] {
+  padding-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-app-main] {
+    transition: none;
   }
 }

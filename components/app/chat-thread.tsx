@@ -6,6 +6,7 @@ import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, 
 import { toast } from "sonner"
 import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
+import { removePending, usePending } from "@/components/app/pending-messages"
 import { PostBody } from "@/components/app/post-body"
 import { TranslateControl } from "@/components/app/translate-control"
 import { LocalTime } from "@/components/app/time-text"
@@ -68,13 +69,25 @@ export function ChatThread({
   const shown = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
   const newest = messages[messages.length - 1]?.id ?? null
 
+  // Text the person sent that the server has not shown yet. A message of theirs with the same text, sent within two
+  // minutes of the time on this screen, is the saved copy: the waiting one is then dropped.
+  const pending = usePending(conversationId)
+  const waiting = pending.filter(
+    (item) => !shown.some((message) => message.mine && !message.call && message.body === item.body && message.createdAt >= item.createdAt - 120_000)
+  )
+  useEffect(() => {
+    for (const item of pending) {
+      if (!waiting.includes(item)) removePending(conversationId, item.key)
+    }
+  }, [pending, waiting, conversationId])
+
   // Start at the newest message, and follow new ones. Older messages added above do not move the view. The scroll
   // waits for the first frame so the thread has its height before it moves.
   useEffect(() => {
     if (!newest) return
     const frame = requestAnimationFrame(() => endRef.current?.scrollIntoView({ block: "end" }))
     return () => cancelAnimationFrame(frame)
-  }, [newest])
+  }, [newest, waiting.length])
 
   // After older messages are added, the message that was first stays where it was on screen.
   useLayoutEffect(() => {
@@ -163,9 +176,26 @@ export function ChatThread({
           />
         )
       })}
+      {waiting.map((item) => (
+        <PendingBubble key={item.key} body={item.body} />
+      ))}
       {typing ? <p className="px-4 text-sm text-muted-foreground">{typing} is typing…</p> : null}
       {/* The margin is the sticky composer, so the newest message clears it when the thread scrolls to the end. */}
       <div ref={endRef} className="scroll-mb-[88px] lg:scroll-mb-[80px]" />
+    </div>
+  )
+}
+
+// A message being sent: it shows at once, a little faded, until the saved copy arrives in the thread.
+function PendingBubble({ body }: { body: string }) {
+  return (
+    <div className="flex flex-col items-end gap-1 px-4 pt-3 animate-in fade-in slide-in-from-bottom-1 duration-200">
+      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[20px] bg-dusk px-3.5 py-2 text-[15px] leading-relaxed text-background opacity-70">
+        {body}
+      </div>
+      <span className="text-xs text-muted-foreground" aria-live="polite">
+        Sending…
+      </span>
     </div>
   )
 }
