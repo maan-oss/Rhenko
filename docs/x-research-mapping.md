@@ -16,14 +16,14 @@ Status key:
 | # | Complaint | Status | What Rhenko has | What is open |
 | --- | --- | --- | --- | --- |
 | 1 | The For you feed ranks by engagement, not by what people value | Partly | `lib/ranking.ts` ranks by a learned model of likes, reposts, bookmarks and dwell time. The Transparency page describes the ordering in plain words. | The default is still engagement-led. A decision is needed on a chronological default or a clearer switch (see decisions). |
-| 5 | Replies ignore who you follow | Gap | Replies can be sorted by Top (engagement, `lib/data.ts`) or by newest. Reply settings (`lib/rules.ts`) control who may reply, but not the order. | A "Following first" order for replies. |
-| 14 | The desktop feed resets to For you | Gap | The tab is kept in the URL (`app/(app)/page.tsx`, `?tab=following`). Home and the For you link go back to the default. | Remember the last tab per person. It changes what people see when they tap Home, so it needs a decision first. |
+| 5 | Replies ignore who you follow | Covered | Thread replies are shown oldest first (`repliesTo` in `lib/data.ts`), so no reply ranking is applied and no ranking can ignore the follow graph. Engagement sorting is used only on other lists. | Nothing needed for threads. Adding reply ranking later would need this decision again. |
+| 14 | The desktop feed resets to For you | Covered (new) | Home now reopens on the tab last chosen. The choice is kept in a one-year `rhenko-feed` cookie (`lib/feed-tab.ts`, `components/app/remember-feed-tab.tsx`). An address with a tab in it still wins, and the For you link now names its tab. The Privacy Policy lists the cookie. | Lawyer to review the new Privacy Policy line. |
 
 ## Moderation, accounts and safety
 
 | # | Complaint | Status | What Rhenko has | What is open |
 | --- | --- | --- | --- | --- |
-| 3 | Appeals are slow and go undecided | Partly | An appeal form (`components/app/appeal-form.tsx`), decisions and appeals kept as legal records (privacy page, retention). | Decision times and reversal rates are not tracked or published. The legal packet lists this under open questions. |
+| 3 | Appeals are slow and go undecided | Partly | An appeal form (`components/app/appeal-form.tsx`). Each appeal already records when it was made and decided. The Transparency page shows appeals made, reversed, upheld and waiting, and now also the average time to decide and the oldest appeal still waiting. | Figures come from this server's own records, and the page says so. Nothing is audited. Whether the time is fast enough is for the operator to judge. |
 | 4 | Bots and automated replies flood conversations | Partly | A proof-of-work puzzle (`RHENKO_PROOF_BITS`) and an optional Turnstile check (`RHENKO_TURNSTILE_VERIFY_URL`), both in `.env.example`. | Reply rate limits were not checked in this pass. |
 | 6 | A paid check reads as verified | Covered | `components/app/badges.tsx`: the verified check and the paid subscriber ring are different shapes. The ring's label says "Rhenko has not checked this person's identity." | None. |
 | 7 | AI edits of real people, including minors | Not checked | Sahayak is a text assistant. No image generation was found in this pass. | Search for image generation before saying this is covered. |
@@ -54,17 +54,16 @@ Status key:
 Paid features are not a way to buy safety fixes or reach. The rules page says paid features do not buy reach, and the
 Transparency page says the same.
 
-## Decisions for the operator
+## Decisions taken
 
-These change what people see by default, so they are not changed without a decision.
+- **Feed default.** For you stays the default, and the Following choice is now remembered (row 14). Changing the default
+  itself would change what every new visitor sees, so it was not changed.
+- **Reply order.** Not changed. Threads are already oldest first with no ranking (row 5), so there is nothing to add.
+- **Appeal timing.** Average decision time and the oldest waiting appeal are now on the Transparency page (row 3).
+- **Status page.** Not built. It needs a host and someone to post updates, which are operator decisions.
 
-1. **Feed default.** Keep For you engagement-led (with the Transparency page explaining it), or make Following the
-   default and offer For you as the alternative. Recommendation: keep For you, and make the Following tab sticky.
-2. **Reply order.** Add "Following first" as an option on replies, and decide whether it becomes the default.
-   Recommendation: offer it as an option first, and measure before changing the default.
-3. **Appeal timing.** Start recording decision times and reversal rates, and publish them on the Transparency page.
-   Recommendation: start recording now, and publish once there are enough decisions to be meaningful.
-4. **Status page.** Decide who posts incident notes, and where. Recommendation: a public status page, updated within an
-   hour of an incident.
-5. **Not checked yet.** Notifications, video playback, search with mutes, image generation and reply rate limits need a
+## Still open
+
+1. **Status page.** The operator picks a host and the person who posts incident notes.
+2. **Not checked yet.** Notifications, video playback, search with mutes, image generation and reply rate limits need a
    check before any claim is made about them.

@@ -25,6 +25,14 @@ decisions that stay with the operator. The step-by-step launch checklist is in [
 The shared operator block that the pages read is `app/_legal/operator.tsx`. Its values come from the `RHENKO_*`
 variables in `.env.example`.
 
+## Changes to the legal text since the last review
+
+- **Privacy Policy, Cookies:** one new line for `rhenko-feed`, a one-year cookie that remembers whether Home opens on For
+  you or Following. It sits next to `rhenko-sidebar`, which is already listed. The policy says Rhenko sets only the
+  cookies it needs, so the lawyer should confirm that a preference cookie fits that sentence.
+- **Transparency:** two new figures, the average time to decide an appeal and the oldest appeal still waiting. They are
+  computed from the server's own records, and the page says they are not an audited report.
+
 ## Values the operator must supply
 
 These are read from the environment. A missing value shows "not yet published" on the page. It does not stop the app.

@@ -487,6 +487,9 @@ const SECTIONS: LegalSection[] = [
             <Code>rhenko-sidebar</Code> remembers whether the sidebar is collapsed, for a year.
           </li>
           <li>
+            <Code>rhenko-feed</Code> remembers whether Home opens on For you or Following, for a year.
+          </li>
+          <li>
             <Code>rhenko_webauthn</Code> holds a passkey sign-in in progress, for {CHALLENGE_MINUTES} minutes.
           </li>
         </List>

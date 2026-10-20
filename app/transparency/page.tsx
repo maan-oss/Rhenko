@@ -17,13 +17,21 @@ async function count(sql: string, ...params: Param[]): Promise<number> {
   return (await get<{ n: number }>(sql, ...params))?.n ?? 0
 }
 
-function Figure({ label, value }: { label: string; value: number }) {
+function Figure({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-border py-2 text-[15px] last:border-b-0">
       <span>{label}</span>
-      <span className="font-semibold tabular-nums">{value.toLocaleString("en")}</span>
+      <span className="font-semibold tabular-nums">{typeof value === "number" ? value.toLocaleString("en") : value}</span>
     </div>
   )
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// The time the page is read, after connection(), so the page is never built with a fixed clock.
+async function readNow(): Promise<number> {
+  await connection()
+  return Date.now()
 }
 
 async function Reports() {
@@ -81,6 +89,16 @@ async function Hiding() {
   const reversed = await count("SELECT COUNT(*) AS n FROM appeals WHERE decision = 'reversed'")
   const upheld = await count("SELECT COUNT(*) AS n FROM appeals WHERE decision = 'upheld'")
   const waiting = await count("SELECT COUNT(*) AS n FROM appeals WHERE decided_at IS NULL")
+  // How long decided appeals took on average, and how long the oldest undecided one has waited. Both come from the
+  // timestamps each appeal already records, in milliseconds.
+  const timing = await get<{ decided: number | string; avg_ms: number | string | null }>(
+    "SELECT COUNT(*) AS decided, AVG(decided_at - created_at) AS avg_ms FROM appeals WHERE decided_at IS NOT NULL"
+  )
+  const oldest = await get<{ at: number | string | null }>("SELECT MIN(created_at) AS at FROM appeals WHERE decided_at IS NULL")
+  const decidedCount = Number(timing?.decided ?? 0)
+  const averageDays = timing?.avg_ms === null || timing?.avg_ms === undefined ? null : Number(timing.avg_ms) / DAY_MS
+  const now = await readNow()
+  const oldestDays = oldest?.at === null || oldest?.at === undefined ? null : Math.floor((now - Number(oldest.at)) / DAY_MS)
   return (
     <div className="flex flex-col">
       <Figure label="Posts hidden, with a notice sent to the author" value={hidden} />
@@ -90,6 +108,14 @@ async function Hiding() {
       <Figure label="Appeals reversed" value={reversed} />
       <Figure label="Appeals not upheld, with the post deleted" value={upheld} />
       <Figure label="Appeals waiting for a decision" value={waiting} />
+      <Figure
+        label="Average time to decide an appeal"
+        value={decidedCount === 0 || averageDays === null ? "None decided yet" : averageDays < 1 ? "Less than a day" : `${averageDays.toFixed(1)} days`}
+      />
+      <Figure
+        label="Oldest appeal still waiting"
+        value={oldestDays === null ? "None waiting" : oldestDays < 1 ? "Less than a day" : `${oldestDays} ${oldestDays === 1 ? "day" : "days"}`}
+      />
     </div>
   )
 }

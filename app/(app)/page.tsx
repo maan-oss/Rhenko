@@ -1,8 +1,10 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 import { connection } from "next/server"
 import { getViewer, requireViewer } from "@/lib/auth"
+import { FEED_TAB_COOKIE, parseHomeTab } from "@/lib/feed-tab"
 import { circlesFor } from "@/lib/circles"
 import { suggestionsFor, topPeople } from "@/lib/connections"
 import { followedTopics, whoToFollow } from "@/lib/data"
@@ -13,6 +15,7 @@ import { pinnedTimelines } from "@/lib/timelines"
 import { firstParam } from "@/lib/params"
 import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
+import { RememberFeedTab } from "@/components/app/remember-feed-tab"
 import { emptyActionClass } from "@/components/app/empty-state"
 import { MenuButton } from "@/components/app/menu-button"
 import { PageHeader } from "@/components/app/page-header"
@@ -59,7 +62,10 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   if (!(await getViewer())) return <Landing />
   const viewer = await requireViewer()
   const params = await searchParams
-  const tab = firstParam(params.tab)
+  // An address with a tab in it wins. Without one, Home opens on the tab the person last chose, so Home does not drop them
+  // back to For you.
+  const remembered = parseHomeTab((await cookies()).get(FEED_TAB_COOKIE)?.value)
+  const tab = firstParam(params.tab) ?? remembered ?? undefined
   // A pinned list is a tab of its own. Only a list the viewer has pinned opens here, whatever the address says.
   const pins = await pinnedTimelines(viewer.id)
   const pin = pins.find((item) => item.id === tab) ?? null
@@ -85,13 +91,14 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
             label="Home sections"
             className="mx-0 my-0 w-full"
             items={[
-              { href: "/", label: "For you", active: !following && !pin },
+              { href: "/?tab=for-you", label: "For you", active: !following && !pin },
               { href: "/?tab=following", label: "Following", active: following },
               ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, active: pin?.id === item.id })),
             ]}
           />
         }
       />
+      {pin ? null : <RememberFeedTab tab={mode} />}
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       <Composer
         viewer={viewer}
