@@ -120,6 +120,12 @@ Final pass, on the production build run locally (`npm run build`, then `node ser
     interested check already did.
   - `[legal]` the command line decides a notice and emails the decision: the suite had not been given `RHENKO_SMTP_URL`, so
     the command-line process that sends the decision had nowhere to send it. The run now sets it.
+- Final full run after the legal-text pass: 507 of 523 checks passed. The 16 that failed were in passkeys, visibility and legal,
+  and all came from how the run was started, not from the code. The base URL was 127.0.0.1 while `RHENKO_PUBLIC_URL` is
+  localhost, so passkey registration was refused; `RHENKO_SMTP_URL` was not set, so the decision email had nowhere to go.
+  Rerun of those areas with the right settings: passkeys and legal passed, and visibility passed 59 of 59 on its own after one
+  connection reset (read ECONNRESET on a media request) that did not recur. A run must use `BASE_URL=http://localhost:3100` and
+  `RHENKO_SMTP_URL=smtp://127.0.0.1:2525`.
   - Re-runs: posts, feed, settings and legal together, 144 of 144 (14.1 minutes). Auth, rules, visibility and legal on the
     final build, after the last change to the landing backdrop: 152 of 152.
 - Calls, including the five group-call late-join checks that failed in the previous round: all passed in the full run.
