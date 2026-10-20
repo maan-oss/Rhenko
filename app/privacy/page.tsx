@@ -44,8 +44,8 @@ const SUMMARY = (
   <Note title="The short version">
     <List>
       <li>
-        Some home feeds show ads. Ads are chosen from your age, whether you pay for Rhenko Plus and the topics you follow. Advertisers see
-        only totals. Nothing is sent to analytics or tracking services.
+        Some home feeds show ads, to adults who do not pay for Rhenko Plus. A topic ad goes only to people who follow that topic. Advertisers
+        see only totals. Nothing is sent to analytics or tracking services.
       </li>
       <li>Rhenko does not sell your data, and does not share personal information with advertisers.</li>
       <li>Payments are taken by Stripe. Rhenko never sees your card number or bank details.</li>
@@ -96,13 +96,16 @@ const SECTIONS: LegalSection[] = [
             You can add a bio, location, website, status, profile photo and banner.
           </li>
           <li>
-            <B>Date of birth.</B> Asked at sign-up, because you must be at least {MINIMUM_AGE}. Only you can see it.
+            <B>Date of birth.</B> Asked at sign-up, because you must be at least {MINIMUM_AGE}. Only you can see it. It also decides whether you may see ads.
           </li>
           <li>
             <B>Agreement.</B> The version of the Terms and Privacy Policy you agreed to, and when you agreed.
           </li>
           <li>
             <B>Email address.</B> Optional. See Email below.
+          </li>
+          <li>
+            <B>Passkeys.</B> If you add one for sign-in: its public key, the name you gave it, and when it was added and last used.
           </li>
           <li>
             <B>Posts and activity.</B> Your posts and replies, including drafts and scheduled posts, your polls and votes, likes,
@@ -114,8 +117,14 @@ const SECTIONS: LegalSection[] = [
             notified about, and your muted words.
           </li>
           <li>
-            <B>Where you are.</B> Optional. Your country and a city or town. Rhenko never stores a street address, postcode, house
+            <B>Circles.</B> The circles you join, your requests to join one, and the answers you gave to its questions.
+          </li>
+          <li>
+            <B>Where you are.</B> Optional. Your country, a city or town, and a state or region if you give one. Rhenko never stores a street address, postcode, house
             number or your device&apos;s location. It is used only to suggest people near you, and nobody else is shown it.
+          </li>
+          <li>
+            <B>Profile location.</B> The Location on your profile is free text that you write. It is shown on your profile to anyone who can see it, and it is separate from where you are.
           </li>
           <li>
             <B>Languages.</B> The languages you speak, how well you speak each one, and the ones you are learning. They are used to
@@ -154,6 +163,9 @@ const SECTIONS: LegalSection[] = [
             never see it.
           </li>
           <li>
+            <B>Post clicks.</B> Clicks on your posts are counted by kind (link, profile, detail, photo or hashtag), with a time and no account. The counts are kept until the post is deleted.
+          </li>
+          <li>
             <B>Notifications.</B> A record of what other people did that involves you, such as likes, replies and follows, so
             that you can read it in Notifications.
           </li>
@@ -186,10 +198,12 @@ const SECTIONS: LegalSection[] = [
             described under How posts are ordered. Nobody else is shown them.
           </li>
           <li>
-            <B>Network address.</B> Sign-up, sign-in and password-reset attempts are counted in the server&apos;s memory, by network
-            address and by the handle or email address typed, to slow down guessing. Those counts last an hour at most, are never
-            written to the database, and are lost when the server restarts. Rhenko writes no request log, although a proxy or host
-            in front of it may.
+            <B>Attempt counts.</B> Sign-up, sign-in, password-reset, notice and human-check attempts are counted, to slow down guessing.
+            Each count is kept in a table in the database, with the network address the attempt came from and the handle or email address
+            typed, in plain text. Rhenko uses the address a proxy reports only where the server is set to trust its proxy; otherwise every
+            attempt is counted against one shared address. A count is removed when its time window ends, at most an hour after it starts.
+            Sign-in also keeps a keyed hash of the network address for {SESSION_DAYS} days, to spot many accounts made from one place.
+            Rhenko writes no request log, although a proxy or host in front of it may.
           </li>
         </List>
       </>
@@ -207,7 +221,7 @@ const SECTIONS: LegalSection[] = [
             tips. This is the contract between you and the operator.
           </li>
           <li>
-            <B>To show ads</B>, using only your age, whether you pay for Plus and the topics you follow, as described under Advertising
+            <B>To show ads</B>, using only whether you are an adult (from your date of birth), whether you pay for Plus and the topics you follow, as described under Advertising
             in the Terms. This is the operator&apos;s legitimate interest in paying for the service, weighed against your rights. You can
             remove ads by subscribing to Plus.
           </li>
@@ -225,8 +239,8 @@ const SECTIONS: LegalSection[] = [
           </li>
         </List>
         <P>
-          Rhenko does not use your posts, messages, likes, contacts or location to choose ads. It does not profile you to decide what
-          you see, and it does not use your data to train AI models.
+          Rhenko does not use your posts, messages, likes, contacts or location to choose ads. Your For you feed is personalised from what you do on Rhenko, as described under How posts are ordered. Posts and messages are not used
+          to train AI models. The ranking weights are learned from what all accounts do, and no weight holds a record of any one person.
         </P>
       </>
     ),
@@ -237,7 +251,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          Messages are stored as you send them, with the reactions to them. They are not end-to-end encrypted, so the operator
+          Messages are stored as you send them, with the reactions to them, and voice messages are stored like photos. They are not end-to-end encrypted, so the operator
           can technically read them. They are kept until they are deleted.
         </P>
         <List>
@@ -258,10 +272,10 @@ const SECTIONS: LegalSection[] = [
     title: "Calls",
     body: (
       <>
-        <P>Calls carry voice only. The audio travels between the browsers on the call and is not recorded or stored.</P>
+        <P>Calls carry voice, and video when your camera is on. The audio and video travel between the browsers on the call and are not recorded or stored.</P>
         <List>
           <li>
-            The server passes along the messages that set a call up and keeps the state of live calls in memory. When a call ends,
+            The server passes along the messages that set a call up and keeps the state of live calls in the database until they end, and the messages that set a call up stay there for about a minute. When a call ends,
             one line is saved in the conversation: that a call happened, how it ended, how long it lasted and how many people took
             part.
           </li>
@@ -279,15 +293,23 @@ const SECTIONS: LegalSection[] = [
     title: "Photos and videos",
     body: (
       <>
-        <P>Uploads are saved on the server under random file names.</P>
+        <P>Uploads are saved under random file names, with the storage provider the operator has set up: Cloudflare R2 or Supabase Storage.</P>
         <List>
           <li>
             Photos can be JPEG, PNG, WebP or GIF, up to {IMAGE_MB} MB. Videos can be MP4, WebM or MOV, up to {VIDEO_MB} MB. A post
             has up to {MAX_IMAGES} photos or {MAX_VIDEOS} video.
           </li>
           <li>
-            Rhenko does not remove the information a camera adds to a photo, which can include where it was taken. Remove it
-            before you upload if you do not want to share it.
+            Before a photo is stored, Rhenko removes the details a camera or editing app adds to it: location, camera make and model,
+            time, and any embedded text or comments. The picture itself is stored unchanged.
+          </li>
+          <li>
+            Rhenko does not change videos. Any location or device details in a video stay in the file, so remove them before you upload
+            a video if you do not want to share them.
+          </li>
+          <li>
+            Opening a photo or video sends your browser to a link at the storage provider. Rhenko makes the link only after checking that
+            you may see the file. It works for one hour and needs no sign-in, so anyone who has it can open the file until it expires.
           </li>
           <li>
             Anyone who has the address of a profile photo or banner can open it. A photo or video in a post can be opened only by
@@ -354,7 +376,7 @@ const SECTIONS: LegalSection[] = [
         </List>
         <P>
           Two rules keep the feed varied: no author fills more than two of the top places, and posts from the same kind of source
-          (for example, people you follow) do not fill more than three places in a row. A post you mark Not interested leaves your
+          (for example, people you follow) do not fill more than three places in a row. Your own posts from the last hour, up to three, lead the first page of For you, newest first, outside these rules. A post you mark Not interested leaves your
           For you and stays out of it.
         </P>
         <P>
@@ -380,12 +402,18 @@ const SECTIONS: LegalSection[] = [
           </li>
         </List>
         <P>
-          Ads are shown in the For you and Following feeds, after every eight posts, and each one is labelled Ad. Rhenko Plus removes
+          Ads are shown in the For you and Following feeds, after about every eight posts (sometimes nine), and each one is labelled Ad. Rhenko Plus removes
           them. Ads are not ranked by what they predict you will do.
         </P>
         <P>
           The main settings that shape what you see are your follows, blocks, mutes, muted words, and whether a post is hidden or
           protected. You can change each one in Settings, under Privacy and safety.
+        </P>
+        <P>
+          Each post is also scored automatically when it goes live and when it is edited, for signs of spam and scams. A post that scores
+          50 or more stays out of other people&apos;s For you feeds and sends no notifications. A post that scores 75 or more is hidden, and
+          its author is sent a notice they can appeal. An account that looks automated may be asked to confirm it is a person, and may have
+          following, messaging and posting paused for a while.
         </P>
       </>
     ),
@@ -402,9 +430,8 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             A <B>notice</B> sent through the notice form is kept with the name, email address, optional postal address and link
-            the sender gave, what the notice is about, the description and the sender&apos;s signature. The sender gets a reference
-            and an email when the notice arrives, and an email with the decision. The author of the content is not told who sent a
-            notice, except that a copyright notice is passed on to the person who posted the work, as the law expects.
+            the sender gave, what the notice is about, the description and the sender&apos;s signature. The sender is sent a reference when the notice arrives, and the operator emails the decision to the sender. The author of the content
+            is not told who sent a notice. The author is told the kind of notice and the reason for the decision.
           </li>
           <li>
             <B>Decisions</B> and the reasons for them are kept with the notice. So are the appeals and their decisions.
@@ -459,6 +486,9 @@ const SECTIONS: LegalSection[] = [
           <li>
             <Code>rhenko-sidebar</Code> remembers whether the sidebar is collapsed, for a year.
           </li>
+          <li>
+            <Code>rhenko_webauthn</Code> holds a passkey sign-in in progress, for {CHALLENGE_MINUTES} minutes.
+          </li>
         </List>
         <P>
           Your choice of light or dark theme is kept in your browser&apos;s local storage, under <Code>theme</Code>, not in a
@@ -500,7 +530,7 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             Sarvam AI, the service Sahayak answers with, only if the operator has turned Sahayak on. When someone mentions @sahayak,
-            it receives that post&apos;s question, and the posts it replies to or quotes that the person asking can see. Nothing else is
+            it receives that post&apos;s question, and the posts it replies to or quotes that the person asking can see, with their authors&apos; handles. Nothing else is
             sent to it.
           </li>
           <li>
@@ -509,6 +539,10 @@ const SECTIONS: LegalSection[] = [
             Turnstile the check is a puzzle that runs in your browser and sends nothing to a third party.
           </li>
           <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
+          <li>
+            A link in a post makes the server fetch that page once to build a preview. The page&apos;s site sees a request from this server,
+            not from you. The preview picture is stored here and can be opened by anyone who has its address.
+          </li>
           <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>
           <li>
             Authorities receive data only where a law or a valid order requires it. The operator keeps a record of each such
@@ -579,7 +613,7 @@ const SECTIONS: LegalSection[] = [
           Sign-in sessions last {SESSION_DAYS} days or until you end them. Emailed codes last {EMAIL_CODE_MINUTES} minutes. The
           step between your password and your two-factor code lasts {CHALLENGE_MINUTES} minutes.
         </li>
-        <li>The counts that include network addresses last an hour at most, and only in the server&apos;s memory.</li>
+        <li>Attempt counts are removed when their time window ends, at most an hour after it starts.</li>
         <li>
           Where an account was made from, and when it passed a human check, is kept for {RETENTION.signalsDays} days as a keyed hash
           that cannot be read back to an address. The browser you used is not kept. Puzzle records for the human check are removed a
@@ -603,7 +637,7 @@ const SECTIONS: LegalSection[] = [
           <li>
             <B>Access and a copy.</B> <TextLink href="/settings">Settings, under Account, Your data</TextLink>, downloads a ZIP of
             your profile, posts, likes, bookmarks, lists, messages, your city or town, your languages and connection choices, and
-            your photos and videos.
+            your photos and videos. It does not yet include notifications, saved searches, sign-in sessions, passkeys, reports you sent, notices, subscription and tip records, or For you history.
           </li>
           <li>
             <B>Correction.</B> Edit your profile from your profile page, and your handle and email address in Settings, under

@@ -22,7 +22,7 @@ const SECTIONS: LegalSection[] = [
           content that sexualises a child, or that invites contact with a child for sexual reasons.
         </P>
         <P>
-          Such content is hidden as soon as a notice about it arrives, and it is reported to the authorities the law requires, such as the
+          Such content is hidden as soon as a notice about it that links to it on this server arrives, and it is reported to the authorities the law requires, such as the
           National Center for Missing &amp; Exploited Children in the US and the National Crime Agency in the UK. Do not save or
           forward it to show someone else. <TextLink href="/safety">The safety page</TextLink> says how to report it.
         </P>
@@ -124,7 +124,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <P>
         Nobody can pay to have a post ranked higher, shown to more people, or pushed into a feed. Paid features change what you can do
-        and see, not how far a post goes. The home feeds are ordered by time, as the{" "}
+        and see, not how far a post goes. The Following feed is ordered by time, and For you is ranked by predicted interest, as the{" "}
         <TextLink href="/transparency">transparency page</TextLink> explains. Authors can hide the like, repost, quote, reply and view
         counts on their own posts, and then no one else sees them.
       </P>

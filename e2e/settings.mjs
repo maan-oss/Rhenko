@@ -315,15 +315,17 @@ async function settingsPages({ phone }) {
   })
 
   await check(`${where}: the Log out button on the Settings page ends the session`, async () => {
-    // Logging out moves the page to the sign-in page as the session ends. One background request for that page's
-    // components (an RSC request with a query string) has been seen to answer 404 at this moment, and the sign-in page
-    // shows correctly regardless. The cause is not found; this allows that one message during this check only.
+    // Logging out moves the page to the sign-in page. Measured on Next 16.4.0: the router then prefetches the sign-in page
+    // while it still holds the signed-in layout's route state. The sign-in page sits outside that layout, so that prefetch
+    // answers 404, and Next caches the answer. The navigation itself is a separate request and loads the sign-in page
+    // correctly. This allows that one console message during this check only.
     const endAllow = allowNoise({
       id: "sign-in-rsc-during-log-out",
       kind: "console",
       text: /Failed to load resource: the server responded with a status of 404/,
       url: /\/login\?/,
-      reason: "A background request for the sign-in page during log-out can answer 404; the sign-in page itself is correct.",
+      reason:
+        "After log-out, the router prefetches the sign-in page with the signed-in layout's route state; that prefetch answers 404. The sign-in page itself loads correctly.",
     })
     try {
       await go(page, "/settings", page.getByRole("navigation", { name: "Settings sections" }))

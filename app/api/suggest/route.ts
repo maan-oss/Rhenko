@@ -1,10 +1,10 @@
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { suggestHandles, suggestTags } from "@/lib/data"
 
 // Autocomplete for the composer: @handles and #topics. Handles leave out deactivated accounts and anyone blocked
 // either way; topics come from live posts by active accounts.
 export async function GET(request: Request) {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return Response.json({ users: [], tags: [] }, { status: 401 })
   const q = (new URL(request.url).searchParams.get("q") ?? "").slice(0, 60)
   if (q.startsWith("@")) {

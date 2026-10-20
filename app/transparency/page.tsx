@@ -196,8 +196,9 @@ const SECTIONS: LegalSection[] = [
     body: (
       <List>
         <li>
-          Sign-up, sign-in, password resets, and new follows, messages and posts from an account that looks automated ask for a human
-          check first. The check is a puzzle that takes a moment in the browser, or Cloudflare Turnstile where the operator uses it.
+          Creating an account and resetting a password always ask for a human check. Signing in asks for one after three failed sign-ins
+          for a handle, or ten from one network, within 15 minutes. New follows, new conversations and posts from an account that looks
+          automated ask for one too. The check is a puzzle that takes a moment in the browser, or Cloudflare Turnstile where the operator uses it.
         </li>
         <li>
           Signs that an account looks automated include how new it is, whether its email is confirmed, an empty profile, a handle that
@@ -208,8 +209,8 @@ const SECTIONS: LegalSection[] = [
           a score but never restricts an account alone.
         </li>
         <li>
-          An account with many signs is held back from following, starting conversations and posting for a while. The hold lifts as its
-          activity settles.
+          An account with many signs is limited from following, starting conversations and posting for a while. The limit lifts as its
+          activity settles, and the account is told what it can do, such as confirming its email address.
         </li>
         <li>Sahayak, the AI account, is not checked this way.</li>
       </List>
@@ -237,7 +238,7 @@ const SECTIONS: LegalSection[] = [
         </li>
         <li>No feed is ranked by who has paid.</li>
         <li>
-          Ads are placed after every eight posts in the home feeds. Each one is labelled Ad. They are not shown to people under 18 or to
+          Ads are placed about every eight posts in the home feeds, sometimes nine. Each one is labelled Ad. They are not shown to people under 18 or to
           people who pay for Rhenko Plus.
         </li>
       </List>
@@ -255,7 +256,8 @@ const SECTIONS: LegalSection[] = [
         <List>
           <li>
             <B>Groups, in order.</B> A person appears in one group only, the first that fits: a language swap, the same town or city,
-            people you follow follow, a language you speak or are learning, or posts on topics you follow.
+            people you follow follow, a language you speak or are learning, or posts on topics you follow. People to start with comes last. It is used only when nothing else fits, and shows the accounts most
+            people follow, with the reason &quot;Followed by N people&quot; or &quot;New to Rhenko&quot;. It is never matched to you.
           </li>
           <li>
             <B>What is used.</B> The town or city you gave and your country, your languages and how well you speak them, the people
@@ -271,8 +273,8 @@ const SECTIONS: LegalSection[] = [
             suggestions.
           </li>
           <li>
-            <B>Your town is not shown to others.</B> Your city or town is never on your profile. The only place it appears is in the
-            reason on a suggestion, and only you see that.
+            <B>Your town is not shown to others.</B> The town or city you give for suggestions is kept apart from your profile. Your profile Location is text you write yourself, and
+            everyone can see it. The town or city appears only in a suggestion&apos;s reason, and only you see that.
           </li>
           <li>
             <B>Nobody is told.</B> No one is told they were suggested to someone, and a suggestion is not a post. Suggestions do not
@@ -280,7 +282,7 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             <B>Never suggested.</B> People you block or mute, people who have blocked you, protected and deactivated accounts, and
-            people you already follow. A person you chose Not now on stays out of your suggestions for 180 days.
+            people you already follow. A person you chose Not now on stays out of your suggestions for 180 days, in every group, including People to start with.
           </li>
           <li>
             <B>Your controls.</B> In Settings, under Connections and languages, you can change where you are and your languages, turn

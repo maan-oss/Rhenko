@@ -27,7 +27,7 @@ const SECTIONS: LegalSection[] = [
         </P>
         <List>
           <li>
-            {URGENT.join(" and ").replace(/^./, (c) => c.toUpperCase())} are hidden as soon as the notice arrives, while we review
+            {URGENT.join(" and ").replace(/^./, (c) => c.toUpperCase())} are hidden as soon as the notice arrives, if it links to a post on this server, while we review
             it. Everything else is reviewed first.
           </li>
           <li>

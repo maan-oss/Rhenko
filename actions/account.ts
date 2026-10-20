@@ -8,6 +8,7 @@ import {
   checkSecondFactor,
   currentSessionHash,
   destroySession,
+  getAgreedViewer,
   getViewer,
   hashPassword,
   isUniqueViolation,
@@ -207,7 +208,7 @@ export async function regenerateRecoveryCodes(_prev: AccountState, formData: For
 }
 
 export async function setNotificationPref(kind: string, enabled: boolean): Promise<VoidResult> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (typeof kind !== "string" || !(NOTIFICATION_KINDS as readonly string[]).includes(kind) || typeof enabled !== "boolean") {
     return { ok: false, error: "That setting isn't available. Reload the page and try again." }
@@ -225,7 +226,7 @@ export async function setNotificationPref(kind: string, enabled: boolean): Promi
 
 // A short line beside your name. Blank clears it.
 export async function setStatus(_prev: StatusState, formData: FormData): Promise<StatusState> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in first." }
   const status = cleanStatus(String(formData.get("status") ?? ""))
   const problem = statusProblem(status)

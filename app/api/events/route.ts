@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server"
-import { getViewer, SESSION_COOKIE, sessionTokenValid } from "@/lib/auth"
+import { getAgreedViewer, SESSION_COOKIE, sessionTokenValid } from "@/lib/auth"
 import { subscribe, type RealtimeEvent } from "@/lib/bus"
 import { openingEvents, serverBootId, takeQueuedBanners } from "@/lib/call-state"
 
@@ -13,7 +13,7 @@ const SESSION_CHECK_MS = 30_000
 // still waiting for them, and banners saved while they had nothing open. After that, the client refreshes its page
 // when a notification or message arrives, shows typing and banners, and runs calls.
 export async function GET(request: NextRequest) {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return new Response("Sign in first.", { status: 401 })
   const token = request.cookies.get(SESSION_COOKIE)?.value ?? null
 

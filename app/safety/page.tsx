@@ -40,8 +40,7 @@ const SECTIONS: LegalSection[] = [
         <P>
           If you are not a member, or you need to give a formal notice (for example a copyright owner, someone pictured in an
           image, a parent, a lawyer, or someone acting for an authority), use the <TextLink href="/notice">notice form</TextLink>.
-          It asks for what the law needs for each kind of notice. You get a reference by email straight away, and an email with the
-          decision.
+          It asks for what the law needs for each kind of notice. You get a reference straight away, and we try to email it to you. The operator emails the decision to you.
         </P>
       </>
     ),

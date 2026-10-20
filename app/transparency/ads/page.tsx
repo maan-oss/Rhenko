@@ -10,10 +10,11 @@ import { formatMoney } from "@/lib/money"
 
 export const metadata: Metadata = {
   title: { absolute: "Advertising policy and ad library · Rhenko" },
-  description: "What advertisers may run on Rhenko, how each ad is labelled and why it is shown, and every campaign that has run.",
+  description: "What advertisers may run on Rhenko, how each ad is labelled and why it is shown, and the campaigns that have run.",
 }
 
-// Drafted for legal review. The rules here are the ones the app enforces; the text is not legal advice and is not final until
+// Drafted for legal review. The list of what may not be advertised is the policy. The app screens campaign text for some of it
+// (lib/ad-rules.ts), and a person reviews every campaign before it runs. The text is not legal advice and is not final until
 // it has been reviewed by a qualified lawyer for each place the service is offered.
 
 const SECTIONS: LegalSection[] = [
@@ -36,7 +37,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          Ads appear in the home feeds, after every {AD_EVERY} posts. Ads are shown only to adults, 18 and over, and never to people who pay for
+          Ads appear in the home feeds, about every {AD_EVERY} posts (sometimes {AD_EVERY + 1}). Ads are shown only to adults, 18 and over, and never to people who pay for
           Rhenko Plus. A campaign with a topic is shown only to people who follow that topic. No campaign uses anything else about a person:
           not their messages, their location, their contacts, or the posts they like. Ads never appear inside replies or threads.
         </P>
@@ -92,8 +93,8 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          An advertiser can pause a running campaign and start it again. A campaign that is rejected states the reason. Advertisers keep their
-          own copy of what they submitted; the library below shows what ran.
+          An advertiser can pause a running campaign and start it again. A rejected campaign shows the reason we gave, when we give one. Ended
+          campaigns stay in the library below.
         </P>
       </>
     ),
@@ -105,7 +106,7 @@ export default function AdsTransparencyPage() {
     <LegalPage
       title="Advertising"
       updated={LEGAL_UPDATED}
-      intro="How ads work on Rhenko, what may be advertised, and every campaign that has run."
+      intro="How ads work on Rhenko, what may be advertised, and the campaigns that have run."
       other={{ href: "/transparency", label: "Transparency figures for this server" }}
       sections={[
         ...SECTIONS,
@@ -146,6 +147,9 @@ async function Library() {
     <div className="flex flex-col gap-4">
       <P>
         Rate: {formatMoney(cpmCents(), CURRENCY)} per thousand impressions. Shown to adults aged {MINIMUM_AGE} and over who do not pay for Plus.
+      </P>
+      <P>
+        The library lists up to the 200 campaigns most recently reviewed. Campaigns from advertisers whose accounts are not active are left out.
       </P>
       {rows.length === 0 ? <P>No campaigns have run yet.</P> : null}
       <ul className="flex flex-col divide-y divide-border">

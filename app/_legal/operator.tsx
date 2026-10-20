@@ -139,10 +139,16 @@ export function OperatorValue({
   )
 }
 
-// A full line for a block of details, shown only when the operator has set the value.
+// A full line for one detail. When the operator has not set it, the line says so.
 async function Line({ which, label, email, max }: { which: OperatorSetting; label: string; email?: boolean; max?: number }) {
   const text = await published(which, max)
-  if (text === null) return null
+  if (text === null) {
+    return (
+      <li>
+        <span className="font-semibold">{label}:</span> not yet published
+      </li>
+    )
+  }
   return (
     <li>
       <span className="font-semibold">{label}:</span>{" "}
@@ -151,7 +157,7 @@ async function Line({ which, label, email, max }: { which: OperatorSetting; labe
   )
 }
 
-// A list of details, each on its own line, with the ones not set left out.
+// A list of details, each on its own line. A detail the operator has not set is listed as not yet published.
 export function OperatorLines({ items }: { items: { which: OperatorSetting; label: string; email?: boolean; max?: number }[] }) {
   return (
     <Waiting>

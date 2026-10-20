@@ -6,6 +6,8 @@ import { newId, requireAgreedViewer } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { AD_CAMPAIGNS_WAITING_MAX, MICRO_PER_CENT, campaignProblem, normalizeTopic } from "@/lib/ad-rules"
 import { CURRENCY, adCreditUrl, paymentsConfigured } from "@/lib/payments"
+import { MINIMUM_AGE } from "@/lib/legal"
+import { ageFrom } from "@/lib/rules"
 
 export type FormState = { error?: string; done?: boolean }
 
@@ -44,6 +46,10 @@ function text(value: FormDataEntryValue | null, max: number): string {
 export async function createAdAccount(_previous: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireAgreedViewer()
   if (await get("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)) return { error: "You already have an advertising account." }
+  // The policy is for adults. The advertise page hides the form for anyone else, and this check makes the server refuse too.
+  const owner = await get<{ birthday: string | null }>("SELECT birthday FROM users WHERE id = ?", viewer.id)
+  const age = owner?.birthday ? ageFrom(owner.birthday) : null
+  if (age === null || age < MINIMUM_AGE) return { error: "Advertising is for adults with a birthday on their account." }
   const business = text(formData.get("business_name"), 80)
   const country = text(formData.get("country"), 2).toUpperCase()
   const contact = text(formData.get("contact_email"), 254)

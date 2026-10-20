@@ -1,4 +1,4 @@
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { mediaAccess } from "@/lib/data"
 import { serveObject } from "@/lib/storage"
 import { contentTypeFor, UPLOAD_NAME_PATTERN, variantFile, variantWidthOf } from "@/lib/uploads"
@@ -15,7 +15,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const { file } = await params
   if (!UPLOAD_NAME_PATTERN.test(file)) return notFound()
 
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   const access = await mediaAccess(file, viewer?.id ?? null)
   if (access === "none") return notFound()
 

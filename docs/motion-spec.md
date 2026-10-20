@@ -105,13 +105,16 @@ Final pass, on the production build run locally (`npm run build`, then `node ser
 - Route audit (`scratchpad/all-routes-widths.mjs`): 581 page loads at seven widths (360, 390, 430, 768, 1024, 1440, 1920
   px). That is 34 signed-in routes in light and dark (476 loads) and 15 public pages in light (105 loads). Zero loads had
   horizontal overflow, console errors, HTTP errors or a redirect. Seven contact sheets at 1440 px were reviewed. This audit
-  ran before the non-author analytics gate was added; the gate test covers that case.
+  ran before the non-author analytics gate was added; the gate test covers that case. The 14 loads that answered 404 for analytics on another account's post are expected:
+  analytics are for the author of a published post, and the page answers 404 to anyone else.
 - End-to-end, full run of all areas (523 checks): 519 passed, 4 failed, 51.1 minutes. The four failures and their fixes:
   - `[posts]` deleting a post on a phone, and `[settings]` Log out: Chromium logged a 404 for a background request. In the
     first, a link to the deleted post prefetched its page, which now answers 404; in the second, a request for the sign-in
     page with a query string answered 404 as the session ended. Nothing shows either one, and the sign-in page is correct
     (the failing run's screenshot shows it). Each check now allows that one console message, for that check only, with the
-    reason written beside it. The Log out cause was not found: four direct repetitions did not reproduce the 404.
+    reason written beside it. The Log out cause: after a log-out the router prefetches the sign-in page with the state of the
+    signed-in layout. That prefetch answers 404 and Next caches it, but the navigation to the sign-in page is unaffected.
+    Next 16.4.2 does not change this, so the dependency stays at 16.4.0.
   - `[feed]` a post a followed person liked is on For you: a reader's For you ranking is reused for a minute. The reader's
     first ranking was made when the account was created, before the like. The check now waits out the minute, as the Not
     interested check already did.
@@ -193,9 +196,9 @@ Earlier rounds, headless Chromium, production build:
   by a qualified lawyer before launch. It is not something the code can decide.
 - Real devices: measure frame timing and Core Web Vitals on a real low-end phone, and on a laptop with graphics hardware
   where the shader is drawn. The landing LCP table above is the number to watch.
-- Sign-in page 404 during log-out: in some runs, a request for the sign-in page with a query string answers 404 as the
-  session ends. The sign-in page the user lands on is correct. The Log out check allows that one console message. The
-  cause has not been found.
+- Sign-in page 404 during log-out: after a log-out, the router prefetches the sign-in page using the signed-in layout's
+  state, and that prefetch answers 404. The page the user lands on is correct, and the Log out check allows that one
+  console message. This is not a code fix: the prefetch comes from the framework, and Next 16.4.2 did not remove it.
 - The landing's product previews are still hand-built miniatures. Rebuilding them from the real post, poll and composer
   components was not done on purpose: those components import the composer, dialogs and server actions, which would add
   to the public landing's first load. Decide whether the previews must be the real components anyway.

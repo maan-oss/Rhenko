@@ -133,4 +133,7 @@ large enough for a formal transparency report under the DSA, the lawyer will say
 - A request log. Only the proxy or host in front of the app keeps one.
 - Automated scanning of images for known abuse material. The operator must add that, with a provider, if it is required.
 - Audited transparency reports.
-- Agreement checks on server actions. Pages send an account that has not agreed to the agreement screen, but a request made directly to a server action is not refused until each action checks the agreement too.
+- Posting, following, messages, lists, circles, calls, payments, advertising, the feed and the media routes refuse an account that has not agreed to the current Terms (`requireAgreedViewer` and `getAgreedViewer`). Account actions (password, two-factor, sessions, email, deactivation and deletion) still accept it, so a person can always secure or leave their account. Every new server action must use one of the two checks unless it is an account action.
+- Counter-notice details the copyright law asks for: the appeal form takes only a reason of at least 10 characters. The copyright notice form does not take a statement under penalty of perjury. Lawyer to decide whether to add both.
+- Timing for putting a post back after a counter-notice is set by the operator by hand, and is not tracked by the app.
+- Intimate-image removal deadlines are not tracked, and there is no self-harm detection.

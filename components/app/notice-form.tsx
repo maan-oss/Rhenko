@@ -73,7 +73,7 @@ export function NoticeForm() {
         <p className="text-[15px] font-semibold">We received your notice.</p>
         {state.reference && state.reference !== "received" ? (
           <p className="text-[15px] leading-relaxed">
-            Your reference is <span className="font-mono text-[14px]">{state.reference}</span>. We have emailed it to you. We will
+            Your reference is <span className="font-mono text-[14px]">{state.reference}</span>. We try to email it to you, so keep this reference. We will
             email you the decision and the reasons for it.
           </p>
         ) : (

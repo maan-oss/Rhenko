@@ -27,11 +27,11 @@ const SECTIONS: LegalSection[] = [
           <li>The copyrighted work you say is being copied, and where you own it.</li>
           <li>The address (link) of the material on Rhenko that you say infringes it.</li>
           <li>A statement that you believe in good faith that the use is not authorised by you, your agent or the law.</li>
-          <li>A statement that the information in the notice is accurate, and, under penalty of perjury, that you are the owner or authorised to act for the owner.</li>
+          <li>A confirmation that the information in the notice is accurate, and that you are the owner or authorised to act for the owner. The form asks you to confirm this. It does not ask for a statement under penalty of perjury.</li>
           <li>Your signature, physical or electronic.</li>
         </List>
         <P>
-          A notice that leaves out these things may not be acted on, and we will tell you which part is missing.
+          A notice that leaves out these things may not be acted on.
         </P>
       </>
     ),
@@ -59,13 +59,11 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          When a notice meets the requirements, we review it. If we act on it, we hide the post, and the author is told the category
-          and the reason. We pass the notice to the author, with your details, so they can respond. The author can send a
-          counter-notice.
+          When a notice meets the requirements, we review it. If we act on it, we hide the post and tell the author the category
+          and the reason. We do not pass the notice or your details to the author, and the author can appeal from Notices.
         </P>
         <P>
-          You are told what we decided, and why. If a counter-notice leads us to put the post back, we tell you first, as the law
-          requires.
+          You are told what we decided, and why. If an appeal puts the post back, the operator emails you the decision.
         </P>
       </>
     ),
@@ -76,8 +74,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          If your post was hidden because of a copyright notice, you can send a counter-notice from <TextLink href="/notices">Notices</TextLink>.
-          It must include:
+          If your post was hidden because of a copyright notice, you can appeal from <TextLink href="/notices">Notices</TextLink>. The appeal asks for a reason of at least 10 characters. A counter-notice under the copyright law also needs the following, which the appeal form does not ask for:
         </P>
         <List>
           <li>Your name, address and phone number, or an email address.</li>
@@ -86,8 +83,7 @@ const SECTIONS: LegalSection[] = [
           <li>Your signature.</li>
         </List>
         <P>
-          Unless the person who sent the notice tells us they have started a court case about it, we put the post back within about
-          ten to fourteen business days after receiving your counter-notice.
+          An operator puts the post back by hand. Where the law sets a time limit for doing so after a counter-notice, the operator keeps to it, unless the person who sent the notice tells us a court case has started.
         </P>
       </>
     ),

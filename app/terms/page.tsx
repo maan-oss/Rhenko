@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { OperatorContact, OperatorLines, OperatorValue, OperatorWho } from "@/app/_legal/operator"
 import { B, LegalPage, List, Note, P, TextLink, type LegalSection } from "@/app/_legal/shell"
 import { LEGAL_UPDATED, MINIMUM_AGE, APPEAL_DAYS } from "@/lib/legal"
-import { HANDLE_MAX, HANDLE_MIN, MIN_PASSWORD } from "@/lib/rules"
+import { HANDLE_MAX, HANDLE_MAX_UNDERSCORES, HANDLE_MIN, HANDLE_MIN_LETTERS, MIN_PASSWORD } from "@/lib/rules"
 
 export const metadata: Metadata = {
   title: { absolute: "Terms of Service · Rhenko" },
@@ -76,8 +76,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <List>
         <li>
-          Your handle belongs to you alone. It has {HANDLE_MIN} to {HANDLE_MAX} letters, numbers or underscores, and you can change
-          it in Settings, under Account.
+          Your handle belongs to you alone. It has {HANDLE_MIN} to {HANDLE_MAX} characters: letters, numbers or underscores, with at least {HANDLE_MIN_LETTERS} letters and no more than {HANDLE_MAX_UNDERSCORES} underscores. You can change it in Settings, under Account.
         </li>
         <li>
           Your password has at least {MIN_PASSWORD} characters. Keep it private: you are responsible for what is done through your
@@ -225,7 +224,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          When we hide something, the author gets a notice the same day. It says what was hidden, the category of the rule or law
+          When we hide something, the author sees a notice in Notices the same day. Rhenko does not email or push that notice. It says what was hidden, the category of the rule or law
           it breaks, the reason, and when the appeal window closes. Nothing is deleted at that point.
         </P>
         <List>
@@ -233,8 +232,7 @@ const SECTIONS: LegalSection[] = [
             <B>Hidden content</B> disappears from feeds, profiles and searches for everyone else at once, with its replies.
           </li>
           <li>
-            <B>Notices about the most serious kinds</B>, such as intimate images shared without consent and child sexual abuse
-            material, hide the post as soon as the notice arrives, before a person reviews it. A person reviews it afterwards.
+            <B>Notices about the most serious kinds</B>, such as intimate images shared without consent and child sexual abuse material, hide the post as soon as the notice arrives, if the notice points to a post on this server. A person reviews it afterwards. A notice without such a link hides nothing.
           </li>
           <li>
             <B>Appeals</B> are made from Notices within {APPEAL_DAYS} days. A person reads each appeal and decides it. If the
@@ -245,7 +243,7 @@ const SECTIONS: LegalSection[] = [
             deleted.
           </li>
           <li>
-            <B>Repeat breaches</B> can lead to an account being suspended or closed. We tell you when that happens and why.
+            <B>Repeat breaches</B> can lead to an account being suspended or closed. The operator tells you when that happens and why, by hand, unless the law forbids it.
           </li>
         </List>
         <P>
@@ -356,8 +354,7 @@ const SECTIONS: LegalSection[] = [
           arranged, the account is not deactivated or deleted, so that nobody is charged for an account that has gone.
         </P>
         <P>
-          The operator can suspend or close an account that breaks these terms, and will tell the account holder why, unless the
-          law forbids it.
+          The operator may suspend or close an account that breaks these terms. The app has no tool for this and sends no notice, so the operator tells the account holder why by hand, unless the law forbids it.
         </P>
       </>
     ),

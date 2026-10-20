@@ -1,11 +1,11 @@
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { getProfileByHandle } from "@/lib/data"
 import { HANDLE_PATTERN } from "@/lib/rules"
 
 // The short profile a hover card shows over a name or a picture. It is the account the profile page would show: the
 // same account, the same visibility. A deactivated account, or one that blocked the viewer, has no card.
 export async function GET(request: Request) {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return Response.json({ error: "Sign in first." }, { status: 401 })
 
   const handle = new URL(request.url).searchParams.get("handle") ?? ""
