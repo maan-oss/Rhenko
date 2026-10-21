@@ -469,26 +469,6 @@ input[type="radio"]:focus-visible {
 .mk-marquee { animation: mk-marquee 46s linear infinite; }
 .mk-marquee-band:hover .mk-marquee { animation-play-state: paused; }
 
-/* The auth panel's ripple (components/app/auth-ripple.tsx). Each ring draws outward once, on first paint. */
-@keyframes auth-ring { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.auth-ring {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 0;
-  animation: auth-ring 1500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .auth-ring { animation: none; }
-}
-/* A ring made by a tap: it grows from the point tapped and fades as it goes. */
-@keyframes auth-drop {
-  from { transform: scale(0.001); opacity: 0.8; }
-  to { transform: scale(1); opacity: 0; }
-}
-.auth-drop {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: auth-drop 2600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
 
 /* The landing's opening (components/marketing/intro-loader.tsx). It is in the markup but hidden. The head script sets
    data-opening on a first visit before the first paint, which shows it at once, so the page is never seen under it first. */
