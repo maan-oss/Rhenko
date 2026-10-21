@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { MISSING_PAGE, pageMissing } from "@/lib/route-gate"
 import { contentSecurityPolicy } from "@/lib/csp"
+import { countryOf, isBlockedCountry, isOpenToBlocked } from "@/lib/geo-block"
 
 // Every page of the app needs a signed-in person, except the few that anyone may read: the landing page at the root,
 // the sign-in and account pages, the policy pages, and the offline page. A visitor without a session cookie is sent to
@@ -12,7 +13,7 @@ const SESSION_COOKIE = "rhenko_session"
 const PREFETCH_HEADER = "next-router-prefetch"
 
 // /notice is public: anyone may tell us about content, with or without an account (app/notice/page.tsx says so).
-const PUBLIC_PAGES = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/rules", "/safety", "/transparency", "/privacy", "/terms", "/legal", "/advertise", "/offline", "/copyright", "/notice"])
+const PUBLIC_PAGES = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/rules", "/safety", "/transparency", "/privacy", "/terms", "/legal", "/advertise", "/offline", "/copyright", "/notice", "/unavailable"])
 const PUBLIC_PREFIXES = ["/login/", "/signup/", "/forgot-password/", "/reset-password/", "/rules/", "/safety/", "/transparency/", "/privacy/", "/terms/", "/legal/", "/api/"]
 
 function isPublic(pathname: string) {
@@ -31,6 +32,12 @@ export default async function proxy(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl
+  // Visitors from a country Rhenko is not offered in see the notice page, and only the rules and policy pages stay open.
+  // A server action is a POST with no page to show, so it gets a plain refusal instead of a redirect.
+  if (isBlockedCountry(countryOf(request.headers)) && !isOpenToBlocked(pathname)) {
+    if (request.headers.get("next-action")) return withPolicy(new NextResponse("Rhenko is not available in your country.", { status: 451 }))
+    return withPolicy(NextResponse.redirect(new URL("/unavailable", request.url)))
+  }
   if (isPublic(pathname)) return withPolicy(NextResponse.next())
   const token = request.cookies.get(SESSION_COOKIE)?.value
   if (!token) return withPolicy(NextResponse.redirect(new URL("/login", request.url)))

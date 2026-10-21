@@ -19,6 +19,7 @@ const SUMMARY = (
       <li>
         You must be {MINIMUM_AGE} or older. Rhenko is not for anyone younger, and sign-up refuses them.
       </li>
+      <li>Rhenko is not offered in Australia, and the app does not open to anyone connecting from there.</li>
       <li>You own what you post. You give the operator permission to host and show it, and nothing more.</li>
       <li>
         Do not post what the <TextLink href="/rules">Community Rules</TextLink> forbid, or what the law where you are or where

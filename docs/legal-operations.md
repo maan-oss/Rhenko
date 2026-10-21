@@ -41,7 +41,10 @@ Work through this list in order. Each item names who is responsible.
 5. **Age assurance (operator + lawyer).** Sign-up asks for a date of birth and refuses anyone under 18. A birthdate the
    person types is not proof of age. Australia's under-16 social media minimum age expects "reasonable steps" to check
    age, and the operator must decide what those are: an age-assurance provider, a restriction on who can sign up in
-   Australia, or another method. The app does not do this yet.
+   Australia, or another method. The operator has chosen the restriction: Australia is blocked (`BLOCKED_COUNTRIES` in
+   `lib/geo-block.ts`, enforced in `proxy.ts`). A birthdate gate alone is not enough under the law, so the block is the
+   only thing standing between an Australian under-16 and an account. The block works only when both hosting steps below
+   are done. Without them the country is unknown, and nothing is blocked.
 6. **UK Online Safety Act (operator).** Complete the illegal-harms and children's risk assessments that Ofcom requires of
    user-to-user services, and keep them on file. Child sexual abuse material found on the service must be reported to the
    National Crime Agency under the Act's rules, which took effect in April 2026. Set up a named person and a route for the
@@ -61,6 +64,11 @@ Work through this list in order. Each item names who is responsible.
     hour (see the README), and remember that a backup holds deleted content until the dump that includes the deletion is
     replaced. Uploads in R2 are removed when they are deleted from the app. Keep `RHENKO_SECRET` safe: without it,
     two-factor keys cannot be read, and the key file is not in the dumps.
+    **Country block (operator, required for the Australia block to work).** Put the domain's DNS record behind Cloudflare's
+    proxy, so Cloudflare sends the visitor's country in `CF-IPCountry`. Set `RHENKO_TRUST_PROXY=1`. Allow inbound web traffic
+    only from Cloudflare's published IP ranges, so nobody can reach the server directly and type in a country. Test it with a
+    request that sends `CF-IPCountry: AU` and check it is redirected to `/unavailable`. A VPN can still hide a visitor's
+    location, so the block is not airtight. The lawyer should know that.
 11. **Lawyer review (lawyer).** Review every page under `/terms`, `/privacy`, `/rules`, `/copyright`, `/safety` and
     `/legal` for each place the server serves. Record the review date.
 12. **Run the suite (operator).** `ONLY=legal npm run test:e2e` against a staging server, then the full suite.
