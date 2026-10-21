@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { MISSING_PAGE, pageMissing } from "@/lib/route-gate"
+import { contentSecurityPolicy } from "@/lib/csp"
 
 // Every page of the app needs a signed-in person, except the few that anyone may read: the landing page at the root,
 // the sign-in and account pages, the policy pages, and the offline page. A visitor without a session cookie is sent to
@@ -21,14 +22,21 @@ function isPublic(pathname: string) {
 
 // A profile, a post or a list that does not exist, or that this person may not see, gets a real 404. The check runs here,
 // before the page streams, because a page cannot send a 404 once it has begun (see lib/route-gate.ts).
+// Every response carries the Content Security Policy from lib/csp.ts.
 export default async function proxy(request: NextRequest) {
+  const policy = contentSecurityPolicy()
+  const withPolicy = (response: NextResponse) => {
+    response.headers.set("Content-Security-Policy", policy)
+    return response
+  }
+
   const { pathname } = request.nextUrl
-  if (isPublic(pathname)) return NextResponse.next()
+  if (isPublic(pathname)) return withPolicy(NextResponse.next())
   const token = request.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return NextResponse.redirect(new URL("/login", request.url))
-  if (request.headers.get(PREFETCH_HEADER) === "1") return NextResponse.next()
-  if (await pageMissing(pathname, token)) return NextResponse.rewrite(new URL(MISSING_PAGE, request.url))
-  return NextResponse.next()
+  if (!token) return withPolicy(NextResponse.redirect(new URL("/login", request.url)))
+  if (request.headers.get(PREFETCH_HEADER) === "1") return withPolicy(NextResponse.next())
+  if (await pageMissing(pathname, token)) return withPolicy(NextResponse.rewrite(new URL(MISSING_PAGE, request.url)))
+  return withPolicy(NextResponse.next())
 }
 
 export const config = {

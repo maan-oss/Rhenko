@@ -120,6 +120,16 @@ export async function run() {
       assert.equal(rows[0].clicks, 1, "the click was not counted")
     })
 
+    await check("repeated clicks from one person stop counting after the hourly limit, and each still reaches the advertiser", async () => {
+      for (let i = 0; i < 25; i++) {
+        const again = await fetch(`${BASE}/api/ads/click/${campaignId}`, { redirect: "manual" })
+        assert.equal(again.status, 302, `click ${i + 2} answered ${again.status}`)
+        assert.equal(again.headers.get("location"), "https://example.com/knives", `click ${i + 2} went somewhere else`)
+      }
+      const rows = await query("SELECT clicks FROM ad_campaigns WHERE id = ?", campaignId)
+      assert.equal(rows[0].clicks, 20, "the clicks were not capped at the hourly limit")
+    })
+
     await check("a person reports the ad, the report is stored, and the review script lists it", async () => {
       const ad = adult.page.locator(`article[aria-label="Ad from ${businessName}"]`).first()
       await ad.getByRole("button", { name: "Report ad" }).click()
