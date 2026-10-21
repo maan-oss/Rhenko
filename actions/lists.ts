@@ -54,7 +54,10 @@ export async function deleteList(listId: string): Promise<VoidResult> {
   if (!viewer) return { ok: false, error: "Sign in first." }
   if (!await ownedList(listId, viewer.id)) return { ok: false, error: "Only the owner can delete this list." }
   await run("DELETE FROM lists WHERE id = ?", listId)
-  refresh()
+  // Only Home (pinned lists) and the lists index show lists. The layout-wide refresh made the delete page refetch the
+  // list it had just removed, and that refetch answered 404 beside the redirect to /lists.
+  revalidatePath("/")
+  revalidatePath("/lists")
   return { ok: true }
 }
 
