@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { AuthRipple } from "@/components/app/auth-ripple"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import { cn } from "@/lib/utils"
 
@@ -8,10 +9,8 @@ import { cn } from "@/lib/utils"
 export function AuthFrame({ width = "narrow", children }: { width?: "narrow" | "wide"; children: ReactNode }) {
   return (
     <main className="app-canvas relative flex min-h-dvh flex-col lg:flex-row">
-      {/* The side panel is flat, with only the mark on it. */}
-      <section className="relative hidden overflow-hidden bg-sidebar lg:flex lg:w-[44%] lg:shrink-0 lg:items-center lg:justify-center">
-        <RhenkoSymbol label="" className="size-40" />
-      </section>
+      {/* The side panel: a ripple on still water, drawn in the page's ink. */}
+      <AuthRipple />
       <div className="flex flex-1 flex-col">
         <header className="flex items-center gap-2.5 px-6 pt-7 sm:px-10 lg:px-16">
           <RhenkoSymbol className="size-8" />

@@ -29,6 +29,9 @@ decoration. There is no second colour anywhere, and no indigo, blue or purple ti
 - Each page gets one orchestrated entrance, on its first paint. Nothing else animates on load.
 - Scroll-linked effects are limited to the marketing site and the profile banner. They use CSS scroll-driven timelines
   where the browser supports them, and `motion/react` scroll hooks elsewhere.
+- The art beside sign-in and sign-up is a ripple on still water (`components/app/auth-ripple.tsx`). Its rings spread out
+  once on first paint, and a tap on the panel drops a new ring where it lands. Both are off under reduced motion, and the
+  panel is decorative, so it is hidden from screen readers.
 - Pointer tilt is at most 6 degrees on feature surfaces, uses springs, and is off on touch devices and under
   `prefers-reduced-motion`.
 - Every motion answers a tap, a click or a scroll. Motion that plays unprompted is not added.
