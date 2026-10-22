@@ -180,7 +180,8 @@ export function AccountSwitcher({ accounts }: { accounts: AccountSummary[] }) {
   function choose(account: AccountSummary) {
     setOpen(false)
     startTransition(async () => {
-      await switchAccount(account.id)
+      const next = await switchAccount(account.id)
+      if (next) window.location.assign(next.to)
     })
   }
 

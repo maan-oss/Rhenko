@@ -220,12 +220,13 @@ export async function logout(): Promise<{ to: "/" | "/login" }> {
 }
 
 // Moves this browser to another remembered account. A call the current account is running here ends with the switch.
-export async function switchAccount(userId: string): Promise<void> {
+// Returns where to go next, or null when the switch did not happen. The caller loads the page (see sign-out-form.tsx).
+export async function switchAccount(userId: string): Promise<{ to: "/" } | null> {
   const viewer = await getViewer()
   const before = await currentSessionHash()
-  if (!(await activateAccount(userId))) return
+  if (!(await activateAccount(userId))) return null
   if (viewer && viewer.id !== userId) await hangUpFor(viewer.id, "signed-out", before)
-  redirect("/")
+  return { to: "/" }
 }
 
 function resetMail(handle: string, code: string): string {

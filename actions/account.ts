@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache"
 import QRCode from "qrcode"
-import { redirect } from "next/navigation"
 import {
   adoptRemainingAccount,
   checkSecondFactor,
@@ -43,7 +42,8 @@ import { encryptText } from "@/lib/secrets"
 import { emailReady, NOTIFICATION_KINDS } from "@/lib/settings-data"
 import { generateRecoveryCodes, generateSecret, matchTotp, normalizeAppCode, otpauthUri } from "@/lib/totp"
 
-export type AccountState = { ok?: boolean; error?: string }
+// `to` is the page a successful action sends the person to. The form loads it (see components/app/use-full-visit.ts).
+export type AccountState = { ok?: boolean; error?: string; to?: string }
 export type SetupResult = { ok: true; secret: string; qr: string; uri: string } | { ok: false; error: string }
 export type CodesResult = { ok: true; codes: string[] } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
@@ -371,8 +371,7 @@ export async function deactivateAccount(_prev: AccountState, formData: FormData)
     await run("DELETE FROM login_challenges WHERE user_id = ?", viewer.id)
   })
   await destroySession()
-  if (await adoptRemainingAccount()) redirect("/")
-  redirect("/login?notice=deactivated")
+  return { ok: true, to: (await adoptRemainingAccount()) ? "/" : "/login?notice=deactivated" }
 }
 
 export async function deleteAccount(_prev: AccountState, formData: FormData): Promise<AccountState> {
@@ -392,8 +391,7 @@ export async function deleteAccount(_prev: AccountState, formData: FormData): Pr
   }
   await eraseAccount(viewer.id)
   await destroySession()
-  if (await adoptRemainingAccount()) redirect("/")
-  redirect("/signup?notice=deleted")
+  return { ok: true, to: (await adoptRemainingAccount()) ? "/" : "/signup?notice=deleted" }
 }
 
 // Deletes an account, every session it has, and every file it owns: media in its posts and in the replies under

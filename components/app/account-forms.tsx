@@ -8,6 +8,7 @@ import { deactivateAccount, deleteAccount, type AccountState } from "@/actions/a
 import { changeHandle, updateBirthday, type ProfileState } from "@/actions/social"
 import { ErrorLine, Field, FIELD_INPUT } from "@/components/app/form-bits"
 import { DateField } from "@/components/app/date-field"
+import { useFullVisit } from "@/components/app/use-full-visit"
 import { Button } from "@/components/ui/button"
 import type { CodeNeed } from "@/lib/account-rules"
 
@@ -153,6 +154,7 @@ export function DataExportButton() {
 
 export function DeactivateForm({ codeNeed }: { codeNeed: CodeNeed }) {
   const [state, action] = useActionState(deactivateAccount, {} as AccountState)
+  useFullVisit(state.to)
   return (
     <form action={action} className="flex flex-col gap-3">
       <PasswordField />
@@ -167,6 +169,7 @@ export function DeactivateForm({ codeNeed }: { codeNeed: CodeNeed }) {
 
 export function DeleteAccountForm({ handle, codeNeed }: { handle: string; codeNeed: CodeNeed }) {
   const [state, action] = useActionState(deleteAccount, {} as AccountState)
+  useFullVisit(state.to)
   return (
     <form action={action} className="flex flex-col gap-3">
       <PasswordField />
