@@ -167,7 +167,8 @@ export function PostCard({
             </ProfileLink>
             <span className="min-w-0 truncate text-[15px] text-muted-foreground">@{post.author.handle}</span>
             <time dateTime={new Date(post.createdAt).toISOString()} title={fullTimestamp(post.createdAt)} suppressHydrationWarning className="shrink-0 text-[15px] whitespace-nowrap text-muted-foreground">
-              <Link href={statusHref} transitionTypes={["nav-forward"]} className="transition-colors after:absolute after:inset-0 hover:text-foreground">
+              {/* A draft or scheduled post is not fetched ahead: deleting it would leave its prefetched page answering 404. */}
+              <Link href={statusHref} prefetch={pending ? false : undefined} transitionTypes={["nav-forward"]} className="transition-colors after:absolute after:inset-0 hover:text-foreground">
                 <RelativeTime at={post.createdAt} />
               </Link>
             </time>
