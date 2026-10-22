@@ -1,7 +1,7 @@
 // Two people must never see each other's private pages, messages or pictures, including through a cache in front of the app.
 // Each check uses separate accounts and reads what the server sends, not what the page shows.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { BASE, RUN_ID, randomWord } from "./lib/env.mjs"
+import { BASE, RUN_ID, TIMEOUT, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { createGroupChat, openChat, sendChat, threadText } from "./lib/chat.mjs"
 import { makePng } from "./lib/files.mjs"
@@ -11,6 +11,20 @@ import { acted } from "./lib/ui.mjs"
 
 function uniq(label) {
   return `${label} ${RUN_ID}${randomWord(4)}`
+}
+
+// The newest photo file in a conversation, once it is saved. Null when none shows up in time.
+async function photoOf(conversationId) {
+  const deadline = Date.now() + TIMEOUT
+  while (Date.now() < deadline) {
+    const [row] = await query(
+      "SELECT media_file FROM chat_messages WHERE conversation_id = ? AND media_file IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+      conversationId
+    )
+    if (row?.media_file) return row.media_file
+    await sleep(250)
+  }
+  return null
 }
 
 // A page or picture that belongs to someone must say so to a cache: private, or no-store, never public.
@@ -103,12 +117,11 @@ async function pictureFlow() {
   await sharer.page.getByAltText("Photo to send").waitFor()
   await acted(sharer.page, () => sharer.page.getByRole("button", { name: "Send", exact: true }).click())
 
-  const [row] = await query(
-    "SELECT media_file FROM chat_messages WHERE conversation_id = ? AND media_file IS NOT NULL ORDER BY created_at DESC LIMIT 1",
-    groupId
-  )
-  need(row?.media_file, "the photo the sharer sent")
-  const picture = `${BASE}/media/${row.media_file}`
+  // acted() resolves on the first server action after the click, which can be another request, so the photo is waited for
+  // rather than read once.
+  const mediaFile = await photoOf(groupId)
+  need(mediaFile, "the photo the sharer sent")
+  const picture = `${BASE}/media/${mediaFile}`
 
   await check("a group picture answers to its members as private, and to nobody outside the group", async () => {
     const member = await founder.page.context().request.get(picture, { maxRedirects: 0 })
