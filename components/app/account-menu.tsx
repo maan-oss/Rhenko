@@ -5,10 +5,11 @@ import Link from "next/link"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { Bookmark, FileText, LogOut, MoreHorizontal, Pencil, Plus, Settings, User } from "lucide-react"
-import { logout, switchAccount } from "@/actions/auth"
+import { switchAccount } from "@/actions/auth"
 import { Avatar } from "@/components/app/avatar"
 import { BottomSheet } from "@/components/app/bottom-sheet"
 import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
+import { SignOutForm } from "@/components/app/sign-out-form"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import type { AccountSummary } from "@/lib/auth"
@@ -118,7 +119,7 @@ function AccountList({
       {showLogout ? (
         <>
           <div className="mx-5 my-2 h-px bg-border" />
-          <form action={logout} onSubmit={onDone} className="px-2 pb-2">
+          <SignOutForm onSubmitted={onDone} className="px-2 pb-2">
             <button
               type="submit"
               className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-[15px] font-semibold transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
@@ -126,7 +127,7 @@ function AccountList({
               <LogOut className="size-[20px] shrink-0" strokeWidth={1.8} aria-hidden="true" />
               Log out @{current?.handle ?? ""}
             </button>
-          </form>
+          </SignOutForm>
         </>
       ) : (
         <div className="pb-2" />
@@ -283,11 +284,11 @@ function LogoutDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="h-10 rounded-full px-4">
             Cancel
           </Button>
-          <form action={logout}>
+          <SignOutForm>
             <Button type="submit" className="h-10 rounded-full px-4">
               Log out
             </Button>
-          </form>
+          </SignOutForm>
         </div>
       </DialogContent>
     </Dialog>

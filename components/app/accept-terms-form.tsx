@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useActionState, type ReactNode } from "react"
 import { useFormStatus } from "react-dom"
 import { acceptTerms, type LegalState } from "@/actions/legal"
-import { logout } from "@/actions/auth"
+import { SignOutForm } from "@/components/app/sign-out-form"
 
 // Shown when the current Terms or Privacy Policy have changed since this account last agreed. Until the box is ticked,
 // the rest of the app stays closed.
@@ -55,13 +55,13 @@ function Submit() {
 // Signs the person out from this screen, for someone who does not agree and wants to leave.
 export function LogOutForm() {
   return (
-    <form action={logout}>
+    <SignOutForm>
       <button
         type="submit"
         className="h-12 w-full rounded-full border border-border text-[15px] font-semibold transition-colors hover:border-foreground/30 hover:bg-foreground/5"
       >
         Log out instead
       </button>
-    </form>
+    </SignOutForm>
   )
 }

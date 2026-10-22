@@ -209,13 +209,14 @@ export async function verifySecondFactor(_prev: AuthState, formData: FormData): 
   redirect("/")
 }
 
-// Logs out the active account. Another remembered account takes over if there is one.
-export async function logout(): Promise<void> {
+// Logs out the active account. Another remembered account takes over if there is one. The caller loads the page it is
+// sent to (see components/app/sign-out-form.tsx): a redirect from here made the browser fetch that page's data as a
+// router request, which the e2e suite caught answering 404.
+export async function logout(): Promise<{ to: "/" | "/login" }> {
   const viewer = await getViewer()
   if (viewer) await hangUpFor(viewer.id, "signed-out", await currentSessionHash())
   await destroySession()
-  if (await adoptRemainingAccount()) redirect("/")
-  redirect("/login")
+  return { to: (await adoptRemainingAccount()) ? "/" : "/login" }
 }
 
 // Moves this browser to another remembered account. A call the current account is running here ends with the switch.
