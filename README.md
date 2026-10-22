@@ -79,7 +79,7 @@ docker compose exec backup sh /backup.sh once          # write a database dump n
 docker compose logs -f backup-upload                    # see whether dumps reach R2
 ```
 
-Set a lifecycle rule on the bucket that deletes objects under `db-backups/` after 30 days (Cloudflare dashboard → R2 → the bucket → Settings → Object lifecycle rules). Without it the dumps are kept forever.
+The upload job removes dumps under `db-backups/` that are older than `BACKUP_KEEP_DAYS` (30 by default), so nothing needs setting in the Cloudflare dashboard. Dumps that the upload job has not removed yet still hold deleted content, as `docs/legal-operations.md` says.
 
 The moderation, legal and grant commands below run on the server with `docker compose exec app` in front of them, for example `docker compose exec app node scripts/moderation.mjs list`. Without Docker, use `npm run` as shown.
 

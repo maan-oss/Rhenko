@@ -1826,11 +1826,13 @@ type LastMessage = {
   call_people: number
 }
 
-async function lastMessageOf(conversationId: string): Promise<LastMessage | undefined> {
+async function lastMessageOf(conversationId: string, viewerId: string): Promise<LastMessage | undefined> {
   return await get<LastMessage>(
-    `SELECT body, sender_id, created_at, deleted_at, media_file, post_id, call_status, call_seconds, call_kind, call_people FROM chat_messages
-     WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
-    conversationId
+    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.call_status, m.call_seconds, m.call_kind, m.call_people FROM chat_messages m
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
+    conversationId,
+    viewerId,
+    viewerId
   )
 }
 
@@ -1851,6 +1853,13 @@ const DM_BLOCKED = `c.kind = 'dm' AND EXISTS (
   SELECT 1 FROM conversation_members o JOIN blocks b
     ON (b.blocker_id = ? AND b.blocked_id = o.user_id) OR (b.blocker_id = o.user_id AND b.blocked_id = ?)
   WHERE o.conversation_id = c.id AND o.user_id <> ?)`
+
+// A message from someone the viewer has blocked, or who has blocked the viewer, is hidden from the viewer. In a one-to-one
+// chat DM_BLOCKED hides the whole conversation. In a group only the messages of the blocked pair go, so the rest of the
+// group stays readable. `column` is the sender's id. The SQL takes the viewer's id twice.
+function notFromBlocked(column: string): string {
+  return `NOT EXISTS (SELECT 1 FROM blocks bl WHERE (bl.blocker_id = ? AND bl.blocked_id = ${column}) OR (bl.blocker_id = ${column} AND bl.blocked_id = ?))`
+}
 
 // Whether the viewer may read a conversation: they are a member of it, and it isn't a one-to-one chat with someone
 // either of them has blocked.
@@ -1905,13 +1914,16 @@ export async function conversationSummaries(viewerId: string, status: "accepted"
     const users = await loadMiniUsers(members)
     const others = members.filter((id) => id !== viewerId).map((id) => users.get(id)).filter((u): u is MiniUser => Boolean(u))
     if (row.kind === "dm") others.push(...(await departedMembers(row.id, members)).filter((u) => u.id !== viewerId))
-    const last = await lastMessageOf(row.id)
+    const last = await lastMessageOf(row.id, viewerId)
     const unread =
       (await get<{ c: number }>(
-        "SELECT COUNT(*) AS c FROM chat_messages WHERE conversation_id = ? AND sender_id <> ? AND created_at > ? AND deleted_at IS NULL",
+        `SELECT COUNT(*) AS c FROM chat_messages m
+         WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.created_at > ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")}`,
         row.id,
         viewerId,
-        row.last_read_at
+        row.last_read_at,
+        viewerId,
+        viewerId
       ))?.c ?? 0
     return {
       id: row.id,
@@ -1937,7 +1949,9 @@ export async function unreadMessageCount(viewerId: string): Promise<number> {
        JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
        JOIN conversations c ON c.id = m.conversation_id
        WHERE cm.status = 'accepted' AND cm.muted = 0 AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL
-         AND NOT (${DM_BLOCKED})`,
+         AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED})`,
+      viewerId,
+      viewerId,
       viewerId,
       viewerId,
       viewerId,
@@ -2082,16 +2096,23 @@ type MessageRow = {
   reply_sender_name: string | null
 }
 
-// The original message is joined in the same chat only, so a reply can never quote something from another conversation.
-const MESSAGE_SELECT = `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
+// The messages of one conversation as this viewer may see them. The original of a reply is joined in the same chat only, so
+// a reply can never quote something from another conversation. A message from a blocked pair is left out, and so is a
+// reply's quote of one. The SQL takes the viewer's id twice for the quote, then the conversation, then the viewer twice.
+function messageSelect(conversationId: string, viewerId: string): { select: string; params: Param[] } {
+  return {
+    select: `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
        u.name AS sender_name, u.handle AS sender_handle,
        m.reply_to_id, rm.id AS reply_id, rm.body AS reply_body, rm.media_file AS reply_media, rm.post_id AS reply_post,
        rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name
      FROM chat_messages m
      JOIN users u ON u.id = m.sender_id
-     LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id
+     LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")}
      LEFT JOIN users ru ON ru.id = rm.sender_id
-     WHERE m.conversation_id = ?`
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")}`,
+    params: [viewerId, viewerId, conversationId, viewerId, viewerId],
+  }
+}
 
 // A short line for a quoted message: its text, or what it was instead.
 function replySnippet(body: string, media: string | null, post: string | null): string {
@@ -2105,7 +2126,8 @@ function replySnippet(body: string, media: string | null, post: string | null): 
 // The latest messages in a conversation, oldest first. Empty for anyone who may not read it.
 export async function conversationMessages(conversationId: string, viewerId: string, limit = 200): Promise<MessageView[]> {
   if (!await canReadConversation(conversationId, viewerId)) return []
-  const { rows } = await pageBefore<MessageRow>(MESSAGE_SELECT, [conversationId], "m.created_at", "m.id", (r) => r.created_at, null, limit)
+  const query = messageSelect(conversationId, viewerId)
+  const { rows } = await pageBefore<MessageRow>(query.select, query.params, "m.created_at", "m.id", (r) => r.created_at, null, limit)
   return await toMessageViews(rows.reverse(), conversationId, viewerId)
 }
 
@@ -2117,7 +2139,8 @@ export async function messagesBefore(conversationId: string, viewerId: string, b
   if (!Number.isFinite(beforeCreatedAt)) return []
   if (!await canReadConversation(conversationId, viewerId)) return []
   const size = Math.min(Math.max(Math.floor(limit), 1), 200)
-  const { rows } = await pageBefore<MessageRow>(MESSAGE_SELECT, [conversationId], "m.created_at", "m.id", (r) => r.created_at, beforeCreatedAt, size)
+  const query = messageSelect(conversationId, viewerId)
+  const { rows } = await pageBefore<MessageRow>(query.select, query.params, "m.created_at", "m.id", (r) => r.created_at, beforeCreatedAt, size)
   return await toMessageViews(rows.reverse(), conversationId, viewerId)
 }
 
@@ -2702,9 +2725,12 @@ async function mediaAccessUncached(file: string, viewerId: string | null): Promi
     file
   )
   if ((await visiblePostIds(posts.map((row) => row.post_id), viewerId)).size > 0) return "private"
+  // A photo or voice note from someone this viewer has blocked is not theirs to open, even inside a shared group.
   const chats = await all<{ conversation_id: string }>(
-    "SELECT DISTINCT conversation_id FROM chat_messages WHERE media_file = ? AND deleted_at IS NULL",
-    file
+    `SELECT DISTINCT m.conversation_id FROM chat_messages m WHERE m.media_file = ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")}`,
+    file,
+    viewerId,
+    viewerId
   )
   if ((await Promise.all(chats.map(async (row) => await canReadConversation(row.conversation_id, viewerId)))).some(Boolean)) return "private"
   return "none"

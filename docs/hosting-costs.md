@@ -9,7 +9,7 @@ Prices were checked on 22 October 2026. Anything marked unverified was not confi
 | --- | --- | --- | --- |
 | Server: app, Postgres, Caddy, backups | DigitalOcean Standard, 1 vCPU, 2 GB RAM, 50 GB disk | $12 (US list price) | Bangalore price unverified |
 | Media storage | Cloudflare R2, bucket `rhenko-media` | $0 up to 10 GB stored, then $0.015 per GB-month | Working: smoke test passed 22 Oct |
-| Database backup copies | R2, `db-backups/`, 30-day lifecycle rule | Cents | Lifecycle rule unverified |
+| Database backup copies | R2, `db-backups/`, removed after 30 days by the upload job | Cents | Removal runs in the upload job; not yet run against R2 |
 | Outbound email | Amazon SES | $0.10 per 1,000 emails | Mumbai rate unverified |
 | Bandwidth for media | R2 egress | $0 | Free per Cloudflare's pricing page |
 | Domain | Not bought yet | Registration fee only | Needs your decision |
@@ -30,7 +30,7 @@ At small volume the total is about $13 a month, plus the domain fee. Email and s
 
 - Confirm the Bangalore price for the 2 GB plan.
 - Confirm the SES price in ap-south-1 (Mumbai).
-- Confirm the 30-day lifecycle rule on `db-backups/` is set in the Cloudflare dashboard. The API token gets a 403 on R2 listing, and the browser was not signed in to Cloudflare, so this is not checked.
+- The R2 access key cannot change bucket settings (a lifecycle rule returns 403), so the 30-day removal runs in `deploy/upload-backups.sh` instead. Check the first hourly run's log once the server is live.
 - Video is the largest future storage cost, with uploads up to 100 MB each. Transcoding would cut it but uses server CPU. Decide after measuring real uploads.
 
 ## Sources

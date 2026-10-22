@@ -297,6 +297,38 @@ async function groupFlow({ phone }) {
     await one.page.locator("main").getByText(two.name, { exact: true }).first().waitFor()
   })
 
+  await check(`${where}: when two members block each other, their messages are hidden from each other, and the rest of the group still sees them`, async () => {
+    need(groupId, "the group")
+    const fromOne = uniq("Before the block from one")
+    const fromTwo = uniq("Before the block from two")
+    const later = uniq("After the block from the creator")
+    await openChat(one.page, groupId)
+    await openChat(two.page, groupId)
+    await sendChat(one.page, fromOne)
+    await sendChat(two.page, fromTwo)
+    for (const person of [creator, one, two]) {
+      await threadText(person.page, fromOne).waitFor()
+      await threadText(person.page, fromTwo).waitFor()
+    }
+
+    await block(one.page, two.handle)
+    // Reload the thread, so what is shown comes from the server after the block, not from what was on screen before it.
+    await openChat(one.page, groupId)
+    await threadText(one.page, fromOne).waitFor()
+    assert.equal(await threadText(one.page, fromTwo).count(), 0, "the blocked person's message still shows to the other person who blocked them")
+    await openChat(two.page, groupId)
+    await threadText(two.page, fromTwo).waitFor()
+    assert.equal(await threadText(two.page, fromOne).count(), 0, "the blocker's message still shows to the blocked person")
+
+    // The creator is not part of the block, so the group keeps both messages for them, and new messages reach everyone else.
+    await openChat(creator.page, groupId)
+    await threadText(creator.page, fromOne).waitFor()
+    await threadText(creator.page, fromTwo).waitFor()
+    await sendChat(creator.page, later)
+    await threadText(one.page, later).waitFor()
+    await threadText(two.page, later).waitFor()
+  })
+
   await check(`${where}: Group info shows the creator's controls only to the creator`, async () => {
     need(groupId, "the group")
     await openChat(one.page, groupId)

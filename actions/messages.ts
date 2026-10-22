@@ -487,12 +487,12 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   // A reply has to point at a live message in this same chat. A call record or a deleted message can't be answered.
   const replyToId = asId(formData.get("replyTo"))
   if (replyToId) {
-    const target = await get<{ id: string }>(
-      "SELECT id FROM chat_messages WHERE id = ? AND conversation_id = ? AND call_status IS NULL AND deleted_at IS NULL",
+    const target = await get<{ id: string; sender_id: string }>(
+      "SELECT id, sender_id FROM chat_messages WHERE id = ? AND conversation_id = ? AND call_status IS NULL AND deleted_at IS NULL",
       replyToId,
       conversationId
     )
-    if (!target) return { error: "That message can't be replied to anymore." }
+    if (!target || await blockedEitherWay(viewer.id, target.sender_id)) return { error: "That message can't be replied to anymore." }
   }
 
   const slowDown =
@@ -599,10 +599,14 @@ export async function toggleReaction(messageId: string, emoji: string): Promise<
   if (!(REACTIONS as readonly string[]).includes(emoji)) return { ok: false, error: "That reaction isn't available." }
   const id = asId(messageId)
   const message = id
-    ? await get<{ conversation_id: string; deleted_at: number | null }>("SELECT conversation_id, deleted_at FROM chat_messages WHERE id = ?", id)
+    ? await get<{ conversation_id: string; sender_id: string; deleted_at: number | null }>(
+        "SELECT conversation_id, sender_id, deleted_at FROM chat_messages WHERE id = ?",
+        id
+      )
     : undefined
   if (!id || !message || message.deleted_at) return { ok: false, error: "That message was deleted." }
   if (await memberStatus(message.conversation_id, viewer.id) !== "accepted") return { ok: false, error: "Accept this conversation first." }
+  if (await blockedEitherWay(viewer.id, message.sender_id)) return { ok: false, error: "That message was deleted." }
 
   const current = await get<{ emoji: string }>("SELECT emoji FROM message_reactions WHERE message_id = ? AND user_id = ?", id, viewer.id)
   await transaction(async () => {

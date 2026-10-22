@@ -50,8 +50,11 @@ Work through this list in order. Each item names who is responsible.
    National Crime Agency under the Act's rules, which took effect in April 2026. Set up a named person and a route for the
    report, and test it.
 7. **India (operator + lawyer).** Name a grievance officer, publish their contact, and answer grievances within the time
-   the IT Rules set. Intimate-image complaints must be actioned within two hours under the 2026 Rules, and grievances answered within seven days. These figures were taken from secondary reporting and have not been checked against the notified text, so confirm them first. The app hides such
-   posts at once, but a person must also be on call to review and decide. DPDP Act children's rules (under 18) are met by
+   the IT Rules set. Two news reports (ThePrint and Outlook India, August 2026) describe the amendments of 10 February 2026 as
+   setting two hours to act on sensitive content, including intimate images, after a complaint, and 36 hours to resolve general
+   complaints about prohibited content (earlier figures 24 hours and 72 hours). The earlier 2021 rules gave 15 days to resolve a
+   grievance, and neither report gives an acknowledgement time. The app uses the shortest figure reported, and the lawyer must
+   check the notified text before launch. The app hides such posts at once, but a person must also be on call to review and decide. DPDP Act children's rules (under 18) are met by
    the age limit; confirm when the DPDP Rules commence.
 8. **Australia (lawyer).** Check the privacy reforms that now apply, including the statutory privacy tort, automated
    decision-making transparency, and the Children's Online Privacy Code, which the regulator must make by December 2026.
