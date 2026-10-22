@@ -160,6 +160,36 @@ export function watchPage(page, label, viewport) {
   page.on("framenavigated", (frame) => {
     if (frame === page.mainFrame()) schedule(entry)
   })
+  // The client router asks for a page's data with ?_rsc=. A 404 there is written out in full, with what was asked and
+  // what came back, so a console 404 can be traced to the request behind it. Nothing is reported from here: the console
+  // check already reports the failure. RSC_404_LOG names the file (one JSON object per line).
+  page.on("response", async (response) => {
+    if (response.status() !== 404 || !/[?&]_rsc=/.test(response.url())) return
+    const request = response.request()
+    const asked = request.headers()
+    const body = await response.text().catch(() => "")
+    const record = {
+      at: new Date().toISOString(),
+      label,
+      viewport: viewport.name,
+      url: response.url().replace(/_rsc=[^&]+/, "_rsc=…"),
+      pageUrl: page.url(),
+      asked: {
+        rsc: asked["rsc"] ?? null,
+        routerState: asked["next-router-state-tree"] ?? null,
+        nextUrl: asked["next-url"] ?? null,
+        prefetch: asked["next-router-prefetch"] ?? null,
+        cookie: asked["cookie"] ? "present" : "absent",
+      },
+      answered: Object.fromEntries(Object.entries(response.headers()).filter(([key]) => /cache|next|location|content-type|x-/i.test(key))),
+      body: body.slice(0, 400),
+    }
+    try {
+      fs.appendFileSync(process.env.RSC_404_LOG || path.join(OUT, "rsc-404s.jsonl"), `${JSON.stringify(record)}\n`)
+    } catch {
+      // Diagnostics only: a full disk must not fail the suite.
+    }
+  })
   return entry
 }
 
