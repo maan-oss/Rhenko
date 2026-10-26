@@ -25,7 +25,7 @@ export type NavItemConfig = {
   mobile: boolean
 }
 
-// The sidebar and the phone panel keep every section. The glass dock on phones keeps the four used most.
+// The sidebar and the phone panel keep every section. The white dock on phones keeps the four used most.
 export function buildItems(notifications: number, messages: number): NavItemConfig[] {
   return [
     { href: "/", label: "Home", Icon: House, filled: true, active: (p) => p === "/", mobile: true },
@@ -48,8 +48,10 @@ const BAR_SPRING = { type: "spring", stiffness: 340, damping: 38 } as const
 // People who asked their system for less motion get the bar moving in one step, not a spring.
 const INSTANT = { duration: 0 } as const
 const DOCK_ITEM = 48
-// The Post button is the size it is drawn at, so the space beside it matches the bar's margin on the other side.
-const POST_SIZE = 48
+// The pill, the page square it folds into and the Post square are all this tall and this round.
+const BAR = 56
+// The gap between the pill and the Post square. The pill and the Post square float apart, not joined.
+const GAP = 10
 // Items collapse by clipping their width. The clip leaves room for the metal shadow beneath each button, which would
 // otherwise end in a hard edge at the clip line.
 const DOCK_CLIP = "flex-none [overflow:clip] [overflow-clip-margin:24px]"
@@ -59,10 +61,10 @@ function isConversation(path: string): boolean {
   return path.startsWith("/messages/") && path !== "/messages/new"
 }
 
-// The phone dock: a floating glass pill of the four main sections and your avatar, with a round Post button beside it.
-// It folds into the left corner as you scroll down, so the page gets the whole screen, and a tap opens it again. A
-// conversation starts folded so its composer can sit at the bottom. The avatar, or a swipe from the left edge, opens the
-// left panel.
+// The phone dock: a floating white pill of the four main sections and your avatar, with a Post square beside it. It folds
+// into the bottom-left corner as you scroll down, leaving the square of the page you are on beside the Post square, so the
+// page gets the whole screen. A tap, or scrolling up, opens it again. A conversation starts folded so its composer can sit
+// at the bottom. The avatar, or a swipe from the left edge, opens the left panel.
 export function MobileTabBar({
   viewer,
   accounts,
@@ -158,15 +160,6 @@ export function MobileTabBar({
     return () => observer.disconnect()
   }, [])
 
-  // The menu button on the Home header opens the same panel as the avatar.
-  useEffect(() => {
-    function openMenu() {
-      setOpen(true)
-    }
-    window.addEventListener("rhenko:open-menu", openMenu)
-    return () => window.removeEventListener("rhenko:open-menu", openMenu)
-  }, [])
-
   // Touch events, not pointer events: the browser cancels a pointer once a sideways pan starts,
   // but the touch moves keep arriving, so the swipe still reads all the way across.
   useEffect(() => {
@@ -207,11 +200,10 @@ export function MobileTabBar({
     }
   }, [])
 
-  const expandedWidth = Math.max(0, navWidth - POST_SIZE - 10)
-  // Four sections and the avatar share the pill. On a 320px phone they shrink to fit beside the Post button, and they
-  // never grow past DOCK_ITEM. The 6px padding on each side of the pill is 12px in all.
-  const slot = navWidth ? Math.min(DOCK_ITEM, Math.floor((expandedWidth - 12) / (items.length + 1))) : DOCK_ITEM
-  const foldedWidth = slot + 12
+  const expandedWidth = Math.max(0, navWidth - BAR - GAP)
+  // Four sections and the avatar share the pill. On a 320px phone they shrink to fit beside the Post square, and they never
+  // grow past DOCK_ITEM. The 4px padding on each side of the pill is 8px in all.
+  const slot = navWidth ? Math.min(DOCK_ITEM, Math.floor((expandedWidth - 8) / (items.length + 1))) : DOCK_ITEM
 
   return (
     <>
@@ -233,17 +225,18 @@ export function MobileTabBar({
           if (conversation || !sectionOpen) setOpen(true)
           else setFolded(false)
         }}
-        // The bar spans the width of the screen, but only the pill and the Post button take taps. The space between
-        // them passes through to the page, so the composer's Send button stays reachable under the dock.
-        className="pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center lg:hidden"
+        // The bar spans the width of the screen, but only the pill and the Post square take taps. The space between them
+        // passes through to the page, so the composer's Send button stays reachable under the dock.
+        className="pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center gap-2.5 lg:hidden"
       >
+        {/* Solid white, not glass. Folded, the pill is a square holding the page you are on, in the bottom-left corner. */}
         <motion.ul
           initial={false}
-          animate={{ width: folded ? foldedWidth : navWidth ? expandedWidth : undefined }}
+          animate={{ width: folded ? BAR : navWidth ? expandedWidth : undefined }}
           transition={spring}
           className={cn(
-            "glass pointer-events-auto flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5",
-            !navWidth && "w-[calc(100%-72px)]"
+            "pointer-events-auto flex h-14 flex-none items-center justify-between rounded-[20px] bg-white p-1 text-black shadow-[0_10px_28px_-10px_rgba(0,0,0,0.35),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5",
+            !navWidth && "w-[calc(100%-66px)]"
           )}
         >
           {items.map(({ href, label, Icon, badge }) => {
@@ -264,17 +257,17 @@ export function MobileTabBar({
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => setPressed({ from: served, to: href })}
                   style={{ width: slot, height: slot }}
-                  className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.94]"
+                  className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-black/5 active:scale-[0.94]"
                 >
-                  {/* The current section is marked by a heavier icon, filled where the icon has a filled form. No pill behind it. */}
+                  {/* The current section is marked by a heavier, filled icon. No pill behind it. */}
                   <Icon
-                    className={cn("relative size-[22px]", isActive ? "text-foreground" : "text-foreground/80")}
+                    className={cn("relative size-[22px]", isActive ? "text-black" : "text-black/45")}
                     fill={isActive ? "currentColor" : "none"}
                     strokeWidth={isActive ? 2.2 : 1.75}
                     aria-hidden="true"
                   />
                   {badge && badge > 0 ? (
-                    <span className="metal absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold">
+                    <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">
                       {badge > 9 ? "9+" : badge}
                     </span>
                   ) : null}
@@ -295,26 +288,20 @@ export function MobileTabBar({
               aria-expanded={open}
               aria-haspopup="dialog"
               style={{ width: slot, height: slot }}
-              className="grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.94]"
+              className="grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-black/5 active:scale-[0.94]"
             >
               <Avatar user={viewer} size={32} />
             </button>
           </motion.li>
         </motion.ul>
-        <motion.div
-          initial={false}
-          animate={{ width: folded ? 0 : POST_SIZE, marginLeft: folded ? 0 : 10, opacity: folded ? 0 : 1 }}
-          transition={spring}
-          className={cn(DOCK_CLIP, folded ? "pointer-events-none" : "pointer-events-auto")}
+        {/* Always in view: beside the pill when it is open, and beside the page square when it is folded. */}
+        <Link
+          href="/#compose"
+          aria-label="Post"
+          className="pointer-events-auto metal grid size-14 flex-none place-items-center rounded-[20px] transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.94]"
         >
-          <Link
-            href="/#compose"
-            aria-label="Post"
-            className="metal grid size-12 place-items-center rounded-full transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.94]"
-          >
-            <Plus className="size-[22px]" strokeWidth={2.1} aria-hidden="true" />
-          </Link>
-        </motion.div>
+          <Plus className="size-[22px]" strokeWidth={2.1} aria-hidden="true" />
+        </Link>
       </motion.nav>
       <MobileDrawer
         open={open}

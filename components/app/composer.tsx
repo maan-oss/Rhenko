@@ -151,11 +151,14 @@ const POLL_DEFAULT_MINUTES = 1440
 // Pills carry their own surface (glass, or metal when active), so the base has no colour or ring.
 const PILL =
   "tap-44 inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
+// The "Made with AI" label sits under the text as a quieter chip than the pills beside it.
+const CHIP =
+  "tap-44 inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring"
 const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline-none transition-colors focus:border-foreground sm:h-9"
 // The emoji list is a component of its own, so its phone sizes are set from here: 40px buttons, and an emoji list that
 // opens from the toolbar's left edge so it stays on the screen.
 const EMOJI_PHONE =
-  "max-sm:static max-sm:[&>button]:size-9 max-[429px]:[&>button]:size-8 max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
+  "max-sm:static max-sm:[&>button]:size-9 max-[429px]:[&>button]:size-8 max-[369px]:[&>button]:size-[30px] max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
 // The emoji list opens upward. Near the top of the page there is no room above the toolbar, so it opens downward.
 const EMOJI_BELOW = "[&_[role=dialog]]:top-11 [&_[role=dialog]]:bottom-auto"
 const EMOJI_LIST_HEIGHT = 300
@@ -250,7 +253,7 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled && hint ? hint : label}
       className={cn(
-        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[429px]:size-8 sm:size-8",
+        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[429px]:size-8 max-[369px]:size-[30px] sm:size-8",
         pressed && "bg-foreground/5"
       )}
     >
@@ -1001,9 +1004,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           send(false)
         }}
         aria-busy={pending}
-        className={cn("flex gap-3", compact ? "" : "border-b border-border px-5 pt-3 pb-3")}
+        className={cn("flex gap-3", compact ? "" : "border-b border-border px-4 pt-3 pb-3 sm:px-5")}
       >
-        <Avatar user={viewer} size={44} />
+        {/* The avatar, the first line of text and the globe share one centre line, 20px down, so the row reads as one. */}
+        <Avatar user={viewer} size={40} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {article ? (
             <input
@@ -1028,10 +1032,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               aria-autocomplete="list"
               readOnly={pending}
               rows={1}
-              className="field-sizing-content min-h-[30px] min-w-0 flex-1 resize-none bg-transparent pt-0.5 text-[17px] leading-relaxed outline-none placeholder:text-muted-foreground max-sm:min-h-10 max-sm:pt-1.5"
+              className="field-sizing-content min-h-10 min-w-0 flex-1 resize-none bg-transparent py-[9px] text-[17px] leading-[22px] outline-none placeholder:text-muted-foreground"
             />
             {showReplyPicker ? (
-              <div className="shrink-0 pt-0.5 max-sm:pt-1">
+              <div className="shrink-0 sm:pt-1">
                 <ReplyPicker value={replySetting} onChange={setReplySetting} />
               </div>
             ) : null}
@@ -1172,7 +1176,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               type="button"
               aria-pressed={madeWithAi}
               onClick={() => setMadeWithAi((value) => !value)}
-              className={cn(PILL, madeWithAi ? "metal" : "glass text-foreground hover:bg-foreground/5")}
+              className={cn(CHIP, madeWithAi ? "metal" : "glass text-foreground hover:bg-foreground/5")}
             >
               Made with AI
             </button>
@@ -1278,7 +1282,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               {`${-remaining} ${pluralize(-remaining, "character")} over the limit. Shorten the post to share it.`}
             </p>
           ) : null}
-          <div ref={toolbarRef} className="relative flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[389px]:flex-wrap max-[389px]:gap-y-1">
+          {/* One line of tools: photos, poll, article, thread, emoji, schedule, save, then Post. The first icon's glyph sits on the text edge. */}
+          <div ref={toolbarRef} className="relative -ml-1.5 flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[355px]:flex-wrap max-[355px]:gap-y-1">
             <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
               <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
             </ToolButton>
@@ -1329,7 +1334,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               }}
             />
 
-            <div className="ml-auto flex shrink-0 items-center gap-1 pl-1 sm:gap-2 sm:pl-0">
+            <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-0.5 sm:gap-2 sm:pl-0">
               {poll ? <span className="sr-only">{pollReady ? "Poll ready" : "Add at least two poll choices"}</span> : null}
               {!isReply && !threading ? (
                 <button
@@ -1338,7 +1343,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                   disabled={!canDraft}
                   aria-label="Save draft"
                   title="Save draft"
-                  className="tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                  className="tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 max-[369px]:size-[30px] sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
                 >
                   <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
                   <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>

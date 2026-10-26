@@ -17,10 +17,10 @@ import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
 import { RememberFeedTab } from "@/components/app/remember-feed-tab"
 import { emptyActionClass } from "@/components/app/empty-state"
-import { MenuButton } from "@/components/app/menu-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
-import { TabLinks } from "@/components/app/tabs"
+import { IconTabLinks } from "@/components/app/tabs"
+import { Pin, Sparkles, UsersRound } from "lucide-react"
 import { Composer } from "@/components/app/composer"
 import { FeedList } from "@/components/app/feed-list"
 import { FeedSkeleton } from "@/components/app/feed-skeleton"
@@ -85,15 +85,13 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader
         title="Home"
         hideTitleOnPhone
-        lead={<MenuButton viewer={viewer} />}
         tabs={
-          <TabLinks
+          <IconTabLinks
             label="Home sections"
-            className="mx-0 my-0 w-full"
             items={[
-              { href: "/?tab=for-you", label: "For you", active: !following && !pin },
-              { href: "/?tab=following", label: "Following", active: following },
-              ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, active: pin?.id === item.id })),
+              { href: "/?tab=for-you", label: "For you", icon: <Sparkles strokeWidth={2} />, active: !following && !pin },
+              { href: "/?tab=following", label: "Following", icon: <UsersRound strokeWidth={2} />, active: following },
+              ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, icon: <Pin strokeWidth={2} />, active: pin?.id === item.id })),
             ]}
           />
         }
@@ -102,7 +100,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       <Composer
         viewer={viewer}
-        placeholder="Write something worth reading"
+        placeholder="Write something"
         id="compose"
         circles={(await circlesFor(viewer.id)).map((circle) => ({ id: circle.id, name: circle.name }))}
       />

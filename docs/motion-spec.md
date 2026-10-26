@@ -50,7 +50,7 @@ critically damped or close to it.
 ## Implemented
 
 - Shared motion tokens (`components/app/motion.ts`), used by the tab selection and the bottom sheet.
-- The page tab bar (`TabLinks`) uses one sliding surface for its selected tab. It is used on home, search, bookmarks,
+- The page tab bar (`TabLinks`) uses one sliding surface for its selected tab. Home uses its icon form (`IconTabLinks`), which opens the chosen tab to show its word. It is used on search, bookmarks,
   notifications, drafts, circles, lists and people.
 - Root reduced-motion handling (`components/app/motion-root.tsx`) around the whole app.
 - The marketing site: transparent phone bar, tabbed features with a preview for each feature, a sticky-footer menu,
