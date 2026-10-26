@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { motion } from "motion/react"
+import { motion, useReducedMotion } from "motion/react"
 import { Bell, Bookmark, ChartNoAxesColumn, CircleDot, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
@@ -45,9 +45,11 @@ export function buildItems(notifications: number, messages: number): NavItemConf
 const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
 // The bar slides down out of sight in a chat, a new message or a call, and back up when the person leaves.
 const BAR_SPRING = { type: "spring", stiffness: 340, damping: 38 } as const
+// People who asked their system for less motion get the bar moving in one step, not a spring.
+const INSTANT = { duration: 0 } as const
 const DOCK_ITEM = 48
-const POST_SIZE = 62
-const FOLDED_WIDTH = DOCK_ITEM + 12
+// The Post button is the size it is drawn at, so the space beside it matches the bar's margin on the other side.
+const POST_SIZE = 48
 // Items collapse by clipping their width. The clip leaves room for the metal shadow beneath each button, which would
 // otherwise end in a hard edge at the clip line.
 const DOCK_CLIP = "flex-none [overflow:clip] [overflow-clip-margin:24px]"
@@ -99,8 +101,12 @@ export function MobileTabBar({
   const served = items.find((item) => item.active(path))?.href ?? null
   const [pressed, setPressed] = useState<{ from: string | null; to: string } | null>(null)
   const currentHref = pressed && pressed.from === served ? pressed.to : served
-  // The section that stays visible when the dock folds. Anything outside the dock falls back to Home.
-  const visibleHref = currentHref ?? "/"
+  // A section of the dock is open. On a page outside the dock (Settings, Lists and the rest) none is, and the folded bar
+  // shows the avatar instead, so it still opens the menu rather than a section that is not open.
+  const sectionOpen = currentHref !== null
+  const reduce = useReducedMotion()
+  const spring = reduce ? INSTANT : SPRING
+  const barSpring = reduce ? INSTANT : BAR_SPRING
 
   useEffect(() => {
     conversationRef.current = conversation
@@ -202,6 +208,10 @@ export function MobileTabBar({
   }, [])
 
   const expandedWidth = Math.max(0, navWidth - POST_SIZE - 10)
+  // Four sections and the avatar share the pill. On a 320px phone they shrink to fit beside the Post button, and they
+  // never grow past DOCK_ITEM. The 6px padding on each side of the pill is 12px in all.
+  const slot = navWidth ? Math.min(DOCK_ITEM, Math.floor((expandedWidth - 12) / (items.length + 1))) : DOCK_ITEM
+  const foldedWidth = slot + 12
 
   return (
     <>
@@ -209,17 +219,18 @@ export function MobileTabBar({
         ref={navRef}
         initial={false}
         animate={{ y: away ? 140 : 0, opacity: away ? 0 : 1 }}
-        transition={BAR_SPRING}
+        transition={barSpring}
         inert={away}
         aria-hidden={away || undefined}
         aria-label="Main"
         // A folded dock does not navigate on a tap. Elsewhere the first tap shows the sections. In a conversation the
-        // dock stays folded, because the composer needs the bottom row, so the tap opens the left panel, which has every section.
+        // dock stays folded, because the composer needs the bottom row, so the tap opens the left panel, which has every
+        // section. With no section open the avatar is all that shows, so the tap opens the panel too.
         onClickCapture={(event) => {
           if (!folded) return
           event.preventDefault()
           event.stopPropagation()
-          if (conversation) setOpen(true)
+          if (conversation || !sectionOpen) setOpen(true)
           else setFolded(false)
         }}
         // The bar spans the width of the screen, but only the pill and the Post button take taps. The space between
@@ -228,8 +239,8 @@ export function MobileTabBar({
       >
         <motion.ul
           initial={false}
-          animate={{ width: folded ? FOLDED_WIDTH : navWidth ? expandedWidth : undefined }}
-          transition={SPRING}
+          animate={{ width: folded ? foldedWidth : navWidth ? expandedWidth : undefined }}
+          transition={spring}
           className={cn(
             "glass pointer-events-auto flex h-[60px] flex-none items-center justify-between rounded-[32px] p-1.5",
             !navWidth && "w-[calc(100%-72px)]"
@@ -237,13 +248,14 @@ export function MobileTabBar({
         >
           {items.map(({ href, label, Icon, badge }) => {
             const isActive = href === currentHref
-            const hidden = folded && href !== visibleHref
+            // When folded, only the section that is open stays in view.
+            const hidden = folded && href !== currentHref
             return (
               <motion.li
                 key={href}
                 initial={false}
-                animate={{ width: hidden ? 0 : DOCK_ITEM, opacity: hidden ? 0 : 1 }}
-                transition={SPRING}
+                animate={{ width: hidden ? 0 : slot, opacity: hidden ? 0 : 1 }}
+                transition={spring}
                 className={cn(DOCK_CLIP, hidden && "pointer-events-none")}
               >
                 <Link
@@ -251,7 +263,8 @@ export function MobileTabBar({
                   aria-label={label}
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => setPressed({ from: served, to: href })}
-                  className="relative grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5"
+                  style={{ width: slot, height: slot }}
+                  className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.94]"
                 >
                   {/* The current section is marked by a heavier icon, filled where the icon has a filled form. No pill behind it. */}
                   <Icon
@@ -271,9 +284,9 @@ export function MobileTabBar({
           })}
           <motion.li
             initial={false}
-            animate={{ width: folded ? 0 : DOCK_ITEM, opacity: folded ? 0 : 1 }}
-            transition={SPRING}
-            className={cn(DOCK_CLIP, folded && "pointer-events-none")}
+            animate={{ width: folded && sectionOpen ? 0 : slot, opacity: folded && sectionOpen ? 0 : 1 }}
+            transition={spring}
+            className={cn(DOCK_CLIP, folded && sectionOpen && "pointer-events-none")}
           >
             <button
               type="button"
@@ -281,7 +294,8 @@ export function MobileTabBar({
               aria-label="Open menu"
               aria-expanded={open}
               aria-haspopup="dialog"
-              className="grid size-12 place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5"
+              style={{ width: slot, height: slot }}
+              className="grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:scale-[0.94]"
             >
               <Avatar user={viewer} size={32} />
             </button>
@@ -290,13 +304,13 @@ export function MobileTabBar({
         <motion.div
           initial={false}
           animate={{ width: folded ? 0 : POST_SIZE, marginLeft: folded ? 0 : 10, opacity: folded ? 0 : 1 }}
-          transition={SPRING}
+          transition={spring}
           className={cn(DOCK_CLIP, folded ? "pointer-events-none" : "pointer-events-auto")}
         >
           <Link
             href="/#compose"
             aria-label="Post"
-            className="metal grid size-12 place-items-center rounded-full transition-[opacity,transform] duration-200 hover:opacity-85"
+            className="metal grid size-12 place-items-center rounded-full transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.94]"
           >
             <Plus className="size-[22px]" strokeWidth={2.1} aria-hidden="true" />
           </Link>

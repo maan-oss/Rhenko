@@ -63,7 +63,7 @@ type Props = {
 const BUTTON =
   "tap-44 inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
 
-// Reply, repost and like are words with their counts, so the row reads as type. Bookmark and share sit in the ⋯ menu.
+// Reply, repost and like show their counts, so the row reads as type. Bookmark is an icon, and share sits in the ⋯ menu.
 const TEXT_ACTION =
   "tap-44 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:h-10"
 
@@ -409,7 +409,7 @@ export function PostActions(props: Props) {
   const instant = reduceMotion === true
   return (
     <div className="mt-2 -ml-2 flex items-center text-muted-foreground max-sm:-mr-2">
-      <div className="flex flex-auto items-center gap-1.5 sm:flex-none sm:gap-1">
+      <div className="flex flex-auto items-center gap-1.5 max-[359px]:gap-0 sm:flex-none sm:gap-1">
         <button
           type="button"
           onClick={onReply}
@@ -451,17 +451,6 @@ export function PostActions(props: Props) {
 
         <button
           type="button"
-          onClick={onBookmark}
-          aria-pressed={bookmarkState}
-          aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
-          title={bookmarkState ? "Remove bookmark" : "Bookmark"}
-          className={cn(BUTTON, "relative z-10", bookmarkState && "text-foreground")}
-        >
-          <BookmarkIcon saved={bookmarkState} reduce={instant} />
-        </button>
-
-        <button
-          type="button"
           onClick={onLike}
           aria-pressed={likeState.active}
           aria-label={likeState.active ? `Unlike, ${likeState.count} ${pluralize(likeState.count, "like")}` : `Like, ${likeState.count} ${pluralize(likeState.count, "like")}`}
@@ -469,6 +458,17 @@ export function PostActions(props: Props) {
         >
           <HeartIcon active={likeState.active} likes={likeBursts} reduce={instant} />
           <Count value={likeState.count} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onBookmark}
+          aria-pressed={bookmarkState}
+          aria-label={bookmarkState ? "Remove bookmark" : "Bookmark"}
+          title={bookmarkState ? "Remove bookmark" : "Bookmark"}
+          className={cn(BUTTON, "relative z-10", bookmarkState && "text-foreground")}
+        >
+          <BookmarkIcon saved={bookmarkState} reduce={instant} />
         </button>
       </div>
       <div className="ml-auto flex items-center sm:gap-1">
