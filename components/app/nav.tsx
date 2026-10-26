@@ -109,9 +109,10 @@ function isConversation(path: string): boolean {
 // The phone dock. Expanded, it is a floating white pill of the four main sections and your avatar, with the + square beside
 // it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, in the bottom-left corner,
 // and the + square moves to the bottom-right corner. Scrolling up, or a tap, brings it back. A conversation starts folded so its
-// composer can sit at the bottom. Holding a section pins the dock, so scrolling no longer moves it. A sideways swipe on the
+// composer can sit at the bottom. Pinning the dock, from the hold menu, stops scrolling from moving it. A sideways swipe on the
 // folded square moves to the next or previous section without opening it. Holding the + square spins it and opens a menu of
 // the things to do next. The avatar, or a swipe from the left edge, opens the left panel.
+// Holding a section or the folded square opens a menu of every page, with a Pin button at its foot.
 export function MobileTabBar({
   viewer,
   accounts,
@@ -134,8 +135,8 @@ export function MobileTabBar({
   const pinned = useSyncExternalStore(subscribePinned, readPinned, () => false)
   const [folded, setFolded] = useState(conversation)
   const [menuOpen, setMenuOpen] = useState(false)
-  // Holding a section or the folded square offers a Pin button above it. A tap on the button pins or unpins the dock.
-  const [pinPrompt, setPinPrompt] = useState(false)
+  // Holding a section or the folded square opens a menu above the dock: every page, and a Pin button at its foot.
+  const [holdMenu, setHoldMenu] = useState(false)
   // Each open or close turns the + square one more full turn, so it always spins forward.
   const [turns, setTurns] = useState(0)
   // A new page starts with the dock folded only if it is a conversation or pinned. Adjusted during render, so it never flashes.
@@ -155,7 +156,8 @@ export function MobileTabBar({
   const live = useLiveCounts()
   const unreadNotifications = live?.notifications ?? notifications
   const unreadMessages = live?.messages ?? messages
-  const items = buildItems(unreadNotifications, unreadMessages).filter((item) => item.mobile)
+  const everyItem = buildItems(unreadNotifications, unreadMessages)
+  const items = everyItem.filter((item) => item.mobile)
   // The section the person has just pressed. The fill moves on the press, before the page has loaded, and the page follows.
   // It is dropped once the page shows that section, or if the page still shows the section it started from.
   const served = items.find((item) => item.active(path))?.href ?? null
@@ -166,6 +168,16 @@ export function MobileTabBar({
   const sectionOpen = currentHref !== null
   const reduce = useReducedMotion()
   const spring = reduce ? INSTANT : SPRING
+  // The hold menu grows from its corner, then its rows stack in one after another. Nothing sweeps up from below. People who
+  // asked for less motion get it at once.
+  const holdCard = {
+    hidden: { opacity: 0, scale: 0.92, transition: reduce ? INSTANT : { duration: 0.14 } },
+    shown: { opacity: 1, scale: 1, transition: reduce ? INSTANT : { ...SPRING, staggerChildren: 0.035, delayChildren: 0.03 } },
+  }
+  const holdRow = {
+    hidden: { opacity: 0, scale: 0.94 },
+    shown: { opacity: 1, scale: 1 },
+  }
 
   // Pressing and holding a section, or a touch that started on the folded square, is tracked here. A hold pins or unpins.
   const holdTimer = useRef<number | undefined>(undefined)
@@ -304,7 +316,7 @@ export function MobileTabBar({
       holdTimer.current = undefined
       touchStart.current = null
       skipTap.current = true
-      setPinPrompt(true)
+      setHoldMenu(true)
     }, HOLD_MS)
   }
 
@@ -414,14 +426,14 @@ export function MobileTabBar({
           ) : null}
         </AnimatePresence>
 
-        {/* A tap anywhere else closes the Pin button too. */}
+        {/* A tap anywhere else closes the hold menu too. */}
         <AnimatePresence>
-          {pinPrompt ? (
+          {holdMenu ? (
             <motion.button
-              key="pin-scrim"
+              key="hold-scrim"
               type="button"
               aria-label="Close"
-              onClick={() => setPinPrompt(false)}
+              onClick={() => setHoldMenu(false)}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -431,30 +443,72 @@ export function MobileTabBar({
           ) : null}
         </AnimatePresence>
 
-        {/* Held on a section or the folded square: a Pin button above it. Tapping it pins the dock, or unpins it. */}
+        {/* Held on a section or the folded square: every page, and a Pin button at the foot. Tapping a page opens it. Tapping
+            Pin pins the dock, or unpins it. */}
         <AnimatePresence>
-          {pinPrompt ? (
-            <motion.button
-              key="pin"
-              type="button"
-              onClick={() => {
-                togglePin()
-                setPinPrompt(false)
-              }}
-              initial={reduce ? false : { opacity: 0, scale: 0.9, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 8 }}
-              transition={spring}
+          {holdMenu ? (
+            <motion.div
+              key="hold-menu"
+              role="menu"
+              aria-label="Pages and pin"
+              variants={holdCard}
+              initial={reduce ? false : "hidden"}
+              animate="shown"
+              exit="hidden"
               style={{
                 bottom: folded ? `calc(env(safe-area-inset-bottom, 0px) + ${BAR + 10}px)` : `calc(${DOCK_BOTTOM} + ${BAR + 10}px)`,
-                left: folded ? 0 : 16,
+                left: folded ? 12 : 16,
                 transformOrigin: "bottom left",
               }}
-              className="pointer-events-auto absolute flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[15px] font-semibold text-black shadow-[0_18px_40px_-14px_rgba(0,0,0,0.4),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
+              className="pointer-events-auto absolute flex w-[240px] flex-col rounded-[22px] bg-white p-1.5 text-black shadow-[0_18px_40px_-14px_rgba(0,0,0,0.4),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
             >
-              <Pin className="size-[18px]" strokeWidth={2} aria-hidden="true" />
-              {pinned ? "Unpin" : "Pin"}
-            </motion.button>
+              <div className="min-h-0 max-h-[min(484px,calc(100dvh-240px))] overflow-y-auto overscroll-contain">
+                {everyItem.map(({ href, label, Icon, badge }) => {
+                  const isActive = href === currentHref
+                  return (
+                    <motion.div key={href} variants={holdRow}>
+                      <Link
+                        href={href}
+                        role="menuitem"
+                        aria-current={isActive ? "page" : undefined}
+                        onClick={() => {
+                          setPressed({ from: served, to: href })
+                          setHoldMenu(false)
+                        }}
+                        className="flex h-11 items-center gap-3 rounded-2xl px-3 text-[15px] transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
+                      >
+                        <Icon
+                          className="size-[20px] shrink-0"
+                          fill={isActive ? "currentColor" : "none"}
+                          strokeWidth={isActive ? 2.2 : 1.8}
+                          aria-hidden="true"
+                        />
+                        <span className={cn("min-w-0 flex-1 truncate", isActive ? "font-semibold" : "font-medium")}>{label}</span>
+                        {badge && badge > 0 ? (
+                          <span className="metal grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
+                            {badge > 99 ? "99+" : badge}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </motion.div>
+                  )
+                })}
+              </div>
+              <motion.div variants={holdRow} className="mt-1 border-t border-black/10 pt-1">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    togglePin()
+                    setHoldMenu(false)
+                  }}
+                  className="flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
+                >
+                  <Pin className="size-[20px] shrink-0" strokeWidth={1.9} aria-hidden="true" />
+                  {pinned ? "Unpin" : "Pin"}
+                </button>
+              </motion.div>
+            </motion.div>
           ) : null}
         </AnimatePresence>
 

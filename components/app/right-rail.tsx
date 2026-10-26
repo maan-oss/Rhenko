@@ -73,7 +73,7 @@ export async function RightRail() {
             People to meet
           </h2>
           {/* Stacked, each face covers a quarter of the one before. Resting on the row spreads them apart, so every face shows
-              whole, and the face under the pointer lifts a little. */}
+              whole. Every face keeps the same size, hovered or not. */}
           <div className="group mt-4 flex items-center pl-1">
             {people.map((person, index) => (
               <ProfileLink
@@ -81,7 +81,7 @@ export async function RightRail() {
                 handle={person.handle}
                 label={person.name}
                 className={cn(
-                  "relative rounded-full outline-none transition-[margin,transform] duration-200 hover:z-10 hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring",
+                  "relative rounded-full outline-none transition-[margin] duration-200 focus-visible:ring-2 focus-visible:ring-ring",
                   index > 0 && "-ml-[11px] group-hover:ml-1"
                 )}
               >
