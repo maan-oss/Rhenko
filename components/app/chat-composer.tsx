@@ -487,9 +487,9 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               onClick={() => void startRecording()}
               aria-label="Record a voice message"
               title="Record a voice message"
-              className="tap-44 relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted"
+              className="tap-44 relative mr-0.5 grid size-10 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted sm:size-8"
             >
-              <AudioLines className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+              <AudioLines className="size-5 sm:size-[18px]" strokeWidth={2} aria-hidden="true" />
             </button>
           ) : null}
           {dictation ? (
@@ -499,7 +499,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               aria-label={listening ? "Stop dictation" : "Dictate a message"}
               aria-pressed={listening}
               title={listening ? "Stop dictation" : "Dictate"}
-              className="tap-44 relative mr-0.5 grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="tap-44 relative mr-0.5 grid size-10 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
             >
               <AnimatePresence>
                 {listening ? (
@@ -516,11 +516,11 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
               </AnimatePresence>
               <span
                 className={cn(
-                  "relative grid size-8 place-items-center rounded-full transition-colors duration-200",
+                  "relative grid size-10 place-items-center rounded-full transition-colors duration-200 sm:size-8",
                   listening ? "bg-foreground text-background" : "text-foreground hover:bg-muted"
                 )}
               >
-                <Mic className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+                <Mic className="size-5 sm:size-[18px]" strokeWidth={2} aria-hidden="true" />
               </span>
             </button>
           ) : null}
