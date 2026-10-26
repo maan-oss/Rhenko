@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react"
 import { X } from "lucide-react"
 import { Composer, type CircleOption } from "@/components/app/composer"
 import type { AvatarUser } from "@/components/app/avatar"
+import { cn } from "@/lib/utils"
 
 const SPRING = { type: "spring", stiffness: 380, damping: 36 } as const
 const EASE = [0.22, 1, 0.36, 1] as const
@@ -32,6 +33,28 @@ export function ComposeSheet({ open, onClose, viewer, circles }: ComposeSheetPro
   useEffect(() => {
     closeRef.current = onClose
   }, [onClose])
+
+  // The part of the screen the keyboard leaves free. With the keyboard up, the sheet fits above it, so its toolbar stays just
+  // over the keys. When the keyboard goes, the sheet grows back to full height. Listening all the time, so it is right the
+  // moment the sheet opens.
+  const [area, setArea] = useState({ top: 0, bottom: 0 })
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    function fit() {
+      const current = window.visualViewport
+      if (!current) return
+      const top = Math.round(current.offsetTop)
+      const bottom = Math.round(Math.max(0, window.innerHeight - current.height - current.offsetTop))
+      setArea((previous) => (previous.top === top && previous.bottom === bottom ? previous : { top, bottom }))
+    }
+    viewport.addEventListener("resize", fit)
+    viewport.addEventListener("scroll", fit)
+    return () => {
+      viewport.removeEventListener("resize", fit)
+      viewport.removeEventListener("scroll", fit)
+    }
+  }, [])
 
   // While open: the page behind does not scroll, Escape closes, and the text field takes the cursor once the pop-up has begun to
   // open, so the keyboard comes up with it.
@@ -85,8 +108,8 @@ export function ComposeSheet({ open, onClose, viewer, circles }: ComposeSheetPro
         initial={false}
         variants={panel}
         animate={open ? "open" : "closed"}
-        style={{ transformOrigin: "bottom right" }}
-        className="fixed inset-x-2 top-2 bottom-2 z-50 flex flex-col overflow-hidden rounded-[32px] border border-border bg-background shadow-[0_30px_80px_-24px_rgba(0,0,0,0.55)] lg:hidden"
+        style={{ transformOrigin: "bottom right", top: 8 + area.top, bottom: 8 + area.bottom }}
+        className="fixed inset-x-2 z-50 flex flex-col overflow-hidden rounded-[32px] border border-border bg-background shadow-[0_30px_80px_-24px_rgba(0,0,0,0.55)] lg:hidden"
       >
         <header className="relative flex h-14 shrink-0 items-center justify-center">
           <button
@@ -100,7 +123,12 @@ export function ComposeSheet({ open, onClose, viewer, circles }: ComposeSheetPro
           </button>
           <h2 className="text-[17px] font-semibold tracking-tight">New post</h2>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-3 pb-[max(20px,env(safe-area-inset-bottom,0px))]">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-3",
+            area.bottom > 0 ? "pb-2" : "pb-[max(20px,env(safe-area-inset-bottom,0px))]"
+          )}
+        >
           <Composer viewer={viewer} circles={circles} placeholder="Write something" compact fill onPosted={onClose} />
         </div>
       </motion.section>
