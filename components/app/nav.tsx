@@ -1,10 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { motion, useReducedMotion } from "motion/react"
-import { Bell, Bookmark, ChartNoAxesColumn, CircleDot, FileText, House, List, MessageCircle, Plus, Search, Settings, UsersRound } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { Bell, Bookmark, ChartNoAxesColumn, CircleDot, FileText, House, List, MessageCircle, Pin, Plus, Search, Settings, SquarePen, UsersRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
@@ -42,29 +42,76 @@ export function buildItems(notifications: number, messages: number): NavItemConf
   ]
 }
 
+// What the + menu offers beyond a post: the other places a person goes to write, find and keep things.
+const COMPOSE_MENU = [
+  { href: "/#compose", label: "Write a post", Icon: SquarePen },
+  { href: "/messages/new", label: "New message", Icon: MessageCircle },
+  { href: "/connect", label: "Find people", Icon: UsersRound },
+  { href: "/bookmarks", label: "Bookmarks", Icon: Bookmark },
+  { href: "/lists", label: "Lists", Icon: List },
+  { href: "/drafts", label: "Drafts", Icon: FileText },
+]
+
 const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
-// The bar slides down out of sight in a chat, a new message or a call, and back up when the person leaves.
-const BAR_SPRING = { type: "spring", stiffness: 340, damping: 38 } as const
 // People who asked their system for less motion get the bar moving in one step, not a spring.
 const INSTANT = { duration: 0 } as const
 const DOCK_ITEM = 48
-// The pill, the page square it folds into and the Post square are all this tall and this round.
+// The pill and the Post square are this tall and this round. Expanded, they sit 16px in from each side and 10px apart, so
+// the pill is the screen less RESERVED.
 const BAR = 56
-// The gap between the pill and the Post square. The pill and the Post square float apart, not joined.
-const GAP = 10
+const RESERVED = 98
 // Items collapse by clipping their width. The clip leaves room for the metal shadow beneath each button, which would
 // otherwise end in a hard edge at the clip line.
 const DOCK_CLIP = "flex-none [overflow:clip] [overflow-clip-margin:24px]"
+// How long a press must last to pin a section, or to open the compose menu from the + square.
+const HOLD_MS = 420
+// Expanded, the dock sits above the home indicator. Folded, the page square and the + square sit against the top corners.
+const DOCK_BOTTOM = "max(16px, env(safe-area-inset-bottom, 0px))"
+const FOLD_TOP = "env(safe-area-inset-top, 0px)"
+// The squares move between the bottom and the top corners with CSS, so they travel up and back down rather than spring.
+const MOVE = "transition-[top,left,right,width,border-radius,transform,opacity] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+
+// Whether the dock is pinned. A pinned dock stays in its corners through scrolling and comes out only when tapped. It is kept
+// on this device, and a page that cannot store it still pins for the visit.
+const PIN_KEY = "rhenko-dock-pinned"
+const PIN_EVENT = "rhenko-dock-pin"
+let memoryPinned = false
+function readPinned(): boolean {
+  try {
+    return localStorage.getItem(PIN_KEY) === "1"
+  } catch {
+    return memoryPinned
+  }
+}
+function subscribePinned(onChange: () => void): () => void {
+  window.addEventListener(PIN_EVENT, onChange)
+  window.addEventListener("storage", onChange)
+  return () => {
+    window.removeEventListener(PIN_EVENT, onChange)
+    window.removeEventListener("storage", onChange)
+  }
+}
+function writePinned(value: boolean) {
+  memoryPinned = value
+  try {
+    localStorage.setItem(PIN_KEY, value ? "1" : "0")
+  } catch {
+    // Storage is blocked. The pin is still kept in memory above.
+  }
+  window.dispatchEvent(new Event(PIN_EVENT))
+}
 
 // A conversation, not the list of conversations. Conversations start with the dock folded (see below).
 function isConversation(path: string): boolean {
   return path.startsWith("/messages/") && path !== "/messages/new"
 }
 
-// The phone dock: a floating white pill of the four main sections and your avatar, with a Post square beside it. It folds
-// into the bottom-left corner as you scroll down, leaving the square of the page you are on beside the Post square, so the
-// page gets the whole screen. A tap, or scrolling up, opens it again. A conversation starts folded so its composer can sit
-// at the bottom. The avatar, or a swipe from the left edge, opens the left panel.
+// The phone dock. Expanded, it is a floating white pill of the four main sections and your avatar, with the + square beside
+// it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, flush in the top-left corner,
+// and the + square moves to the top-right corner. Scrolling up, or a tap, brings it back. A conversation starts folded so its
+// composer can sit at the bottom. Holding a section pins the dock, so scrolling no longer moves it. A sideways swipe on the
+// folded square moves to the next or previous section without opening it. Holding the + square spins it and opens a menu of
+// the things to do next. The avatar, or a swipe from the left edge, opens the left panel.
 export function MobileTabBar({
   viewer,
   accounts,
@@ -77,18 +124,27 @@ export function MobileTabBar({
   messages: number
 }) {
   const path = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const conversation = isConversation(path)
   // A call in progress or ringing (anything but idle or ended) takes the bar away as well.
   const call = useSyncExternalStore(subscribeCall, getCallState, getServerCallState)
   const inCall = call.status !== "idle" && call.status !== "ended"
   const away = conversation || path === "/messages/new" || inCall
+  const pinned = useSyncExternalStore(subscribePinned, readPinned, () => false)
   const [folded, setFolded] = useState(conversation)
-  // A new page starts with the dock folded only if it is a conversation. Adjusted during render, so it never flashes.
+  const [menuOpen, setMenuOpen] = useState(false)
+  // Each open or close turns the + square one more full turn, so it always spins forward.
+  const [turns, setTurns] = useState(0)
+  // A new page starts with the dock folded only if it is a conversation or pinned. Adjusted during render, so it never flashes.
   const [seenPath, setSeenPath] = useState(path)
   if (seenPath !== path) {
     setSeenPath(path)
-    setFolded(conversation)
+    setFolded(conversation || pinned)
+    if (menuOpen) {
+      setMenuOpen(false)
+      setTurns((count) => count + 1)
+    }
   }
   const navRef = useRef<HTMLElement>(null)
   const [navWidth, setNavWidth] = useState(0)
@@ -103,12 +159,19 @@ export function MobileTabBar({
   const served = items.find((item) => item.active(path))?.href ?? null
   const [pressed, setPressed] = useState<{ from: string | null; to: string } | null>(null)
   const currentHref = pressed && pressed.from === served ? pressed.to : served
-  // A section of the dock is open. On a page outside the dock (Settings, Lists and the rest) none is, and the folded bar
+  // A section of the dock is open. On a page outside the dock (Settings, Lists and the rest) none is, and the folded square
   // shows the avatar instead, so it still opens the menu rather than a section that is not open.
   const sectionOpen = currentHref !== null
   const reduce = useReducedMotion()
   const spring = reduce ? INSTANT : SPRING
-  const barSpring = reduce ? INSTANT : BAR_SPRING
+
+  // Pressing and holding a section, or a touch that started on the folded square, is tracked here. A hold pins or unpins.
+  const holdTimer = useRef<number | undefined>(undefined)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  // A tap that was used for a hold or a swipe is not also a tap.
+  const skipTap = useRef(false)
+  const plusHold = useRef<number | undefined>(undefined)
+  const plusSkip = useRef(false)
 
   useEffect(() => {
     conversationRef.current = conversation
@@ -120,8 +183,10 @@ export function MobileTabBar({
   }, [away])
 
   // Scrolling down folds the dock; scrolling up opens it. The distance is added up per direction, so a small wobble never
-  // flickers it. At the top of the page it opens, except in a conversation, where the composer owns the bottom.
+  // flickers it. At the top of the page it opens, except in a conversation, where the composer owns the top. A pinned dock
+  // ignores scrolling altogether: only a tap moves it.
   useEffect(() => {
+    if (pinned) return
     let last = window.scrollY
     let travel = 0
     let frame = 0
@@ -149,9 +214,9 @@ export function MobileTabBar({
       window.removeEventListener("scroll", onScroll)
       if (frame) cancelAnimationFrame(frame)
     }
-  }, [])
+  }, [pinned])
 
-  // The pill's width is the bar less the Post button, so it is measured to animate in pixels.
+  // The width of the dock is measured, so the sections can share the pill in pixels.
   useEffect(() => {
     const element = navRef.current
     if (!element) return
@@ -200,43 +265,165 @@ export function MobileTabBar({
     }
   }, [])
 
-  const expandedWidth = Math.max(0, navWidth - BAR - GAP)
-  // Four sections and the avatar share the pill. On a 320px phone they shrink to fit beside the Post square, and they never
+  const expandedWidth = Math.max(0, navWidth - RESERVED)
+  // Four sections and the avatar share the pill. On a 320px phone they shrink to fit beside the + square, and they never
   // grow past DOCK_ITEM. The 4px padding on each side of the pill is 8px in all.
   const slot = navWidth ? Math.min(DOCK_ITEM, Math.floor((expandedWidth - 8) / (items.length + 1))) : DOCK_ITEM
 
+  function clearHold() {
+    window.clearTimeout(holdTimer.current)
+    holdTimer.current = undefined
+  }
+
+  function togglePin() {
+    const next = !pinned
+    writePinned(next)
+    // Pinning tucks the dock into its corners at once, so it is clear what the pin does.
+    if (next) setFolded(true)
+  }
+
+  function pillTouchStart(event: ReactTouchEvent<HTMLUListElement>) {
+    clearHold()
+    skipTap.current = false
+    const touch = event.touches[0]
+    if (!touch || event.touches.length > 1) {
+      touchStart.current = null
+      return
+    }
+    touchStart.current = { x: touch.clientX, y: touch.clientY }
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = undefined
+      touchStart.current = null
+      skipTap.current = true
+      togglePin()
+    }, HOLD_MS)
+  }
+
+  function pillTouchMove(event: ReactTouchEvent<HTMLUListElement>) {
+    const touch = event.touches[0]
+    const start = touchStart.current
+    if (!touch || !start) return
+    if (Math.abs(touch.clientX - start.x) > 10 || Math.abs(touch.clientY - start.y) > 10) clearHold()
+  }
+
+  // A sideways swipe on the folded square moves to the next or previous section, without opening the dock. The left edge is
+  // left to the panel, which a swipe from there opens.
+  function pillTouchEnd(event: ReactTouchEvent<HTMLUListElement>) {
+    clearHold()
+    const start = touchStart.current
+    touchStart.current = null
+    const touch = event.changedTouches[0]
+    if (!start || !touch || !folded || !currentHref || start.x <= 24 || skipTap.current) return
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (Math.abs(dx) < 48 || Math.abs(dy) > 36) return
+    const index = items.findIndex((item) => item.href === currentHref)
+    const target = items[dx < 0 ? index + 1 : index - 1]
+    if (!target) return
+    skipTap.current = true
+    setPressed({ from: served, to: target.href })
+    router.push(target.href)
+  }
+
+  function pillClick(event: ReactMouseEvent<HTMLUListElement>) {
+    if (skipTap.current) {
+      skipTap.current = false
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    // A folded dock does not navigate on a tap. Elsewhere the first tap opens the sections. In a conversation the dock stays
+    // folded, because the composer needs the room, so the tap opens the left panel, which has every section. With no section
+    // open the avatar is all that shows, so the tap opens the panel too.
+    if (!folded) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (conversation || !sectionOpen) setOpen(true)
+    else setFolded(false)
+  }
+
+  function toggleMenu(next: boolean) {
+    setMenuOpen(next)
+    setTurns((count) => count + 1)
+  }
+
+  function startPlusHold() {
+    plusSkip.current = false
+    window.clearTimeout(plusHold.current)
+    if (menuOpen) return
+    plusHold.current = window.setTimeout(() => {
+      plusHold.current = undefined
+      plusSkip.current = true
+      toggleMenu(true)
+    }, HOLD_MS)
+  }
+
+  function cancelPlusHold() {
+    window.clearTimeout(plusHold.current)
+    plusHold.current = undefined
+  }
+
+  function tapPlus(event: ReactMouseEvent<HTMLAnchorElement>) {
+    if (plusSkip.current) {
+      plusSkip.current = false
+      event.preventDefault()
+      return
+    }
+    // With the menu open, the + square closes it rather than writing a post.
+    if (menuOpen) {
+      event.preventDefault()
+      toggleMenu(false)
+    }
+  }
+
+  const expandedTop = `calc(100% - ${BAR}px - ${DOCK_BOTTOM})`
+  const rotation = turns * 360 + (menuOpen ? 45 : 0)
+
   return (
     <>
-      <motion.nav
+      <nav
         ref={navRef}
-        initial={false}
-        animate={{ y: away ? 140 : 0, opacity: away ? 0 : 1 }}
-        transition={barSpring}
         inert={away}
         aria-hidden={away || undefined}
         aria-label="Main"
-        // A folded dock does not navigate on a tap. Elsewhere the first tap shows the sections. In a conversation the
-        // dock stays folded, because the composer needs the bottom row, so the tap opens the left panel, which has every
-        // section. With no section open the avatar is all that shows, so the tap opens the panel too.
-        onClickCapture={(event) => {
-          if (!folded) return
-          event.preventDefault()
-          event.stopPropagation()
-          if (conversation || !sectionOpen) setOpen(true)
-          else setFolded(false)
-        }}
-        // The bar spans the width of the screen, but only the pill and the Post square take taps. The space between them
-        // passes through to the page, so the composer's Send button stays reachable under the dock.
-        className="pointer-events-none fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center gap-2.5 lg:hidden"
+        className="pointer-events-none fixed inset-0 z-30 lg:hidden"
       >
-        {/* Solid white, not glass. Folded, the pill is a square holding the page you are on, in the bottom-left corner. */}
-        <motion.ul
-          initial={false}
-          animate={{ width: folded ? BAR : navWidth ? expandedWidth : undefined }}
-          transition={spring}
+        {/* While the + menu is open, a tap anywhere else closes it. */}
+        <AnimatePresence>
+          {menuOpen ? (
+            <motion.button
+              key="scrim"
+              type="button"
+              aria-label="Close menu"
+              onClick={() => toggleMenu(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="pointer-events-auto fixed inset-0 bg-black/10"
+            />
+          ) : null}
+        </AnimatePresence>
+
+        {/* Solid white, not glass. Folded, the pill is the square of the page you are on, flush in the top-left corner. */}
+        <ul
+          onTouchStart={pillTouchStart}
+          onTouchMove={pillTouchMove}
+          onTouchEnd={pillTouchEnd}
+          onTouchCancel={clearHold}
+          onClickCapture={pillClick}
+          style={{
+            top: folded ? FOLD_TOP : expandedTop,
+            left: folded ? 0 : 16,
+            width: folded ? BAR : `calc(100% - ${RESERVED}px)`,
+            borderRadius: folded ? "0px 0px 20px 0px" : "20px",
+            transform: away ? "translateY(160px)" : undefined,
+            opacity: away ? 0 : 1,
+          }}
           className={cn(
-            "pointer-events-auto flex h-14 flex-none items-center justify-between rounded-[20px] bg-white p-1 text-black shadow-[0_10px_28px_-10px_rgba(0,0,0,0.35),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5",
-            !navWidth && "w-[calc(100%-66px)]"
+            "pointer-events-auto absolute flex h-14 items-center bg-white p-1 text-black shadow-[0_10px_28px_-10px_rgba(0,0,0,0.35),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5",
+            MOVE,
+            folded ? "justify-center" : "justify-between"
           )}
         >
           {items.map(({ href, label, Icon, badge }) => {
@@ -271,6 +458,10 @@ export function MobileTabBar({
                       {badge > 9 ? "9+" : badge}
                     </span>
                   ) : null}
+                  {/* Pinned, the folded square carries a pin, so it is clear the dock stays where it is. */}
+                  {pinned && folded && isActive ? (
+                    <Pin className="pointer-events-none absolute top-0.5 right-0.5 size-3 text-black/55" strokeWidth={2.4} aria-hidden="true" />
+                  ) : null}
                 </Link>
               </motion.li>
             )
@@ -293,16 +484,73 @@ export function MobileTabBar({
               <Avatar user={viewer} size={32} />
             </button>
           </motion.li>
-        </motion.ul>
-        {/* Always in view: beside the pill when it is open, and beside the page square when it is folded. */}
+        </ul>
+
+        {/* Always in view: the bottom-right square when expanded, and the top-right corner when folded. Holding it spins it
+            and opens the menu. */}
         <Link
           href="/#compose"
           aria-label="Post"
-          className="pointer-events-auto metal grid size-14 flex-none place-items-center rounded-[20px] transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.94]"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onTouchStart={startPlusHold}
+          onTouchMove={cancelPlusHold}
+          onTouchEnd={cancelPlusHold}
+          onTouchCancel={cancelPlusHold}
+          onClick={tapPlus}
+          style={{
+            top: folded ? FOLD_TOP : expandedTop,
+            right: folded ? 0 : 16,
+            borderRadius: folded ? "0px 0px 0px 20px" : "20px",
+            transform: away ? "translateY(160px)" : undefined,
+            opacity: away ? 0 : 1,
+          }}
+          className={cn(
+            "pointer-events-auto metal absolute grid size-14 place-items-center transition-[top,right,border-radius,transform,opacity,filter] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:opacity-85 active:scale-[0.94] motion-reduce:transition-none",
+          )}
         >
-          <Plus className="size-[22px]" strokeWidth={2.1} aria-hidden="true" />
+          <Plus
+            className="size-[22px]"
+            strokeWidth={2.1}
+            aria-hidden="true"
+            style={{ transform: `rotate(${rotation}deg)`, transition: reduce ? "none" : "transform 480ms cubic-bezier(0.22,1,0.36,1)" }}
+          />
         </Link>
-      </motion.nav>
+
+        {/* The + menu. Folded, it drops from the top-right corner; expanded, it rises above the + square. */}
+        <AnimatePresence>
+          {menuOpen ? (
+            <motion.div
+              key="menu"
+              role="menu"
+              aria-label="Compose and more"
+              initial={reduce ? false : { opacity: 0, scale: 0.92, y: folded ? -8 : 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: folded ? -8 : 8 }}
+              transition={spring}
+              style={
+                folded
+                  ? { top: `calc(${FOLD_TOP} + ${BAR + 8}px)`, right: 12, transformOrigin: "top right" }
+                  : { bottom: `calc(${DOCK_BOTTOM} + ${BAR + 8}px)`, right: 16, transformOrigin: "bottom right" }
+              }
+              className="pointer-events-auto absolute w-[220px] rounded-[22px] bg-white p-1.5 text-black shadow-[0_18px_40px_-14px_rgba(0,0,0,0.4),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
+            >
+              {COMPOSE_MENU.map(({ href, label, Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  role="menuitem"
+                  onClick={() => toggleMenu(false)}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
+                >
+                  <Icon className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
+                  {label}
+                </Link>
+              ))}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </nav>
       <MobileDrawer
         open={open}
         onClose={() => setOpen(false)}

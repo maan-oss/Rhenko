@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
+import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { markNotInterested } from "@/actions/feed"
 import { snoozeForYouTopic } from "@/actions/topic-snoozes"
@@ -63,10 +63,7 @@ type Props = {
 const BUTTON =
   "tap-44 inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-0.5 text-[13px] tabular-nums outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:min-h-10 max-sm:min-w-10 sm:gap-1.5 sm:px-2 sm:py-1.5"
 
-// Reply, repost and like show their counts, so the row reads as type. Bookmark is an icon, and share sits in the ⋯ menu.
-const TEXT_ACTION =
-  "tap-44 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] font-medium outline-none transition-[color,background-color,transform] duration-200 hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 active:scale-90 max-sm:h-10"
-
+// Reply, repost and like are icons with their counts beside them. Bookmark is an icon, and share sits in the ⋯ menu.
 const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
 // 999 stays 999, 1,234 becomes 1.2K. Short enough that four counts and three icons fit a phone's row.
@@ -416,9 +413,9 @@ export function PostActions(props: Props) {
           aria-disabled={canReply ? undefined : true}
           aria-label={`Reply, ${replies} ${pluralize(replies, "reply", "replies")}`}
           title={replyReason ?? "Reply"}
-          className={cn(TEXT_ACTION, "relative z-10", !canReply && "opacity-60")}
+          className={cn(BUTTON, "relative z-10", !canReply && "opacity-60")}
         >
-          Reply
+          <MessageCircle className="size-[18px]" strokeWidth={1.8} aria-hidden="true" />
           <Count value={replies} />
         </button>
 
