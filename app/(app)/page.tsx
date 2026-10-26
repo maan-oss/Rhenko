@@ -17,6 +17,7 @@ import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
 import { RememberFeedTab } from "@/components/app/remember-feed-tab"
 import { emptyActionClass } from "@/components/app/empty-state"
+import { MenuButton } from "@/components/app/menu-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
 import { IconTabLinks } from "@/components/app/tabs"
@@ -85,6 +86,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader
         title="Home"
         hideTitleOnPhone
+        lead={<MenuButton />}
         tabs={
           <IconTabLinks
             label="Home sections"

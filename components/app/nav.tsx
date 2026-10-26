@@ -134,6 +134,8 @@ export function MobileTabBar({
   const pinned = useSyncExternalStore(subscribePinned, readPinned, () => false)
   const [folded, setFolded] = useState(conversation)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Holding a section or the folded square offers a Pin button above it. A tap on the button pins or unpins the dock.
+  const [pinPrompt, setPinPrompt] = useState(false)
   // Each open or close turns the + square one more full turn, so it always spins forward.
   const [turns, setTurns] = useState(0)
   // A new page starts with the dock folded only if it is a conversation or pinned. Adjusted during render, so it never flashes.
@@ -176,6 +178,13 @@ export function MobileTabBar({
   useEffect(() => {
     conversationRef.current = conversation
   }, [conversation])
+
+  // The sidebar icon in a page's top-left corner asks the left panel to open.
+  useEffect(() => {
+    const openPanel = () => setOpen(true)
+    window.addEventListener("rhenko:open-menu", openPanel)
+    return () => window.removeEventListener("rhenko:open-menu", openPanel)
+  }, [])
 
   // Lets the page drop the bottom room it keeps for the bar while the bar is away.
   useEffect(() => {
@@ -295,7 +304,7 @@ export function MobileTabBar({
       holdTimer.current = undefined
       touchStart.current = null
       skipTap.current = true
-      togglePin()
+      setPinPrompt(true)
     }, HOLD_MS)
   }
 
@@ -405,6 +414,50 @@ export function MobileTabBar({
           ) : null}
         </AnimatePresence>
 
+        {/* A tap anywhere else closes the Pin button too. */}
+        <AnimatePresence>
+          {pinPrompt ? (
+            <motion.button
+              key="pin-scrim"
+              type="button"
+              aria-label="Close"
+              onClick={() => setPinPrompt(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="pointer-events-auto fixed inset-0"
+            />
+          ) : null}
+        </AnimatePresence>
+
+        {/* Held on a section or the folded square: a Pin button above it. Tapping it pins the dock, or unpins it. */}
+        <AnimatePresence>
+          {pinPrompt ? (
+            <motion.button
+              key="pin"
+              type="button"
+              onClick={() => {
+                togglePin()
+                setPinPrompt(false)
+              }}
+              initial={reduce ? false : { opacity: 0, scale: 0.9, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 8 }}
+              transition={spring}
+              style={{
+                bottom: folded ? `calc(env(safe-area-inset-bottom, 0px) + ${BAR + 10}px)` : `calc(${DOCK_BOTTOM} + ${BAR + 10}px)`,
+                left: folded ? 0 : 16,
+                transformOrigin: "bottom left",
+              }}
+              className="pointer-events-auto absolute flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[15px] font-semibold text-black shadow-[0_18px_40px_-14px_rgba(0,0,0,0.4),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
+            >
+              <Pin className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+              {pinned ? "Unpin" : "Pin"}
+            </motion.button>
+          ) : null}
+        </AnimatePresence>
+
         {/* Solid white, not glass. Folded, the pill is the square of the page you are on, in the bottom-left corner. */}
         <ul
           onTouchStart={pillTouchStart}
@@ -457,10 +510,6 @@ export function MobileTabBar({
                     <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">
                       {badge > 9 ? "9+" : badge}
                     </span>
-                  ) : null}
-                  {/* Pinned, the folded square carries a pin, so it is clear the dock stays where it is. */}
-                  {pinned && folded && isActive ? (
-                    <Pin className="pointer-events-none absolute top-0.5 right-0.5 size-3 text-black/55" strokeWidth={2.4} aria-hidden="true" />
                   ) : null}
                 </Link>
               </motion.li>

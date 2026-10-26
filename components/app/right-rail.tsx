@@ -72,15 +72,17 @@ export async function RightRail() {
           <h2 id="meet-title" className="text-[18px] font-semibold tracking-tight">
             People to meet
           </h2>
-          <div className="mt-4 flex items-center pl-1">
+          {/* Stacked, each face covers a quarter of the one before. Resting on the row spreads them apart, so every face shows
+              whole, and the face under the pointer lifts a little. */}
+          <div className="group mt-4 flex items-center pl-1">
             {people.map((person, index) => (
               <ProfileLink
                 key={person.id}
                 handle={person.handle}
                 label={person.name}
                 className={cn(
-                  "relative rounded-full outline-none transition-transform duration-200 hover:z-10 hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring",
-                  index > 0 && "-ml-[11px]"
+                  "relative rounded-full outline-none transition-[margin,transform] duration-200 hover:z-10 hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring",
+                  index > 0 && "-ml-[11px] group-hover:ml-1"
                 )}
               >
                 <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={44} className="ring-2 ring-background" />
