@@ -65,10 +65,10 @@ const RESERVED = 98
 const DOCK_CLIP = "flex-none [overflow:clip] [overflow-clip-margin:24px]"
 // How long a press must last to pin a section, or to open the compose menu from the + square.
 const HOLD_MS = 420
-// Expanded, the dock sits above the home indicator. Folded, the page square and the + square sit against the top corners.
+// Expanded, the dock sits above the home indicator. Folded, the page square and the + square sit in the bottom corners.
 const DOCK_BOTTOM = "max(16px, env(safe-area-inset-bottom, 0px))"
-const FOLD_TOP = "env(safe-area-inset-top, 0px)"
-// The squares move between the bottom and the top corners with CSS, so they travel up and back down rather than spring.
+const FOLDED_BOTTOM = `calc(100% - ${BAR}px - env(safe-area-inset-bottom, 0px))`
+// The squares move between the expanded row and the bottom corners with CSS, so they glide rather than spring.
 const MOVE = "transition-[top,left,right,width,border-radius,transform,opacity] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
 
 // Whether the dock is pinned. A pinned dock stays in its corners through scrolling and comes out only when tapped. It is kept
@@ -107,8 +107,8 @@ function isConversation(path: string): boolean {
 }
 
 // The phone dock. Expanded, it is a floating white pill of the four main sections and your avatar, with the + square beside
-// it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, flush in the top-left corner,
-// and the + square moves to the top-right corner. Scrolling up, or a tap, brings it back. A conversation starts folded so its
+// it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, in the bottom-left corner,
+// and the + square moves to the bottom-right corner. Scrolling up, or a tap, brings it back. A conversation starts folded so its
 // composer can sit at the bottom. Holding a section pins the dock, so scrolling no longer moves it. A sideways swipe on the
 // folded square moves to the next or previous section without opening it. Holding the + square spins it and opens a menu of
 // the things to do next. The avatar, or a swipe from the left edge, opens the left panel.
@@ -405,7 +405,7 @@ export function MobileTabBar({
           ) : null}
         </AnimatePresence>
 
-        {/* Solid white, not glass. Folded, the pill is the square of the page you are on, flush in the top-left corner. */}
+        {/* Solid white, not glass. Folded, the pill is the square of the page you are on, in the bottom-left corner. */}
         <ul
           onTouchStart={pillTouchStart}
           onTouchMove={pillTouchMove}
@@ -413,10 +413,10 @@ export function MobileTabBar({
           onTouchCancel={clearHold}
           onClickCapture={pillClick}
           style={{
-            top: folded ? FOLD_TOP : expandedTop,
+            top: folded ? FOLDED_BOTTOM : expandedTop,
             left: folded ? 0 : 16,
             width: folded ? BAR : `calc(100% - ${RESERVED}px)`,
-            borderRadius: folded ? "0px 0px 20px 0px" : "20px",
+            borderRadius: folded ? "0px 20px 0px 0px" : "20px",
             transform: away ? "translateY(160px)" : undefined,
             opacity: away ? 0 : 1,
           }}
@@ -486,7 +486,7 @@ export function MobileTabBar({
           </motion.li>
         </ul>
 
-        {/* Always in view: the bottom-right square when expanded, and the top-right corner when folded. Holding it spins it
+        {/* Always in view: the bottom-right square when expanded, and the bottom-right corner when folded. Holding it spins it
             and opens the menu. */}
         <Link
           href="/#compose"
@@ -499,9 +499,9 @@ export function MobileTabBar({
           onTouchCancel={cancelPlusHold}
           onClick={tapPlus}
           style={{
-            top: folded ? FOLD_TOP : expandedTop,
+            top: folded ? FOLDED_BOTTOM : expandedTop,
             right: folded ? 0 : 16,
-            borderRadius: folded ? "0px 0px 0px 20px" : "20px",
+            borderRadius: folded ? "20px 0px 0px 0px" : "20px",
             transform: away ? "translateY(160px)" : undefined,
             opacity: away ? 0 : 1,
           }}
@@ -517,20 +517,20 @@ export function MobileTabBar({
           />
         </Link>
 
-        {/* The + menu. Folded, it drops from the top-right corner; expanded, it rises above the + square. */}
+        {/* The + menu. Folded, it rises from the bottom-right corner; expanded, it rises above the + square. */}
         <AnimatePresence>
           {menuOpen ? (
             <motion.div
               key="menu"
               role="menu"
               aria-label="Compose and more"
-              initial={reduce ? false : { opacity: 0, scale: 0.92, y: folded ? -8 : 8 }}
+              initial={reduce ? false : { opacity: 0, scale: 0.92, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: folded ? -8 : 8 }}
+              exit={{ opacity: 0, scale: 0.94, y: 8 }}
               transition={spring}
               style={
                 folded
-                  ? { top: `calc(${FOLD_TOP} + ${BAR + 8}px)`, right: 12, transformOrigin: "top right" }
+                  ? { bottom: `calc(env(safe-area-inset-bottom, 0px) + ${BAR + 8}px)`, right: 12, transformOrigin: "bottom right" }
                   : { bottom: `calc(${DOCK_BOTTOM} + ${BAR + 8}px)`, right: 16, transformOrigin: "bottom right" }
               }
               className="pointer-events-auto absolute w-[220px] rounded-[22px] bg-white p-1.5 text-black shadow-[0_18px_40px_-14px_rgba(0,0,0,0.4),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
