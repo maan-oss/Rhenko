@@ -8,6 +8,8 @@ import { Bell, Bookmark, ChartNoAxesColumn, CircleDot, FileText, House, List, Me
 import type { LucideIcon } from "lucide-react"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { MobileDrawer } from "@/components/app/mobile-drawer"
+import { ComposeSheet } from "@/components/app/compose-sheet"
+import type { CircleOption } from "@/components/app/composer"
 import { useLiveCounts } from "@/components/app/live-counts"
 import type { AccountSummary } from "@/lib/auth"
 import { getCallState, getServerCallState, subscribeCall } from "@/lib/call-engine"
@@ -118,11 +120,13 @@ export function MobileTabBar({
   accounts,
   notifications,
   messages,
+  circles,
 }: {
   viewer: AvatarUser & { handle: string; status?: string | null }
   accounts: AccountSummary[]
   notifications: number
   messages: number
+  circles: CircleOption[]
 }) {
   const path = usePathname()
   const router = useRouter()
@@ -135,6 +139,8 @@ export function MobileTabBar({
   const pinned = useSyncExternalStore(subscribePinned, readPinned, () => false)
   const [folded, setFolded] = useState(conversation)
   const [menuOpen, setMenuOpen] = useState(false)
+  // The composer opens as a pop-up over the page, so the + square and the compose menu never leave the page you are on.
+  const [composing, setComposing] = useState(false)
   // Holding a section or the folded square opens a menu above the dock: every page, and a Pin button at its foot.
   const [holdMenu, setHoldMenu] = useState(false)
   // Each open or close turns the + square one more full turn, so it always spins forward.
@@ -384,17 +390,18 @@ export function MobileTabBar({
     plusHold.current = undefined
   }
 
+  // A tap on the + square opens the composer as a pop-up on this page. With the menu open, the + square closes the menu.
   function tapPlus(event: ReactMouseEvent<HTMLAnchorElement>) {
+    event.preventDefault()
     if (plusSkip.current) {
       plusSkip.current = false
-      event.preventDefault()
       return
     }
-    // With the menu open, the + square closes it rather than writing a post.
     if (menuOpen) {
-      event.preventDefault()
       toggleMenu(false)
+      return
     }
+    setComposing(true)
   }
 
   const expandedTop = `calc(100% - ${BAR}px - ${DOCK_BOTTOM})`
@@ -643,7 +650,13 @@ export function MobileTabBar({
                   key={href}
                   href={href}
                   role="menuitem"
-                  onClick={() => toggleMenu(false)}
+                  onClick={(event) => {
+                    toggleMenu(false)
+                    if (href === "/#compose") {
+                      event.preventDefault()
+                      setComposing(true)
+                    }
+                  }}
                   className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
                 >
                   <Icon className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
@@ -663,6 +676,7 @@ export function MobileTabBar({
         notifications={unreadNotifications}
         messages={unreadMessages}
       />
+      <ComposeSheet open={composing} onClose={() => setComposing(false)} viewer={viewer} circles={circles} />
     </>
   )
 }

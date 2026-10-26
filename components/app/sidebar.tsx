@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { getViewer, listAccounts } from "@/lib/auth"
+import { circlesFor } from "@/lib/circles"
 import { recentSearches, unreadMessageCount, unreadNotificationCount } from "@/lib/data"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
 import { MobileTabBar } from "@/components/app/nav"
@@ -33,12 +34,14 @@ export async function MobileNav() {
   const viewer = await getViewer()
   if (!viewer) return null
   const accounts = await listAccounts()
+  const circles = (await circlesFor(viewer.id)).map((circle) => ({ id: circle.id, name: circle.name }))
   return (
     <MobileTabBar
       viewer={viewer}
       accounts={accounts}
       notifications={await unreadNotificationCount(viewer.id)}
       messages={await unreadMessageCount(viewer.id)}
+      circles={circles}
     />
   )
 }

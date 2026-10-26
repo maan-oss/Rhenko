@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, MessageSquarePlus, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
+import { motion, useReducedMotion } from "motion/react"
 import { createPost, undoPost, type CreateResult } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
@@ -41,7 +42,7 @@ import { cn } from "@/lib/utils"
 // Post sends now, Schedule waits for a time, and Save draft keeps it for later.
 // A reply takes its reply setting from the post it answers, so a reply has no "Who can reply" choice, no schedule and no draft.
 
-type CircleOption = { id: string; name: string }
+export type CircleOption = { id: string; name: string }
 
 type ComposerProps = {
   viewer: AvatarUser
@@ -54,6 +55,8 @@ type ComposerProps = {
   placeholder: string
   id?: string
   compact?: boolean
+  // A pop-up sheet fills its height, so the tools sit at its foot.
+  fill?: boolean
   autoFocus?: boolean
   onPosted?: () => void
 }
@@ -151,9 +154,6 @@ const POLL_DEFAULT_MINUTES = 1440
 // Pills carry their own surface (glass, or metal when active), so the base has no colour or ring.
 const PILL =
   "tap-44 inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
-// The "Made with AI" label sits under the text as a quieter chip than the pills beside it.
-const CHIP =
-  "tap-44 inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring"
 const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline-none transition-colors focus:border-foreground sm:h-9"
 // The emoji list is a component of its own, so its phone sizes are set from here: 40px buttons, and an emoji list that
 // opens from the toolbar's left edge so it stays on the screen.
@@ -162,6 +162,12 @@ const EMOJI_PHONE =
 // The emoji list opens upward. Near the top of the page there is no room above the toolbar, so it opens downward.
 const EMOJI_BELOW = "[&_[role=dialog]]:top-11 [&_[role=dialog]]:bottom-auto"
 const EMOJI_LIST_HEIGHT = 300
+// The tools start under the plus and slide out from it. The plus is the avatar's width, and each tool takes one slot of TOOL_SLOT.
+const TOOL_LEFT = 40
+const TOOL_SLOT = 36
+const TOOL_SPRING = { type: "spring", stiffness: 420, damping: 34 } as const
+const TOOL_EASE = [0.22, 1, 0.36, 1] as const
+const INSTANT = { duration: 0 } as const
 
 function pad(value: number): string {
   return String(value).padStart(2, "0")
@@ -569,7 +575,7 @@ async function submitPost(form: FormData): Promise<CreateResult> {
   }
 }
 
-export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeholder, id, compact = false, autoFocus = false, onPosted }: ComposerProps) {
+export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeholder, id, compact = false, fill = false, autoFocus = false, onPosted }: ComposerProps) {
   const router = useRouter()
   const [text, setText] = useState("")
   const [circleChoice, setCircleChoice] = useState("")
@@ -587,7 +593,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [pollMinutes, setPollMinutes] = useState<number>(POLL_DEFAULT_MINUTES)
   const [replySetting, setReplySetting] = useState<ReplySetting>("everyone")
   const [sensitive, setSensitive] = useState(false)
-  const [madeWithAi, setMadeWithAi] = useState(false)
+  // The tools toggle: the plus opens them, and the other tools come out from behind it.
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const toolsId = useId()
+  const reduce = useReducedMotion()
   const [scheduling, setScheduling] = useState(false)
   const [schedule, setSchedule] = useState<Schedule>({ date: "", time: "09:00", min: "", max: "" })
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -857,7 +866,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     if (inCircle && !replyToId) body.set("circle", inCircle)
     if (!isReply) body.set("replySetting", replySetting)
     if (media.length > 0 && sensitive) body.set("sensitive", "on")
-    if (madeWithAi) body.set("madeWithAi", "on")
     if (draft) body.set("draft", "on")
     else if (at !== null) body.set("scheduleAt", String(at))
     return body
@@ -873,7 +881,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     setArticle(false)
     setTitle("")
     setSensitive(false)
-    setMadeWithAi(false)
     setReplySetting("everyone")
     setScheduling(false)
     setExtra([])
@@ -995,6 +1002,94 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   // a post can be as long as the limit allows, and going over it stops the post with a clear message.
   const showReplyPicker = !isReply
 
+  // The tools that come out from behind the plus. Each keeps the rule it always had for when it is shown or disabled.
+  const toolItems: { key: string; node: ReactNode }[] = [
+    {
+      key: "media",
+      node: (
+        <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
+          <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        </ToolButton>
+      ),
+    },
+    {
+      key: "poll",
+      node: (
+        <ToolButton
+          label={poll ? "Remove poll" : "Add a poll"}
+          hint="Remove the photos or video to add a poll"
+          disabled={media.length > 0 || article}
+          pressed={poll}
+          onClick={() => setPoll((value) => !value)}
+        >
+          <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        </ToolButton>
+      ),
+    },
+  ]
+  if (!isReply && !quoteOfId && !threading && !poll && !scheduling) {
+    toolItems.push({
+      key: "article",
+      node: (
+        <ToolButton
+          label={article ? "Turn off article" : "Write an article"}
+          hint="Articles can't have polls, threads, replies or quotes"
+          pressed={article}
+          onClick={() => {
+            setArticle((value) => !value)
+            setTitle("")
+          }}
+        >
+          <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        </ToolButton>
+      ),
+    })
+  }
+  if (!isReply) {
+    toolItems.push({
+      key: "thread",
+      node: (
+        <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
+          <MessageSquarePlus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        </ToolButton>
+      ),
+    })
+  }
+  toolItems.push({
+    key: "emoji",
+    node: (
+      <span className="contents" onClickCapture={placeEmojiList}>
+        <EmojiPicker onPick={insertEmoji} className={cn(EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
+      </span>
+    ),
+  })
+  if (!isReply && !threading) {
+    toolItems.push({
+      key: "schedule",
+      node: (
+        <ToolButton label="Schedule this post" pressed={scheduling} onClick={toggleScheduling}>
+          <CalendarClock className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        </ToolButton>
+      ),
+    })
+  }
+  // Every tool starts under the plus, hidden, and slides out one after another. Closing runs the same way back.
+  const toolCount = toolItems.length
+  const tray = {
+    open: (index: number) => ({
+      opacity: 1,
+      scale: 1,
+      x: 0,
+      transition: reduce ? INSTANT : { ...TOOL_SPRING, delay: index * 0.035 },
+    }),
+    closed: (index: number) => ({
+      opacity: 0,
+      scale: 0.6,
+      x: -(TOOL_LEFT + index * TOOL_SLOT),
+      transition: reduce ? INSTANT : { duration: 0.18, ease: TOOL_EASE, delay: (toolCount - 1 - index) * 0.02 },
+    }),
+  }
+
   return (
     <>
       <form
@@ -1004,9 +1099,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           send(false)
         }}
         aria-busy={pending}
-        className={cn("flex gap-3", compact ? "" : "border-b border-border px-4 pt-3 pb-3 sm:px-5")}
+        className={cn("flex flex-col", compact ? "" : "border-b border-border px-4 pt-3 pb-3 sm:px-5", fill && "min-h-full flex-1")}
       >
-        {/* The avatar, the first line of text and the globe share one centre line, 20px down, so the row reads as one. */}
+        {/* The avatar, the first line of text and the globe share one row. The tools below start at the avatar's left edge. */}
+        <div className="flex gap-3">
         <Avatar user={viewer} size={40} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {article ? (
@@ -1019,7 +1115,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
             />
           ) : null}
-          <div className="-mx-2 flex items-start gap-2 rounded-2xl px-2 transition-shadow duration-200 focus-within:shadow-[0_0_0_3px_var(--halo)]">
+          <div className="-mx-2 flex items-start gap-2 px-2">
             <textarea
               data-composer-field
               ref={textareaRef}
@@ -1170,18 +1266,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             </div>
           ) : null}
 
-          {/* Whether the post was made with AI. It is shown as a label on the post. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={madeWithAi}
-              onClick={() => setMadeWithAi((value) => !value)}
-              className={cn(CHIP, madeWithAi ? "metal" : "glass text-foreground hover:bg-foreground/5")}
-            >
-              Made with AI
-            </button>
-          </div>
-
           {scheduling ? (
             <div className="glass flex flex-wrap items-center gap-2 rounded-[22px] p-3 text-sm">
               <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -1282,46 +1366,42 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               {`${-remaining} ${pluralize(-remaining, "character")} over the limit. Shorten the post to share it.`}
             </p>
           ) : null}
-          {/* One line of tools: photos, poll, article, thread, emoji, schedule, save, then Post. The first icon's glyph sits on the text edge. */}
-          <div ref={toolbarRef} className="relative -ml-1.5 flex flex-nowrap items-center gap-0 pt-1 sm:gap-0.5 max-[355px]:flex-wrap max-[355px]:gap-y-1">
-            <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
-              <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-            </ToolButton>
-            <ToolButton
-              label={poll ? "Remove poll" : "Add a poll"}
-              hint="Remove the photos or video to add a poll"
-              disabled={media.length > 0 || article}
-              pressed={poll}
-              onClick={() => setPoll((value) => !value)}
-            >
-              <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-            </ToolButton>
-            {!isReply && !quoteOfId && !threading && !poll && !scheduling ? (
-              <ToolButton
-                label={article ? "Turn off article" : "Write an article"}
-                hint="Articles can't have polls, threads, replies or quotes"
-                pressed={article}
-                onClick={() => {
-                  setArticle((value) => !value)
-                  setTitle("")
-                }}
+          </div>
+        </div>
+        {/* The tools sit under the avatar. The plus is the avatar's width, so the two share one centre line. Opening the tools
+            turns the plus into a cross, and the tools come out from behind it. Save and Post stay on the right. */}
+        <div ref={toolbarRef} className="relative mt-auto flex h-11 items-center">
+          <button
+            type="button"
+            onClick={() => setToolsOpen((open) => !open)}
+            aria-expanded={toolsOpen}
+            aria-controls={toolsId}
+            aria-label={toolsOpen ? "Hide the tools" : "Show the tools"}
+            title={toolsOpen ? "Hide the tools" : "Show the tools"}
+            className={cn(
+              "tap-44 relative z-20 grid size-10 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring",
+              toolsOpen && "bg-foreground/5"
+            )}
+          >
+            <motion.span animate={{ rotate: toolsOpen ? 45 : 0 }} transition={reduce ? INSTANT : TOOL_SPRING} className="grid place-items-center">
+              <Plus className="size-[22px]" strokeWidth={1.9} aria-hidden="true" />
+            </motion.span>
+          </button>
+          <div id={toolsId} className="pointer-events-none absolute inset-y-0 right-0 left-0 flex items-center pl-10">
+            {toolItems.map((tool, index) => (
+              <motion.div
+                key={tool.key}
+                custom={index}
+                variants={tray}
+                initial={false}
+                animate={toolsOpen ? "open" : "closed"}
+                inert={!toolsOpen}
+                className={cn("shrink-0", toolsOpen && "pointer-events-auto")}
               >
-                <FileText className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-              </ToolButton>
-            ) : null}
-            {!isReply ? (
-              <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
-                <Plus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-              </ToolButton>
-            ) : null}
-            <span className="contents" onClickCapture={placeEmojiList}>
-              <EmojiPicker onPick={insertEmoji} className={cn(EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
-            </span>
-            {!isReply && !threading ? (
-              <ToolButton label="Schedule this post" pressed={scheduling} onClick={toggleScheduling}>
-                <CalendarClock className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
-              </ToolButton>
-            ) : null}
+                {tool.node}
+              </motion.div>
+            ))}
+          </div>
             <input
               ref={fileRef}
               type="file"
@@ -1367,7 +1447,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 <span className={iconOnlyPhone ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
               </button>
             </div>
-          </div>
         </div>
       </form>
     {proof.dialog}

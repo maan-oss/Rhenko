@@ -1,13 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { AtSign, Check, Globe, Users, type LucideIcon } from "lucide-react"
-import { BottomSheet } from "@/components/app/bottom-sheet"
 import { REPLY_SETTINGS, type ReplySetting } from "@/lib/rules"
-import { useIsDesktop } from "@/lib/use-media"
 
-const EASE = [0.22, 1, 0.36, 1] as const
+const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
+const INSTANT = { duration: 0 } as const
 
 const OPTIONS: Record<ReplySetting, { title: string; Icon: LucideIcon }> = {
   everyone: { title: "Everyone", Icon: Globe },
@@ -16,11 +15,10 @@ const OPTIONS: Record<ReplySetting, { title: string; Icon: LucideIcon }> = {
 }
 
 // The choices as a list: an icon, the label, and a check on the one in use. Picking a row sets it and closes the list.
-// Rows arrive one after another, so the list opens as a sequence rather than all at once.
 function ReplyList({ value, onPick }: { value: ReplySetting; onPick: (next: ReplySetting) => void }) {
   return (
     <div role="radiogroup" aria-label="Who can reply" className="flex flex-col gap-0.5">
-      {REPLY_SETTINGS.map((option, index) => {
+      {REPLY_SETTINGS.map((option) => {
         const { title, Icon } = OPTIONS[option]
         const selected = option === value
         return (
@@ -29,9 +27,7 @@ function ReplyList({ value, onPick }: { value: ReplySetting; onPick: (next: Repl
             type="button"
             role="radio"
             aria-checked={selected}
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.03 + index * 0.045, duration: 0.26, ease: EASE }}
+            variants={{ hidden: { opacity: 0, scale: 0.94 }, shown: { opacity: 1, scale: 1 } }}
             onClick={() => onPick(option)}
             className="flex items-center gap-3.5 rounded-2xl px-3.5 py-3 text-left transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -45,17 +41,17 @@ function ReplyList({ value, onPick }: { value: ReplySetting; onPick: (next: Repl
   )
 }
 
-// A round icon in the top-right corner of the composer, beside the first line of text, shows who can reply. Tapping it
-// opens the list: on a computer it unfolds from the icon, growing from its top-right corner; on a phone it rises as a
-// sheet titled "Who can reply?".
+// A round icon in the top-right corner of the composer, beside the first line of text, shows who can reply. Tapping it opens
+// a small card anchored to the icon, on a phone and a computer alike. The card grows from the icon's corner, and its rows
+// stack in one after another. Nothing slides up from below.
 export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange: (next: ReplySetting) => void }) {
-  const desktop = useIsDesktop()
+  const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const current = OPTIONS[value]
 
   useEffect(() => {
-    if (!open || !desktop) return
+    if (!open) return
     function onPointer(event: PointerEvent) {
       if (rootRef.current?.contains(event.target as Node)) return
       setOpen(false)
@@ -69,11 +65,16 @@ export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange
       document.removeEventListener("pointerdown", onPointer)
       document.removeEventListener("keydown", onKey)
     }
-  }, [open, desktop])
+  }, [open])
 
   function pick(next: ReplySetting) {
     onChange(next)
     setOpen(false)
+  }
+
+  const card = {
+    hidden: { opacity: 0, scale: 0.92, transition: reduce ? INSTANT : { duration: 0.14 } },
+    shown: { opacity: 1, scale: 1, transition: reduce ? INSTANT : { ...SPRING, staggerChildren: 0.035, delayChildren: 0.03 } },
   }
 
   return (
@@ -90,36 +91,24 @@ export function ReplyPicker({ value, onChange }: { value: ReplySetting; onChange
         <current.Icon className="size-[16px]" strokeWidth={2} aria-hidden="true" />
       </button>
 
-      {desktop ? (
-        <AnimatePresence>
-          {open ? (
-            <motion.div
-              key="card"
-              role="dialog"
-              aria-label="Who can reply"
-              initial={{ opacity: 0, scale: 0.7, y: -8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.85, y: -6 }}
-              transition={{ duration: 0.26, ease: EASE }}
-              style={{ transformOrigin: "top right" }}
-              className="absolute top-full right-0 z-40 mt-2 w-[300px] rounded-[24px] border border-border bg-popover p-2 text-popover-foreground shadow-[0_28px_70px_-20px_rgba(0,0,0,0.45)]"
-            >
-              <p className="px-3.5 pt-2 pb-1.5 text-[13px] font-semibold text-muted-foreground">Who can reply?</p>
-              <ReplyList value={value} onPick={pick} />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      ) : (
-        <BottomSheet open={open} onClose={() => setOpen(false)} label="Who can reply">
-          <div className="px-5 pt-2 pb-3">
-            <h2 className="text-[18px] font-semibold tracking-tight">Who can reply?</h2>
-            <p className="mt-1 text-[14px] text-muted-foreground">Choose who can reply to this post.</p>
-          </div>
-          <div className="px-2">
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            key="card"
+            role="dialog"
+            aria-label="Who can reply"
+            variants={card}
+            initial={reduce ? false : "hidden"}
+            animate="shown"
+            exit="hidden"
+            style={{ transformOrigin: "top right" }}
+            className="absolute top-full right-0 z-40 mt-2 w-[296px] rounded-[24px] border border-border bg-popover p-2 text-popover-foreground shadow-[0_28px_70px_-20px_rgba(0,0,0,0.45)]"
+          >
+            <p className="px-3.5 pt-2 pb-1.5 text-[13px] font-semibold text-muted-foreground">Who can reply?</p>
             <ReplyList value={value} onPick={pick} />
-          </div>
-        </BottomSheet>
-      )}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   )
 }
