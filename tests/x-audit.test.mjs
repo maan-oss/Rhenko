@@ -1,6 +1,8 @@
 // Unit checks for the fixes from the X complaints audit (docs/x-research-mapping.md).
 //   Videos: a cleaned MP4 or MOV has its index (moov) before its picture and sound (mdat), so a phone can start and seek
 //   without fetching the end of the file first (lib/video-metadata.ts). Needs ffmpeg; skipped without it.
+//   Page policy: with Supabase storage, the media route redirects to the project address, so img-src and media-src name it
+//   (lib/csp.ts).
 // Run with: npm run test:unit
 
 import { test, before, after } from "node:test"
@@ -10,6 +12,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { withCleanVideo } from "../lib/video-metadata.ts"
+import { contentSecurityPolicy } from "../lib/csp.ts"
 
 // ── Videos start fast on phones ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -74,4 +77,36 @@ test("a WebM video is still cleaned (the MP4 index option is not passed to it)",
   const source = makeVideo("clip.webm", ["-c:v", "libvpx", "-c:a", "libopus"])
   const out = await cleaned(source, "video/webm")
   assert.ok(out.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])), "the cleaned file is not a WebM")
+})
+
+// ── Media from Supabase storage is allowed by the page policy ───────────────────────────────────────────────────────
+
+function policyOf(env) {
+  const map = new Map()
+  for (const part of contentSecurityPolicy(env).split(";")) {
+    const [name, ...sources] = part.trim().split(/\s+/)
+    map.set(name, sources)
+  }
+  return map
+}
+
+test("with Supabase storage (the default store), photos and videos may load from the project's address", () => {
+  for (const env of [{ SUPABASE_URL: "https://project.supabase.co/" }, { RHENKO_STORAGE: "supabase", SUPABASE_URL: "https://project.supabase.co" }]) {
+    const policy = policyOf(env)
+    assert.ok(policy.get("img-src").includes("https://project.supabase.co"), "img-src leaves out the Supabase project")
+    assert.ok(policy.get("media-src").includes("https://project.supabase.co"), "media-src leaves out the Supabase project")
+  }
+})
+
+test("Supabase is not named when media is kept on this server or in R2", () => {
+  const local = policyOf({ RHENKO_STORAGE: "local", SUPABASE_URL: "https://project.supabase.co" })
+  assert.deepEqual(local.get("media-src"), ["'self'", "blob:"])
+  const r2 = policyOf({ RHENKO_STORAGE: "r2", RHENKO_R2_ENDPOINT: "https://account.r2.example.com", SUPABASE_URL: "https://project.supabase.co" })
+  assert.deepEqual(r2.get("media-src"), ["'self'", "blob:", "https://account.r2.example.com"])
+})
+
+test("a Supabase address that is not a web address is ignored, and no origin is named twice", () => {
+  assert.deepEqual(policyOf({ SUPABASE_URL: "not a url" }).get("media-src"), ["'self'", "blob:"])
+  const same = policyOf({ SUPABASE_URL: "https://store.example.com", RHENKO_R2_ENDPOINT: "https://store.example.com/bucket" })
+  assert.deepEqual(same.get("media-src"), ["'self'", "blob:", "https://store.example.com"])
 })
