@@ -110,7 +110,7 @@ async function directFlow({ phone }) {
     const framing = sender.page.getByRole("dialog", { name: "Frame your photo" })
     await framing.getByRole("button", { name: "Use this", exact: true }).click()
     await framing.waitFor({ state: "detached" })
-    await sender.page.getByAltText("Photo to send").waitFor()
+    await sender.page.getByText("Photo", { exact: true }).first().waitFor()
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
     for (const person of [sender, receiver]) {
       await person.page.locator('main img[alt="Shared photo"]').first().waitFor()

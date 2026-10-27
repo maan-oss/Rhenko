@@ -114,7 +114,7 @@ async function pictureFlow() {
   const framing = sharer.page.getByRole("dialog", { name: "Frame your photo" })
   await framing.getByRole("button", { name: "Use this", exact: true }).click()
   await framing.waitFor({ state: "detached" })
-  await sharer.page.getByAltText("Photo to send").waitFor()
+  await sharer.page.getByText("Photo", { exact: true }).first().waitFor()
   await acted(sharer.page, () => sharer.page.getByRole("button", { name: "Send", exact: true }).click())
 
   // acted() resolves on the first server action after the click, which can be another request, so the photo is waited for
