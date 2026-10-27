@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/app/page-header"
 import { FeedList } from "@/components/app/feed-list"
 import { MediaSwitch, RankingButton } from "@/components/app/explore-controls"
 import { SearchField } from "@/components/app/search-field"
+import { MenuButton } from "@/components/app/menu-button"
 import { TabLinks } from "@/components/app/tabs"
 
 type SearchParams = Promise<{ tab?: string | string[]; sort?: string | string[]; media?: string | string[] }>
@@ -54,8 +55,12 @@ async function ExploreBody({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       {/* The search comes first, as on X. The tabs below it are the header that stays on screen while the page scrolls. */}
-      <SearchField defaultQuery="" />
-      <PageHeader title="Explore" hideTitleOnDesktop>
+      {/* On a phone the sidebar button sits at the start of the search row, the top-left corner, like every other page. */}
+      <div data-top-row className="flex items-center gap-2 px-4 pt-3 pb-3">
+        <MenuButton />
+        <SearchField defaultQuery="" className="min-w-0 flex-1" />
+      </div>
+      <PageHeader title="Explore" hideTitleOnDesktop menu={false}>
         <TabLinks
           label="Explore sections"
           items={[

@@ -39,14 +39,6 @@ async function ConnectBody() {
   return (
     <>
       <PageHeader title="Connect" />
-      <nav aria-label="Connections" className="flex flex-wrap gap-2 border-b border-border px-4 py-4">
-        <Link href="/settings/connections" className={PILL}>
-          Where and languages
-        </Link>
-        <Link href="/transparency#connections" className={PILL}>
-          How it works
-        </Link>
-      </nav>
 
       {groups.length === 0 ? (
         <EmptyState title="Nobody to show yet" body="Add where you are and your languages to find people.">
@@ -89,6 +81,3 @@ async function ConnectBody() {
     </>
   )
 }
-
-const PILL =
-  "tap-44 inline-flex h-9 items-center rounded-full border border-border px-4 text-[14px] font-semibold transition-colors duration-200 hover:border-foreground/30 hover:bg-foreground/5"

@@ -1,11 +1,13 @@
 import Link from "@/components/app/link"
 import type { ReactNode } from "react"
 import { ArrowLeft } from "lucide-react"
+import { MenuButton } from "@/components/app/menu-button"
 import { cn } from "@/lib/utils"
 
 // One compact row. The title says which page you are on. Tabs sit in the same row when
 // given, and anything in children drops below it. A lead (such as an avatar) and a subtitle
-// let a conversation or profile carry its person in the same bar.
+// let a conversation or profile carry its person in the same bar. On a phone, a page with no
+// back arrow puts the sidebar button in the top-left corner, so every top-level page has it.
 export function PageHeader({
   title,
   subtitle,
@@ -17,6 +19,7 @@ export function PageHeader({
   hideTitle = false,
   hideTitleOnDesktop = false,
   hideSubtitleOnPhone = false,
+  menu = true,
   children,
 }: {
   title: string
@@ -25,6 +28,8 @@ export function PageHeader({
   hideSubtitleOnPhone?: boolean
   lead?: ReactNode
   backHref?: string
+  // On a phone, a page with no back arrow shows the sidebar button here. A page that puts it elsewhere (Explore, under its search) turns this off.
+  menu?: boolean
   actions?: ReactNode
   tabs?: ReactNode
   // On a phone the title can give way to something else in the lead (the menu button, for one). It stays for screen readers.
@@ -48,6 +53,8 @@ export function PageHeader({
           >
             <ArrowLeft className="size-5" />
           </Link>
+        ) : menu ? (
+          <MenuButton />
         ) : null}
         {lead}
         <div className={tabs ? "min-w-0 shrink" : "min-w-0 flex-1"}>

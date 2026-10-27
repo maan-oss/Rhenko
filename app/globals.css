@@ -336,18 +336,22 @@ textarea:-webkit-autofill {
   }
 }
 
-/* With the dock folded into the top corners, the page's top bar leaves each corner room for its 56px square, so the title and the
+/* With the dock folded into the top corners, the page's top bar (data-bar-row), and any row above it that a page marks as its
+   top row (data-top-row, such as Explore's search), leave each corner room for its 56px square, so the title, the search and the
    back, menu or action buttons never sit under it. The room eases in as the dock folds. */
 @media (max-width: 1023.98px) {
-  [data-bar-row] {
+  [data-bar-row],
+  [data-top-row] {
     transition: padding-inline 420ms cubic-bezier(0.22, 1, 0.36, 1);
   }
-  html[data-dock-folded="true"] [data-bar-row] {
+  html[data-dock-folded="true"] [data-bar-row],
+  html[data-dock-folded="true"] [data-top-row] {
     padding-inline: 4.5rem;
   }
 }
 @media (max-width: 1023.98px) and (prefers-reduced-motion: reduce) {
-  [data-bar-row] {
+  [data-bar-row],
+  [data-top-row] {
     transition: none;
   }
 }

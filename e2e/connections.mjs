@@ -176,7 +176,7 @@ async function connectionsFlow() {
   })
 
   await check("with language suggestions off, Connect says so and offers no language swaps", async () => {
-    await go(ana.page, "/connect", ana.page.getByRole("link", { name: "Where and languages", exact: true }))
+    await go(ana.page, "/connect", ana.page.getByText("Language suggestions are off.", { exact: true }))
     assert.equal(await gone(ana.page.getByRole("region", { name: SWAPS })), 0, "a language swap is still suggested")
     await ana.page.getByText("Language suggestions are off.", { exact: true }).waitFor()
   })
