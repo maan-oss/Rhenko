@@ -21,6 +21,7 @@ import {
   MAX_IMAGES,
   MAX_MUTED_WORD,
   MAX_FOLDER_NAME,
+  MAX_VIDEO_SECONDS,
   MAX_VIDEOS,
   POST_UNAVAILABLE,
   REPORT_REASONS,
@@ -32,6 +33,7 @@ import {
   validateTitle,
   type ReplySetting,
 } from "@/lib/rules"
+import { parseTrimFields, type Trim } from "@/lib/trim-rules"
 import { saveUpload, type MediaKind } from "@/lib/uploads"
 
 export type CreateResult =
@@ -48,6 +50,8 @@ const POST_WINDOW_MS = 60_000
 const HOUR_MS = 60 * 60_000
 const UPLOAD_LIMIT = 60
 const UPLOAD_WINDOW_MS = 60 * 60_000
+// A trimmed video is decoded and encoded again, which takes a worker for up to a minute or two. A person trims a few an hour.
+const TRIM_LIMIT = 10
 
 function refresh() {
   revalidatePath("/", "layout")
@@ -80,11 +84,21 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const alts = formData.getAll("alt")
   // Stickers come the same way: one entry per picked file, in order. Only a valid set is kept, and only on photos.
   const stickerFields = formData.getAll("stickers")
+  // A video can carry the part to keep, as a start and an end in seconds, one entry per picked file. An empty entry keeps all of it.
+  const trimStarts = formData.getAll("trimStart")
+  const trimEnds = formData.getAll("trimEnd")
   const picked = formData
     .getAll("media")
     .flatMap((value, index) =>
       value instanceof File && value.size > 0
-        ? [{ file: value, alt: String(alts[index] ?? "").trim().slice(0, MAX_ALT), stickers: parseStickerSet(stickerFields[index]) }]
+        ? [
+            {
+              file: value,
+              alt: String(alts[index] ?? "").trim().slice(0, MAX_ALT),
+              stickers: parseStickerSet(stickerFields[index]),
+              trimFields: [trimStarts[index], trimEnds[index]] as const,
+            },
+          ]
         : []
     )
   const wantsPoll = formData.get("poll") === "on"
@@ -107,6 +121,14 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   if (videos > MAX_VIDEOS || (videos > 0 && images > 0)) return { ok: false, error: "Add one video, or up to four images." }
   if (images > MAX_IMAGES) return { ok: false, error: `Add up to ${MAX_IMAGES} images.` }
   if (wantsPoll && picked.length > 0) return { ok: false, error: "Polls can't include media." }
+  // The trim comes from the browser, so its numbers are checked here. The server checks it again against the file's own length.
+  const trims: (Trim | null)[] = []
+  for (const item of picked) {
+    const parsed = parseTrimFields(item.trimFields[0], item.trimFields[1], MAX_VIDEO_SECONDS)
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    if (parsed.trim && !item.file.type.startsWith("video/")) return { ok: false, error: "Only a video can be trimmed." }
+    trims.push(parsed.trim)
+  }
 
   const article = title !== ""
   if (article) {
@@ -177,12 +199,18 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
     }
   }
 
+  for (const trim of trims) {
+    if (!trim) continue
+    const room = await consume(`trim:${viewer.id}`, TRIM_LIMIT, UPLOAD_WINDOW_MS)
+    if (!room.ok) return { ok: false, error: `You've trimmed a lot of videos in the last hour. Try again in ${waitLabel(room.retryAfterSeconds)}.` }
+  }
+
   // From here on, every way out without a post removes the files saved for it.
   const saved: { file: string; kind: MediaKind; alt: string; stickers: string | null }[] = []
   const discard = async () => await removeFiles(saved.map((s) => s.file))
   try {
-    for (const item of picked) {
-      const upload = await saveUpload(item.file)
+    for (const [index, item] of picked.entries()) {
+      const upload = await saveUpload(item.file, "any", trims[index])
       if (!upload) continue
       if (!upload.ok) {
         await discard()
