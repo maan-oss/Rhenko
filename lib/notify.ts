@@ -1,5 +1,5 @@
 import { newId } from "@/lib/auth"
-import { get, run } from "@/lib/db"
+import { all, get, run } from "@/lib/db"
 import { publish } from "@/lib/bus"
 import { canSeePost, type NotificationKind } from "@/lib/data"
 import { mayNotify, NOTICE, type DeliveryFacts } from "@/lib/notify-rules"
@@ -13,6 +13,22 @@ export async function blockedEitherWay(a: string, b: string): Promise<boolean> {
     await get("SELECT 1 AS found FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", a, b, b, a) !==
     undefined
   )
+}
+
+// Of the given people, the ones blocked either way with `userId`. One read however many people there are.
+export async function blockedWithin(userId: string, others: readonly string[]): Promise<Set<string>> {
+  if (others.length === 0) return new Set()
+  const marks = others.map(() => "?").join(",")
+  const rows = await all<{ other: string }>(
+    `SELECT CASE WHEN blocker_id = ? THEN blocked_id ELSE blocker_id END AS other FROM blocks
+     WHERE (blocker_id = ? AND blocked_id IN (${marks})) OR (blocked_id = ? AND blocker_id IN (${marks}))`,
+    userId,
+    userId,
+    ...others,
+    userId,
+    ...others
+  )
+  return new Set(rows.map((row) => row.other))
 }
 
 // What decides whether an event reaches the recipient, in one read: their switch for this kind in settings (on unless they

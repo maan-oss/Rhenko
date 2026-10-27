@@ -15,7 +15,7 @@ import {
 import { CALL_RECONNECT_MS, CALL_RESTART_WAIT_MS, CALL_STALE_MS, GROUP_CALL_MAX } from "@/lib/call-rules"
 import type { CallOutcome } from "@/lib/format"
 import { iceServersFor } from "@/lib/ice"
-import { blockedEitherWay } from "@/lib/notify"
+import { blockedEitherWay, blockedWithin } from "@/lib/notify"
 import { CALL_RING_MS } from "@/lib/rules"
 import { pushCallRing } from "@/lib/push"
 
@@ -612,10 +612,13 @@ async function groupState(call: GroupCall, live: boolean, viewerId: string, quie
   }
 }
 
-// Every accepted member hears who is in the call, so their page can offer to join it.
+// Every accepted member hears who is in the call, so their page can offer to join it. Someone blocked either way with a person in
+// the call hears nothing of it: no join offer and no banner, since the state names everyone who is in it.
 async function broadcastGroup(call: GroupCall, live: boolean): Promise<void> {
+  const people = [...call.participants.keys()]
   for (const member of await acceptedMembers(call.conversationId)) {
-    await relay(member.user_id, call.id, await groupState(call, live, member.user_id, member.muted === 1))
+    const hidden = (await blockedWithin(member.user_id, people)).size > 0
+    await relay(member.user_id, call.id, await groupState(call, live && !hidden, member.user_id, member.muted === 1))
   }
 }
 

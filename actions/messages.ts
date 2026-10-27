@@ -24,7 +24,8 @@ import {
   type AlertLevel,
 } from "@/lib/chat-message-rules"
 import { wallpaperInput } from "@/lib/chat-wallpapers"
-import { blockedEitherWay } from "@/lib/notify"
+import { blockedEitherWay, blockedWithin } from "@/lib/notify"
+import { audienceOf } from "@/lib/chat-audience"
 import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
 import { firstLink, requestPreviews } from "@/lib/link-previews"
 import { pollInput, pollVoteInput } from "@/lib/poll-rules"
@@ -249,9 +250,20 @@ async function insertMessage(
   )
   await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
-  // A new message brings an archived chat back to the chats list for everyone else in it, as WhatsApp does.
-  await run("UPDATE conversation_members SET archived = 0 WHERE conversation_id = ? AND user_id <> ? AND archived = 1", conversationId, senderId)
-  await publish(await memberIds(conversationId), { type: "message", conversationId })
+  // A new message brings an archived chat back to the chats list for everyone else in it, as WhatsApp does. Not for someone blocked
+  // either way with the sender: a chat coming back for them would tell them something was sent.
+  await run(
+    `UPDATE conversation_members SET archived = 0 WHERE conversation_id = ? AND user_id <> ? AND archived = 1
+       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = conversation_members.user_id AND b.blocked_id = ?) OR (b.blocker_id = ? AND b.blocked_id = conversation_members.user_id))`,
+    conversationId,
+    senderId,
+    senderId,
+    senderId
+  )
+  // The realtime signal reaches the sender's own tabs and the members who are not blocked either way with them.
+  const members = await memberIds(conversationId)
+  const audience = audienceOf(members, senderId, await blockedWithin(senderId, members))
+  await publish([senderId, ...audience], { type: "message", conversationId })
 }
 
 // The accepted members of a group whose @handle the message names, other than its sender. A mention reaches them even when they
@@ -288,7 +300,10 @@ async function announceMessage(conversationId: string, senderId: string, preview
     senderId
   )
   const mentioned = conversation.kind === "group" ? await mentionedMembers(conversationId, senderId, body) : new Set<string>()
+  // Nobody blocked either way with the sender hears of the message: no banner, and no mention either.
+  const blocked = await blockedWithin(senderId, members.map((member) => member.user_id))
   for (const member of members) {
+    if (blocked.has(member.user_id)) continue
     const mention = mentioned.has(member.user_id)
     if (!reachesMember(alertLevel(member.muted, member.silenced), mention)) continue
     const requested = member.status === "requested"
@@ -725,8 +740,11 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
     }
   }
 
+  // A direct chat with someone blocked either way can't be used. In a group the sender carries on with everyone else: a blocked pair
+  // simply don't get each other's messages (see audienceOf).
   const others = (await memberIds(conversationId)).filter((id) => id !== viewer.id)
-  if ((await Promise.all(others.map(async (id) => await blockedEitherWay(viewer.id, id)))).some(Boolean)) {
+  const direct = (await get<{ kind: string }>("SELECT kind FROM conversations WHERE id = ?", conversationId))?.kind === "dm"
+  if (direct && (await Promise.all(others.map(async (id) => await blockedEitherWay(viewer.id, id)))).some(Boolean)) {
     return { error: "You can't message someone in this conversation." }
   }
   if (postId && !await sendablePost(postId, viewer.id)) return { error: POST_UNAVAILABLE }
@@ -1474,7 +1492,9 @@ export async function forwardMessage(messageId: string, targets: unknown): Promi
     if ((await memberStatus(conversationId, viewer.id)) !== "accepted") return { ok: false, error: "You can only forward to chats you're in." }
     if (await directConversationClosed(conversationId, viewer.id)) return { ok: false, error: "They can't receive messages here anymore." }
     const others = (await memberIds(conversationId)).filter((memberId) => memberId !== viewer.id)
-    if ((await Promise.all(others.map((memberId) => blockedEitherWay(viewer.id, memberId)))).some(Boolean)) {
+    // Only a direct chat with someone blocked either way is refused. A group gets the copy, and a blocked pair don't see it.
+    const direct = (await get<{ kind: string }>("SELECT kind FROM conversations WHERE id = ?", conversationId))?.kind === "dm"
+    if (direct && (await Promise.all(others.map((memberId) => blockedEitherWay(viewer.id, memberId)))).some(Boolean)) {
       return { ok: false, error: "You can't message someone in one of those chats." }
     }
     if (attachment?.kind === "contact" && !others.includes(attachment.userId)) {
