@@ -80,6 +80,9 @@ function ffmpegArguments(input: string, output: string, container: Container, ma
     "-c", "copy",
     // No ffmpeg version or build date in the output.
     "-fflags", "+bitexact",
+    // MP4 and MOV: the index (the moov box) goes before the picture and sound. ffmpeg otherwise writes it at the end, and a
+    // phone then has to fetch the end of the file before it can show the first frame or seek.
+    ...(container.muxer === "mp4" || container.muxer === "mov" ? ["-movflags", "+faststart"] : []),
     "-fs", String(maxBytes),
     "-f", container.muxer,
     output,
