@@ -24,7 +24,7 @@ export default function MessagesPage({ searchParams }: { searchParams: SearchPar
 async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const requested = firstParam((await searchParams).tab)
-  const tab = requested === "requests" || requested === "archived" ? requested : "messages"
+  const tab = requested === "requests" || requested === "archived" || requested === "favourites" ? requested : "messages"
 
   if (tab === "archived") {
     const archived = await conversationSummaries(viewer.id, "accepted", 60, true)
@@ -44,7 +44,7 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
     )
   }
 
-  const conversations = await conversationSummaries(viewer.id, tab === "requests" ? "requested" : "accepted")
+  const conversations = await conversationSummaries(viewer.id, tab === "requests" ? "requested" : "accepted", 60, false, tab === "favourites")
   const requests = await requestCount(viewer.id)
   const archived = tab === "messages" ? await archivedCount(viewer.id) : 0
 
@@ -73,6 +73,7 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
           label="Messages sections"
           items={[
             { href: "/messages", label: "Chats", active: tab === "messages" },
+            { href: "/messages?tab=favourites", label: "Favourites", active: tab === "favourites" },
             { href: "/messages?tab=requests", label: "Requests", active: tab === "requests", badge: requests },
           ]}
         />
@@ -107,7 +108,9 @@ async function MessagesBody({ searchParams }: { searchParams: SearchParams }) {
         </p>
       ) : null}
       {conversations.length === 0 ? (
-        tab === "requests" ? (
+        tab === "favourites" ? (
+          <EmptyState title="No favourites yet" body="Favourite a chat from the options beside it in your list. It also shows here." />
+        ) : tab === "requests" ? (
           <EmptyState
             title="No message requests"
             body="Messages and group invites from people you don't follow wait here until you accept them."

@@ -1836,6 +1836,8 @@ export type ConversationSummary = {
   // Pinned chats are listed first. Archived chats are listed only under Archived.
   pinned: boolean
   archived: boolean
+  // Favourite chats can be listed together under Favourites. Only this viewer sees the flag.
+  favourite: boolean
 }
 
 type LastMessage = {
@@ -1863,12 +1865,13 @@ async function lastMessageOf(conversationId: string, viewerId: string): Promise<
   return await get<LastMessage>(
     `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change
      FROM chat_messages m
-     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")}
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notClearedFor("m")}
      ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
     conversationId,
     viewerId,
     viewerId,
     Date.now(),
+    viewerId,
     viewerId
   )
 }
@@ -1877,6 +1880,11 @@ async function lastMessageOf(conversationId: string, viewerId: string): Promise<
 // viewer's id once, as its last parameter.
 function notHiddenFrom(alias: string): string {
   return `NOT EXISTS (SELECT 1 FROM chat_hidden_messages hid WHERE hid.message_id = ${alias}.id AND hid.user_id = ?)`
+}
+
+// Clear chat hides a chat's messages sent up to that moment, for the one person who cleared it. Only messages sent after show.
+function notClearedFor(alias: string): string {
+  return `${alias}.created_at > COALESCE((SELECT cc.cleared_at FROM conversation_members cc WHERE cc.conversation_id = ${alias}.conversation_id AND cc.user_id = ?), 0)`
 }
 
 // What the conversation list says about the latest message, from the viewer's side.
@@ -1946,7 +1954,8 @@ export async function conversationSummaries(
   viewerId: string,
   status: "accepted" | "requested",
   limit = 60,
-  archived = false
+  archived = false,
+  favourites = false
 ): Promise<ConversationSummary[]> {
   const rows = await all<{
     id: string
@@ -1957,14 +1966,16 @@ export async function conversationSummaries(
     message_timer: number
     pinned: number
     archived: number
+    favourite: number
   }>(
-    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer, cm.pinned, cm.archived
+    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer, cm.pinned, cm.archived, cm.favourite
      FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
-     WHERE cm.user_id = ? AND cm.status = ? AND cm.archived = ? AND NOT (${DM_BLOCKED})
+     WHERE cm.user_id = ? AND cm.status = ? AND cm.archived = ? AND (? = 0 OR cm.favourite = 1) AND NOT (${DM_BLOCKED})
      ORDER BY cm.pinned DESC, c.updated_at DESC LIMIT ?`,
     viewerId,
     status,
     archived ? 1 : 0,
+    favourites ? 1 : 0,
     viewerId,
     viewerId,
     viewerId,
@@ -2007,6 +2018,7 @@ export async function conversationSummaries(
       messageTimer: row.message_timer,
       pinned: row.pinned === 1,
       archived: row.archived === 1,
+      favourite: row.favourite === 1,
     }
   }))
 }
@@ -2044,7 +2056,8 @@ export async function starredMessages(viewerId: string, limit = 200): Promise<St
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = s.user_id
      JOIN conversations c ON c.id = m.conversation_id
      WHERE s.user_id = ? AND cm.status = 'accepted' AND m.deleted_at IS NULL AND m.call_status IS NULL AND m.timer_change IS NULL
-       AND m.view_once = 0 AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED})
+       AND m.view_once = 0 AND (cm.cleared_at IS NULL OR m.created_at > cm.cleared_at)
+       AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED})
      ORDER BY s.created_at DESC LIMIT ?`,
     viewerId,
     Date.now(),
@@ -2302,8 +2315,8 @@ function messageSelect(conversationId: string, viewerId: string): { select: stri
      JOIN users u ON u.id = m.sender_id
      LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")} AND ${unexpired("rm")}
      LEFT JOIN users ru ON ru.id = rm.sender_id
-     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")}`,
-    params: [viewerId, viewerId, viewerId, now, conversationId, viewerId, viewerId, now, viewerId],
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notClearedFor("m")}`,
+    params: [viewerId, viewerId, viewerId, now, conversationId, viewerId, viewerId, now, viewerId, viewerId],
   }
 }
 
@@ -2394,6 +2407,15 @@ export async function messagesFrom(
     hasNewer,
     hasEarlier: earlier !== undefined,
   }
+}
+
+// The first message the viewer can see that was sent at or after `at` (a time in milliseconds), oldest first, so a date can be
+// jumped to. Null when there is none, and for anyone who may not read the conversation.
+export async function firstMessageFrom(conversationId: string, viewerId: string, at: number): Promise<string | null> {
+  if (!await canReadConversation(conversationId, viewerId)) return null
+  const base = messageSelect(conversationId, viewerId)
+  const row = await get<{ id: string }>(`${base.select} AND m.created_at >= ? ORDER BY m.created_at ASC, m.id ASC LIMIT 1`, ...base.params, at)
+  return row?.id ?? null
 }
 
 // The background this viewer chose for a chat. The default when they chose none.

@@ -82,7 +82,13 @@ export function ConversationRow({ conversation }: { conversation: ConversationSu
       </Link>
       {conversation.status === "accepted" ? (
         <div className="absolute top-1/2 right-2 -translate-y-1/2">
-          <ConversationMenu conversationId={conversation.id} title={title} pinned={conversation.pinned} archived={conversation.archived} />
+          <ConversationMenu
+            conversationId={conversation.id}
+            title={title}
+            pinned={conversation.pinned}
+            archived={conversation.archived}
+            favourite={conversation.favourite}
+          />
         </div>
       ) : null}
     </li>

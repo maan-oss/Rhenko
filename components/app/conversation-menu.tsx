@@ -1,23 +1,26 @@
 "use client"
 
 import { useTransition } from "react"
-import { Archive, ArchiveRestore, MoreHorizontal, Pin, PinOff } from "lucide-react"
+import { Archive, ArchiveRestore, MoreHorizontal, Pin, PinOff, Star, StarOff } from "lucide-react"
 import { toast } from "sonner"
-import { toggleConversationArchive, toggleConversationPin } from "@/actions/messages"
+import { toggleConversationArchive, toggleConversationFavourite, toggleConversationPin } from "@/actions/messages"
 import { MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
-// The chat's options from the messages list: pin it to the top, or archive it. It sits beside the row's link, never inside it.
+// The chat's options from the messages list: pin it to the top, make it a favourite, or archive it. It sits beside the row's link,
+// never inside it.
 export function ConversationMenu({
   conversationId,
   title,
   pinned,
   archived,
+  favourite,
 }: {
   conversationId: string
   title: string
   pinned: boolean
   archived: boolean
+  favourite: boolean
 }) {
   const [pending, startTransition] = useTransition()
 
@@ -46,6 +49,18 @@ export function ConversationMenu({
           >
             {pinned ? <PinOff className="size-4" aria-hidden="true" /> : <Pin className="size-4" aria-hidden="true" />}
             {pinned ? "Unpin chat" : "Pin chat"}
+          </DropdownMenuItem>
+        )}
+        {archived ? null : (
+          <DropdownMenuItem
+            className={MENU_ITEM_PHONE}
+            disabled={pending}
+            onClick={() =>
+              run(() => toggleConversationFavourite(conversationId), favourite ? "Removed from favourites." : "Added to favourites.")
+            }
+          >
+            {favourite ? <StarOff className="size-4" aria-hidden="true" /> : <Star className="size-4" aria-hidden="true" />}
+            {favourite ? "Remove from favourites" : "Add to favourites"}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem

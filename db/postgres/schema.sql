@@ -463,6 +463,10 @@ CREATE TABLE conversation_members (
   -- Per person: pinned chats stay at the top of their list, and archived chats move to the Archived list until a new message.
   pinned bigint NOT NULL DEFAULT 0,
   archived bigint NOT NULL DEFAULT 0,
+  -- Clear chat: messages sent up to this time are hidden for this person. NULL until they clear the chat.
+  cleared_at bigint,
+  -- Favourite chats are listed together under Favourites, for this person only.
+  favourite bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (conversation_id, user_id)
 );
 

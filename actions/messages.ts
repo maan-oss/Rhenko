@@ -6,7 +6,7 @@ import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
-import { canReadConversation, canSeePost, conversationSummaries, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
+import { canReadConversation, canSeePost, conversationSummaries, firstMessageFrom, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
 import { PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "@/lib/chat-organize-rules"
 import { editBodyInput, editRefusal, mentionedHandles, searchQueryInput, viewOnceRefusal } from "@/lib/chat-message-rules"
 import { wallpaperInput } from "@/lib/chat-wallpapers"
@@ -1040,6 +1040,88 @@ export async function searchConversation(conversationId: string, text: unknown):
   const slowDown = await tooFast(`search:${viewer.id}`, SEARCH_LIMIT, SEARCH_WINDOW_MS, "You're searching too fast. Wait a moment.")
   if (slowDown) return { ok: false, error: slowDown }
   return { ok: true, hits: await searchChatMessages(id, viewer.id, input.query) }
+}
+
+// Clear chat empties this viewer's copy of a chat: the messages sent so far are hidden for them only, and the rest of the people in
+// the chat keep theirs. Messages sent afterwards show as usual.
+export async function clearChat(conversationId: string): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id || (await memberStatus(id, viewer.id)) !== "accepted") return { ok: false, error: "That conversation doesn't exist." }
+  const now = Date.now()
+  await run("UPDATE conversation_members SET cleared_at = ?, last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, now, id, viewer.id)
+  refresh()
+  return { ok: true }
+}
+
+// The first message in a chat sent on or after a time, so the thread can open at a date. The client sends the start of the day
+// picked, in its own time zone.
+export async function messageOnOrAfter(conversationId: string, at: unknown): Promise<IdResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id || (await memberStatus(id, viewer.id)) !== "accepted") return { ok: false, error: "That conversation doesn't exist." }
+  if (typeof at !== "number" || !Number.isFinite(at) || at <= 0) return { ok: false, error: "Pick a date." }
+  const found = await firstMessageFrom(id, viewer.id, at)
+  return found ? { ok: true, id: found } : { ok: false, error: "No messages on or after that date." }
+}
+
+// Who in the chat has seen one of the viewer's messages. Someone has seen it when they last read the chat at or after it was
+// sent. The app keeps only the last time each person read, so no time is shown for a read.
+export type MessageInfoPerson = { id: string; name: string; handle: string; avatarFile: string | null; seen: boolean }
+export type MessageInfoResult = { ok: true; sentAt: number; people: MessageInfoPerson[] } | { ok: false; error: string }
+
+export async function messageInfo(messageId: string): Promise<MessageInfoResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = id
+    ? await get<{
+        conversation_id: string
+        sender_id: string
+        created_at: number
+        deleted_at: number | null
+        call_status: string | null
+        timer_change: number | null
+      }>(
+        "SELECT conversation_id, sender_id, created_at, deleted_at, call_status, timer_change FROM chat_messages WHERE id = ?",
+        id
+      )
+    : undefined
+  if (!message || message.sender_id !== viewer.id || (await memberStatus(message.conversation_id, viewer.id)) !== "accepted") {
+    return { ok: false, error: "That message can't be found." }
+  }
+  if (message.deleted_at !== null) return { ok: false, error: "That message was deleted." }
+  if (message.call_status !== null || message.timer_change !== null) return { ok: false, error: "There's nothing to show for this message." }
+  const rows = await all<{ user_id: string; last_read_at: number }>(
+    "SELECT user_id, last_read_at FROM conversation_members WHERE conversation_id = ? AND status = 'accepted' AND user_id <> ? ORDER BY joined_at ASC, user_id ASC",
+    message.conversation_id,
+    viewer.id
+  )
+  const people = await loadMiniUsers(rows.map((row) => row.user_id))
+  const list: MessageInfoPerson[] = []
+  for (const row of rows) {
+    const person = people.get(row.user_id)
+    if (!person) continue
+    list.push({ id: person.id, name: person.name, handle: person.handle, avatarFile: person.avatarFile, seen: row.last_read_at >= message.created_at })
+  }
+  return { ok: true, sentAt: message.created_at, people: list }
+}
+
+// Favourites are a list of their own, for this person. Only they see the flag.
+export async function toggleConversationFavourite(conversationId: string): Promise<VoidResult & { favourite?: boolean }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const member = id
+    ? await get<{ status: string; favourite: number }>("SELECT status, favourite FROM conversation_members WHERE conversation_id = ? AND user_id = ?", id, viewer.id)
+    : undefined
+  if (!id || !member || member.status !== "accepted") return { ok: false, error: "That conversation doesn't exist." }
+  const favourite = member.favourite === 1 ? 0 : 1
+  await run("UPDATE conversation_members SET favourite = ? WHERE conversation_id = ? AND user_id = ?", favourite, id, viewer.id)
+  refresh()
+  return { ok: true, favourite: favourite === 1 }
 }
 
 // Muting a conversation keeps its messages but stops them from counting as unread.

@@ -186,6 +186,10 @@ The scripts read the same database as the app, and the server can keep running w
 - View once: switch on "View once" before sending a photo or video. Each other person in the chat can open it once, and it then shows "Opened". The sender always sees it. It can't be starred, forwarded or sent as a scan.
 - Chat wallpaper: choose Default, Dusk, Paper, Mist or Ink from the chat's ⋯ menu. Only you see it, and the other people in the chat keep theirs.
 - Delete for me removes a message from your own view only. Everyone else keeps it.
+- Clear chat, from the header's ⋯ menu, empties your copy of the chat: the messages sent so far disappear for you only, and new messages still show. The chat's list preview goes with them.
+- Jump to a date, from the header's ⋯ menu, opens the chat at the first message sent on or after the day picked. A date with nothing after it says so.
+- Message info, from the ⋯ menu on your own message, lists who in the chat has seen it. It shows whether each person has seen it, not when.
+- Favourite a chat from its ⋯ menu in the chats list. Favourites have a tab of their own, and a favourite stays in the chats list too.
 - Voice calls. Start a call from a conversation's header, one to one or with a group. The others get a ring, and a Join banner reaches anyone who opens the app during the call. Anyone can mute their own microphone, leave, or come back. A call with no one left ends, and the conversation keeps a record of it. A group call holds up to six people. Members who muted the conversation are not rung. Calls need the microphone, and a secure page.
 - Video calls, one to one. The video button sits beside the call button. The person called sees "Incoming video call" and answers with their camera, or without one if the camera is refused. Camera off hides this side's picture and keeps the call going. Group calls are voice only.
 - Group info shows the members. Any member can rename the group. Only the person who made it can remove someone, and every member can leave.

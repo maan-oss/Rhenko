@@ -87,3 +87,17 @@ export function mentionedHandles(body: string): string[] {
   for (const match of body.matchAll(MENTION_WORD)) found.add(match[1].toLowerCase())
   return [...found]
 }
+
+// The start of a day picked in a date field ("2026-10-27"), in the time zone of the device that picked it. Null for anything that
+// isn't a real date, such as February 30.
+export function dayStartOf(value: unknown): number | null {
+  if (typeof value !== "string") return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  return date.getTime()
+}

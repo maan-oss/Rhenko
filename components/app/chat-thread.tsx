@@ -2,11 +2,12 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { Eye, EyeOff, Forward, MoreHorizontal, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
+import { Eye, EyeOff, Forward, Info, MoreHorizontal, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, toggleReaction, toggleStarMessage } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { ForwardDialog } from "@/components/app/forward-dialog"
+import { MessageInfoDialog } from "@/components/app/message-info-dialog"
 import { MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { removePending, usePending } from "@/components/app/pending-messages"
@@ -442,6 +443,7 @@ function MessageRow({
   const [revealed, setRevealed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   // A view-once photo or video this viewer has opened in this visit. Until they leave, it stays on screen.
@@ -715,6 +717,12 @@ function MessageRow({
                     Forward
                   </DropdownMenuItem>
                 )}
+                {message.mine && !message.call && message.timerChange === null ? (
+                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setInfoOpen(true)}>
+                    <Info className="size-4" aria-hidden="true" />
+                    Message info
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={deleteForMe}>
                   <EyeOff className="size-4" aria-hidden="true" />
                   Delete for me
@@ -783,6 +791,7 @@ function MessageRow({
         </p>
       ) : null}
       {forwardOpen ? <ForwardDialog messageId={message.id} onOpenChange={setForwardOpen} /> : null}
+      {infoOpen ? <MessageInfoDialog messageId={message.id} onOpenChange={setInfoOpen} /> : null}
     </div>
   )
 }

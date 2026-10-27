@@ -4,7 +4,7 @@
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { EDIT_WINDOW_MS, editBodyInput, editRefusal, mentionedHandles, searchQueryInput, snippetAround, viewOnceRefusal } from "../lib/chat-message-rules.ts"
+import { EDIT_WINDOW_MS, dayStartOf, editBodyInput, editRefusal, mentionedHandles, searchQueryInput, snippetAround, viewOnceRefusal } from "../lib/chat-message-rules.ts"
 import { WALLPAPERS, wallpaperInput, wallpaperOf } from "../lib/chat-wallpapers.ts"
 
 const SENT = 1_000_000
@@ -102,4 +102,13 @@ test("a mention is an @handle that starts a word: lowercased, once, and never in
   assert.deepEqual(mentionedHandles("mail a@maan.com"), [])
   assert.deepEqual(mentionedHandles("see https://rhenko.app/@maan_1"), [])
   assert.deepEqual(mentionedHandles("no one named here"), [])
+})
+
+test("a picked date is the start of that day on this device, and an impossible date is refused", () => {
+  assert.equal(dayStartOf("2026-10-27"), new Date(2026, 9, 27).getTime())
+  assert.equal(dayStartOf("2024-02-29"), new Date(2024, 1, 29).getTime())
+  assert.equal(dayStartOf("2026-02-30"), null)
+  assert.equal(dayStartOf("2026-13-01"), null)
+  assert.equal(dayStartOf("27/10/2026"), null)
+  assert.equal(dayStartOf(20261027), null)
 })
