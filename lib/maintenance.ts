@@ -9,6 +9,7 @@ import { RETENTION } from "@/lib/legal"
 import { purgeHidden } from "@/lib/moderation"
 import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
+import { prunePush } from "@/lib/push"
 import { recordMissingLanguages } from "@/lib/translate"
 import { answerQuestions } from "@/lib/sahayak"
 import { expireMessages } from "@/lib/message-expiry"
@@ -114,6 +115,8 @@ async function keepWithinRetention(now: number): Promise<void> {
   await run("DELETE FROM account_signals WHERE created_at < ?", now - RETENTION.signalsDays * DAY)
   // A human-check puzzle is only useful until it expires; a day later it is removed.
   await run("DELETE FROM proof_challenges WHERE expires_at < ?", now - DAY)
+  // Pushed events are remembered for 30 days so none is pushed twice, and a device signed out for 90 days is removed.
+  await prunePush(now)
 }
 
 // Tells everyone who voted in a poll that it has ended, once.
