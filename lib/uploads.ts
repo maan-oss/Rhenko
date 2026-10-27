@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VOICE_BYTES } from "@/lib/rules"
 import { stripImageMetadata } from "@/lib/image-metadata"
 import { objectSize, readObject, removeObjects, storeObject } from "@/lib/storage"
+import { VideoRefused, withCleanVideo } from "@/lib/video-metadata"
 
 // Upload rules and picture copies. The bytes live in storage (lib/storage.ts). Each file gets a random name, and a viewer
 // is sent a link to it only after the media route has checked that they may see it.
@@ -91,12 +92,11 @@ export async function saveUpload(
     }
   }
 
-  let body: Blob | Uint8Array
+  let body: Uint8Array | null = null
   if (format.kind === "video") {
-    // A video is checked from its first bytes and streamed up from the request, so a long clip is never held in memory.
+    // A video is checked from its first bytes. It is cleaned and stored below, from disk, so no second copy of it is held in memory.
     const head = Buffer.from(await value.slice(0, 16).arrayBuffer())
     if (!matchesSignature(head, type)) return { ok: false, error: "That file is not a valid video." }
-    body = value
   } else {
     let buf: Buffer
     try {
@@ -119,8 +119,13 @@ export async function saveUpload(
 
   const name = `${randomUUID().replace(/-/g, "")}.${format.ext}`
   try {
-    await storeObject(name, body, type)
+    if (body !== null) await storeObject(name, body, type)
+    // A video keeps its picture and sound only. Location, device and time details are removed before anything is stored,
+    // and a video that cannot be cleaned is refused. The original is never kept.
+    else await withCleanVideo(value, type, (clean) => storeObject(name, clean, type))
   } catch (error) {
+    // A video that could not be cleaned was refused before anything reached storage.
+    if (error instanceof VideoRefused) return { ok: false, error: error.message }
     // A write that fails part way leaves nothing behind.
     await removeUpload(name)
     console.error("[uploads] saving a file failed", error)

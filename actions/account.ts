@@ -17,6 +17,7 @@ import {
   readTotpSecret,
   redeemEmailCode,
   replaceRecoveryCodes,
+  requireAgreedViewer,
   runChanges,
   secondFactorState,
   verifyPassword,
@@ -83,8 +84,7 @@ async function confirmIdentity(userId: string, formData: FormData, needs: { code
 }
 
 export async function changePassword(_prev: AccountState, formData: FormData): Promise<AccountState> {
-  const viewer = await getViewer()
-  if (!viewer) return { error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const current = String(formData.get("current") ?? "")
   const next = String(formData.get("next") ?? "")
   const limited = await identityLimit(viewer.id)
@@ -105,8 +105,7 @@ export async function changePassword(_prev: AccountState, formData: FormData): P
 }
 
 export async function revokeSession(tokenHash: string): Promise<VoidResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   if (typeof tokenHash !== "string" || !/^[a-f0-9]{64}$/.test(tokenHash)) {
     return { ok: false, error: "That device isn't in the list any more. Reload the page." }
   }
@@ -118,8 +117,7 @@ export async function revokeSession(tokenHash: string): Promise<VoidResult> {
 }
 
 export async function revokeOtherSessions(): Promise<VoidResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const keep = await currentSessionHash()
   await run("DELETE FROM sessions WHERE user_id = ? AND token_hash IS DISTINCT FROM ?", viewer.id, keep)
   refresh()
@@ -128,8 +126,7 @@ export async function revokeOtherSessions(): Promise<VoidResult> {
 
 // Starts two-factor setup. The secret is stored encrypted and stays off until a code checks out.
 export async function beginTotpSetup(): Promise<SetupResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   if (viewer.totpEnabled) return { ok: false, error: "Two-factor sign-in is already on." }
   const secret = generateSecret()
   await run("UPDATE users SET totp_secret = ?, totp_step = 0 WHERE id = ? AND totp_enabled = 0", encryptText(secret), viewer.id)
@@ -139,8 +136,7 @@ export async function beginTotpSetup(): Promise<SetupResult> {
 }
 
 export async function enableTotp(_prev: AccountState, formData: FormData): Promise<CodesResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const row = await get<{ totp_secret: string | null; totp_enabled: number }>(
     "SELECT totp_secret, totp_enabled FROM users WHERE id = ?",
     viewer.id
@@ -174,8 +170,7 @@ export async function enableTotp(_prev: AccountState, formData: FormData): Promi
 }
 
 export async function disableTotp(_prev: AccountState, formData: FormData): Promise<AccountState> {
-  const viewer = await getViewer()
-  if (!viewer) return { error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const state = await secondFactorState(viewer.id)
   if (!state.enabled) return { error: "Two-factor sign-in is already off." }
   // When the server can't read the authenticator key and no recovery codes are left, there is no code anyone could
@@ -192,8 +187,7 @@ export async function disableTotp(_prev: AccountState, formData: FormData): Prom
 }
 
 export async function regenerateRecoveryCodes(_prev: AccountState, formData: FormData): Promise<CodesResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const state = await secondFactorState(viewer.id)
   if (!state.enabled) return { ok: false, error: "Turn on two-factor sign-in first." }
   if (!state.usable && state.recoveryLeft === 0) {
@@ -252,8 +246,7 @@ function verifyMail(handle: string, code: string): string {
 // two-factor code while that is on; confirming the address already on the account, or sending a fresh code to an
 // address waiting for one, doesn't. One code a minute per account, and five emails an hour to one address.
 export async function sendEmailCode(_prev: EmailState, formData: FormData): Promise<EmailState> {
-  const viewer = await getViewer()
-  if (!viewer) return { error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   if (!emailReady()) return { error: "Email isn't set up on this server, so codes can't be sent." }
   const email = cleanEmail(String(formData.get("email") ?? ""))
   const problem = emailProblem(email)
@@ -300,8 +293,7 @@ export async function sendEmailCode(_prev: EmailState, formData: FormData): Prom
 
 // Confirms the emailed code. The address it went to becomes the account's verified email.
 export async function confirmEmail(_prev: EmailState, formData: FormData): Promise<EmailState> {
-  const viewer = await getViewer()
-  if (!viewer) return { error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   let result: RedeemResult<string>
   try {
     result = await redeemEmailCode(viewer.id, "verify", String(formData.get("code") ?? ""), async (target) => {
@@ -329,16 +321,14 @@ export async function confirmEmail(_prev: EmailState, formData: FormData): Promi
 
 // Drops a code that is waiting, so a different address can be entered.
 export async function cancelEmailCode(): Promise<VoidResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   await withdrawEmailCodes(viewer.id, "verify")
   refresh()
   return { ok: true }
 }
 
 export async function removeEmail(_prev: EmailState, formData: FormData): Promise<EmailState> {
-  const viewer = await getViewer()
-  if (!viewer) return { error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const current = await get<{ email: string | null }>("SELECT email FROM users WHERE id = ?", viewer.id)
   if (!current?.email) return { error: "There's no email on your account to remove." }
   const denied = await confirmIdentity(viewer.id, formData)
@@ -351,6 +341,8 @@ export async function removeEmail(_prev: EmailState, formData: FormData): Promis
   return { ok: true, email: null, verified: false }
 }
 
+// Deactivating and deleting stay open to an account that has not agreed to the current Terms (getViewer, not
+// requireAgreedViewer): leaving, and taking your data off the service, must not depend on accepting new terms.
 export async function deactivateAccount(_prev: AccountState, formData: FormData): Promise<AccountState> {
   const viewer = await getViewer()
   if (!viewer) return { error: "Sign in first." }

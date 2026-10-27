@@ -1,6 +1,6 @@
 "use server"
 
-import { getViewer } from "@/lib/auth"
+import { getAgreedViewer } from "@/lib/auth"
 import { notificationsPage, type NotificationView } from "@/lib/data"
 import { isNotificationTab, NOTIFICATION_PAGE_SIZE } from "@/lib/rules"
 
@@ -9,7 +9,7 @@ export type MoreNotifications = { ok: true; items: NotificationView[]; next: num
 // The next page of notifications for "Show more": the ones older than `before`, which is the `next` of the page
 // already on screen.
 export async function loadMoreNotifications(tab: string, before: number): Promise<MoreNotifications> {
-  const viewer = await getViewer()
+  const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to see your notifications." }
   if (!isNotificationTab(tab)) return { ok: false, error: "Open All, Mentions or Priority, then try again." }
   if (typeof before !== "number" || !Number.isFinite(before) || before <= 0) {
