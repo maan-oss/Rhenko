@@ -5,10 +5,11 @@ decoration. There is no second colour anywhere, and no indigo, blue or purple ti
 
 ## Identity
 
-- Ink is `#0b0b0b` in dark mode and `#fafafa` on paper in light mode. Neutrals stay neutral. Gradients are not used as
-  decoration.
-- The accent is the ink itself. The verified mark, on-switches and the reader's own messages are black in light mode and
-  white in dark mode. Focus is a soft neutral halo, never a coloured or dark outline.
+- Two themes only. Light is cream paper, `#f6f3ec`, with warm ink `#1f1d19`. Dark is charcoal, `#212121`, with soft white ink
+  `#ececec`, the palette of ChatGPT's dark theme. Gradients are not used as decoration.
+- The accent is the ink itself. The verified mark, on-switches, likes and the reader's own messages take the ink: warm black in
+  light mode and soft white in dark mode. Red is kept for destructive actions only. Focus is a soft ink halo, never a coloured or
+  dark outline.
 - Sora is the only typeface. Body text is 400 and 600. Display headings are 600 with slightly tight tracking. No second
   family and no italic accent words.
 - Depth comes from three surface levels (ground, raised, overlay), a one-pixel inner highlight on raised surfaces, and

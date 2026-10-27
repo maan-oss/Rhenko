@@ -106,7 +106,7 @@ function Burst() {
         return (
           <motion.span
             key={degrees}
-            className="absolute top-1/2 left-1/2 size-1 rounded-full bg-destructive"
+            className="absolute top-1/2 left-1/2 size-1 rounded-full bg-foreground"
             style={{ marginTop: -2, marginLeft: -2 }}
             initial={{ x: 0, y: 0, opacity: 1, scale: 0.4 }}
             animate={{ x: Math.cos(radians) * SPREAD, y: Math.sin(radians) * SPREAD, opacity: 0, scale: 1.2 }}
@@ -132,7 +132,7 @@ function HeartIcon({ active, likes, reduce }: { active: boolean; likes: number; 
         <Heart size={18} strokeWidth={2} aria-hidden="true" />
       </motion.span>
       <motion.span
-        className="text-destructive [grid-area:1/1]"
+        className="text-foreground [grid-area:1/1]"
         initial={false}
         animate={active ? { scale: [0.2, 1.3, 1], opacity: 1 } : { scale: 0.2, opacity: 0 }}
         transition={reduce ? instant : POP}
@@ -451,7 +451,7 @@ export function PostActions(props: Props) {
           onClick={onLike}
           aria-pressed={likeState.active}
           aria-label={likeState.active ? `Unlike, ${likeState.count} ${pluralize(likeState.count, "like")}` : `Like, ${likeState.count} ${pluralize(likeState.count, "like")}`}
-          className={cn(BUTTON, "relative z-10", likeState.active && "text-destructive hover:text-destructive")}
+          className={cn(BUTTON, "relative z-10", likeState.active && "text-foreground hover:text-foreground")}
         >
           <HeartIcon active={likeState.active} likes={likeBursts} reduce={instant} />
           <Count value={likeState.count} />

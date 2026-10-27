@@ -52,55 +52,55 @@
 
 /* Light: black and white. Ink is pure black, the page is a near-white, and nothing is tinted. There is no second colour. */
 :root {
-  --background: #fafafa;
+  --background: #f6f3ec;
   /* The flat ground of the landing backdrop, drawn in CSS so the server's markup and the client agree on every theme. */
-  --grain-back: #fafafa;
+  --grain-back: #f6f3ec;
   --grain-glow: #2a2a2a40;
-  --foreground: #0a0a0a;
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --foreground: #1f1d19;
+  --card: #fbf9f4;
+  --card-foreground: #1f1d19;
   /* The one-pixel light edge along the top of a raised surface. */
   --raised-edge: rgb(255 255 255 / 0.9);
-  --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
-  --primary: #0a0a0a;
-  --primary-foreground: #fafafa;
-  --secondary: #f0f0f0;
-  --secondary-foreground: #0a0a0a;
-  --muted: #f0f0f0;
-  --muted-foreground: #5f5f5f;
-  --accent: #f0f0f0;
-  --accent-foreground: #0a0a0a;
+  --popover: #fbf9f4;
+  --popover-foreground: #1f1d19;
+  --primary: #1f1d19;
+  --primary-foreground: #f6f3ec;
+  --secondary: #ebe6da;
+  --secondary-foreground: #1f1d19;
+  --muted: #ebe6da;
+  --muted-foreground: #6d675b;
+  --accent: #ebe6da;
+  --accent-foreground: #1f1d19;
   --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: #e5e5e5;
-  --input: #d4d4d4;
+  --border: #ddd7c9;
+  --input: #cdc6b5;
   /* Focus rings and checked controls are ink, so a tap or a click never flashes a second colour. */
   --ring: var(--foreground);
   /* The accent is the ink itself: the verified check, the reader's own messages and on-switches are black. */
   --dusk: var(--foreground);
   /* Focus halo: a soft ring of the ink, never a dark or coloured outline. */
-  --halo: rgb(10 10 10 / 0.2);
-  --chart-1: #0a0a0a;
-  --chart-2: #5f5f5f;
-  --chart-3: #8a8a8a;
-  --chart-4: #b8b8b8;
-  --chart-5: #e0e0e0;
+  --halo: rgb(31 29 25 / 0.2);
+  --chart-1: #1f1d19;
+  --chart-2: #6d675b;
+  --chart-3: #9a9486;
+  --chart-4: #cdc6b5;
+  --chart-5: #e6e0d2;
   --radius: 0.75rem;
-  --sidebar: #f3f3f3;
-  --sidebar-foreground: #0a0a0a;
-  --sidebar-primary: #0a0a0a;
-  --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #e8e8e8;
-  --sidebar-accent-foreground: #0a0a0a;
-  --sidebar-border: #e5e5e5;
+  --sidebar: #efeadf;
+  --sidebar-foreground: #1f1d19;
+  --sidebar-primary: #1f1d19;
+  --sidebar-primary-foreground: #f6f3ec;
+  --sidebar-accent: #e4ded0;
+  --sidebar-accent-foreground: #1f1d19;
+  --sidebar-border: #ddd7c9;
   --sidebar-ring: var(--foreground);
   /* Glass is white over the page, and metal is black with a bright top edge. */
   --sheen: #ffffff;
   --glass: rgb(255 255 255 / 0.72);
   --glass-edge: rgb(255 255 255 / 0.9);
-  --glass-line: rgb(10 10 10 / 0.08);
-  --glass-shadow: rgb(10 10 10 / 0.16);
+  --glass-line: rgb(31 29 25 / 0.08);
+  --glass-shadow: rgb(31 29 25 / 0.16);
   --metal-top: #2a2a2a;
   --metal-mid: #0a0a0a;
   --metal-bottom: #000000;
@@ -116,55 +116,55 @@
 
 /* Dark: black and white inverted. The page is near-black and ink is near-white. Still no second colour. */
 .dark {
-  --background: #0b0b0b;
-  --grain-back: #0b0b0b;
+  --background: #212121;
+  --grain-back: #212121;
   --grain-glow: #2a2a2a40;
-  --foreground: #f2f2f2;
-  --card: #141414;
-  --card-foreground: #f2f2f2;
+  --foreground: #ececec;
+  --card: #2a2a2a;
+  --card-foreground: #ececec;
   --raised-edge: rgb(255 255 255 / 0.07);
-  --popover: #141414;
-  --popover-foreground: #f2f2f2;
-  --primary: #f2f2f2;
-  --primary-foreground: #0b0b0b;
-  --secondary: #1a1a1a;
-  --secondary-foreground: #f2f2f2;
-  --muted: #1a1a1a;
-  --muted-foreground: #a0a0a0;
-  --accent: #1a1a1a;
-  --accent-foreground: #f2f2f2;
-  --destructive: #ff8a80;
-  --destructive-foreground: #0b0b0b;
-  --border: #262626;
-  --input: #3a3a3a;
+  --popover: #2f2f2f;
+  --popover-foreground: #ececec;
+  --primary: #ececec;
+  --primary-foreground: #212121;
+  --secondary: #2f2f2f;
+  --secondary-foreground: #ececec;
+  --muted: #2a2a2a;
+  --muted-foreground: #a6a6a6;
+  --accent: #2f2f2f;
+  --accent-foreground: #ececec;
+  --destructive: #f87171;
+  --destructive-foreground: #212121;
+  --border: #3a3a3a;
+  --input: #4a4a4a;
   --ring: var(--foreground);
   /* The accent is the ink, as in light. */
   --dusk: var(--foreground);
-  --halo: rgb(242 242 242 / 0.22);
-  --chart-1: #f2f2f2;
-  --chart-2: #a0a0a0;
+  --halo: rgb(236 236 236 / 0.22);
+  --chart-1: #ececec;
+  --chart-2: #a6a6a6;
   --chart-3: #6e6e6e;
   --chart-4: #3a3a3a;
-  --chart-5: #262626;
-  --sidebar: #0f0f0f;
-  --sidebar-foreground: #f2f2f2;
-  --sidebar-primary: #f2f2f2;
-  --sidebar-primary-foreground: #0b0b0b;
-  --sidebar-accent: #1c1c1c;
-  --sidebar-accent-foreground: #f2f2f2;
-  --sidebar-border: #1f1f1f;
+  --chart-5: #2a2a2a;
+  --sidebar: #171717;
+  --sidebar-foreground: #ececec;
+  --sidebar-primary: #ececec;
+  --sidebar-primary-foreground: #212121;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #ececec;
+  --sidebar-border: #2a2a2a;
   --sidebar-ring: var(--foreground);
   /* Metallic glass on black: a lifted tint, a light top edge, and a bright metal button. */
-  --sheen: #161616;
-  --glass: rgb(20 20 20 / 0.72);
+  --sheen: #262626;
+  --glass: rgb(38 38 38 / 0.72);
   --glass-edge: rgb(255 255 255 / 0.1);
   --glass-line: rgb(255 255 255 / 0.08);
   --glass-shadow: rgb(0 0 0 / 0.6);
   --metal-top: #ffffff;
   --metal-mid: #f2f2f2;
   --metal-bottom: #c8c8c8;
-  --metal-text: #0b0b0b;
-  --chrome-fill: #141414;
+  --metal-text: #212121;
+  --chrome-fill: #2a2a2a;
   /* Dark theme is bright chrome: a white sky over a dark horizon and a light ground. */
   --art-top: #f5f5f5;
   --art-mid: #141414;
@@ -333,6 +333,22 @@ textarea:-webkit-autofill {
       animation-timeline: scroll(root block);
       animation-range: 0px 96px;
     }
+  }
+}
+
+/* With the dock folded into the top corners, the page's top bar leaves each corner room for its 56px square, so the title and the
+   back, menu or action buttons never sit under it. The room eases in as the dock folds. */
+@media (max-width: 1023.98px) {
+  [data-bar-row] {
+    transition: padding-inline 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  html[data-dock-folded="true"] [data-bar-row] {
+    padding-inline: 4.5rem;
+  }
+}
+@media (max-width: 1023.98px) and (prefers-reduced-motion: reduce) {
+  [data-bar-row] {
+    transition: none;
   }
 }
 

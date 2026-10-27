@@ -12,8 +12,8 @@ type Theme = "light" | "dark"
 // The preview windows show each theme's real colours whatever theme is active, so they are fixed here
 // rather than read from the page's tokens. They match the palette in app/globals.css.
 const PREVIEW: Record<Theme, { bg: string; panel: string; bar: string; line: string; ink: string; edge: string }> = {
-  light: { bg: "#fafafa", panel: "#ffffff", bar: "#f0f0f0", line: "#d4d4d4", ink: "#0a0a0a", edge: "#e5e5e5" },
-  dark: { bg: "#0b0b0b", panel: "#141414", bar: "#1a1a1a", line: "#3a3a3a", ink: "#f2f2f2", edge: "#262626" },
+  light: { bg: "#f6f3ec", panel: "#fbf9f4", bar: "#ebe6da", line: "#cdc6b5", ink: "#1f1d19", edge: "#ddd7c9" },
+  dark: { bg: "#212121", panel: "#2a2a2a", bar: "#2f2f2f", line: "#4a4a4a", ink: "#ececec", edge: "#3a3a3a" },
 }
 
 const OPTIONS: { value: Theme; label: string }[] = [
@@ -22,7 +22,7 @@ const OPTIONS: { value: Theme; label: string }[] = [
 ]
 
 // The colour the sweep paints in: each theme's page background.
-const BACKDROP: Record<Theme, string> = { light: "#fafafa", dark: "#0b0b0b" }
+const BACKDROP: Record<Theme, string> = { light: "#f6f3ec", dark: "#212121" }
 
 const noopSubscribe = () => () => {}
 
