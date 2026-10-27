@@ -161,12 +161,14 @@ The scripts read the same database as the app, and the server can keep running w
 - The sidebar search is one surface. Clicking or focusing it grows the field into a card of recent searches, which fades in one row after another. The card sits over the nav without pushing it. Typing adds a "Search for" row, arrow down moves into the card, and Escape closes it.
 - Search posts and people with `from:handle`, `to:handle`, `since:YYYY-MM-DD`, `until:YYYY-MM-DD`, `filter:images|videos|media|links|replies`, `min_likes:N`, `min_reposts:N`, and `-word` to leave a word out. Each search you run is kept as a recent search, and you can remove one or clear them all.
 - The right rail shows trending hashtags, topics (`/topics/[tag]`) and suggested people.
+- Cashtags: `$AAPL` (a `$` and 1 to 10 letters, never `$5`) links to `/topics/%24AAPL`, separate from `#aapl`; follow, snooze, Trending (with the `$`), composer suggestions.
 
 **Notifications**
 - Likes, reposts, replies, quotes, follows, mentions, poll results, follow requests, and new posts from accounts you've switched alerts on for. Each kind has an on/off switch in Settings → Notifications.
 - Mentions can be limited to verified accounts in Settings → Notifications.
 - Each row shows the kind of notification as a small badge on the avatar, with the time under the name and a preview of the post when there is one. Unread rows are shaded and carry a dot.
 - The tabs show an icon, and the active one also shows its name. The solid fill slides to the one you pick.
+- Push: Settings → Notifications → Turn on push on this device. Kind switches, mutes and blocks apply. A push says who and what, and message words appear only with "Show message previews" (off by default).
 
 **Messages**
 - Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave. Anyone who doesn't follow the creator gets an invite and joins once they accept.
@@ -177,6 +179,9 @@ The scripts read the same database as the app, and the server can keep running w
 - Voice calls. Start a call from a conversation's header, one to one or with a group. The others get a ring, and a Join banner reaches anyone who opens the app during the call. Anyone can mute their own microphone, leave, or come back. A call with no one left ends, and the conversation keeps a record of it. A group call holds up to six people. Members who muted the conversation are not rung. Calls need the microphone, and a secure page.
 - Video calls, one to one. The video button sits beside the call button. The person called sees "Incoming video call" and answers with their camera, or without one if the camera is refused. Camera off hides this side's picture and keeps the call going. Group calls are voice only.
 - Group info shows the members. Any member can rename the group. Only the person who made it can remove someone, and every member can leave.
+- Disappearing messages: set from the header (off, 24 hours, 7 days, 30 days). Applies to new messages; each is gone for everyone once its time runs out.
+- Group invite links: any member can make, reset or turn one off in Group info. People join without approval, up to 50.
+- Screen sharing, one to one: Share screen replaces your camera, or adds a picture to a voice call. The other person sees it whole, labelled Sharing screen. Hidden where the browser can't share.
 
 **Analytics**
 - Owners get an Analytics page: post views and profile visits over the last 28 days, follower counts, a 14-day chart, and the top posts.
@@ -222,8 +227,8 @@ The scripts read the same database as the app, and the server can keep running w
 - Local uploads (`RHENKO_STORAGE=local`) live on one machine's disk. They are for development. Production uses R2.
 - A page that doesn't exist, or that the viewer may not see, answers HTTP 200 with the "This page is not here" view and a `noindex` tag. Cache Components sends the page shell before the page's checks run, so the status can't change. The app is behind sign-in, so search engines see only the sign-in, terms and privacy pages. A path with no matching route at all, such as `/nope/a/b`, gets a real 404. A single unknown name is read as a handle, so it gets the same "not here" view as any missing profile.
 - Messages are stored as readable text on the server. They are not end-to-end encrypted.
-- The agreement to the Terms is enforced on every page. A request sent straight to a server action by an account that has not agreed is not refused yet: the actions check that someone is signed in, not that they agreed. Adding that check to each action is the next step.
-- Videos keep their metadata. Only photos are cleaned on upload.
+- Actions that change an account, a setting, a passkey or content check the agreement to the Terms. Signing in, signing out, accepting the Terms, and deactivating or deleting an account do not require it.
+- Videos are rewritten with ffmpeg on upload, which must be installed. Older videos keep their metadata.
 - Voice calls use Google's public STUN server unless `RHENKO_ICE_SERVERS` or the TURN settings are set. Some networks only connect through TURN. Video calls are one to one, and a group call is voice only and holds up to six people.
 - Link previews show the page's title and description only. Images from the page are not copied to the server.
 - Email codes need SMTP. Without it, in production, the email features say they are not set up.
@@ -233,4 +238,6 @@ The scripts read the same database as the app, and the server can keep running w
 - Passkeys need the address people use set in `RHENKO_PUBLIC_URL`. Without it the server reads the address from each request, so a passkey made on one address will not work on another.
 - The 140-second video limit is checked in the browser when a video is picked. The server checks the file's type and size, not its length.
 - Server actions accept request bodies up to 110 MB (`next.config.ts`), so a video can be sent to any of them. The body is read whole before the server checks it.
+- Push needs `RHENKO_VAPID_PUBLIC_KEY`, `RHENKO_VAPID_PRIVATE_KEY` and `RHENKO_VAPID_SUBJECT`. Development has no service worker, so push can't be turned on there.
+- Screen sharing is one to one and has no sound. Group calls stay voice only.
 - Not included: Spaces, jobs, live video, shopping, GIF search, and the News, Sports and Entertainment tabs in Explore. GIF search needs a GIF provider, the news tabs need a curated source, and the rest need their own product, realtime or safety work before they can be offered safely here.

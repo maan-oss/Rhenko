@@ -36,8 +36,8 @@ row says so.
 | Embed a post on another site | Yes | Yes | Have |
 | Community notes | Yes | Yes | Have |
 | Post analytics and view counts | Yes | Yes | Have |
-| Cashtags ($TICKER) | Yes, 2026 | No | **Building** (feat/cashtags) |
-| GIF search and picker | Yes | No | **Building** (feat/gif-search). Needs a GIF provider key before it works. |
+| Cashtags ($TICKER) | Yes, 2026 | Yes: links, topic pages, follow, Trending, suggestions | Have |
+| GIF search and picker | Yes | No. Built on feat/gif-search, but held. | Held. GIPHY's terms bar a server proxy and stored copies, and Tenor's API closed on 30 June 2026. Needs a provider that allows this, or an approved arrangement. |
 | Video editor (trim before posting) | Yes, rolling out 2026 | No | Missing. Next batch. |
 | React to a post with a video | Yes, 2026 | No | Missing. Decide what it adds beyond a reply. |
 | Custom timelines | Yes, 2026 | Lists have a timeline | Partly. Decide whether topic and keyword timelines are needed. |
@@ -83,11 +83,11 @@ row says so.
 | Reactions, unsend, photos, voice notes | Yes | Yes | Have |
 | Read receipts and typing | Yes | Yes | Have |
 | Voice and video calls | Yes | Yes (one to one video, group voice up to 6) | Have |
-| Disappearing messages | Yes (XChat) | No | **Building** (feat/dm-timers-invites) |
-| Group invite links (Groupchat links, up to 350 members) | Yes (XChat, 2026) | No | **Building** (feat/dm-timers-invites). Group size limit is a decision. |
+| Disappearing messages | Yes (XChat) | Yes: off, 24 hours, 7 days, 30 days | Have |
+| Group invite links (Groupchat links, up to 350 members) | Yes (XChat, 2026) | Yes, up to 50 | Have. The 350 limit is a decision. |
 | End-to-end encryption | Yes (XChat) | No. Messages are readable on the server, so moderation and multi-device sign-in work. | Decide. It changes key handling, search and moderation, so it is an operator decision. |
 | Screenshot blocking | Yes (XChat, iOS) | No | Not doing. Browsers cannot block screenshots. |
-| Screen sharing in calls | Yes | No | **Building** (feat/screen-share) |
+| Screen sharing in calls | Yes | One to one only | Have. Group calls need a media server first. |
 | Communities | Being closed in 2026 | Circles (open, request, invite) | Have. Rhenko's circles are the replacement X is moving to. |
 
 ## Notifications and realtime
@@ -95,7 +95,7 @@ row says so.
 | Feature | X | Rhenko | Status / plan |
 | --- | --- | --- | --- |
 | In-app notifications, filtered by type | Yes | Yes | Have |
-| Push notifications when the app is closed | Yes | No. The in-app feed works while open. | **Building** (feat/web-push). Needs VAPID keys set in the environment. |
+| Push notifications when the app is closed | Yes | Built, not yet tested on a real device. Needs VAPID keys. | Have, pending a device test |
 | Email notifications | Yes | Partly. Codes and some account mail only. | Missing. Next batch. |
 | Live updates while open | Yes | Yes (server-sent events) | Have |
 
@@ -128,13 +128,15 @@ row says so.
 | Deactivate and delete | Yes | Yes | Have |
 | Appeals with timing published | Yes | Yes | Have |
 | Transparency pages | Yes | Yes | Have |
-| Metadata removed from uploads | Partly | Photos only. Video metadata is kept. | **Building** (feat/video-metadata) |
-| Terms check on every write | n/a | Most actions check. Passkey and some account actions did not. | Fixed in this batch |
+| Metadata removed from uploads | Partly | Photos, and new videos. Older videos keep theirs. | Have |
+| Terms check on every write | n/a | Account, passkey and setting writes check it now. | Have |
 
 ## Bugs and gaps found in the code
 
-- Video uploads keep their metadata, which can include location. Being fixed in feat/video-metadata.
-- Passkey registration and some account writes checked sign-in but not agreement to the current Terms. Being fixed.
-- The README said server actions did not check agreement. Most do, so the note was out of date. Corrected.
-- Mutes and muted words are applied to search (lib/data.ts and actions/search.ts). Confirmed in code.
-- Notifications delayed or duplicated, video playback on phones, reply rate limits, outages: not yet checked. Next batch.
+- Video uploads kept their metadata, including location. Fixed: new videos are rewritten with ffmpeg. Older videos still keep theirs.
+- Passkey and account writes checked sign-in but not agreement to the current Terms. Fixed.
+- The README said server actions did not check agreement. Most already did, so the note was out of date. Corrected.
+- Mutes and muted words apply to search (lib/data.ts and actions/search.ts). Confirmed in code.
+- Reply rate limits: replies go through the same posting limit as posts (30 a minute). Confirmed in code.
+- Likes, reposts and follows remove their notification when undone, so undoing and redoing does not duplicate it. Confirmed in code.
+- Not yet checked: notification delay, video playback on phones, outages.
