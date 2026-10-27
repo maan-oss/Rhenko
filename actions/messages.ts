@@ -6,8 +6,10 @@ import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
-import { canReadConversation, canSeePost, conversationSummaries, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
+import { canReadConversation, canSeePost, conversationSummaries, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
 import { PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "@/lib/chat-organize-rules"
+import { editBodyInput, editRefusal, searchQueryInput, viewOnceRefusal } from "@/lib/chat-message-rules"
+import { wallpaperInput } from "@/lib/chat-wallpapers"
 import { blockedEitherWay } from "@/lib/notify"
 import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
 import { firstLink, requestPreviews } from "@/lib/link-previews"
@@ -48,6 +50,9 @@ const DM_LIMIT = 60
 const DM_WINDOW_MS = 60 * 1000
 const PHOTO_LIMIT = 60
 const PHOTO_WINDOW_MS = 60 * 60 * 1000
+// A person can search a chat this many times a minute.
+const SEARCH_LIMIT = 40
+const SEARCH_WINDOW_MS = 60 * 1000
 // Earlier messages load this many at a time.
 const HISTORY_PAGE = 100
 // A handle is at most 15 characters, and an id at most 100, so anything longer can't name anyone.
@@ -207,12 +212,13 @@ async function insertMessage(
   postId: string | null,
   replyToId: string | null,
   attachment: Attachment | null,
-  forwarded = false
+  forwarded = false,
+  viewOnce = false
 ): Promise<void> {
   const now = Date.now()
   const timer = (await get<{ message_timer: number }>("SELECT message_timer FROM conversations WHERE id = ?", conversationId))?.message_timer ?? 0
   await run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment, forwarded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment, forwarded, view_once) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     newId(),
     conversationId,
     senderId,
@@ -224,7 +230,8 @@ async function insertMessage(
     replyToId,
     expiryFor(now, timer),
     attachment ? attachmentText(attachment) : null,
-    forwarded ? 1 : 0
+    forwarded ? 1 : 0,
+    viewOnce ? 1 : 0
   )
   await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
@@ -645,6 +652,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   const hasDocument = document instanceof File && document.size > 0
   const hasUpload = hasImage || hasVoice || hasAudio || hasDocument
   const scan = hasImage && formData.get("scan") === "on"
+  const viewOnce = formData.get("viewOnce") === "on"
   const contactId = asId(formData.get("contact"))
   // A poll is its question and choices as JSON, checked in full by lib/poll-rules.
   const pollField = formData.get("poll")
@@ -662,6 +670,8 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
     return { error: "Write a message, or add a photo, file, contact, location or poll." }
   }
   if ([...body].length > MAX_DM) return { error: `Messages can have up to ${MAX_DM} characters.` }
+  const onceRefused = viewOnceRefusal({ requested: viewOnce, hasPhoto: hasImage, scan })
+  if (onceRefused) return { error: onceRefused }
   let poll: Attachment | null = null
   if (hasPoll) {
     let raw: unknown = null
@@ -730,7 +740,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
 
   const mediaFile = upload?.ok ? upload.name : null
   try {
-    await insertMessage(conversationId, viewer.id, body, mediaFile, postId, replyToId, attachment)
+    await insertMessage(conversationId, viewer.id, body, mediaFile, postId, replyToId, attachment, false, viewOnce)
   } catch (error) {
     await removeUpload(mediaFile)
     throw error
@@ -917,6 +927,100 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   return { ok: true }
 }
 
+// Changes the words of a message the viewer sent, for EDIT_WINDOW_MS after it was sent. The message is marked as edited. Members
+// see the change at once. A forwarded copy keeps the words it was sent with.
+export async function editMessage(messageId: string, text: unknown): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = id ? await visibleMessageFor(id, viewer.id) : null
+  if (!id || !message) return { ok: false, error: "That message doesn't exist." }
+  if ((await memberStatus(message.conversation_id, viewer.id)) !== "accepted") return { ok: false, error: "You can only edit messages in chats you're in." }
+  const attachment = parseAttachment(message.attachment)
+  const refused = editRefusal(
+    {
+      mine: message.sender_id === viewer.id,
+      deleted: message.deleted_at !== null,
+      callStatus: message.call_status,
+      timerChange: message.timer_change,
+      attachmentKind: attachment?.kind ?? null,
+      viewOnce: message.view_once === 1,
+      createdAt: message.created_at,
+    },
+    Date.now()
+  )
+  if (refused) return { ok: false, error: refused }
+  const input = editBodyInput(text, message.media_file !== null, MAX_DM)
+  if (!input.ok) return { ok: false, error: input.error }
+  if (input.body === message.body) return { ok: true }
+
+  await run("UPDATE chat_messages SET body = ?, lang = ?, edited_at = ? WHERE id = ?", input.body, languageOf(input.body), Date.now(), id)
+  const members = await memberIds(message.conversation_id)
+  // A text-only message with a link gets the link's preview, as a new message does.
+  const link = !message.media_file && !attachment && !message.post_id ? firstLink(input.body) : null
+  if (link) {
+    void requestPreviews([link], () => {
+      void publish(members, { type: "message", conversationId: message.conversation_id }).catch(() => undefined)
+    })
+  }
+  await publish(members, { type: "message", conversationId: message.conversation_id })
+  refresh()
+  return { ok: true }
+}
+
+// Records that the viewer has opened a view-once photo or video, which lets the server give it to them, once. The sender can always
+// see their own. Opening it again is not recorded twice.
+export async function openViewOnce(messageId: string): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = id ? await visibleMessageFor(id, viewer.id) : null
+  if (!id || !message) return { ok: false, error: "That message isn't here anymore." }
+  if (message.view_once !== 1) return { ok: false, error: "That isn't a view-once message." }
+  if (message.deleted_at !== null) return { ok: false, error: "That message was deleted." }
+  if (message.sender_id === viewer.id) return { ok: true }
+  if ((await memberStatus(message.conversation_id, viewer.id)) !== "accepted") return { ok: false, error: "Accept this request to open it." }
+  await run("INSERT INTO chat_view_once_opens (message_id, user_id, opened_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", id, viewer.id, Date.now())
+  return { ok: true }
+}
+
+// Sets the background this viewer sees in one chat. Only they see it. "none" goes back to the plain page.
+export async function setChatWallpaper(conversationId: string, key: unknown): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id || !(await canReadConversation(id, viewer.id))) return { ok: false, error: "That conversation doesn't exist." }
+  const wallpaper = wallpaperInput(key)
+  if (!wallpaper) return { ok: false, error: "That background isn't one we offer." }
+  if (wallpaper === "none") {
+    await run("DELETE FROM chat_wallpapers WHERE user_id = ? AND conversation_id = ?", viewer.id, id)
+  } else {
+    await run(
+      "INSERT INTO chat_wallpapers (user_id, conversation_id, wallpaper) VALUES (?, ?, ?) ON CONFLICT (user_id, conversation_id) DO UPDATE SET wallpaper = excluded.wallpaper",
+      viewer.id,
+      id,
+      wallpaper
+    )
+  }
+  refresh()
+  return { ok: true }
+}
+
+export type ChatSearchResult = { ok: true; hits: ChatSearchHit[] } | { ok: false; error: string }
+
+// Searches the words of one chat, as the viewer may see them. A search is refused when it is empty, too long or too frequent.
+export async function searchConversation(conversationId: string, text: unknown): Promise<ChatSearchResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id) return { ok: false, error: "That conversation doesn't exist." }
+  const input = searchQueryInput(text)
+  if (!input.ok) return { ok: false, error: input.error }
+  const slowDown = await tooFast(`search:${viewer.id}`, SEARCH_LIMIT, SEARCH_WINDOW_MS, "You're searching too fast. Wait a moment.")
+  if (slowDown) return { ok: false, error: slowDown }
+  return { ok: true, hits: await searchChatMessages(id, viewer.id, input.query) }
+}
+
 // Muting a conversation keeps its messages but stops them from counting as unread.
 export async function toggleConversationMute(conversationId: string): Promise<VoidResult & { muted?: boolean }> {
   const viewer = await getAgreedViewer()
@@ -974,10 +1078,25 @@ export async function toggleConversationArchive(conversationId: string): Promise
 }
 
 // The message a viewer can act on: it exists, they may read its chat, and they have not deleted it for themselves. Null otherwise.
-async function visibleMessageFor(messageId: string | null, viewerId: string): Promise<{ conversation_id: string; body: string; media_file: string | null; post_id: string | null; attachment: string | null; deleted_at: number | null; call_status: string | null; timer_change: number | null; expires_at: number | null } | null> {
+type VisibleMessage = {
+  conversation_id: string
+  sender_id: string
+  body: string
+  media_file: string | null
+  post_id: string | null
+  attachment: string | null
+  deleted_at: number | null
+  call_status: string | null
+  timer_change: number | null
+  expires_at: number | null
+  created_at: number
+  view_once: number
+}
+
+async function visibleMessageFor(messageId: string | null, viewerId: string): Promise<VisibleMessage | null> {
   if (!messageId) return null
-  const message = await get<{ conversation_id: string; body: string; media_file: string | null; post_id: string | null; attachment: string | null; deleted_at: number | null; call_status: string | null; timer_change: number | null; expires_at: number | null }>(
-    "SELECT conversation_id, body, media_file, post_id, attachment, deleted_at, call_status, timer_change, expires_at FROM chat_messages WHERE id = ?",
+  const message = await get<VisibleMessage>(
+    "SELECT conversation_id, sender_id, body, media_file, post_id, attachment, deleted_at, call_status, timer_change, expires_at, created_at, view_once FROM chat_messages WHERE id = ?",
     messageId
   )
   if (!message || !(await canReadConversation(message.conversation_id, viewerId))) return null
@@ -996,6 +1115,7 @@ export async function toggleStarMessage(messageId: string): Promise<VoidResult &
   if (message.deleted_at !== null || message.call_status !== null || message.timer_change !== null) {
     return { ok: false, error: "This message can't be starred." }
   }
+  if (message.view_once === 1) return { ok: false, error: "A view-once photo can't be starred." }
   const starred = await get("SELECT 1 AS found FROM chat_stars WHERE user_id = ? AND message_id = ?", viewer.id, id)
   if (starred) await run("DELETE FROM chat_stars WHERE user_id = ? AND message_id = ?", viewer.id, id)
   else await run("INSERT INTO chat_stars (user_id, message_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, id, Date.now())
@@ -1046,6 +1166,7 @@ export async function forwardMessage(messageId: string, targets: unknown): Promi
     callStatus: message.call_status,
     timerChange: message.timer_change,
     attachmentKind: attachment?.kind ?? null,
+    viewOnce: message.view_once === 1,
   })
   if (refused) return { ok: false, error: refused }
   const chosen = forwardTargetsInput(targets)

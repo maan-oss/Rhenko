@@ -13,15 +13,18 @@ export type ForwardCandidate = {
   callStatus: string | null
   timerChange: number | null
   attachmentKind: string | null
+  viewOnce: boolean
 }
 
 // Why a message can't be forwarded, or null when it can. A poll is left out: its votes belong to the original, so a copy would
-// start with none, which would look like a different poll.
+// start with none, which would look like a different poll. A view-once photo is left out too, so it can't be passed on to be seen
+// again.
 export function forwardRefusal(message: ForwardCandidate): string | null {
   if (message.deleted) return "That message was deleted, so it can't be forwarded."
   if (message.callStatus !== null) return "A call record can't be forwarded."
   if (message.timerChange !== null) return "A change to disappearing messages can't be forwarded."
   if (message.attachmentKind === "poll") return "A poll can't be forwarded. Make a new one in the chat you want it in."
+  if (message.viewOnce) return "A view-once photo can't be forwarded."
   return null
 }
 

@@ -2,12 +2,14 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Timer } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
-import { conversationFor, conversationMessages } from "@/lib/data"
+import { chatWallpaper, conversationFor, conversationMessages, messagesFrom } from "@/lib/data"
+import { firstParam } from "@/lib/params"
 import { timerNotice } from "@/lib/message-timers"
 import { AcceptBar } from "@/components/app/accept-bar"
 import { Avatar } from "@/components/app/avatar"
 import { CallButton } from "@/components/app/call-button"
 import { ChatComposer } from "@/components/app/chat-composer"
+import { ChatOptionsMenu } from "@/components/app/chat-options-menu"
 import { ChatThread } from "@/components/app/chat-thread"
 import { GroupCallButton } from "@/components/app/group-call-button"
 import { GroupPanel } from "@/components/app/group-panel"
@@ -17,6 +19,10 @@ import { PageHeader } from "@/components/app/page-header"
 import { ThreadMarker } from "@/components/app/thread-marker"
 
 type Params = Promise<{ id: string }>
+type SearchParams = Promise<{ m?: string | string[] }>
+
+// A message id as the app makes them: letters, digits, dashes and underscores.
+const MESSAGE_ID = /^[A-Za-z0-9_-]{1,100}$/
 
 // The thread opens with the newest messages. A full page means older ones may be waiting behind the
 // "Load earlier messages" button.
@@ -25,19 +31,24 @@ const THREAD_PAGE = 200
 // Existence checks run before anything streams, so a missing record gets a real 404.
 export const instant = false
 
-export default async function ConversationPage({ params }: { params: Params }) {
+export default async function ConversationPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
   if (!await conversationFor((await params).id, viewer.id)) notFound()
-  return <ConversationBody params={params} />
+  return <ConversationBody params={params} searchParams={searchParams} />
 }
 
-async function ConversationBody({ params }: { params: Params }) {
+// `?m=` opens the thread at one message, from a search: the messages from it on, with the thread's earlier ones still above.
+async function ConversationBody({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const viewer = await requireViewer()
   const { id } = await params
   const conversation = await conversationFor(id, viewer.id)
   if (!conversation) notFound()
 
-  const messages = await conversationMessages(id, viewer.id, THREAD_PAGE)
+  const requestedFocus = firstParam((await searchParams).m)
+  const focus = requestedFocus && MESSAGE_ID.test(requestedFocus) ? requestedFocus : null
+  const focused = focus ? await messagesFrom(id, viewer.id, focus) : null
+  const messages = focused ? focused.messages : await conversationMessages(id, viewer.id, THREAD_PAGE)
+  const wallpaper = await chatWallpaper(id, viewer.id)
   const others = conversation.members.filter((m) => m.id !== viewer.id)
   const isGroup = conversation.kind === "group"
   const title = isGroup ? conversation.title || others.map((o) => o.name).join(", ") : others[0]?.name ?? "Conversation"
@@ -91,6 +102,7 @@ async function ConversationBody({ params }: { params: Params }) {
                 video
               />
             ) : null}
+            <ChatOptionsMenu conversationId={conversation.id} wallpaper={wallpaper} />
             <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
             <MessageTimerButton conversationId={conversation.id} timer={conversation.messageTimer} disabled={requested || closed} />
           </div>
@@ -106,8 +118,17 @@ async function ConversationBody({ params }: { params: Params }) {
       </PageHeader>
       <ThreadMarker conversationId={conversation.id} />
       {requested ? <AcceptBar conversationId={conversation.id} /> : null}
-      <div className="flex flex-1 flex-col">
-        <ChatThread conversationId={conversation.id} messages={messages} showNames={isGroup} mayHaveEarlier={messages.length >= THREAD_PAGE} />
+      <div className="flex flex-1 flex-col" data-wallpaper={wallpaper}>
+        {/* A thread opened at a search hit is its own view, so it starts there and not at the newest message. */}
+        <ChatThread
+          key={focus ?? "latest"}
+          conversationId={conversation.id}
+          messages={messages}
+          showNames={isGroup}
+          mayHaveEarlier={focused ? focused.hasEarlier : messages.length >= THREAD_PAGE}
+          focusId={focused ? focus : null}
+          hasNewer={focused?.hasNewer ?? false}
+        />
       </div>
       {requested ? (
         // Left space matches the composer, so the folded dock on a phone never sits over the text.

@@ -2,9 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { EyeOff, Forward, MoreHorizontal, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
+import { Eye, EyeOff, Forward, MoreHorizontal, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
-import { deleteMessage, hideMessageForMe, loadEarlierMessages, toggleReaction, toggleStarMessage } from "@/actions/messages"
+import { deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, toggleReaction, toggleStarMessage } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { ForwardDialog } from "@/components/app/forward-dialog"
 import { MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
@@ -20,6 +20,7 @@ import { LocalTime } from "@/components/app/time-text"
 import { callSummary } from "@/lib/format"
 import { isAudioFile, isDocumentFile, isVideoFile, isVoiceFile } from "@/lib/media-names"
 import { quoteLabel } from "@/lib/message-attachments"
+import { editRefusal } from "@/lib/chat-message-rules"
 import { isExpired, nextExpiry, timerLine } from "@/lib/message-timers"
 import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
@@ -30,6 +31,17 @@ type CallRecord = NonNullable<MessageView["call"]>
 
 // The longest the thread waits before it checks again for a disappearing message that is due.
 const EXPIRY_CHECK_MAX_MS = 60 * 60 * 1000
+
+// What this viewer changed in one message, kept over the thread until the page is refreshed.
+type ThreadChange = { starred?: boolean; hidden?: boolean; body?: string; editedAt?: number }
+
+// A message with this viewer's changes applied, so an older message in the thread shows its star or its edit at once.
+function withChange(message: MessageView, change: ThreadChange | undefined): MessageView {
+  if (!change) return message
+  const starredView = change.starred === undefined ? message : { ...message, starred: change.starred }
+  if (change.body === undefined) return starredView
+  return { ...starredView, body: change.body, editedAt: change.editedAt ?? message.editedAt }
+}
 
 // Oldest first, each message once.
 function mergeOlder(current: MessageView[], more: MessageView[]): MessageView[] {
@@ -49,11 +61,17 @@ export function ChatThread({
   messages,
   showNames,
   mayHaveEarlier,
+  focusId,
+  hasNewer,
 }: {
   conversationId: string
   messages: MessageView[]
   showNames: boolean
   mayHaveEarlier: boolean
+  // A message to open the thread at, from a search. Null for the newest messages.
+  focusId: string | null
+  // Whether messages go on past the ones shown, so the newest are a link away.
+  hasNewer: boolean
 }) {
   const endRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -68,7 +86,7 @@ export function ChatThread({
   const [clock, setClock] = useState(0)
   // What this viewer changed in the thread: a star, or a message deleted for them. The server's newest page is refreshed, but the
   // copies of older messages kept here are not, so these changes are applied over the list.
-  const [changes, setChanges] = useState<Record<string, { starred?: boolean; hidden?: boolean }>>({})
+  const [changes, setChanges] = useState<Record<string, ThreadChange>>({})
 
   // The newest page moves on as messages arrive. Once older messages are showing, whatever slides out of the page
   // stays in the thread, so it never has a gap.
@@ -85,7 +103,7 @@ export function ChatThread({
   const pageIds = new Set(messages.map((message) => message.id))
   const listed = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
     .filter((message) => !changes[message.id]?.hidden)
-    .map((message) => (changes[message.id]?.starred === undefined ? message : { ...message, starred: changes[message.id].starred as boolean }))
+    .map((message) => withChange(message, changes[message.id]))
   // A disappearing message leaves the thread the moment its time is up, without waiting for a refresh. The clock starts at
   // zero, so the first render is the page the server sent, which had already left out anything that was gone.
   const shown = clock === 0 ? listed : listed.filter((message) => !isExpired(message.expiresAt, clock))
@@ -114,10 +132,17 @@ export function ChatThread({
   // Start at the newest message, and follow new ones. Older messages added above do not move the view. The scroll
   // waits for the first frame so the thread has its height before it moves.
   useEffect(() => {
-    if (!newest) return
+    if (!newest || focusId) return
     const frame = requestAnimationFrame(() => endRef.current?.scrollIntoView({ block: "end" }))
     return () => cancelAnimationFrame(frame)
-  }, [newest, waiting.length])
+  }, [newest, waiting.length, focusId])
+
+  // A thread opened at a search hit goes to that message and lights it, and stays there while new messages arrive.
+  useEffect(() => {
+    if (!focusId) return
+    const frame = requestAnimationFrame(() => jumpTo(focusId))
+    return () => cancelAnimationFrame(frame)
+  }, [focusId])
 
   // After older messages are added, the message that was first stays where it was on screen.
   useLayoutEffect(() => {
@@ -211,6 +236,13 @@ export function ChatThread({
         <PendingBubble key={item.key} body={item.body} />
       ))}
       {typing ? <p className="px-4 text-sm text-muted-foreground">{typing} is typing…</p> : null}
+      {hasNewer ? (
+        <div className="flex justify-center px-4 pt-4">
+          <Link href={`/messages/${conversationId}`} className="glass inline-flex h-9 items-center rounded-full px-4 text-[14px] font-medium text-foreground transition-colors hover:bg-foreground/5">
+            Jump to the latest messages
+          </Link>
+        </div>
+      ) : null}
       {/* The margin is the sticky composer, so the newest message clears it when the thread scrolls to the end. */}
       <div ref={endRef} className="scroll-mb-[88px] lg:scroll-mb-[80px]" />
     </div>
@@ -310,6 +342,84 @@ function jumpTo(id: string) {
   if (!reduced) row.animate([{ backgroundColor: "color-mix(in oklab, var(--foreground) 10%, transparent)" }, { backgroundColor: "transparent" }], { duration: 1400 })
 }
 
+// The words of a message being edited: a box, and Save or Cancel. Enter saves, Shift+Enter starts a new line, Escape cancels.
+function EditBox({
+  value,
+  onChange,
+  onSave,
+  onCancel,
+  pending,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSave: () => void
+  onCancel: () => void
+  pending: boolean
+}) {
+  return (
+    <div className="flex min-w-[220px] flex-col gap-2">
+      <textarea
+        aria-label="Edit message"
+        value={value}
+        rows={Math.min(8, Math.max(2, value.split("\n").length))}
+        autoFocus
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onCancel()
+          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            onSave()
+          }
+        }}
+        className="w-full resize-none rounded-lg bg-background px-2.5 py-2 text-[15px] leading-relaxed text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div className="flex justify-end gap-2 text-sm">
+        <button type="button" onClick={onCancel} className="tap-44 rounded-full px-3 py-1 font-semibold transition-colors hover:bg-background/20">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={pending}
+          className="tap-44 rounded-full bg-background px-3 py-1 font-semibold text-foreground transition-opacity disabled:opacity-60"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// A view-once photo or video before it is opened: a tap opens it, once. Once opened, it is only a label.
+function ViewOnceTile({ video, opened, pending, onOpen }: { video: boolean; opened: boolean; pending: boolean; onOpen: () => void }) {
+  const label = video ? "video" : "photo"
+  const tone = "flex w-full min-w-0 max-w-[300px] items-center gap-3 rounded-xl bg-background p-2.5 text-left text-foreground transition-colors"
+  if (opened) {
+    return (
+      <div className={tone}>
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-foreground/10">
+          <EyeOff className="size-5" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold">Opened</span>
+          <span className="block text-[12px] text-muted-foreground">View once {label}</span>
+        </span>
+      </div>
+    )
+  }
+  return (
+    <button type="button" onClick={onOpen} disabled={pending} className={cn(tone, "hover:bg-foreground/5 disabled:opacity-60")}>
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-foreground/10">
+        <Eye className="size-5" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-semibold">View once {label}</span>
+        <span className="block text-[12px] text-muted-foreground">Opens once. Tap to see it.</span>
+      </span>
+    </button>
+  )
+}
+
 function MessageRow({
   conversationId,
   message,
@@ -321,7 +431,7 @@ function MessageRow({
 }: {
   conversationId: string
   message: MessageView
-  onChange: (change: { starred?: boolean; hidden?: boolean }) => void
+  onChange: (change: ThreadChange) => void
   showSeen: boolean
   showName: boolean
   joinsPrev: boolean
@@ -332,10 +442,39 @@ function MessageRow({
   const [revealed, setRevealed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState("")
+  // A view-once photo or video this viewer has opened in this visit. Until they leave, it stays on screen.
+  const [viewed, setViewed] = useState(false)
   const [pending, startTransition] = useTransition()
 
+  // A sender can change the words of a message for a short time after sending it. The menu asks the rule when it opens, so the
+  // window is judged at that moment, and the server judges it again when the change is sent.
+  const [editable, setEditable] = useState(false)
+  function judgeEditable(): boolean {
+    return (
+      message.mine &&
+      !message.deleted &&
+      message.call === null &&
+      message.timerChange === null &&
+      editRefusal(
+        {
+          mine: message.mine,
+          deleted: message.deleted,
+          callStatus: null,
+          timerChange: null,
+          attachmentKind: message.attachment?.kind ?? null,
+          viewOnce: message.viewOnce,
+          createdAt: message.createdAt,
+        },
+        Date.now()
+      ) === null
+    )
+  }
+  const viewOnceHidden = message.mediaFile !== null && message.viewOnce && !message.mine && !viewed
+
   function toggleOnTouch() {
-    if (message.deleted) return
+    if (message.deleted || editing) return
     if (window.matchMedia("(pointer: coarse)").matches) setRevealed((open) => !open)
   }
 
@@ -368,6 +507,39 @@ function MessageRow({
       } else {
         toast.error(result.error)
       }
+    })
+  }
+
+  function startEdit() {
+    setRevealed(false)
+    setDraft(message.body)
+    setEditing(true)
+  }
+
+  // Saves the new words. A message left as it was is simply closed.
+  function saveEdit() {
+    const body = draft.replace(/\r\n/g, "\n").trim()
+    if (body === message.body) {
+      setEditing(false)
+      return
+    }
+    startTransition(async () => {
+      const result = await editMessage(message.id, draft)
+      if (result.ok) {
+        onChange({ body, editedAt: Date.now() })
+        setEditing(false)
+      } else {
+        toast.error(result.error)
+      }
+    })
+  }
+
+  // Shows a view-once photo or video, and records that it was opened, so the server gives it to this person once.
+  function openOnce() {
+    startTransition(async () => {
+      const result = await openViewOnce(message.id)
+      if (result.ok) setViewed(true)
+      else toast.error(result.error)
     })
   }
 
@@ -426,7 +598,9 @@ function MessageRow({
                   </span>
                 </button>
               ) : null}
-              {message.mediaFile && isVoiceFile(message.mediaFile) ? (
+              {viewOnceHidden ? (
+                <ViewOnceTile video={isVideoFile(message.mediaFile ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
+              ) : message.mediaFile && isVoiceFile(message.mediaFile) ? (
                 <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
               ) : message.mediaFile && isVideoFile(message.mediaFile) ? (
                 <div className="w-full max-w-[300px] overflow-hidden rounded-xl">
@@ -454,7 +628,9 @@ function MessageRow({
               {message.attachment?.kind === "location" ? (
                 <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} mine={message.mine} />
               ) : null}
-              {message.body ? (
+              {editing ? (
+                <EditBox value={draft} onChange={setDraft} onSave={saveEdit} onCancel={() => setEditing(false)} pending={pending} />
+              ) : message.body ? (
                 <>
                   <PostBody text={message.body} className="text-[15px]" />
                   <div className="relative z-10">
@@ -479,6 +655,7 @@ function MessageRow({
                   This post is unavailable.
                 </p>
               ) : null}
+              {message.editedAt !== null ? <span className="-mt-1 self-end text-[11px] leading-none opacity-70">Edited</span> : null}
             </>
           )}
         </div>
@@ -510,19 +687,34 @@ function MessageRow({
                 action={() => deleteMessage(message.id)}
               />
             ) : null}
-            <DropdownMenu onOpenChange={setMenuOpen}>
+            <DropdownMenu
+              onOpenChange={(open) => {
+                setMenuOpen(open)
+                if (open) setEditable(judgeEditable())
+              }}
+            >
               <DropdownMenuTrigger aria-label="More message options" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
                 <MoreHorizontal className="size-4" aria-hidden="true" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align={message.mine ? "end" : "start"} className="min-w-44">
-                <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={toggleStar}>
-                  {message.starred ? <StarOff className="size-4" aria-hidden="true" /> : <Star className="size-4" aria-hidden="true" />}
-                  {message.starred ? "Unstar" : "Star"}
-                </DropdownMenuItem>
-                <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setForwardOpen(true)}>
-                  <Forward className="size-4" aria-hidden="true" />
-                  Forward
-                </DropdownMenuItem>
+                {editable ? (
+                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={startEdit}>
+                    <Pencil className="size-4" aria-hidden="true" />
+                    Edit
+                  </DropdownMenuItem>
+                ) : null}
+                {message.viewOnce ? null : (
+                  <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={toggleStar}>
+                    {message.starred ? <StarOff className="size-4" aria-hidden="true" /> : <Star className="size-4" aria-hidden="true" />}
+                    {message.starred ? "Unstar" : "Star"}
+                  </DropdownMenuItem>
+                )}
+                {message.viewOnce ? null : (
+                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setForwardOpen(true)}>
+                    <Forward className="size-4" aria-hidden="true" />
+                    Forward
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={deleteForMe}>
                   <EyeOff className="size-4" aria-hidden="true" />
                   Delete for me
@@ -569,6 +761,12 @@ function MessageRow({
       {!joinsNext || showSeen ? (
         <p className="text-xs text-muted-foreground">
           {showSeen ? "Seen · " : null}
+          {message.viewOnce ? (
+            <>
+              <Eye className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+              <span className="sr-only">View once, </span>
+            </>
+          ) : null}
           {message.starred ? (
             <>
               <Star className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />

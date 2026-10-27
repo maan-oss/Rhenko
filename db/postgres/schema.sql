@@ -548,7 +548,12 @@ CREATE TABLE chat_messages (
   -- voice note, which are stored as media_file alone.
   attachment text,
   -- 1 when the message was forwarded from another chat, so it can say so.
-  forwarded bigint NOT NULL DEFAULT 0);
+  forwarded bigint NOT NULL DEFAULT 0,
+  -- When the sender last changed the words, as a time. NULL for a message never edited. Edits are allowed only within the
+  -- window in lib/chat-message-rules.ts (EDIT_WINDOW_MS) after sending.
+  edited_at bigint,
+  -- 1 for a photo or video that each recipient may open once. Opening is recorded per person in chat_view_once_opens.
+  view_once bigint NOT NULL DEFAULT 0);
 
 -- A vote in a poll sent in a chat. The poll's choices are in the message's attachment; a person's vote is one row per choice
 -- they picked, so a single-answer poll has at most one row for them.
@@ -573,6 +578,22 @@ CREATE TABLE chat_hidden_messages (
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, message_id)
+);
+
+-- A view-once photo or video a recipient has opened. The server gives the file to that person only after this row exists.
+CREATE TABLE chat_view_once_opens (
+  message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  opened_at bigint NOT NULL,
+  PRIMARY KEY (message_id, user_id)
+);
+
+-- The background one person chose for one chat (lib/chat-wallpapers.ts). Only that person sees it.
+CREATE TABLE chat_wallpapers (
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conversation_id text NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  wallpaper text NOT NULL,
+  PRIMARY KEY (user_id, conversation_id)
 );
 
 CREATE TABLE community_notes (

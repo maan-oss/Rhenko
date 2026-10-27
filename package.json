@@ -8,7 +8,7 @@
     "start": "node server.mjs",
     "lint": "eslint",
     "test:e2e": "node e2e/run.mjs",
-    "test:unit": "node --experimental-strip-types --test tests/abuse.test.mjs tests/ranking.test.mjs tests/languages.test.mjs tests/places-connections.test.mjs tests/sahayak.test.mjs tests/stickers.test.mjs tests/edit-window.test.mjs tests/feed-tab.test.mjs tests/csp.test.mjs tests/geo-block.test.mjs tests/cashtags.test.mjs tests/video-metadata.test.mjs tests/screen-share.test.mjs tests/dm-timers-invites.test.mjs tests/push.test.mjs tests/x-audit.test.mjs tests/digest.test.mjs tests/video-trim.test.mjs tests/poll-rules.test.mjs tests/chat-organize-rules.test.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/abuse.test.mjs tests/ranking.test.mjs tests/languages.test.mjs tests/places-connections.test.mjs tests/sahayak.test.mjs tests/stickers.test.mjs tests/edit-window.test.mjs tests/feed-tab.test.mjs tests/csp.test.mjs tests/geo-block.test.mjs tests/cashtags.test.mjs tests/video-metadata.test.mjs tests/screen-share.test.mjs tests/dm-timers-invites.test.mjs tests/push.test.mjs tests/x-audit.test.mjs tests/digest.test.mjs tests/video-trim.test.mjs tests/poll-rules.test.mjs tests/chat-organize-rules.test.mjs tests/chat-message-rules.test.mjs",
     "moderation": "node --env-file-if-exists=.env scripts/moderation.mjs",
     "legal": "node --env-file-if-exists=.env scripts/legal.mjs",
     "icons": "node scripts/generate-icons.mjs"

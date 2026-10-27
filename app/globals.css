@@ -504,3 +504,17 @@ html[data-nav-away="true"] [data-app-main] {
     transition: none;
   }
 }
+
+/* Chat wallpapers (lib/chat-wallpapers.ts). Each is built from the page's own two colours, so it reads in light and dark. */
+[data-wallpaper="dusk"] {
+  background: radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, var(--foreground) 9%, transparent), transparent 72%), var(--background);
+}
+[data-wallpaper="paper"] {
+  background: color-mix(in oklab, var(--foreground) 4%, var(--background));
+}
+[data-wallpaper="mist"] {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 8%, var(--background)), var(--background) 70%);
+}
+[data-wallpaper="ink"] {
+  background: color-mix(in oklab, var(--foreground) 13%, var(--background));
+}

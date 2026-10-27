@@ -5,7 +5,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { FORWARD_TARGETS_MAX, PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "../lib/chat-organize-rules.ts"
 
-const plain = { deleted: false, callStatus: null, timerChange: null, attachmentKind: null }
+const plain = { deleted: false, callStatus: null, timerChange: null, attachmentKind: null, viewOnce: false }
 
 test("a plain message, photo or file can be forwarded", () => {
   assert.equal(forwardRefusal(plain), null)
@@ -17,6 +17,10 @@ test("a deleted message, a call record and a timer change are refused", () => {
   assert.match(forwardRefusal({ ...plain, deleted: true }), /deleted/)
   assert.match(forwardRefusal({ ...plain, callStatus: "missed" }), /call/)
   assert.match(forwardRefusal({ ...plain, timerChange: 0 }), /disappearing/)
+})
+
+test("a view-once photo is refused, so it can't be passed on to be seen again", () => {
+  assert.match(forwardRefusal({ ...plain, viewOnce: true }), /view-once/)
 })
 
 test("a poll is refused, because its votes belong to the original", () => {

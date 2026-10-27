@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, AudioLines, Camera, FileText, Image as ImageIcon, ListChecks, MapPin, Mic, Music, Plus, ScanLine, UserRound, X } from "lucide-react"
+import { ArrowUp, AudioLines, Camera, Eye, FileText, Image as ImageIcon, ListChecks, MapPin, Mic, Music, Plus, ScanLine, UserRound, X } from "lucide-react"
 import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
@@ -210,6 +210,8 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
   const formRef = useRef<HTMLFormElement>(null)
   const lastSignal = useRef(0)
   const [pick, setPick] = useState<Pick | null>(null)
+  // A photo or video the recipients may open once. It applies only to a picked photo or video that is not a scan.
+  const [viewOnce, setViewOnce] = useState(false)
   // A picture waiting to be framed in the crop dialog. Only the framed part is attached.
   const [framing, setFraming] = useState<{ file: File; scan: boolean } | null>(null)
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
@@ -606,7 +608,21 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
             <p className="truncate font-semibold">{summary.title}</p>
             <p className="truncate text-muted-foreground">{summary.detail}</p>
           </div>
-          <button type="button" onClick={() => setPick(null)} className="tap-44 ml-auto shrink-0 rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted">
+          {pick.kind === "media" && !pick.scan ? (
+            <button
+              type="button"
+              aria-pressed={viewOnce}
+              onClick={() => setViewOnce((on) => !on)}
+              className={cn(
+                "tap-44 ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-semibold transition-colors",
+                viewOnce ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted"
+              )}
+            >
+              <Eye className="size-3.5" aria-hidden="true" />
+              View once
+            </button>
+          ) : null}
+          <button type="button" onClick={() => setPick(null)} className={cn("tap-44 shrink-0 rounded-full px-3 py-1 font-semibold transition-colors hover:bg-muted", !(pick.kind === "media" && !pick.scan) && "ml-auto")}>
             Remove
           </button>
         </div>
@@ -667,12 +683,16 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
           stopDictation()
           queueOptimistic()
         }}
-        onReset={() => setPick(null)}
+        onReset={() => {
+          setPick(null)
+          setViewOnce(false)
+        }}
         className="flex items-center gap-2 pt-3 pr-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-2 lg:pt-2.5 lg:pb-3 lg:pl-3"
       >
         <input type="hidden" name="conversationId" value={conversationId} />
         <input type="hidden" name="replyTo" value={replyTo?.id ?? ""} />
         <input type="hidden" name="scan" value={pick?.kind === "media" && pick.scan ? "on" : ""} />
+        <input type="hidden" name="viewOnce" value={viewOnce && pick?.kind === "media" && !pick.scan ? "on" : ""} />
         <input type="hidden" name="contact" value={pick?.kind === "contact" ? pick.user.id : ""} />
         <input type="hidden" name="lat" value={pick?.kind === "location" ? String(pick.lat) : ""} />
         <input type="hidden" name="lng" value={pick?.kind === "location" ? String(pick.lng) : ""} />
