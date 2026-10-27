@@ -1,6 +1,7 @@
 import { getViewer } from "@/lib/auth"
 import { settingsFor } from "@/lib/connections"
 import { all, get } from "@/lib/db"
+import { digestSettingsFor } from "@/lib/digest"
 import { languageName } from "@/lib/languages"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { notificationPrefsFor } from "@/lib/settings-data"
@@ -16,6 +17,12 @@ type Media = { name: string; size: number }
 
 function iso(ms: number | null): string | null {
   return ms === null ? null : new Date(ms).toISOString()
+}
+
+// The daily email digest choice. The hour is a UTC hour: Rhenko stores no time zone.
+async function digestFor(userId: string): Promise<{ on: boolean; hourUtc: number; lastSentAt: string | null }> {
+  const digest = await digestSettingsFor(userId)
+  return { on: digest.enabled, hourUtc: digest.hour, lastSentAt: iso(digest.lastSentAt) }
 }
 
 // Every stored file the export can include, found in storage now. Files that are gone are left out, and data.json
@@ -333,6 +340,7 @@ async function collect(userId: string, media: Map<string, Media>) {
     notificationSettings: {
       ...await notificationPrefsFor(userId),
       mentionsFromVerifiedAccountsOnly: user.mentions_verified_only === 1,
+      dailyEmailDigest: await digestFor(userId),
     },
     recentSearches: (await all<{ query: string; created_at: number }>(
       "SELECT query, created_at FROM recent_searches WHERE user_id = ? ORDER BY created_at DESC",

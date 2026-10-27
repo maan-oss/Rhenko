@@ -51,8 +51,8 @@ const SUMMARY = (
       <li>Payments are taken by Stripe. Rhenko never sees your card number or bank details.</li>
       <li>The operator can reach everything stored on this server, including messages, which are not end-to-end encrypted.</li>
       <li>
-        Your email address, if you add one, is used only to send you codes. Date of birth is used only to check you are {MINIMUM_AGE} or
-        older.
+        Your email address, if you add one, is used only to send you codes, and the daily digest if you turn it on. Date of birth is used
+        only to check you are {MINIMUM_AGE} or older.
       </li>
       <li>You can download, correct or delete your data yourself, in Settings, under Account.</li>
     </List>
@@ -452,8 +452,15 @@ const SECTIONS: LegalSection[] = [
       <List>
         <li>Adding an email address is optional. You confirm it with a six-digit code, in Settings, under Account.</li>
         <li>
-          Rhenko uses it for two things only: verification codes, and password-reset codes. A reset code goes only to an address
-          that has been confirmed. It sends no newsletters or marketing.
+          Rhenko uses it for three things only: verification codes, password-reset codes, and the daily digest if you turn it on. A
+          reset code goes only to an address that has been confirmed. It sends no newsletters or marketing.
+        </li>
+        <li>
+          The daily digest is off until you turn it on in Settings, under Notifications, and it goes only to a confirmed address. It is
+          one email a day, with how many likes, replies, messages and the like you missed, and who and what the five newest were. It
+          holds no words from posts, and none from messages unless you turned on message previews. Rhenko keeps the UTC hour you chose
+          and when the last digest went out. Every digest has a link that turns it off without signing in, and removing your address
+          turns it off.
         </li>
         <li>Codes work for {EMAIL_CODE_MINUTES} minutes. They are stored as hashes, not as the codes themselves.</li>
         <li>Your address is not shown to anyone else.</li>
@@ -525,7 +532,7 @@ const SECTIONS: LegalSection[] = [
             Stripe receives what it needs to take a payment, to manage a subscription, to refund a payment and to pay out tips. It keeps
             that under its own privacy policy. Rhenko does not receive card numbers or bank details.
           </li>
-          <li>The operator&apos;s mail service receives the address and the text of each verification, reset or notice email.</li>
+          <li>The operator&apos;s mail service receives the address and the text of each verification, reset, notice or digest email.</li>
           <li>
             A translation service, only if the operator has turned translation on. It receives the text of the one post or message you
             ask to translate, and the two languages involved. Nothing else is sent to it. Translation is off unless the operator sets

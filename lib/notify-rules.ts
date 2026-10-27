@@ -15,6 +15,17 @@ export const NOTICE: Record<NotificationKind, string> = {
   post: "posted",
 }
 
+// The line a notification reads as in the daily digest email: who, then what. A poll result has no one to name, as in the
+// notifications list.
+export function noticeLine(kind: NotificationKind, actorName: string): string {
+  return kind === "poll" ? NOTICE.poll : `${actorName} ${NOTICE[kind]}`
+}
+
+// What a push, and the digest, say after the sender's name for a message.
+export function messageLine(isGroup: boolean, request: boolean): string {
+  return request ? "sent you a message request" : isGroup ? "sent a message" : "sent you a message"
+}
+
 // What the settings page and the server actions say when the server has no VAPID keys.
 export const PUSH_NOT_SET_UP = "Push is not set up on this server."
 
@@ -74,7 +85,7 @@ export function notificationPush(input: NotificationPushInput): PushPayload {
 
 // The same page a row on the notifications page opens. Likes and reposts are of your own post; replies, quotes,
 // mentions, new posts and poll results point at the other person's.
-function notificationUrl(input: NotificationPushInput): string {
+export function notificationUrl(input: NotificationPushInput): string {
   if (input.kind === "follow_request") return "/notifications"
   const own = input.kind === "like" || input.kind === "repost"
   if (input.postId && input.postVisible && input.kind !== "follow") {
@@ -99,7 +110,7 @@ export type MessagePushInput = {
 // A push for a message names the sender and says a message came. Its words appear only when the recipient turned on
 // "Show message previews", and never for a request from someone they haven't accepted.
 export function messagePush(input: MessagePushInput): PushPayload {
-  const line = input.request ? "sent you a message request" : input.isGroup ? "sent a message" : "sent you a message"
+  const line = messageLine(input.isGroup, input.request)
   const preview = input.previewsOn && !input.request ? input.preview.trim() : ""
   return {
     title: input.isGroup && input.groupTitle ? `${input.senderName} in ${input.groupTitle}` : input.senderName,

@@ -3,8 +3,9 @@
 // setting cannot open the service in a blocked country.
 export const BLOCKED_COUNTRIES: ReadonlySet<string> = new Set(["AU"])
 
-// Pages anyone may read, wherever they are, so the reason for the block and the rules stay visible.
-const OPEN_PAGES = new Set(["/unavailable", "/terms", "/privacy", "/rules", "/safety", "/transparency", "/legal", "/copyright"])
+// Pages anyone may read, wherever they are, so the reason for the block and the rules stay visible. The two unsubscribe
+// addresses stay open too: someone who still gets the daily digest from abroad must be able to turn it off.
+const OPEN_PAGES = new Set(["/unavailable", "/terms", "/privacy", "/rules", "/safety", "/transparency", "/legal", "/copyright", "/unsubscribe", "/api/digest/unsubscribe"])
 const OPEN_PREFIXES = ["/terms/", "/privacy/", "/rules/", "/safety/", "/transparency/", "/legal/", "/copyright/"]
 
 export function isOpenToBlocked(pathname: string): boolean {

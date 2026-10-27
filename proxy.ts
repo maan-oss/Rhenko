@@ -14,7 +14,7 @@ const SESSION_COOKIE = "rhenko_session"
 const PREFETCH_HEADER = "next-router-prefetch"
 
 // /notice is public: anyone may tell us about content, with or without an account (app/notice/page.tsx says so).
-const PUBLIC_PAGES = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/rules", "/safety", "/transparency", "/privacy", "/terms", "/legal", "/advertise", "/offline", "/copyright", "/notice", "/unavailable"])
+const PUBLIC_PAGES = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/rules", "/safety", "/transparency", "/privacy", "/terms", "/legal", "/advertise", "/offline", "/copyright", "/notice", "/unavailable", "/unsubscribe"])
 const PUBLIC_PREFIXES = ["/login/", "/signup/", "/forgot-password/", "/reset-password/", "/rules/", "/safety/", "/transparency/", "/privacy/", "/terms/", "/legal/", "/api/"]
 
 function isPublic(pathname: string) {

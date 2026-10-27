@@ -59,7 +59,8 @@ Work through this list in order. Each item names who is responsible.
 8. **Australia (lawyer).** Check the privacy reforms that now apply, including the statutory privacy tort, automated
    decision-making transparency, and the Children's Online Privacy Code, which the regulator must make by December 2026.
 9. **Email (operator).** Set `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM`. Without SMTP, reference and decision emails are
-   printed to the log and the command line, so they must be sent by hand.
+   printed to the log and the command line, so they must be sent by hand. The daily email digest, which people turn on
+   themselves, also needs `RHENKO_PUBLIC_URL` and `RHENKO_SECRET`; `RHENKO_DIGEST_PER_PASS` caps how many go out every 15 seconds.
     **Translation (operator, optional).** Set `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if the service needs a key. The
     service receives the text of each post or message a reader asks to translate, so name it in the Privacy Policy's list of
     recipients and put in place the processing terms the law requires. Without the variable, no translate button appears.

@@ -1,9 +1,11 @@
 import { Suspense } from "react"
 import { currentSessionHash, requireViewer } from "@/lib/auth"
 import { mentionsVerifiedOnly } from "@/lib/data"
+import { digestAvailable, digestSettingsFor } from "@/lib/digest"
 import { followedAccountsForPriority, MAX_PRIORITY_ACCOUNTS } from "@/lib/priority-accounts"
 import { messagePreviewsOn, pushDevicesFor, vapidPublicKey } from "@/lib/push"
-import { NOTIFICATION_KINDS, NOTIFICATION_LABELS, notificationPrefsFor } from "@/lib/settings-data"
+import { emailSettingsFor, NOTIFICATION_KINDS, NOTIFICATION_LABELS, notificationPrefsFor } from "@/lib/settings-data"
+import { DigestSettings } from "@/components/app/digest-settings"
 import { NotificationPrefs } from "@/components/app/notification-prefs"
 import { MentionFilterChoice } from "@/components/app/mention-filter"
 import { PriorityAccounts } from "@/components/app/priority-accounts"
@@ -27,6 +29,10 @@ async function NotificationBody() {
     hint: NOTIFICATION_LABELS[kind].hint,
     enabled: prefs[kind],
   }))
+  const email = await emailSettingsFor(viewer.id)
+  const digest = await digestSettingsFor(viewer.id)
+  const pushKey = vapidPublicKey()
+  const previews = await messagePreviewsOn(viewer.id)
   return (
     <>
       <PageHeader title="Notifications" backHref="/settings" />
@@ -38,10 +44,23 @@ async function NotificationBody() {
         <p className="text-sm text-muted-foreground">
           Alerts on your phone or computer when Rhenko is closed. They follow the switches above, and a muted account or conversation sends none.
         </p>
-        <PushSettings
-          publicKey={vapidPublicKey()}
-          devices={await pushDevicesFor(viewer.id, await currentSessionHash())}
-          previews={await messagePreviewsOn(viewer.id)}
+        <PushSettings publicKey={pushKey} devices={await pushDevicesFor(viewer.id, await currentSessionHash())} previews={previews} />
+      </section>
+      <section className="flex flex-col gap-3 border-t border-border px-4 py-4">
+        <h2 className="text-lg font-semibold">Email digest</h2>
+        <p className="text-sm text-muted-foreground">
+          One email a day instead of one for every event. It follows the switches above, and a muted or blocked account is left out. It
+          never quotes a post.
+        </p>
+        <DigestSettings
+          state={!digestAvailable() ? "unavailable" : !email.email ? "no-email" : !email.verified ? "unverified" : "ready"}
+          address={email.email}
+          enabled={digest.enabled}
+          chosen={digest.chosen}
+          hour={digest.hour}
+          lastSentAt={digest.lastSentAt}
+          previews={previews}
+          previewsHere={pushKey === null}
         />
       </section>
       <section className="flex flex-col gap-3 border-t border-border px-4 py-4">
