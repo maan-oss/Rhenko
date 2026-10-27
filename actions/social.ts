@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { getAgreedViewer } from "@/lib/auth"
 import { hangUpFor } from "@/lib/call-state"
-import { get, run, transaction } from "@/lib/db"
+import { change, get, run, transaction } from "@/lib/db"
 import { getProfileByHandle, peopleOfPage, visiblePostIds } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { withRequested } from "@/lib/people-state"
@@ -131,17 +131,18 @@ export async function toggleFollow(handle: string, want?: "follow" | "unfollow",
   const day = await consume(`followday:${viewer.id}`, fresh ? 40 : 300, FOLLOW_DAY)
   if (!day.ok) return { ok: false, error: `You've reached today's limit for following people. Try again in ${waitLabel(day.retryAfterSeconds)}.` }
 
+  // Only the request that added the follow or the request notifies, so two at once (from two tabs, say) send one notice.
   if (target.protected === 1) {
-    await run("INSERT INTO follow_requests (requester_id, target_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, Date.now())
-    await notify(target.id, viewer.id, "follow_request", null)
+    const asked = await change("INSERT INTO follow_requests (requester_id, target_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, Date.now())
+    if (asked > 0) await notify(target.id, viewer.id, "follow_request", null)
     refresh()
     return { ok: true, state: "requested" }
   }
 
   const now = Date.now()
-  await run("INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, now)
+  const added = await change("INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, target.id, now)
   await recordFollowSource(viewer.id, target.id, from, now)
-  await notify(target.id, viewer.id, "follow", null)
+  if (added > 0) await notify(target.id, viewer.id, "follow", null)
   refresh()
   return { ok: true, state: "following" }
 }
