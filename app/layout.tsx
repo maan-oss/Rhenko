@@ -45,7 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <MotionRoot>{children}</MotionRoot>
-          <Toaster position="top-center" />
+          <Toaster position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>

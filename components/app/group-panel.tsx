@@ -18,7 +18,7 @@ type Member = { id: string; name: string; handle: string; status: "accepted" | "
 type Info = { title: string; viewerIsCreator: boolean; members: GroupMember[]; inviteToken: string | null }
 
 const INPUT =
-  "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
+  "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] outline-none transition-colors duration-200 focus:bg-muted/60"
 
 // Rename a group, see who is in it, add people, share its invite link, remove people (only the person who made it), or leave.
 // The conversation page hands over the people it already knows. The panel asks the server who made the group each time it
@@ -117,8 +117,8 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Group info" className="rounded-full" />}>
-        <Info className="size-4" />
+      <DialogTrigger render={<Button variant="ghost" size="icon" aria-label="Group info" className="size-11 rounded-full" />}>
+        <Info className="size-[22px]" strokeWidth={1.9} />
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md" showCloseButton>
         <DialogTitle className="pr-8 text-lg font-semibold">Group info</DialogTitle>
@@ -144,6 +144,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
           </label>
           <input
             id="group-title"
+            data-plain-field
             value={shownTitle}
             maxLength={MAX_GROUP_TITLE}
             onChange={(event) => setDraft(event.target.value)}
@@ -217,7 +218,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
             <label htmlFor="add-handle" className="sr-only">
               Add a person by handle
             </label>
-            <input id="add-handle" name="handle" required placeholder="Add by handle" autoComplete="off" disabled={invited} className={INPUT} />
+            <input id="add-handle" data-plain-field name="handle" required placeholder="Add by handle" autoComplete="off" disabled={invited} className={INPUT} />
             <Button type="submit" disabled={pending || invited} variant="outline" className="h-10 rounded-lg px-4">
               Add
             </Button>

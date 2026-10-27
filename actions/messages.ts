@@ -8,8 +8,8 @@ import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
 import { canReadConversation, canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
 import { blockedEitherWay } from "@/lib/notify"
-import { isVoiceFile } from "@/lib/media-names"
-import { pushMessage } from "@/lib/push"
+import { attachmentPreview, attachmentText, cleanFileName, type Attachment } from "@/lib/message-attachments"
+import { pushGroupAdded, pushMessage } from "@/lib/push"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
@@ -185,10 +185,11 @@ export async function startConversation(
 }
 
 // What a banner or the conversation list shows for a message: its text, or what it carries.
-function previewOf(body: string, media: string | null, hasPost: boolean): string {
+function previewOf(body: string, media: string | null, attachment: Attachment | null, hasPost: boolean): string {
   const chars = [...body]
   if (chars.length > 0) return chars.length > BANNER_PREVIEW_MAX ? `${chars.slice(0, BANNER_PREVIEW_MAX - 1).join("")}…` : body
-  if (media) return isVoiceFile(media) ? "Sent a voice message" : "Sent a photo"
+  const kind = attachmentPreview(attachment, media)
+  if (kind) return kind
   if (hasPost) return "Shared a post"
   return ""
 }
@@ -201,12 +202,13 @@ async function insertMessage(
   body: string,
   mediaFile: string | null,
   postId: string | null,
-  replyToId: string | null
+  replyToId: string | null,
+  attachment: Attachment | null
 ): Promise<void> {
   const now = Date.now()
   const timer = (await get<{ message_timer: number }>("SELECT message_timer FROM conversations WHERE id = ?", conversationId))?.message_timer ?? 0
   await run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     newId(),
     conversationId,
     senderId,
@@ -216,7 +218,8 @@ async function insertMessage(
     now,
     languageOf(body),
     replyToId,
-    expiryFor(now, timer)
+    expiryFor(now, timer),
+    attachment ? attachmentText(attachment) : null
   )
   await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
@@ -489,6 +492,9 @@ export async function addToGroup(
     Date.now()
   )
   await publish(await memberIds(id), { type: "message", conversationId: id })
+  void pushGroupAdded(id, { id: viewer.id, name: viewer.name }, user.id, conversation.title, joined === "requested").catch((error) =>
+    console.error("[push] group add failed", error)
+  )
   refresh()
   return { ok: true, status: joined }
 }
@@ -619,13 +625,32 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   if (await directConversationClosed(conversationId, viewer.id)) return { error: "They can't receive messages here anymore." }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
-  const image = formData.get("image")
   const postId = String(formData.get("postId") ?? "") || null
-  const hasImage = image instanceof File && image.size > 0
+  // Each attachment is one of these fields. A photo or video is "image" (a camera or gallery pick), a scan is a photo
+  // marked "scan", and a voice note is "voice". Audio files, documents, a contact and a place are their own fields.
+  const image = formData.get("image")
   const voice = formData.get("voice")
+  const audio = formData.get("audio")
+  const document = formData.get("document")
+  const hasImage = image instanceof File && image.size > 0
   const hasVoice = voice instanceof File && voice.size > 0
-  if (!body && !hasImage && !hasVoice && !postId) return { error: "Write a message, or add a photo or voice message." }
-  if (hasImage && hasVoice) return { error: "Send a photo or a voice message, not both." }
+  const hasAudio = audio instanceof File && audio.size > 0
+  const hasDocument = document instanceof File && document.size > 0
+  const hasUpload = hasImage || hasVoice || hasAudio || hasDocument
+  const scan = hasImage && formData.get("scan") === "on"
+  const contactId = asId(formData.get("contact"))
+  const lat = formData.get("lat")
+  const lng = formData.get("lng")
+  const hasPlace = typeof lat === "string" && typeof lng === "string" && lat !== "" && lng !== ""
+  const place = hasPlace ? { lat: Number(lat), lng: Number(lng) } : null
+  if (place && (!Number.isFinite(place.lat) || !Number.isFinite(place.lng) || Math.abs(place.lat) > 90 || Math.abs(place.lng) > 180)) {
+    return { error: "That place isn't a real location. Try sharing it again." }
+  }
+  const picks = [hasUpload, contactId !== null, place !== null].filter(Boolean).length
+  if (picks > 1) return { error: "Send one photo, file, contact or location at a time." }
+  if (!body && !hasUpload && !contactId && !place && !postId) {
+    return { error: "Write a message, or add a photo, file, contact or location." }
+  }
   if ([...body].length > MAX_DM) return { error: `Messages can have up to ${MAX_DM} characters.` }
 
   const others = (await memberIds(conversationId)).filter((id) => id !== viewer.id)
@@ -633,6 +658,10 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
     return { error: "You can't message someone in this conversation." }
   }
   if (postId && !await sendablePost(postId, viewer.id)) return { error: POST_UNAVAILABLE }
+  // A contact is someone else in this conversation, so a card never points outside it.
+  if (contactId && (contactId === viewer.id || !others.includes(contactId))) {
+    return { error: "Only someone in this conversation can be shared." }
+  }
 
   // A reply has to point at a live message in this same chat. A call record, a timer change, a deleted message or one that
   // has disappeared can't be answered.
@@ -651,20 +680,34 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
 
   const slowDown =
     await tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.") ??
-    (hasImage || hasVoice ? await tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of photos.") : null)
+    (hasUpload ? await tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of files.") : null)
   if (slowDown) return { error: slowDown }
 
-  const upload = hasImage ? await saveUpload(image, "image") : hasVoice ? await saveUpload(voice, "audio") : null
+  const upload = hasImage
+    ? await saveUpload(image, "any")
+    : hasVoice
+      ? await saveUpload(voice, "audio")
+      : hasAudio
+        ? await saveUpload(audio, "audio")
+        : hasDocument
+          ? await saveUpload(document, "document")
+          : null
   if (upload && !upload.ok) return { error: upload.error }
+
+  let attachment: Attachment | null = null
+  if (scan) attachment = { kind: "scan" }
+  else if (hasDocument && document instanceof File) attachment = { kind: "document", name: cleanFileName(document.name), size: document.size }
+  else if (contactId) attachment = { kind: "contact", userId: contactId }
+  else if (place) attachment = { kind: "location", lat: place.lat, lng: place.lng }
 
   const mediaFile = upload?.ok ? upload.name : null
   try {
-    await insertMessage(conversationId, viewer.id, body, mediaFile, postId, replyToId)
+    await insertMessage(conversationId, viewer.id, body, mediaFile, postId, replyToId, attachment)
   } catch (error) {
     await removeUpload(mediaFile)
     throw error
   }
-  await announceMessage(conversationId, viewer.id, previewOf(body, mediaFile, postId !== null))
+  await announceMessage(conversationId, viewer.id, previewOf(body, mediaFile, attachment, postId !== null))
   refresh()
   return { sent: true }
 }
@@ -718,8 +761,8 @@ export async function sharePostWith(postId: string, handles: string[], note: str
       failed.push({ handle: target.handle, error: "Accept their request before you send anything." })
       continue
     }
-    await insertMessage(opened.id, viewer.id, clean, null, id, null)
-    await announceMessage(opened.id, viewer.id, previewOf(clean, null, true))
+    await insertMessage(opened.id, viewer.id, clean, null, id, null, null)
+    await announceMessage(opened.id, viewer.id, previewOf(clean, null, null, true))
     sent.push({ handle: target.handle, conversationId: opened.id })
   }
   refresh()

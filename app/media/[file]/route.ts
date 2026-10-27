@@ -1,10 +1,19 @@
 import { getAgreedViewer } from "@/lib/auth"
 import { mediaAccess } from "@/lib/data"
 import { serveObject } from "@/lib/storage"
-import { contentTypeFor, UPLOAD_NAME_PATTERN, variantFile, variantWidthOf } from "@/lib/uploads"
+import { cleanFileName } from "@/lib/message-attachments"
+import { contentTypeFor, DOCUMENT_EXTS, UPLOAD_NAME_PATTERN, variantFile, variantWidthOf } from "@/lib/uploads"
 
 function notFound(): Response {
   return new Response("Not found", { status: 404, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } })
+}
+
+// The header for a download: the name the file was sent with, quoted and without anything that could break the header.
+function downloadName(raw: string | null, ext: string): string {
+  const base = cleanFileName(raw ?? "") || `file.${ext}`
+  // The plain name is ASCII only, since a header carries no other characters. The full name follows in encoded form.
+  const plain = base.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_")
+  return `attachment; filename="${plain}"; filename*=UTF-8''${encodeURIComponent(base)}`
 }
 
 // Serves uploaded media. A file is served only when the viewer may see it: avatars and banners are public and cached for a
@@ -31,5 +40,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     }
   }
 
-  return (await serveObject(name, request, { contentType, cacheControl })) ?? notFound()
+  // A document is never shown inside the page. It is a download under the name it was sent with.
+  const ext = file.slice(file.lastIndexOf(".") + 1)
+  const disposition = DOCUMENT_EXTS.has(ext) ? downloadName(new URL(request.url).searchParams.get("name"), ext) : undefined
+  return (await serveObject(name, request, { contentType, cacheControl, disposition })) ?? notFound()
 }

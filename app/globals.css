@@ -226,6 +226,11 @@
   outline: none;
 }
 
+/* A field that shows focus with its own soft fill, not the halo: the group name and the invite link in Group info. */
+[data-plain-field]:focus-visible {
+  outline: none;
+}
+
 /* The browser's own reveal and clear buttons would sit beside the form's button, so they are hidden. The form draws its own. */
 input::-ms-reveal,
 input::-ms-clear {

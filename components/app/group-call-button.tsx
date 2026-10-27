@@ -63,17 +63,17 @@ export function GroupCallButton({ conversationId, disabled }: { conversationId: 
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="icon"
       aria-label={here ? "On this call" : "Start a group call"}
       aria-pressed={here || undefined}
       aria-busy={pending}
       title={disabled ? "Accept the request to call" : "Group voice call"}
-      className={cn("rounded-full", here && "bg-muted")}
+      className={cn("size-11 rounded-full", here && "bg-muted")}
       disabled={disabled || pending}
       onClick={onClick}
     >
-      <Phone className="size-4" />
+      <Phone className="size-[22px]" strokeWidth={1.9} />
     </Button>
   )
 }

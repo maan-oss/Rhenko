@@ -5,12 +5,19 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { MediaItem } from "@/lib/data"
 import { StickerLayer } from "@/components/app/sticker-layer"
+import { VideoPlayer } from "@/components/app/video-player"
 import { cn } from "@/lib/utils"
 
-function AltBadge({ alt }: { alt: string }) {
+function AltBadge({ alt, position = "bottom" }: { alt: string; position?: "top" | "bottom" }) {
   if (!alt) return null
   return (
-    <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white" title={alt}>
+    <span
+      className={cn(
+        "absolute left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white",
+        position === "top" ? "top-2" : "bottom-2"
+      )}
+      title={alt}
+    >
       ALT
     </span>
   )
@@ -28,15 +35,9 @@ function Tile({
   if (item.kind === "video") {
     return (
       <div className={cn("relative z-10 overflow-hidden rounded-2xl border border-border bg-black", className)}>
-        <video
-          src={`/media/${item.file}`}
-          controls
-          preload="metadata"
-          playsInline
-          aria-label={item.alt || "Video"}
-          className="size-full max-h-[480px] object-contain"
-        />
-        <AltBadge alt={item.alt} />
+        <VideoPlayer src={`/media/${item.file}`} label={item.alt || "Video"} maxHeight="480px">
+          <AltBadge alt={item.alt} position="top" />
+        </VideoPlayer>
       </div>
     )
   }

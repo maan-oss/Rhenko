@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, MessageSquarePlus, Plus, Save, Scissors, Sticker as StickerIcon, Trash2, X } from "lucide-react"
+import { CalendarClock, Captions, CircleDot, EyeOff, FileText, ImageIcon, ListChecks, LoaderCircle, MessageSquarePlus, Plus, Save, Scissors, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { motion, useReducedMotion } from "motion/react"
 import { createPost, undoPost, type CreateResult } from "@/actions/posts"
@@ -14,6 +14,8 @@ import { useProofGate } from "@/components/app/proof-dialog"
 import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
 import type { StickerPick } from "@/components/app/sticker-tray"
 import { usePreview } from "@/components/app/use-preview"
+import { VideoPlayer } from "@/components/app/video-player"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { MAX_STICKERS, TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_LOOK_FIELDS, clamp, type Sticker } from "@/lib/stickers"
 import { ReplyPicker } from "@/components/app/reply-picker"
 import { fullTimestamp, pluralize } from "@/lib/format"
@@ -167,10 +169,6 @@ const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
 })
 
 const POLL_DEFAULT_MINUTES = 1440
-// Controls are 40px tall on a phone and smaller on a computer.
-// Pills carry their own surface (glass, or metal when active), so the base has no colour or ring.
-const PILL =
-  "tap-44 inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
 const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline-none transition-colors focus:border-foreground sm:h-9"
 // The emoji list is a component of its own, so its phone sizes are set from here: 40px buttons, and an emoji list that
 // opens from the toolbar's left edge so it stays on the screen.
@@ -251,6 +249,9 @@ function ToolButton({
 
 const PANEL_BUTTON =
   "h-9 rounded-full border border-border px-3 font-semibold transition-colors duration-200 hover:bg-foreground/5 disabled:opacity-50"
+// An icon-only tool under a picture or video: 40px on a phone, 36px on a computer, with no border of its own.
+const ICON_TOOL =
+  "tap-44 inline-grid size-10 place-items-center rounded-full transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-9"
 
 // A row of pills where one is chosen. The chosen one is filled, and says so to assistive technology.
 function ChoiceGroup<T extends string>({
@@ -287,22 +288,26 @@ function ChoiceGroup<T extends string>({
   )
 }
 
-// One picture or video with its remove control, its ALT control and, for a picture, its stickers. Photos and videos take
-// the same description, and both say what they show to people who can't see them. On a video the ALT control sits at the
-// top, clear of the player's controls. A picture's stickers are added and changed from the tile; the controls for a
+// One picture or video with its remove control. Its description (alt text) and its sensitive toggle are icon buttons in the
+// row beneath it, beside Trim on a video, each with a label on hover. Photos and videos take the same description, and both say
+// what they show to people who can't see them. A picture's stickers are added and changed from the tile; the controls for a
 // selected sticker sit under the picture.
 function MediaTile({
   item,
+  sensitive,
   onRemove,
   onPatch,
   onOpenTray,
   onTrim,
+  onToggleSensitive,
 }: {
   item: Attachment
+  sensitive: boolean
   onRemove: () => void
   onPatch: (patch: MediaPatch) => void
   onOpenTray: () => void
   onTrim: () => void
+  onToggleSensitive: () => void
 }) {
   const url = usePreview(item.file)
   // A video with a trim plays only the part that will be posted.
@@ -346,12 +351,13 @@ function MediaTile({
   }
 
   return (
+    <TooltipProvider>
     <div className="flex flex-col gap-1.5">
       <div className="relative overflow-hidden rounded-2xl bg-muted">
         {url === null ? (
           <div className="aspect-video w-full" aria-hidden="true" />
         ) : video ? (
-          <video ref={player} src={url} muted playsInline controls preload="metadata" className="max-h-72 w-full" aria-label={item.alt || "Selected video"} />
+          <VideoPlayer src={url} label={item.alt || "Selected video"} maxHeight="min(78dvh, 40rem)" startMuted videoRef={player} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -385,20 +391,6 @@ function MediaTile({
         >
           <X className="size-4" />
         </button>
-        <button
-          type="button"
-          onClick={() => onPatch({ altOpen: !item.altOpen })}
-          aria-expanded={item.altOpen}
-          aria-controls={item.altOpen ? altId : undefined}
-          title={item.alt ? "Edit alt text" : "Add alt text"}
-          className={cn(
-            "absolute left-2 inline-flex items-center justify-center rounded-full px-2.5 text-[12px] font-semibold transition-colors duration-200 max-sm:h-10 max-sm:min-w-10 max-sm:text-[13px] sm:h-6",
-            video ? "top-2" : "bottom-2",
-            item.alt ? "metal" : "glass text-foreground"
-          )}
-        >
-          ALT
-        </button>
         {video ? null : (
           <button
             type="button"
@@ -416,17 +408,54 @@ function MediaTile({
           </button>
         )}
       </div>
-      {video && item.duration !== null && item.duration > MIN_TRIM_SECONDS ? (
-        <div className="flex items-center gap-2 text-[13px]">
-          <button type="button" onClick={onTrim} className={cn(PANEL_BUTTON, "tap-44 inline-flex items-center gap-1.5")}>
-            <Scissors className="size-4" aria-hidden />
-            {item.trim ? "Change trim" : "Trim"}
-          </button>
-          <span className="min-w-0 truncate text-muted-foreground tabular-nums">
-            {item.trim ? `Posting ${rangeLabel(item.trim)}` : `Length ${formatClock(item.duration)}`}
-          </span>
+      <div className="flex min-h-10 items-center gap-2 text-[13px] sm:min-h-9">
+        {video && item.duration !== null && item.duration > MIN_TRIM_SECONDS ? (
+          <>
+            <button type="button" onClick={onTrim} className={cn(PANEL_BUTTON, "tap-44 inline-flex items-center gap-1.5")}>
+              <Scissors className="size-4" aria-hidden />
+              {item.trim ? "Change trim" : "Trim"}
+            </button>
+            <span className="min-w-0 truncate text-muted-foreground tabular-nums">
+              {item.trim ? `Posting ${rangeLabel(item.trim)}` : `Length ${formatClock(item.duration)}`}
+            </span>
+          </>
+        ) : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onToggleSensitive}
+                  aria-pressed={sensitive}
+                  aria-label="Mark as sensitive"
+                  className={cn(ICON_TOOL, sensitive ? "metal" : "glass text-foreground hover:bg-foreground/5")}
+                />
+              }
+            >
+              <EyeOff className="size-[18px]" aria-hidden />
+            </TooltipTrigger>
+            <TooltipContent>Mark as sensitive</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={() => onPatch({ altOpen: !item.altOpen })}
+                  aria-expanded={item.altOpen}
+                  aria-controls={item.altOpen ? altId : undefined}
+                  aria-label={item.alt ? "Edit alt text" : "Add alt text"}
+                  className={cn(ICON_TOOL, item.alt ? "metal" : "glass text-foreground hover:bg-foreground/5")}
+                />
+              }
+            >
+              <Captions className="size-[18px]" aria-hidden />
+            </TooltipTrigger>
+            <TooltipContent>{item.alt ? "Edit alt text" : "Add alt text"}</TooltipContent>
+          </Tooltip>
         </div>
-      ) : null}
+      </div>
       {!video && item.stickerOpen && item.aspect !== null ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-2.5 text-[13px]">
           <div className="flex flex-wrap items-center gap-2">
@@ -531,6 +560,7 @@ function MediaTile({
         </label>
       ) : null}
     </div>
+    </TooltipProvider>
   )
 }
 
@@ -1218,6 +1248,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 <MediaTile
                   key={item.key}
                   item={item}
+                  sensitive={sensitive}
+                  onToggleSensitive={() => setSensitive((value) => !value)}
                   onRemove={() => removeMedia(item.key)}
                   onPatch={(patch) => patchMedia(item.key, patch)}
                   onOpenTray={() => setTrayFor(item.key)}
@@ -1281,20 +1313,6 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 </label>
               </div>
             </fieldset>
-          ) : null}
-
-          {/* Whether the media needs a warning. */}
-          {media.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                aria-pressed={sensitive}
-                onClick={() => setSensitive((value) => !value)}
-                className={cn(PILL, sensitive ? "metal" : "glass text-foreground hover:bg-foreground/5")}
-              >
-                Mark media as sensitive
-              </button>
-            </div>
           ) : null}
 
           {scheduling ? (

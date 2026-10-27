@@ -119,7 +119,7 @@ async function ConversationBody({ params }: { params: Params }) {
           {others[0].name} can&apos;t receive messages here anymore.
         </p>
       ) : (
-        <ChatComposer conversationId={conversation.id} />
+        <ChatComposer conversationId={conversation.id} group={isGroup} people={others.filter((m) => m.status === "accepted" && !m.departed)} />
       )}
     </div>
   )

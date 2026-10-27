@@ -20,7 +20,7 @@ import {
 } from "@/lib/digest-rules"
 import { readUnsubscribeToken, signUnsubscribeToken, type TokenCheck } from "@/lib/digest-token"
 import { sendMail } from "@/lib/mail"
-import { isVoiceFile } from "@/lib/media-names"
+import { attachmentPreview, parseAttachment, type Attachment } from "@/lib/message-attachments"
 import { messageLine, noticeLine, notificationUrl } from "@/lib/notify-rules"
 import { consume } from "@/lib/rate-limit"
 import { BANNER_PREVIEW_MAX } from "@/lib/rules"
@@ -287,6 +287,7 @@ async function contentFor(person: Due, from: number, to: number, previewsOn: boo
         created_at: number
         body: string
         media_file: string | null
+        attachment: string | null
         post_id: string | null
         kind: "dm" | "group"
         title: string
@@ -294,7 +295,7 @@ async function contentFor(person: Due, from: number, to: number, previewsOn: boo
       }>(
         `SELECT * FROM (
            SELECT DISTINCT ON (m.conversation_id) m.conversation_id, m.created_at, ${previewsOn ? "m.body" : "''::text"} AS body,
-             m.media_file, m.post_id, c.kind, c.title, su.name AS sender_name
+             m.media_file, m.attachment, m.post_id, c.kind, c.title, su.name AS sender_name
            ${base} JOIN users su ON su.id = m.sender_id
            WHERE ${where}
            ORDER BY m.conversation_id, m.created_at DESC, m.id DESC
@@ -309,7 +310,7 @@ async function contentFor(person: Due, from: number, to: number, previewsOn: boo
           at: row.created_at,
           text: `${row.sender_name} ${line}${group && row.title ? ` in ${row.title}` : ""}`,
           path: `/messages/${encodeURIComponent(row.conversation_id)}`,
-          ...(previewsOn ? { preview: messagePreview(row.body, row.media_file, row.post_id !== null) } : {}),
+          ...(previewsOn ? { preview: messagePreview(row.body, row.media_file, parseAttachment(row.attachment), row.post_id !== null) } : {}),
         })
       }
     }
@@ -318,9 +319,10 @@ async function contentFor(person: Due, from: number, to: number, previewsOn: boo
 }
 
 // What the conversation list shows for a message: its first words, or what it carries.
-function messagePreview(body: string, mediaFile: string | null, hasPost: boolean): string {
+function messagePreview(body: string, mediaFile: string | null, attachment: Attachment | null, hasPost: boolean): string {
   const chars = [...body.trim()]
   if (chars.length > 0) return chars.length > BANNER_PREVIEW_MAX ? `${chars.slice(0, BANNER_PREVIEW_MAX - 1).join("")}…` : chars.join("")
-  if (mediaFile) return isVoiceFile(mediaFile) ? "Sent a voice message" : "Sent a photo"
+  const kind = attachmentPreview(attachment, mediaFile)
+  if (kind) return kind
   return hasPost ? "Shared a post" : ""
 }

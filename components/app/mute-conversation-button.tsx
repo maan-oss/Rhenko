@@ -21,14 +21,14 @@ export function MuteConversationButton({ conversationId, muted }: { conversation
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="icon"
       aria-label={muted ? "Unmute conversation" : "Mute conversation"}
       disabled={pending}
       onClick={toggle}
-      className="rounded-full"
+      className="size-11 rounded-full"
     >
-      {muted ? <BellOff className="size-4" /> : <Bell className="size-4" />}
+      {muted ? <BellOff className="size-[22px]" strokeWidth={1.9} /> : <Bell className="size-[22px]" strokeWidth={1.9} />}
     </Button>
   )
 }

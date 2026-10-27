@@ -11,7 +11,7 @@ import { joinPath } from "@/lib/invite-links"
 import { MAX_GROUP_MEMBERS } from "@/lib/rules"
 
 const INPUT =
-  "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] text-muted-foreground outline-none focus-visible:border-foreground/50"
+  "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] text-muted-foreground outline-none transition-colors duration-200 focus:bg-muted/60"
 
 // The invite link part of Group info. Anyone who has joined the group can make the link, copy it, reset it (the old link
 // stops working) or turn it off. Someone only invited sees why they can't yet. `ready` is false until the panel has heard
@@ -69,7 +69,7 @@ export function GroupInviteLink({
             <label htmlFor="invite-link" className="sr-only">
               Invite link
             </label>
-            <input id="invite-link" readOnly value={url} onFocus={(event) => event.currentTarget.select()} className={INPUT} />
+            <input id="invite-link" data-plain-field readOnly value={url} onFocus={(event) => event.currentTarget.select()} className={INPUT} />
             <Button type="button" variant="outline" onClick={copy} className="h-10 rounded-lg px-4">
               <Copy className="size-4" aria-hidden="true" />
               Copy
@@ -116,13 +116,11 @@ export function GroupInviteLink({
           {pending ? "Making the link" : "Create invite link"}
         </Button>
       )}
-      {invited ? null : (
+      {!invited && full ? (
         <p className="text-xs text-muted-foreground">
-          {full
-            ? `This group has ${MAX_GROUP_MEMBERS} people, the most it can hold, so nobody can join with a link until someone leaves.`
-            : `Anyone with the link can join straight away, with no approval, up to ${MAX_GROUP_MEMBERS} people. They see the group's messages. Reset the link to stop an old one working.`}
+          This group has {MAX_GROUP_MEMBERS} people, the most it can hold. Someone has to leave before another person can join.
         </p>
-      )}
+      ) : null}
     </div>
   )
 }

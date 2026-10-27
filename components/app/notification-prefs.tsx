@@ -3,14 +3,14 @@
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { setNotificationPref } from "@/actions/account"
-import { cn } from "@/lib/utils"
+import { ToggleSwitch } from "@/components/app/toggle-switch"
 
 type Row = { kind: string; title: string; hint: string; enabled: boolean }
 
 // Each kind of notification can be turned off. Turning one off stops new ones of that kind from arriving.
 export function NotificationPrefs({ rows }: { rows: Row[] }) {
   return (
-    <ul className="flex flex-col divide-y divide-border">
+    <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
       {rows.map((row) => (
         <PrefRow key={row.kind} row={row} />
       ))}
@@ -23,7 +23,7 @@ function PrefRow({ row }: { row: Row }) {
   const [pending, startTransition] = useTransition()
   const hintId = `notification-pref-${row.kind}`
   return (
-    <li className="flex items-center justify-between gap-4 py-3.5">
+    <li className="flex items-center justify-between gap-4 px-4 py-3.5">
       <div className="min-w-0">
         <p className="font-semibold">{row.title}</p>
         <p id={hintId} className="text-sm text-muted-foreground">
@@ -50,9 +50,9 @@ function PrefRow({ row }: { row: Row }) {
             }
           })
         }}
-        className={cn("tap-44 relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors", on ? "border-dusk bg-dusk" : "border-border bg-muted")}
+        className="tap-44 inline-flex shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className={cn("size-5 rounded-full bg-background shadow transition-transform", on ? "translate-x-[22px]" : "translate-x-[3px]")} />
+        <ToggleSwitch on={on} />
       </button>
     </li>
   )

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VOICE_BYTES } from "@/lib/rules"
+import { MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS } from "@/lib/rules"
 import { stripImageMetadata } from "@/lib/image-metadata"
 import { objectSize, readObject, removeObjects, storeObject } from "@/lib/storage"
 import { trimProblem, type Trim } from "@/lib/trim-rules"
@@ -10,7 +10,7 @@ import { VideoRefused, withCleanVideo, type VideoCut } from "@/lib/video-metadat
 
 export { storeObject }
 
-export type MediaKind = "image" | "video" | "audio"
+export type MediaKind = "image" | "video" | "audio" | "document"
 
 type Format = { ext: string; kind: MediaKind; mime: string }
 
@@ -26,11 +26,25 @@ const FORMATS: Record<string, Format> = {
   "audio/webm": { ext: "weba", kind: "audio", mime: "audio/webm" },
   "audio/mp4": { ext: "m4a", kind: "audio", mime: "audio/mp4" },
   "audio/ogg": { ext: "oga", kind: "audio", mime: "audio/ogg" },
+  // Audio files from the gallery.
+  "audio/mpeg": { ext: "mp3", kind: "audio", mime: "audio/mpeg" },
+  "audio/wav": { ext: "wav", kind: "audio", mime: "audio/wav" },
+  // Documents sent in a chat. They are served as downloads, never shown inside the page.
+  "application/pdf": { ext: "pdf", kind: "document", mime: "application/pdf" },
+  "text/plain": { ext: "txt", kind: "document", mime: "text/plain" },
+  "text/csv": { ext: "csv", kind: "document", mime: "text/csv" },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { ext: "docx", kind: "document", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { ext: "xlsx", kind: "document", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": { ext: "pptx", kind: "document", mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+  "application/zip": { ext: "zip", kind: "document", mime: "application/zip" },
 }
+
+// The extensions of documents, which are always served as downloads.
+export const DOCUMENT_EXTS: ReadonlySet<string> = new Set(["pdf", "txt", "csv", "docx", "xlsx", "pptx", "zip"])
 
 const BY_EXT: Record<string, Format> = Object.fromEntries(Object.values(FORMATS).map((f) => [f.ext, f]))
 
-export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga)$/
+export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga|mp3|wav|pdf|txt|csv|docx|xlsx|pptx|zip)$/
 
 function matchesSignature(buf: Buffer, mime: string): boolean {
   if (mime === "image/jpeg") return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
@@ -45,12 +59,23 @@ function matchesSignature(buf: Buffer, mime: string): boolean {
   if (mime === "video/webm" || mime === "audio/webm") return buf.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
   if (mime === "audio/mp4") return buf.subarray(4, 8).toString("ascii") === "ftyp"
   if (mime === "audio/ogg") return buf.subarray(0, 4).toString("ascii") === "OggS"
+  if (mime === "audio/mpeg") {
+    // An ID3 tag, or an MPEG frame sync.
+    return buf.subarray(0, 3).toString("ascii") === "ID3" || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)
+  }
+  if (mime === "audio/wav") return buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WAVE"
+  if (mime === "application/pdf") return buf.subarray(0, 4).toString("ascii") === "%PDF"
+  // Office files and ZIP archives are ZIP containers.
+  if (mime === "application/zip" || mime.startsWith("application/vnd.openxmlformats")) return buf.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+  // Plain text has no NUL bytes in its first part.
+  if (mime === "text/plain" || mime === "text/csv") return !buf.subarray(0, 4096).includes(0)
   return false
 }
 
 export type SaveResult = { ok: true; name: string; kind: MediaKind } | { ok: false; error: string }
 
 const VIDEO_MB = MAX_VIDEO_BYTES / (1024 * 1024)
+const MAX_DOCUMENT_MB = MAX_DOCUMENT_BYTES / (1024 * 1024)
 
 // The size of an upload, or null when it is missing.
 export async function uploadSize(name: string): Promise<number | null> {
@@ -76,23 +101,33 @@ export async function removeUpload(name: string | null | undefined): Promise<voi
 // the post carries nothing of the rest. The window is checked here against the length of the real file.
 export async function saveUpload(
   value: FormDataEntryValue | null,
-  accept: "image" | "audio" | "any" = "any",
+  accept: "image" | "audio" | "document" | "any" = "any",
   trim: Trim | null = null
 ): Promise<SaveResult | null> {
   if (!(value instanceof File) || value.size === 0) return null
   // A recorder can label its type with codecs ("audio/webm;codecs=opus"). The codecs are not part of the format.
   const type = value.type.split(";")[0].trim()
   const format = FORMATS[type]
-  if (!format) return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, or an MP4, WebM or MOV video." }
+  if (!format) return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, an MP4, WebM or MOV video, or a file of a type that can be sent." }
   if (accept === "image" && format.kind !== "image") return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image." }
-  if (accept === "audio" && format.kind !== "audio") return { ok: false, error: "Send a voice recording." }
-  if (accept === "any" && format.kind === "audio") return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, or an MP4, WebM or MOV video." }
+  if (accept === "audio" && format.kind !== "audio") return { ok: false, error: "Send a voice recording or an audio file." }
+  if (accept === "document" && format.kind !== "document") return { ok: false, error: "Send a PDF, Word, Excel, PowerPoint, text, CSV or ZIP file." }
+  if (accept === "any" && (format.kind === "audio" || format.kind === "document")) {
+    return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, or an MP4, WebM or MOV video." }
+  }
   if (trim && format.kind !== "video") return { ok: false, error: "Only a video can be trimmed." }
-  const limit = format.kind === "video" ? MAX_VIDEO_BYTES : format.kind === "audio" ? MAX_VOICE_BYTES : MAX_IMAGE_BYTES
+  const limit = format.kind === "video" ? MAX_VIDEO_BYTES : format.kind === "image" ? MAX_IMAGE_BYTES : MAX_DOCUMENT_BYTES
   if (value.size > limit) {
     return {
       ok: false,
-      error: format.kind === "video" ? `Videos can be up to ${VIDEO_MB} MB.` : format.kind === "audio" ? "Voice messages are too long." : "Images can be up to 4 MB.",
+      error:
+        format.kind === "video"
+          ? `Videos can be up to ${VIDEO_MB} MB.`
+          : format.kind === "image"
+            ? "Images can be up to 4 MB."
+            : format.kind === "audio"
+              ? `Audio can be up to ${MAX_DOCUMENT_MB} MB.`
+              : `Files can be up to ${MAX_DOCUMENT_MB} MB.`,
     }
   }
 
@@ -109,7 +144,8 @@ export async function saveUpload(
       return { ok: false, error: "That file didn't finish uploading. Try again." }
     }
     if (!matchesSignature(buf, type)) {
-      const problem = format.kind === "audio" ? "That file is not a valid recording." : "That file is not a valid image."
+      const problem =
+        format.kind === "audio" ? "That file is not a valid recording or audio file." : format.kind === "document" ? "That file is not the type it says it is." : "That file is not a valid image."
       return { ok: false, error: problem }
     }
     // A photo keeps its picture only. Location, camera and time details are removed before anything is stored.

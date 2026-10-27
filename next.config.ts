@@ -1,10 +1,11 @@
 import type { NextConfig } from "next";
 
-// Headers sent with every response. Calls need the microphone and, for video calls, the camera, so both are allowed for this origin only.
+// Headers sent with every response. Calls need the microphone and, for video calls, the camera. A chat can share where the person
+// is, when they pick Location, so geolocation is allowed for this origin only. Everything else stays off.
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(self), geolocation=(), payment=(), usb=(), microphone=(self)" },
+  { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), payment=(), usb=(), microphone=(self)" },
   { key: "X-Frame-Options", value: "DENY" },
   ...(process.env.NODE_ENV === "production" ? [{ key: "Strict-Transport-Security", value: "max-age=31536000" }] : []),
 ]

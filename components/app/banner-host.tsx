@@ -82,13 +82,14 @@ export function BannerHost() {
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-3 top-[max(12px,env(safe-area-inset-top))] z-[75] flex flex-col gap-2.5 lg:inset-x-auto lg:top-5 lg:right-5 lg:w-[360px]"
+      className="pointer-events-none fixed inset-x-3 top-[max(12px,env(safe-area-inset-top))] z-[75] flex flex-col gap-2.5 lg:inset-x-auto lg:top-auto lg:right-5 lg:bottom-5 lg:w-max lg:max-w-[360px]"
     >
       <AnimatePresence initial={false}>
         {joinable.map((live) => (
           <JoinBanner key={`join-${live.callId}`} live={live} onOpen={() => router.push(`/messages/${live.conversationId}`)} />
         ))}
-        {banners.map((banner) => (
+        {/* Newest last, so on a computer, where the stack sits at the bottom right, the newest is nearest the corner. */}
+        {[...banners].reverse().map((banner) => (
           <BannerCard key={banner.key} banner={banner} onOpen={() => open(banner)} onDismiss={() => dismiss(banner.key)} />
         ))}
       </AnimatePresence>
@@ -100,9 +101,9 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
   const Icon = ICONS[banner.kind]
   return (
     <motion.div
-      initial={{ opacity: 0, y: -22, scale: 0.96 }}
+      initial={{ opacity: 0, y: 18, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -14, scale: 0.97, transition: { duration: 0.18 } }}
+      exit={{ opacity: 0, y: 12, scale: 0.97, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
@@ -157,9 +158,9 @@ function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -22, scale: 0.96 }}
+      initial={{ opacity: 0, y: 18, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -14, scale: 0.97, transition: { duration: 0.18 } }}
+      exit={{ opacity: 0, y: 12, scale: 0.97, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}

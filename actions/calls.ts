@@ -18,6 +18,7 @@ import {
   type StartResult,
 } from "@/lib/call-state"
 import { blockedEitherWay } from "@/lib/notify"
+import { pushCallRing } from "@/lib/push"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { CALL_CANDIDATE_MAX, CALL_SDP_MAX } from "@/lib/rules"
 
@@ -129,7 +130,13 @@ export async function startCall(conversationId: string, deviceId: string, video 
   const limited = await startLimited(viewer.id)
   if (limited) return { ok: false, error: limited }
   const caller: Device = { userId: viewer.id, deviceId: device, session: await currentSessionHash() }
-  return await startDmCall(id, caller, callee, from, video === true)
+  const started = await startDmCall(id, caller, callee, from, video === true)
+  if (started.ok && started.mode === "ringing") {
+    void pushCallRing(id, { id: viewer.id, name: from.name }, null, video === true, [other.user_id]).catch((error) =>
+      console.error("[push] ring failed", error)
+    )
+  }
+  return started
 }
 
 // Starts a voice call in a group, or joins the one already going there.

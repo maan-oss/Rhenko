@@ -121,6 +121,46 @@ export function messagePush(input: MessagePushInput): PushPayload {
   }
 }
 
+export type CallPushInput = {
+  conversationId: string
+  callerName: string
+  // The group's name, empty for a group nobody named. Null for a one-to-one call.
+  group: string | null
+  video: boolean
+}
+
+// A push for a call that is ringing, to someone whose app is closed. The next ring in the same conversation replaces it.
+export function callPush(input: CallPushInput): PushPayload {
+  const body = input.group !== null ? "Incoming group call" : input.video ? "Incoming video call" : "Incoming voice call"
+  return {
+    title: input.group ? `${input.callerName} in ${input.group}` : input.callerName,
+    body,
+    tag: `call:${input.conversationId}`,
+    url: `/messages/${encodeURIComponent(input.conversationId)}`,
+    renotify: true,
+  }
+}
+
+export type GroupAddPushInput = {
+  conversationId: string
+  adderName: string
+  group: string
+  // The person was invited from outside their follows, so they accept before the group is theirs.
+  requested: boolean
+}
+
+// A push for being added to a group. The group opens from its page, where an invite is accepted.
+export function groupAddPush(input: GroupAddPushInput): PushPayload {
+  const place = input.group.trim() || "a group chat"
+  return {
+    title: input.adderName,
+    body: input.requested ? `Invited you to ${place}` : `Added you to ${place}`,
+    tag: `group:${input.conversationId}`,
+    url: `/messages/${encodeURIComponent(input.conversationId)}`,
+    renotify: true,
+  }
+}
+
 // One push per event. A like taken back and given again, or a poll announced again after a crash, has the same key.
 export function pushEventKey(kind: NotificationKind, actorId: string, postId: string | null): string {
   return `${kind}:${actorId}:${postId ?? ""}`

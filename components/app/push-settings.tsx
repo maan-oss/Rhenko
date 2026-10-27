@@ -6,10 +6,10 @@ import { BellRing, Monitor, Share, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { removePushDevice, setMessagePreviews, turnOffPush, turnOnPush } from "@/actions/push"
 import { RelativeTime } from "@/components/app/time-text"
+import { ToggleSwitch } from "@/components/app/toggle-switch"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PUSH_NOT_SET_UP, type PushDeviceView } from "@/lib/notify-rules"
-import { cn } from "@/lib/utils"
 
 // What this browser can do about push. Browsers differ, and the server can't tell which one is asking, so it is worked out
 // here after the page loads.
@@ -133,7 +133,7 @@ function ThisDevice({ publicKey, serverOn }: { publicKey: string; serverOn: bool
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
         <BellRing className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5" aria-live="polite">
@@ -195,32 +195,32 @@ export function PreviewChoice({ initial, hint = PREVIEW_HINT }: { initial: boole
       aria-label="Show message previews"
       disabled={pending}
       onClick={toggle}
-      className="flex w-full items-center justify-between gap-4 rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-muted disabled:opacity-60"
+      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-card px-4 py-4 text-left transition-colors hover:bg-muted disabled:opacity-60"
     >
-      <span className="flex flex-col gap-0.5">
+      <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[15px] font-semibold">Show message previews</span>
         <span className="text-sm text-muted-foreground">{hint}</span>
       </span>
-      <span aria-hidden className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-dusk" : "bg-muted-foreground/40")}>
-        <span className={cn("absolute top-0.5 left-0.5 size-5 rounded-full bg-background shadow transition-transform", on && "translate-x-5")} />
-      </span>
+      <ToggleSwitch on={on} />
     </button>
   )
 }
 
 function DeviceList({ devices }: { devices: PushDeviceView[] }) {
   return (
-    <div className="flex flex-col gap-1">
-      <h3 className="font-semibold">Devices with push</h3>
+    <div className="flex flex-col gap-2">
+      <h3 className="px-1 text-[15px] font-semibold">Devices with push</h3>
       {devices.length === 0 ? (
-        <p className="py-2 text-[15px] text-muted-foreground">No devices yet.</p>
+        <p className="rounded-2xl border border-border bg-card px-4 py-4 text-[15px] text-muted-foreground">No devices yet.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border">
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
           {devices.map((device) => {
             const Icon = /iOS|Android/.test(device.device) ? Smartphone : Monitor
             return (
-              <li key={device.id} className="flex items-center gap-3 py-3">
-                <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+              <li key={device.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted">
+                  <Icon className="size-[18px] text-muted-foreground" aria-hidden />
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-semibold">{device.device}</p>
                   <p className="text-sm text-muted-foreground">

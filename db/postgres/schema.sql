@@ -540,7 +540,10 @@ CREATE TABLE chat_messages (
   -- When a disappearing message is gone for everyone: its sent time plus the conversation's timer when it was sent.
   expires_at bigint,
   -- A line in the thread that records a change to the timer, with the new value (0 for off). NULL on every other message.
-  timer_change bigint);
+  timer_change bigint,
+  -- What the message carries besides its text, as JSON (lib/message-attachments.ts). NULL for a photo, video, audio file or
+  -- voice note, which are stored as media_file alone.
+  attachment text);
 
 CREATE TABLE community_notes (
   id text PRIMARY KEY,

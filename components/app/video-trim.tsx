@@ -159,7 +159,7 @@ export function VideoTrim({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className={cn("sm:max-w-lg", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
+      <DialogContent className={cn("gap-3 pt-3 sm:max-w-lg max-sm:pt-5", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
         <DialogTitle className="pr-8 text-base font-semibold">Trim your video</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
           {tooLong

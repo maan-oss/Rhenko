@@ -40,7 +40,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         // A toast is a raised card and its buttons are pills, the same shape as every other button. The colours are the
         // page's own ink and surface, so no toast carries a tint.
         classNames: {
-          toast: "cn-toast rounded-3xl border border-border bg-popover text-popover-foreground shadow-[0_14px_36px_-16px_rgb(0_0_0/0.35)]",
+          toast: "cn-toast !w-auto !max-w-[min(22rem,calc(100vw-2rem))] !min-w-[15rem] rounded-2xl border border-border/70 bg-popover/95 text-popover-foreground shadow-[0_18px_40px_-14px_rgb(0_0_0/0.32),0_2px_8px_-2px_rgb(0_0_0/0.12)] backdrop-blur-xl",
           actionButton: "!h-8 !rounded-full !bg-foreground !px-3.5 !text-[13px] !font-semibold !text-background",
           cancelButton: "!h-8 !rounded-full !bg-muted !px-3.5 !text-[13px] !font-semibold !text-foreground",
           closeButton: "!rounded-full !border-border !bg-background !text-foreground",

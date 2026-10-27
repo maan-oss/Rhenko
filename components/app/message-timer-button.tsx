@@ -41,16 +41,16 @@ export function MessageTimerButton({ conversationId, timer, disabled }: { conver
         render={
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="icon"
             aria-label={label}
             aria-busy={pending}
             title={disabled ? "Accept the request to change this" : label}
-            className="rounded-full"
+            className="size-11 rounded-full"
           />
         }
       >
-        <Timer className="size-4" />
+        <Timer className="size-[22px]" strokeWidth={1.9} />
         {on ? (
           <span
             aria-hidden="true"

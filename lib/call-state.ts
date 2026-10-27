@@ -17,6 +17,7 @@ import type { CallOutcome } from "@/lib/format"
 import { iceServersFor } from "@/lib/ice"
 import { blockedEitherWay } from "@/lib/notify"
 import { CALL_RING_MS } from "@/lib/rules"
+import { pushCallRing } from "@/lib/push"
 
 // Live calls: who is ringing, who is talking, and from which tab. Several server processes serve the calls, and a tab may
 // be connected to any of them, so the state lives in the database. Each call is one row that holds the call as a document.
@@ -707,11 +708,16 @@ export async function startGroupCall(conversationId: string, device: Device, per
     // have not blocked either person. Each check is awaited in turn. A predicate that is itself async would always count as
     // true, which rang everyone, the starter included, and ended the call for the starter when the ring ran out.
     const others: { user_id: string; muted: number }[] = []
+    // A member with no page open cannot see a ring, so their phone is rung by push instead.
+    const unheard: string[] = []
     for (const member of await acceptedMembers(conversationId)) {
       if (member.user_id === device.userId) continue
       if ((await busyState(member.user_id)) !== null) continue
-      if ((await listenerCount(member.user_id)) === 0) continue
       if (await blockedEitherWay(member.user_id, device.userId)) continue
+      if ((await listenerCount(member.user_id)) === 0) {
+        if (member.muted !== 1) unheard.push(member.user_id)
+        continue
+      }
       others.push(member)
     }
     const now = Date.now()
@@ -732,7 +738,7 @@ export async function startGroupCall(conversationId: string, device: Device, per
       togetherSince: null,
       togetherMs: 0,
     }
-    if (others.length === 0) {
+    if (others.length === 0 && unheard.length === 0) {
       await writeRecord(call, "missed", 0, 1, [device.userId])
       return { ok: false, error: "No one in this group is available right now." }
     }
@@ -749,6 +755,12 @@ export async function startGroupCall(conversationId: string, device: Device, per
         title: await groupTitle(conversationId, member.user_id),
         iceServers: iceServersFor(member.user_id),
       })
+    }
+    if (unheard.length > 0) {
+      const title = (await get<{ title: string }>("SELECT title FROM conversations WHERE id = ?", conversationId))?.title ?? ""
+      void pushCallRing(conversationId, { id: device.userId, name: person.name }, title, false, unheard).catch((error) =>
+        console.error("[push] group ring failed", error)
+      )
     }
     await broadcastGroup(call, true)
     return await joinedResult(call, me)

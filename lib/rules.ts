@@ -174,7 +174,8 @@ export const MAX_VIDEO_SECONDS = 140
 export const MAX_ALT = 1000
 // A voice message is recorded for up to two minutes. Opus at a voice bitrate keeps that far under the size limit.
 export const MAX_VOICE_SECONDS = 120
-export const MAX_VOICE_BYTES = 10 * 1024 * 1024
+// A file, or an audio file, sent in a chat. Documents and music are larger than a voice note, so they get this limit.
+export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
 export const POLL_MIN_OPTIONS = 2
 export const POLL_MAX_OPTIONS = 4
 export const MAX_POLL_OPTION = 25

@@ -5,7 +5,9 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import {
+  callPush,
   checkPushSubscription,
+  groupAddPush,
   mayNotify,
   messagePush,
   notificationPush,
@@ -173,4 +175,28 @@ test("a subscription with missing or malformed keys is refused", () => {
   assert.equal(checkPushSubscription({ endpoint: good.endpoint }).ok, false)
   assert.equal(checkPushSubscription({ ...good, keys: { ...good.keys, auth: "short" } }).ok, false)
   assert.equal(checkPushSubscription({ ...good, keys: { ...good.keys, p256dh: "A".repeat(87) } }).ok, false)
+})
+
+test("a ringing call is pushed with who is calling, what kind of call, and one tag per conversation", () => {
+  const dm = callPush({ conversationId: "c1", callerName: "Asha", group: null, video: true })
+  assert.equal(dm.title, "Asha")
+  assert.equal(dm.body, "Incoming video call")
+  assert.equal(dm.tag, "call:c1")
+  assert.equal(dm.url, "/messages/c1")
+  const group = callPush({ conversationId: "c2", callerName: "Asha", group: "Family", video: false })
+  assert.equal(group.title, "Asha in Family")
+  assert.equal(group.body, "Incoming group call")
+  const unnamed = callPush({ conversationId: "c3", callerName: "Asha", group: "", video: false })
+  assert.equal(unnamed.title, "Asha")
+  assert.equal(unnamed.body, "Incoming group call")
+})
+
+test("being added to a group is pushed as an add, or an invite that needs accepting", () => {
+  const added = groupAddPush({ conversationId: "g1", adderName: "Ravi", group: "Hiking", requested: false })
+  assert.equal(added.title, "Ravi")
+  assert.equal(added.body, "Added you to Hiking")
+  assert.equal(added.url, "/messages/g1")
+  const invited = groupAddPush({ conversationId: "g1", adderName: "Ravi", group: "", requested: true })
+  assert.equal(invited.body, "Invited you to a group chat")
+  assert.equal(invited.tag, "group:g1")
 })

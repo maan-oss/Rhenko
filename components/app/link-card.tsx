@@ -8,7 +8,7 @@ export function LinkCard({ preview }: { preview: LinkPreview }) {
       href={preview.url}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      className="relative z-10 mt-2 block overflow-hidden rounded-2xl border border-border text-foreground no-underline transition-colors duration-200 hover:bg-foreground/5"
+      className="relative z-10 mt-2 block w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border text-foreground no-underline transition-colors duration-200 hover:bg-foreground/5"
     >
       {preview.image ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -16,8 +16,8 @@ export function LinkCard({ preview }: { preview: LinkPreview }) {
       ) : null}
       <span className="block px-4 py-3">
         {preview.site ? <span className="block truncate text-[13px] text-muted-foreground">{preview.site}</span> : null}
-        <span className="mt-0.5 block line-clamp-2 font-semibold tracking-tight">{preview.title}</span>
-        {preview.description ? <span className="mt-1 block line-clamp-2 text-[14px] text-muted-foreground">{preview.description}</span> : null}
+        <span className="mt-0.5 block line-clamp-2 font-semibold tracking-tight [overflow-wrap:anywhere]">{preview.title}</span>
+        {preview.description ? <span className="mt-1 block line-clamp-2 text-[14px] text-muted-foreground [overflow-wrap:anywhere]">{preview.description}</span> : null}
       </span>
     </a>
   )

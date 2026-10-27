@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { sendNotification, type Urgency } from "web-push"
 import { all, change, get, outsideTransaction, run } from "@/lib/db"
 import { canSeePost, type NotificationKind } from "@/lib/data"
-import { mayNotify, messagePush, notificationPush, pushEventKey, vapidConfig, type PushDeviceView, type PushPayload } from "@/lib/notify-rules"
+import { callPush, groupAddPush, mayNotify, messagePush, notificationPush, pushEventKey, vapidConfig, type CallPushInput, type GroupAddPushInput, type PushDeviceView, type PushPayload } from "@/lib/notify-rules"
 
 // Web Push. When something notifies a person, each device they turned push on for gets a short encrypted message through
 // its browser's push service, and the service worker (public/sw.js) shows it, even with Rhenko closed. Nothing is sent
@@ -10,6 +10,8 @@ import { mayNotify, messagePush, notificationPush, pushEventKey, vapidConfig, ty
 
 // A push waits at the push service this long for a device that is offline. An alert a day old is not worth showing.
 const TTL_SECONDS = 24 * 60 * 60
+// A ring is only worth showing while it could still be answered. Past this, the phone shows nothing for it.
+const CALL_RING_TTL_SECONDS = 60
 const SEND_TIMEOUT_MS = 10_000
 // Pushes go out in the background, a few people at a time, so a poll with thousands of voters can't open thousands of
 // connections at once. Beyond MAX_WAITING the newest are dropped and logged.
@@ -102,16 +104,16 @@ export async function pushMessage(
   }
 }
 
-type Job = { devices: Device[]; payload: PushPayload; urgency: Urgency }
+type Job = { devices: Device[]; payload: PushPayload; urgency: Urgency; ttl: number }
 const waiting: Job[] = []
 let sending = 0
 
-function enqueue(devices: Device[], payload: PushPayload, urgency: Urgency): void {
+function enqueue(devices: Device[], payload: PushPayload, urgency: Urgency, ttl: number = TTL_SECONDS): void {
   if (waiting.length >= MAX_WAITING) {
     console.error("[push] too many pushes waiting; one was dropped")
     return
   }
-  waiting.push({ devices, payload, urgency })
+  waiting.push({ devices, payload, urgency, ttl })
   pump()
 }
 
@@ -140,7 +142,7 @@ async function deliver(job: Job): Promise<void> {
       try {
         await sendNotification({ endpoint: device.endpoint, keys: { p256dh: device.p256dh, auth: device.auth } }, body, {
           vapidDetails,
-          TTL: TTL_SECONDS,
+          TTL: job.ttl,
           urgency: job.urgency,
           topic,
           timeout: SEND_TIMEOUT_MS,
@@ -166,6 +168,30 @@ function hostOf(endpoint: string): string {
   } catch {
     return "unknown host"
   }
+}
+
+// A push for a call that is ringing. Its recipients are the people the call rings: in a one-to-one chat the other person,
+// in a group the members whose app is closed, since the open ones already ring on screen.
+export async function pushCallRing(conversationId: string, caller: { id: string; name: string }, group: string | null, video: boolean, recipientIds: string[]): Promise<void> {
+  if (!pushReady()) return
+  const input: CallPushInput = { conversationId, callerName: caller.name, group, video }
+  const payload = callPush(input)
+  for (const recipientId of recipientIds) {
+    if (recipientId === caller.id) continue
+    const devices = await devicesOf(recipientId)
+    if (devices.length === 0) continue
+    enqueue(devices, payload, "high", CALL_RING_TTL_SECONDS)
+  }
+}
+
+// A push for being added to a group. A person who muted the one who added them gets none, as with any other push.
+export async function pushGroupAdded(conversationId: string, adder: { id: string; name: string }, recipientId: string, group: string, requested: boolean): Promise<void> {
+  if (!pushReady() || adder.id === recipientId) return
+  if (await get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", recipientId, adder.id)) return
+  const devices = await devicesOf(recipientId)
+  if (devices.length === 0) return
+  const input: GroupAddPushInput = { conversationId, adderName: adder.name, group, requested }
+  enqueue(devices, groupAddPush(input), "high")
 }
 
 // The devices on the settings page, most recently active first.

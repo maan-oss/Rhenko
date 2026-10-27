@@ -36,16 +36,16 @@ export function CallButton({ conversationId, peer, disabled, video = false }: { 
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="icon"
       aria-label={ringingHere ? `Answer ${peer.name}` : video ? `Video call ${peer.name}` : `Call ${peer.name}`}
       aria-busy={pending}
       title={disabled ? "Accept the request to call" : video ? "Video call" : "Voice call"}
-      className="rounded-full"
+      className="size-11 rounded-full"
       disabled={disabled || pending}
       onClick={onClick}
     >
-      {video ? <Video className="size-4" /> : <Phone className="size-4" />}
+      {video ? <Video className="size-[22px]" strokeWidth={1.9} /> : <Phone className="size-[22px]" strokeWidth={1.9} />}
     </Button>
   )
 }

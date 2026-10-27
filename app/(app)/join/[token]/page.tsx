@@ -35,30 +35,28 @@ export default async function JoinGroupPage({ params }: { params: Params }) {
   return (
     <>
       <PageHeader title="Group invite" backHref="/messages" />
-      <section className="flex flex-col items-center px-6 pt-12 pb-10 text-center">
+      <section className="flex flex-col items-center px-6 pt-10 pb-10 text-center">
         <span aria-hidden="true" className="glass grid size-20 place-items-center rounded-full text-foreground">
           <Users className="size-8" strokeWidth={1.8} />
         </span>
-        <h2 className="mt-5 max-w-full text-[24px] leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h2>
-        <p className="mt-1.5 text-[15px] text-muted-foreground">{named ? `Group chat · ${people}` : people}</p>
-        <div className="mt-7 flex w-full max-w-xs flex-col items-center">
-          {standing.blocked ? (
-            <p className="w-full rounded-2xl bg-muted px-4 py-3 text-[15px]">You can&apos;t join this group.</p>
-          ) : full ? (
-            <p className="w-full rounded-2xl bg-muted px-4 py-3 text-[15px]">
-              This group is full. Groups can have up to {MAX_GROUP_MEMBERS} people.
-            </p>
-          ) : (
-            <JoinGroupButton token={token} title={title} />
-          )}
-        </div>
-        {standing.blocked || full ? null : (
-          <p className="mt-6 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            {standing.status === "requested"
-              ? "You're invited to this group already. Joining accepts the invite. "
-              : "You join straight away, with no approval. "}
-            Everyone in the group sees your name and handle, and you see theirs and the group&apos;s messages.
+        <p className="mt-5 text-sm text-muted-foreground">You&apos;re invited to</p>
+        <h2 className="mt-1 max-w-full text-[26px] leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h2>
+        <p className="mt-2 text-[15px] text-muted-foreground">{people}</p>
+
+        {standing.blocked ? (
+          <p className="mt-8 w-full max-w-xs rounded-2xl bg-muted px-4 py-3 text-[15px]">You can&apos;t join this group.</p>
+        ) : full ? (
+          <p className="mt-8 w-full max-w-xs rounded-2xl bg-muted px-4 py-3 text-[15px]">
+            This group is full. Groups can have up to {MAX_GROUP_MEMBERS} people.
           </p>
+        ) : (
+          <div className="mt-8 flex w-full max-w-xs flex-col items-center gap-4">
+            <JoinGroupButton token={token} title={title} />
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {standing.status === "requested" ? "Joining accepts the invite you already have. " : null}
+              Everyone in the group sees your name and handle. You see theirs in the group&apos;s messages.
+            </p>
+          </div>
         )}
       </section>
     </>

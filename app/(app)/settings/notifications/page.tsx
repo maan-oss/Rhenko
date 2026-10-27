@@ -36,9 +36,11 @@ async function NotificationBody() {
   return (
     <>
       <PageHeader title="Notifications" backHref="/settings" />
-      <div className="px-4 py-2">
+      <section className="flex flex-col gap-3 px-4 py-4">
+        <h2 className="text-lg font-semibold">Alerts</h2>
+        <p className="text-sm text-muted-foreground">Turn off a kind to stop new ones of it arriving, in the app and by push.</p>
         <NotificationPrefs rows={rows} />
-      </div>
+      </section>
       <section className="flex flex-col gap-3 border-t border-border px-4 py-4">
         <h2 className="text-lg font-semibold">Push notifications</h2>
         <p className="text-sm text-muted-foreground">

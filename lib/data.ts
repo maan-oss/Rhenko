@@ -16,7 +16,7 @@ import {
   type ReplySetting,
 } from "@/lib/rules"
 import type { MediaKind } from "@/lib/uploads"
-import { isVoiceFile } from "@/lib/media-names"
+import { attachmentPreview, parseAttachment, quoteLabel, type Attachment } from "@/lib/message-attachments"
 import { parseStickerSet, type StickerSet } from "@/lib/stickers"
 import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib/link-previews"
 import { callSummary, type CallOutcome } from "@/lib/format"
@@ -1840,6 +1840,7 @@ type LastMessage = {
   deleted_at: number | null
   media_file: string | null
   post_id: string | null
+  attachment: string | null
   call_status: CallOutcome | null
   call_seconds: number
   call_kind: "dm" | "group"
@@ -1855,7 +1856,7 @@ export function unexpired(alias: string): string {
 
 async function lastMessageOf(conversationId: string, viewerId: string): Promise<LastMessage | undefined> {
   return await get<LastMessage>(
-    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change
+    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change
      FROM chat_messages m
      WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
     conversationId,
@@ -1872,8 +1873,10 @@ function previewOfLast(last: LastMessage | undefined, viewerId: string): string 
     return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId, last.call_kind, last.call_people)
   }
   if (last.timer_change !== null) return timerLine(last.timer_change)
-  if (last.media_file) return isVoiceFile(last.media_file) ? "Sent a voice message" : "Sent a photo"
-  return last.body || (last.post_id ? "Shared a post" : "")
+  if (last.body) return last.body
+  const attached = attachmentPreview(parseAttachment(last.attachment), last.media_file)
+  if (attached) return attached
+  return last.post_id ? "Shared a post" : ""
 }
 
 // A one-to-one conversation (alias c) where the viewer and the other person have blocked each other, in either
@@ -2113,6 +2116,10 @@ export type MessageView = {
   expiresAt: number | null
   // A line recording a change to the disappearing-messages timer: the new value in milliseconds, 0 for off.
   timerChange: number | null
+  // What the message carries besides its text (a document, a scan, a contact or a location). Null when nothing else.
+  attachment: Attachment | null
+  // The person a contact card is about, when that account is still there. Null for any other message.
+  contact: MiniUser | null
 }
 
 type MessageRow = {
@@ -2122,6 +2129,7 @@ type MessageRow = {
   lang: string | null
   media_file: string | null
   post_id: string | null
+  attachment: string | null
   created_at: number
   deleted_at: number | null
   call_status: CallOutcome | null
@@ -2134,6 +2142,7 @@ type MessageRow = {
   reply_id: string | null
   reply_body: string | null
   reply_media: string | null
+  reply_attachment: string | null
   reply_post: string | null
   reply_deleted: number | null
   reply_sender_name: string | null
@@ -2148,11 +2157,11 @@ type MessageRow = {
 function messageSelect(conversationId: string, viewerId: string): { select: string; params: Param[] } {
   const now = Date.now()
   return {
-    select: `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
+    select: `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.attachment, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
        m.expires_at, m.timer_change,
        u.name AS sender_name, u.handle AS sender_handle,
        m.reply_to_id, rm.id AS reply_id, rm.body AS reply_body, rm.media_file AS reply_media, rm.post_id AS reply_post,
-       rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name
+       rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name, rm.attachment AS reply_attachment
      FROM chat_messages m
      JOIN users u ON u.id = m.sender_id
      LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")} AND ${unexpired("rm")}
@@ -2163,12 +2172,10 @@ function messageSelect(conversationId: string, viewerId: string): { select: stri
 }
 
 // A short line for a quoted message: its text, or what it was instead.
-function replySnippet(body: string, media: string | null, post: string | null): string {
+function replySnippet(body: string, media: string | null, post: string | null, attachment: Attachment | null): string {
   const text = body.replace(/\s+/g, " ").trim()
   if (text) return [...text].length > 140 ? `${[...text].slice(0, 139).join("")}…` : text
-  if (media) return isVoiceFile(media) ? "Voice message" : "Photo"
-  if (post) return "Shared a post"
-  return "Message"
+  return quoteLabel(attachment, media, post !== null)
 }
 
 // The latest messages in a conversation, oldest first. Empty for anyone who may not read it.
@@ -2220,7 +2227,12 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
     true
   )
   const posts = new Map((await loadPosts([...shared], viewerId)).map((p) => [p.id, p]))
+  const attachments = new Map(rows.map((r) => [r.id, r.deleted_at ? null : parseAttachment(r.attachment)]))
+  const contacts = await loadMiniUsers(
+    [...attachments.values()].flatMap((a) => (a?.kind === "contact" ? [a.userId] : []))
+  )
   return rows.map((r) => {
+    const attachment = attachments.get(r.id) ?? null
     const others = readers.filter((m) => m.user_id !== r.sender_id)
     const seen = r.sender_id === viewerId && others.length > 0 && others.every((m) => m.last_read_at >= r.created_at)
     const post = r.post_id && !r.deleted_at ? posts.get(r.post_id) ?? null : null
@@ -2229,7 +2241,7 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
         ? {
             id: r.reply_id,
             senderName: r.reply_sender_name ?? "Someone",
-            snippet: r.reply_deleted ? "" : replySnippet(r.reply_body ?? "", r.reply_media, r.reply_post),
+            snippet: r.reply_deleted ? "" : replySnippet(r.reply_body ?? "", r.reply_media, r.reply_post, parseAttachment(r.reply_attachment)),
             deleted: r.reply_deleted !== null,
           }
         : null
@@ -2254,6 +2266,8 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       reactions: reactions.get(r.id) ?? [],
       expiresAt: r.expires_at,
       timerChange: r.timer_change,
+      attachment,
+      contact: attachment?.kind === "contact" ? contacts.get(attachment.userId) ?? null : null,
     }
   })
 }

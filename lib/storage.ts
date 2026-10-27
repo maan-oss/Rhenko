@@ -289,7 +289,7 @@ export async function removeObjects(names: string[]): Promise<void> {
 export async function serveObject(
   name: string,
   request: Request,
-  options: { contentType: string; cacheControl: string }
+  options: { contentType: string; cacheControl: string; disposition?: string }
 ): Promise<Response | null> {
   if (R2) {
     return new Response(null, {
@@ -318,6 +318,7 @@ export async function serveObject(
     "Accept-Ranges": "bytes",
     "Cache-Control": options.cacheControl,
     "X-Content-Type-Options": "nosniff",
+    ...(options.disposition ? { "Content-Disposition": options.disposition, "Content-Security-Policy": "sandbox" } : {}),
   }
   const rangeError = { "Cache-Control": options.cacheControl, "X-Content-Type-Options": "nosniff" }
   const range = request.headers.get("range")

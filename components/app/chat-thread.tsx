@@ -8,10 +8,13 @@ import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/me
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { removePending, usePending } from "@/components/app/pending-messages"
 import { PostBody } from "@/components/app/post-body"
+import { ContactCard, DocumentCard, LocationCard } from "@/components/app/attachment-view"
+import { VideoPlayer } from "@/components/app/video-player"
 import { TranslateControl } from "@/components/app/translate-control"
 import { LocalTime } from "@/components/app/time-text"
 import { callSummary } from "@/lib/format"
-import { isVoiceFile } from "@/lib/media-names"
+import { isAudioFile, isDocumentFile, isVideoFile, isVoiceFile } from "@/lib/media-names"
+import { quoteLabel } from "@/lib/message-attachments"
 import { isExpired, nextExpiry, timerLine } from "@/lib/message-timers"
 import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
@@ -281,9 +284,7 @@ function CallEvent({ message }: { message: MessageView }) {
 // What a message reads as when it is quoted: its words, or what it was instead.
 function previewOf(message: MessageView): string {
   if (message.body) return message.body
-  if (message.mediaFile) return isVoiceFile(message.mediaFile) ? "Voice message" : "Photo"
-  if (message.post) return "Shared a post"
-  return ""
+  return quoteLabel(message.attachment, message.mediaFile, message.post !== null)
 }
 
 // Scrolls to a message on screen and lights it for a moment. Reduced motion gets the jump without the flash.
@@ -382,9 +383,31 @@ function MessageRow({
               ) : null}
               {message.mediaFile && isVoiceFile(message.mediaFile) ? (
                 <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
+              ) : message.mediaFile && isVideoFile(message.mediaFile) ? (
+                <div className="w-full max-w-[300px] overflow-hidden rounded-xl">
+                  <VideoPlayer src={`/media/${message.mediaFile}`} label="Shared video" maxHeight="320px" />
+                </div>
+              ) : message.mediaFile && isAudioFile(message.mediaFile) ? (
+                <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Audio file" className="block h-10 w-[260px] max-w-full" />
+              ) : message.mediaFile && isDocumentFile(message.mediaFile) ? (
+                <DocumentCard
+                  file={message.mediaFile}
+                  name={message.attachment?.kind === "document" ? message.attachment.name : "File"}
+                  size={message.attachment?.kind === "document" ? message.attachment.size : 0}
+                  mine={message.mine}
+                />
               ) : message.mediaFile ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={`/media/${message.mediaFile}?w=1280`} alt="Shared photo" loading="lazy" decoding="async" className="max-h-72 rounded-xl object-cover" />
+                <span className="relative block w-fit max-w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} loading="lazy" decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
+                  {message.attachment?.kind === "scan" ? (
+                    <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">Scan</span>
+                  ) : null}
+                </span>
+              ) : null}
+              {message.attachment?.kind === "contact" ? <ContactCard user={message.contact} mine={message.mine} /> : null}
+              {message.attachment?.kind === "location" ? (
+                <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} mine={message.mine} />
               ) : null}
               {message.body ? (
                 <>
