@@ -11,6 +11,7 @@ import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
 import { recordMissingLanguages } from "@/lib/translate"
 import { answerQuestions } from "@/lib/sahayak"
+import { expireMessages } from "@/lib/message-expiry"
 
 // Background work that does not wait for anyone to open a page. Several server processes run this timer. Each tick asks
 // the database for the maintenance lease, and only the holder does the shared work: scheduled posts go live on time, polls
@@ -63,6 +64,13 @@ export async function runMaintenance(now = Date.now()): Promise<void> {
   await run("DELETE FROM email_codes WHERE expires_at < ?", now)
   // Hidden posts whose appeal window has closed, or whose appeal failed, are deleted here.
   await purgeHidden(now)
+  // Disappearing messages whose time is up are deleted for everyone. Reads already skip them, so a failure here is logged
+  // and the rest of the pass goes on.
+  try {
+    await expireMessages(now)
+  } catch (error) {
+    console.error("[maintenance] removing expired messages failed", error)
+  }
   if (now - lastRetentionPass >= HOUR) {
     lastRetentionPass = now
     await keepWithinRetention(now)

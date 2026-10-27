@@ -6,13 +6,14 @@ import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
-import { canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
+import { canReadConversation, canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
 import { blockedEitherWay } from "@/lib/notify"
 import { isVoiceFile } from "@/lib/media-names"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
 import { removeUpload, saveUpload } from "@/lib/uploads"
+import { asMessageTimer, expiryFor, isExpired } from "@/lib/message-timers"
 
 export type ChatState = { error?: string; sent?: boolean }
 export type IdResult = { ok: true; id: string } | { ok: false; error: string }
@@ -166,7 +167,8 @@ function previewOf(body: string, media: string | null, hasPost: boolean): string
   return ""
 }
 
-// Writes a message and marks it read for its sender. Every member gets a refresh.
+// Writes a message and marks it read for its sender. Every member gets a refresh. While the conversation's timer is on, the
+// message is given the moment it disappears: the timer in force now, never one set later.
 async function insertMessage(
   conversationId: string,
   senderId: string,
@@ -176,8 +178,9 @@ async function insertMessage(
   replyToId: string | null
 ): Promise<void> {
   const now = Date.now()
+  const timer = (await get<{ message_timer: number }>("SELECT message_timer FROM conversations WHERE id = ?", conversationId))?.message_timer ?? 0
   await run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     newId(),
     conversationId,
     senderId,
@@ -186,7 +189,8 @@ async function insertMessage(
     postId,
     now,
     languageOf(body),
-    replyToId
+    replyToId,
+    expiryFor(now, timer)
   )
   await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
@@ -484,13 +488,17 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   }
   if (postId && !await sendablePost(postId, viewer.id)) return { error: POST_UNAVAILABLE }
 
-  // A reply has to point at a live message in this same chat. A call record or a deleted message can't be answered.
+  // A reply has to point at a live message in this same chat. A call record, a timer change, a deleted message or one that
+  // has disappeared can't be answered.
   const replyToId = asId(formData.get("replyTo"))
   if (replyToId) {
     const target = await get<{ id: string; sender_id: string }>(
-      "SELECT id, sender_id FROM chat_messages WHERE id = ? AND conversation_id = ? AND call_status IS NULL AND deleted_at IS NULL",
+      `SELECT id, sender_id FROM chat_messages
+       WHERE id = ? AND conversation_id = ? AND call_status IS NULL AND timer_change IS NULL AND deleted_at IS NULL
+         AND (expires_at IS NULL OR expires_at > ?)`,
       replyToId,
-      conversationId
+      conversationId,
+      Date.now()
     )
     if (!target || await blockedEitherWay(viewer.id, target.sender_id)) return { error: "That message can't be replied to anymore." }
   }
@@ -599,12 +607,12 @@ export async function toggleReaction(messageId: string, emoji: string): Promise<
   if (!(REACTIONS as readonly string[]).includes(emoji)) return { ok: false, error: "That reaction isn't available." }
   const id = asId(messageId)
   const message = id
-    ? await get<{ conversation_id: string; sender_id: string; deleted_at: number | null }>(
-        "SELECT conversation_id, sender_id, deleted_at FROM chat_messages WHERE id = ?",
+    ? await get<{ conversation_id: string; sender_id: string; deleted_at: number | null; expires_at: number | null }>(
+        "SELECT conversation_id, sender_id, deleted_at, expires_at FROM chat_messages WHERE id = ?",
         id
       )
     : undefined
-  if (!id || !message || message.deleted_at) return { ok: false, error: "That message was deleted." }
+  if (!id || !message || message.deleted_at || isExpired(message.expires_at, Date.now())) return { ok: false, error: "That message was deleted." }
   if (await memberStatus(message.conversation_id, viewer.id) !== "accepted") return { ok: false, error: "Accept this conversation first." }
   if (await blockedEitherWay(viewer.id, message.sender_id)) return { ok: false, error: "That message was deleted." }
 
@@ -653,4 +661,44 @@ export async function toggleConversationMute(conversationId: string): Promise<Vo
   await run("UPDATE conversation_members SET muted = ? WHERE conversation_id = ? AND user_id = ?", muted, id, viewer.id)
   refresh()
   return { ok: true, muted: muted === 1 }
+}
+
+// A person can change a conversation's timer this many times in TIMER_WINDOW_MS. Each change writes a line in the thread.
+const TIMER_LIMIT = 10
+const TIMER_WINDOW_MS = 10 * 60 * 1000
+
+// Sets the disappearing-messages timer for everyone in the conversation, and records the change in the thread. Anyone who
+// has joined it can. The timer applies to messages sent from now on; messages already sent keep the timer they had.
+export async function setMessageTimer(conversationId: string, timer: number): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const status = id ? await memberStatus(id, viewer.id) : null
+  if (!id || !status || !await canReadConversation(id, viewer.id)) return { ok: false, error: "That conversation doesn't exist." }
+  if (status !== "accepted") return { ok: false, error: "Accept this conversation first." }
+  if (await directConversationClosed(id, viewer.id)) return { ok: false, error: "They can't receive messages here anymore." }
+  const next = asMessageTimer(timer)
+  if (next === null) return { ok: false, error: "Choose Off, 24 hours, 7 days or 30 days." }
+  const current = (await get<{ message_timer: number }>("SELECT message_timer FROM conversations WHERE id = ?", id))?.message_timer ?? 0
+  if (current === next) return { ok: true }
+  const slowDown = await tooFast(`timer:${viewer.id}`, TIMER_LIMIT, TIMER_WINDOW_MS, "You've changed disappearing messages a lot.")
+  if (slowDown) return { ok: false, error: slowDown }
+
+  const now = Date.now()
+  await transaction(async () => {
+    await run("UPDATE conversations SET message_timer = ?, updated_at = ? WHERE id = ?", next, now, id)
+    // The record of the change is a line in the thread, and it stays when the timer is on: it is not a message to expire.
+    await run(
+      "INSERT INTO chat_messages (id, conversation_id, sender_id, body, created_at, lang, timer_change) VALUES (?, ?, ?, '', ?, '', ?)",
+      newId(),
+      id,
+      viewer.id,
+      now,
+      next
+    )
+    await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, id, viewer.id)
+  })
+  await publish(await memberIds(id), { type: "message", conversationId: id })
+  refresh()
+  return { ok: true }
 }

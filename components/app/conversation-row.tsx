@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { Users } from "lucide-react"
+import { Timer, Users } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { RelativeTime } from "@/components/app/time-text"
 import type { ConversationSummary, MiniUser } from "@/lib/data"
+import { timerLabel } from "@/lib/message-timers"
 import { cn } from "@/lib/utils"
 
 // What a conversation is called in the list: the group's name, or the people in it when it has none.
@@ -47,6 +48,12 @@ export function ConversationRow({ conversation }: { conversation: ConversationSu
           <div className="flex items-baseline justify-between gap-2">
             <span className={cn("truncate text-[15px]", unread ? "font-bold" : "font-semibold")}>{conversationTitle(conversation)}</span>
             <span className="shrink-0 text-xs text-muted-foreground">
+              {conversation.messageTimer > 0 ? (
+                <>
+                  <Timer className="mr-1 inline size-3.5 align-[-3px]" aria-hidden="true" />
+                  <span className="sr-only">Disappearing messages: {timerLabel(conversation.messageTimer)}. </span>
+                </>
+              ) : null}
               <RelativeTime at={conversation.lastAt} />
             </span>
           </div>

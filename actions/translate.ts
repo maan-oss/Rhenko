@@ -64,14 +64,16 @@ export async function translateMessage(messageId: string): Promise<TranslateResu
   if (typeof messageId !== "string" || messageId.length === 0 || messageId.length > MAX_ID) return { ok: false, error: "That message can't be found." }
   if (!translationOn()) return { ok: false, error: "Translation isn't set up on this server." }
 
-  // A message from someone the viewer has blocked, or who has blocked them, is not readable here either.
+  // A message from someone the viewer has blocked, or who has blocked them, is not readable here either, and nor is a
+  // disappearing message whose time is up.
   const message = await get<{ body: string; lang: string | null; deleted_at: number | null }>(
     `SELECT m.body, m.lang, m.deleted_at FROM chat_messages m
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
-     WHERE m.id = ? AND NOT EXISTS (
+     WHERE m.id = ? AND (m.expires_at IS NULL OR m.expires_at > ?) AND NOT EXISTS (
        SELECT 1 FROM blocks bl WHERE (bl.blocker_id = ? AND bl.blocked_id = m.sender_id) OR (bl.blocker_id = m.sender_id AND bl.blocked_id = ?))`,
     viewer.id,
     messageId,
+    Date.now(),
     viewer.id,
     viewer.id
   )
