@@ -47,7 +47,7 @@ Every setting is optional. `.env.example` lists them, and a line that starts wit
 - `DATABASE_URL` points the app at Postgres (version 16 or later; the Compose file runs 17). It must be a direct connection or a session-mode pooler, not a transaction-mode one, because live events use `LISTEN`.
 - `RHENKO_STORAGE` chooses where uploads go: `r2` with the `RHENKO_R2_ENDPOINT`, `RHENKO_R2_BUCKET`, `RHENKO_R2_ACCESS_KEY_ID` and `RHENKO_R2_SECRET_ACCESS_KEY` settings for production, or `local` for development. Without it the app looks for Supabase settings instead.
 - `RHENKO_PUBLIC_URL` is the address people use, with `https`. Passkeys and Stripe checkout links are built from it.
-- `RHENKO_SECRET` (16 characters or more) protects the stored two-factor keys. Without it the server makes `data/secret.key` on first use, and that file is not in the database backups. Set it in production and keep a copy.
+- `RHENKO_SECRET` (16 characters or more) is required. It keys the encryption of stored two-factor keys and codes, and the server refuses to use them without it. Keep a copy: losing or changing it makes the stored two-factor keys unreadable (recovery codes still work).
 - `RHENKO_SMTP_URL` and `RHENKO_MAIL_FROM` send the email codes for address confirmation and password reset. In production, without SMTP, those features say email isn't set up.
 - `RHENKO_TRANSLATE_URL`, and `RHENKO_TRANSLATE_KEY` if that service needs one, turn on the translate button through a LibreTranslate-compatible service. Off by default, and only the text a reader asks to translate is sent.
 - `RHENKO_SARVAM_KEY` turns on Sahayak, the AI account that answers a mention of `@sahayak` under a post. It uses Sarvam AI (`RHENKO_SARVAM_URL` and `RHENKO_SARVAM_MODEL` can point it elsewhere). Off by default. When on, only the question and the posts it replies to or quotes that the asker can see are sent, and Sahayak labels its posts and profile as AI.
@@ -56,7 +56,7 @@ Every setting is optional. `.env.example` lists them, and a line that starts wit
 - `RHENKO_PROOF_BITS` sets how hard the built-in puzzle is, from 8 to 22 zero bits (default 16). The end-to-end suite sets it to 8 so each sign-up is quick.
 - `RHENKO_ICE_SERVERS`, or `RHENKO_TURN_SECRET` with `RHENKO_TURN_URLS`, give voice calls a TURN relay for networks that block direct connections. Without them calls use Google's public STUN server.
 - `RHENKO_OPERATOR_NAME` and `RHENKO_CONTACT_EMAIL` appear on the Terms and Privacy pages.
-- `RHENKO_DATA_DIR` moves the data folder (default `./data`), which holds the server key when `RHENKO_SECRET` is not set and, with `RHENKO_STORAGE=local`, the uploads. `PORT` sets the port for `npm start`; Compose serves ports 80 and 443 through Caddy.
+- `RHENKO_DATA_DIR` moves the data folder (default `./data`), which, with `RHENKO_STORAGE=local`, holds the uploads. `PORT` sets the port for `npm start`; Compose serves ports 80 and 443 through Caddy.
 - `RHENKO_WORKERS` sets how many worker processes serve the app (default 4, or the number of CPUs when there are fewer). `RHENKO_HOST` sets the address they listen on (default `0.0.0.0`).
 
 Production needs HTTPS: the sign-in cookie is marked Secure, and voice calls need a secure page.
@@ -169,6 +169,7 @@ The scripts read the same database as the app, and the server can keep running w
 - Each row shows the kind of notification as a small badge on the avatar, with the time under the name and a preview of the post when there is one. Unread rows are shaded and carry a dot.
 - The tabs show an icon, and the active one also shows its name. The solid fill slides to the one you pick.
 - Push: Settings → Notifications → Turn on push on this device. Kind switches, mutes and blocks apply. A push says who and what, and message words appear only with "Show message previews" (off by default).
+- Email digest: off by default. Settings → Notifications → Email me a daily digest sends one email a day with counts and the latest notifications. It has one unsubscribe link that works signed out. Message words appear only with "Show message previews".
 
 **Messages**
 - Direct messages and group chats. Groups have a title, up to 50 people, and members can be added or leave. Anyone who doesn't follow the creator gets an invite and joins once they accept.
@@ -240,4 +241,5 @@ The scripts read the same database as the app, and the server can keep running w
 - Server actions accept request bodies up to 110 MB (`next.config.ts`), so a video can be sent to any of them. The body is read whole before the server checks it.
 - Push needs `RHENKO_VAPID_PUBLIC_KEY`, `RHENKO_VAPID_PRIVATE_KEY` and `RHENKO_VAPID_SUBJECT`. Development has no service worker, so push can't be turned on there.
 - Screen sharing is one to one and has no sound. Group calls stay voice only.
+- The digest needs SMTP, `RHENKO_PUBLIC_URL` and `RHENKO_SECRET`. Its hour is UTC, because no time zone is stored. It sends up to `RHENKO_DIGEST_PER_PASS` emails per pass (default 25, at most 200).
 - Not included: Spaces, jobs, live video, shopping, GIF search, and the News, Sports and Entertainment tabs in Explore. GIF search needs a GIF provider, the news tabs need a curated source, and the rest need their own product, realtime or safety work before they can be offered safely here.

@@ -4,7 +4,7 @@
 #   docker build -t rhenko .
 #   docker run --env-file .env -p 3000:3000 rhenko
 #
-# /app/data holds the server key only when RHENKO_SECRET is not set, so it is a volume. The build needs network access
+# /app/data is a volume for local uploads and the data folder. The server key comes from RHENKO_SECRET. The build needs network access
 # only to install packages; the Sora font is in the repository.
 
 FROM node:22.22.0-bookworm-slim AS deps
