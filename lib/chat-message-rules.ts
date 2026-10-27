@@ -101,3 +101,57 @@ export function dayStartOf(value: unknown): number | null {
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
   return date.getTime()
 }
+
+// Messages pinned to the top of one chat at most. A pin past this asks the person to unpin one first.
+export const PINNED_MESSAGES_MAX = 3
+
+// A reminder can be set up to a year ahead, so a forgotten one can't sit for longer.
+export const REMINDER_MAX_MS = 366 * 24 * 60 * 60 * 1000
+
+// A bulk action (star or delete for me on a selection) changes this many messages at most.
+export const BULK_MESSAGES_MAX = 100
+
+// Who a chat's notifications reach: everyone ("all"), only the people who are mentioned ("mentions"), or nobody ("none").
+export type AlertLevel = "all" | "mentions" | "none"
+
+// The level from the two stored flags. Silenced wins: it turns off mentions too. Muted alone lets mentions through, as it always has.
+export function alertLevel(muted: number, silenced: number): AlertLevel {
+  if (silenced === 1) return "none"
+  return muted === 1 ? "mentions" : "all"
+}
+
+// The stored flags for a level, so the two columns always agree with what the person picked.
+export function alertFlags(level: AlertLevel): { muted: number; silenced: number } {
+  if (level === "none") return { muted: 1, silenced: 1 }
+  if (level === "mentions") return { muted: 1, silenced: 0 }
+  return { muted: 0, silenced: 0 }
+}
+
+// Whether a message reaches a member at this level. A mention reaches the "mentions" level, and never the "none" level.
+export function reachesMember(level: AlertLevel, mention: boolean): boolean {
+  if (level === "all") return true
+  if (level === "mentions") return mention
+  return false
+}
+
+export function alertLevelInput(raw: unknown): { ok: true; level: AlertLevel } | { ok: false; error: string } {
+  if (raw === "all" || raw === "mentions" || raw === "none") return { ok: true, level: raw }
+  return { ok: false, error: "Choose how notifications should work for this chat." }
+}
+
+// A reminder time: a whole number of milliseconds, later than now and no more than REMINDER_MAX_MS away.
+export function reminderInput(raw: unknown, now: number): { ok: true; at: number } | { ok: false; error: string } {
+  if (typeof raw !== "number" || !Number.isInteger(raw)) return { ok: false, error: "Pick a time for the reminder." }
+  if (raw <= now) return { ok: false, error: "Pick a time later than now." }
+  if (raw - now > REMINDER_MAX_MS) return { ok: false, error: "Reminders can be set up to a year ahead." }
+  return { ok: true, at: raw }
+}
+
+// The message ids a bulk action names: unique, plain ids only, and at least one and at most BULK_MESSAGES_MAX.
+export function messageIdsInput(raw: unknown): { ok: true; ids: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: false, error: "Select some messages first." }
+  const ids = [...new Set(raw.filter((id): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(id)))]
+  if (ids.length === 0) return { ok: false, error: "Select some messages first." }
+  if (ids.length > BULK_MESSAGES_MAX) return { ok: false, error: `Select up to ${BULK_MESSAGES_MAX} messages at a time.` }
+  return { ok: true, ids }
+}

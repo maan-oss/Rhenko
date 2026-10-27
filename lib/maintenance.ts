@@ -10,6 +10,7 @@ import { purgeHidden } from "@/lib/moderation"
 import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
 import { prunePush } from "@/lib/push"
+import { deliverDueReminders } from "@/lib/reminders"
 import { recordMissingLanguages } from "@/lib/translate"
 import { answerQuestions } from "@/lib/sahayak"
 import { expireMessages } from "@/lib/message-expiry"
@@ -61,6 +62,12 @@ async function tick(): Promise<void> {
 export async function runMaintenance(now = Date.now()): Promise<void> {
   await publishDue(now)
   await announceEndedPolls(now)
+  // Message reminders that have come due are sent. A failure is logged, and the rest of the pass goes on.
+  try {
+    await deliverDueReminders(now)
+  } catch (error) {
+    console.error("[maintenance] sending reminders failed", error)
+  }
   await run("DELETE FROM sessions WHERE expires_at < ?", now)
   await run("DELETE FROM login_challenges WHERE expires_at < ?", now)
   await run("DELETE FROM email_codes WHERE expires_at < ?", now)

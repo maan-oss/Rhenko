@@ -4,11 +4,25 @@ import { languageOf } from "@/lib/languages"
 import { revalidatePath } from "next/cache"
 import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
-import { all, get, run, transaction } from "@/lib/db"
+import { all, change, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
-import { canReadConversation, canSeePost, conversationSummaries, firstMessageFrom, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
+import { canReadConversation, canSeePost, chatCounts, conversationSummaries, firstMessageFrom, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
 import { PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "@/lib/chat-organize-rules"
-import { editBodyInput, editRefusal, mentionedHandles, searchQueryInput, viewOnceRefusal } from "@/lib/chat-message-rules"
+import {
+  PINNED_MESSAGES_MAX,
+  alertFlags,
+  alertLevel,
+  alertLevelInput,
+  editBodyInput,
+  editRefusal,
+  mentionedHandles,
+  messageIdsInput,
+  reachesMember,
+  reminderInput,
+  searchQueryInput,
+  viewOnceRefusal,
+  type AlertLevel,
+} from "@/lib/chat-message-rules"
 import { wallpaperInput } from "@/lib/chat-wallpapers"
 import { blockedEitherWay } from "@/lib/notify"
 import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
@@ -268,15 +282,15 @@ async function announceMessage(conversationId: string, senderId: string, preview
   if (!sender || !conversation) return
   const from: EventPerson = { id: sender.id, name: sender.name, handle: sender.handle, avatarFile: sender.avatar_file }
   const title = conversation.kind === "group" && conversation.title ? `${sender.name} in ${conversation.title}` : sender.name
-  const members = await all<{ user_id: string; status: string; muted: number }>(
-    "SELECT user_id, status, muted FROM conversation_members WHERE conversation_id = ? AND user_id <> ?",
+  const members = await all<{ user_id: string; status: string; muted: number; silenced: number }>(
+    "SELECT user_id, status, muted, silenced FROM conversation_members WHERE conversation_id = ? AND user_id <> ?",
     conversationId,
     senderId
   )
   const mentioned = conversation.kind === "group" ? await mentionedMembers(conversationId, senderId, body) : new Set<string>()
   for (const member of members) {
     const mention = mentioned.has(member.user_id)
-    if (member.muted === 1 && !mention) continue
+    if (!reachesMember(alertLevel(member.muted, member.silenced), mention)) continue
     const requested = member.status === "requested"
     const line = requested ? "Sent you a message request" : mention ? (preview ? `Mentioned you: ${preview}` : "Mentioned you") : preview || "Sent a message"
     await publish([member.user_id], {
@@ -939,6 +953,9 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   await run("UPDATE chat_messages SET deleted_at = ?, body = '', media_file = NULL, post_id = NULL WHERE id = ?", Date.now(), id)
   await run("DELETE FROM message_reactions WHERE message_id = ?", id)
   await run("DELETE FROM message_translations WHERE message_id = ?", id)
+  // A deleted message is no longer pinned, and nobody is reminded of it.
+  await run("DELETE FROM chat_pinned_messages WHERE message_id = ?", id)
+  await run("DELETE FROM chat_message_reminders WHERE message_id = ?", id)
   // A forwarded copy can share this file, so it is removed only once no message still points at it.
   if (message.media_file && !(await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", message.media_file))) {
     await removeUpload(message.media_file)
@@ -1055,6 +1072,175 @@ export async function clearChat(conversationId: string): Promise<VoidResult> {
   return { ok: true }
 }
 
+// Pins a message to the top of its chat for everyone in it, or unpins it. A chat holds PINNED_MESSAGES_MAX pins at most.
+export async function pinMessage(messageId: string, pin: boolean): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = await visibleMessageFor(id, viewer.id)
+  if (!id || !message || (await memberStatus(message.conversation_id, viewer.id)) !== "accepted") {
+    return { ok: false, error: "That message doesn't exist." }
+  }
+  if (pin) {
+    if (message.deleted_at !== null || message.call_status !== null || message.timer_change !== null) {
+      return { ok: false, error: "This message can't be pinned." }
+    }
+    if (message.view_once === 1) return { ok: false, error: "A view-once photo can't be pinned." }
+    const already = await get("SELECT 1 AS found FROM chat_pinned_messages WHERE conversation_id = ? AND message_id = ?", message.conversation_id, id)
+    if (!already) {
+      // A pin on a message that has since expired doesn't count against the limit.
+      const count = await get<{ c: number }>(
+        `SELECT COUNT(*) AS c FROM chat_pinned_messages p JOIN chat_messages m ON m.id = p.message_id
+         WHERE p.conversation_id = ? AND m.deleted_at IS NULL AND (m.expires_at IS NULL OR m.expires_at > ?)`,
+        message.conversation_id,
+        Date.now()
+      )
+      if (Number(count?.c ?? 0) >= PINNED_MESSAGES_MAX) {
+        return { ok: false, error: `A chat can have up to ${PINNED_MESSAGES_MAX} pinned messages. Unpin one first.` }
+      }
+      await run(
+        "INSERT INTO chat_pinned_messages (conversation_id, message_id, pinned_by, pinned_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        message.conversation_id,
+        id,
+        viewer.id,
+        Date.now()
+      )
+    }
+  } else {
+    await run("DELETE FROM chat_pinned_messages WHERE conversation_id = ? AND message_id = ?", message.conversation_id, id)
+  }
+  await publish(await memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })
+  refresh()
+  return { ok: true }
+}
+
+// Stars or unstars several messages for this viewer alone. A message that can't be starred (a call, a change to the timer, a
+// deleted one, a view-once photo) is passed over. Returns how many changed.
+export async function setStarredMessages(messageIds: unknown, star: boolean): Promise<VoidResult & { changed?: string[] }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const input = messageIdsInput(messageIds)
+  if (!input.ok) return input
+  const changed: string[] = []
+  for (const id of input.ids) {
+    const message = await visibleMessageFor(id, viewer.id)
+    if (!message || message.deleted_at !== null || message.call_status !== null || message.timer_change !== null || message.view_once === 1) continue
+    const done = star
+      ? await change("INSERT INTO chat_stars (user_id, message_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, id, Date.now())
+      : await change("DELETE FROM chat_stars WHERE user_id = ? AND message_id = ?", viewer.id, id)
+    if (done > 0) changed.push(id)
+  }
+  refresh()
+  return { ok: true, changed }
+}
+
+// Removes several messages from this viewer's own view. They stay for everyone else in the chat, as with one message.
+export async function hideMessagesForMe(messageIds: unknown): Promise<VoidResult & { changed?: string[] }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const input = messageIdsInput(messageIds)
+  if (!input.ok) return input
+  const changed: string[] = []
+  const chats = new Set<string>()
+  for (const id of input.ids) {
+    const message = await visibleMessageFor(id, viewer.id)
+    if (!message) continue
+    if ((await change("INSERT INTO chat_hidden_messages (user_id, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING", viewer.id, id)) > 0) {
+      changed.push(id)
+    }
+    chats.add(message.conversation_id)
+  }
+  for (const conversationId of chats) await publish([viewer.id], { type: "message", conversationId })
+  refresh()
+  return { ok: true, changed }
+}
+
+// Sets a reminder on a message for this viewer. It comes back once, at the time given (lib/reminders.ts). One reminder per message.
+export async function setMessageReminder(messageId: string, at: unknown): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = await visibleMessageFor(id, viewer.id)
+  if (!id || !message || message.deleted_at !== null || message.call_status !== null || message.timer_change !== null) {
+    return { ok: false, error: "This message can't have a reminder." }
+  }
+  const when = reminderInput(at, Date.now())
+  if (!when.ok) return when
+  await run(
+    "INSERT INTO chat_message_reminders (user_id, message_id, remind_at) VALUES (?, ?, ?) ON CONFLICT (user_id, message_id) DO UPDATE SET remind_at = excluded.remind_at",
+    viewer.id,
+    id,
+    when.at
+  )
+  refresh()
+  return { ok: true }
+}
+
+// Removes this viewer's reminder on a message, if it has one.
+export async function cancelMessageReminder(messageId: string): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  if (!id) return { ok: false, error: "That message doesn't exist." }
+  await run("DELETE FROM chat_message_reminders WHERE user_id = ? AND message_id = ?", viewer.id, id)
+  refresh()
+  return { ok: true }
+}
+
+// Sets how notifications from one chat reach this viewer: everything, mentions only, or nothing. Nobody else is told.
+export async function setConversationAlerts(conversationId: string, level: unknown): Promise<VoidResult & { level?: AlertLevel }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id || (await memberStatus(id, viewer.id)) === null) return { ok: false, error: "That conversation doesn't exist." }
+  const picked = alertLevelInput(level)
+  if (!picked.ok) return picked
+  const flags = alertFlags(picked.level)
+  await run("UPDATE conversation_members SET muted = ?, silenced = ? WHERE conversation_id = ? AND user_id = ?", flags.muted, flags.silenced, id, viewer.id)
+  refresh()
+  return { ok: true, level: picked.level }
+}
+
+// What the contact info shows for a chat: the other people in it (the viewer left out), its name, what has been shared in it, and how
+// notifications reach this viewer.
+export type ChatInfoResult =
+  | {
+      ok: true
+      kind: "dm" | "group"
+      title: string
+      people: MiniUser[]
+      counts: { media: number; documents: number; links: number; starred: number }
+      level: AlertLevel
+    }
+  | { ok: false; error: string }
+
+export async function chatInfo(conversationId: string): Promise<ChatInfoResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const member = id
+    ? await get<{ muted: number; silenced: number }>("SELECT muted, silenced FROM conversation_members WHERE conversation_id = ? AND user_id = ?", id, viewer.id)
+    : undefined
+  const conversation = id ? await get<{ kind: "dm" | "group"; title: string }>("SELECT kind, title FROM conversations WHERE id = ?", id) : undefined
+  if (!id || !member || !conversation || !(await canReadConversation(id, viewer.id))) {
+    return { ok: false, error: "That conversation doesn't exist." }
+  }
+  const others = await all<{ user_id: string }>(
+    "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ? AND status = 'accepted'",
+    id,
+    viewer.id
+  )
+  const people = [...(await loadMiniUsers(others.map((other) => other.user_id))).values()]
+  return {
+    ok: true,
+    kind: conversation.kind,
+    title: conversation.title,
+    people,
+    counts: await chatCounts(id, viewer.id),
+    level: alertLevel(member.muted, member.silenced),
+  }
+}
+
 // The first message in a chat sent on or after a time, so the thread can open at a date. The client sends the start of the day
 // picked, in its own time zone.
 export async function messageOnOrAfter(conversationId: string, at: unknown): Promise<IdResult> {
@@ -1124,7 +1310,8 @@ export async function toggleConversationFavourite(conversationId: string): Promi
   return { ok: true, favourite: favourite === 1 }
 }
 
-// Muting a conversation keeps its messages but stops them from counting as unread.
+// Muting a conversation keeps its messages but stops them from counting as unread. Mentions still reach a muted chat. Unmuting
+// also lifts "nothing at all" from the chat's notification level.
 export async function toggleConversationMute(conversationId: string): Promise<VoidResult & { muted?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
@@ -1134,7 +1321,14 @@ export async function toggleConversationMute(conversationId: string): Promise<Vo
     : undefined
   if (!id || !member) return { ok: false, error: "That conversation doesn't exist." }
   const muted = member.muted === 1 ? 0 : 1
-  await run("UPDATE conversation_members SET muted = ? WHERE conversation_id = ? AND user_id = ?", muted, id, viewer.id)
+  const flags = alertFlags(muted === 1 ? "mentions" : "all")
+  await run(
+    "UPDATE conversation_members SET muted = ?, silenced = ? WHERE conversation_id = ? AND user_id = ?",
+    flags.muted,
+    flags.silenced,
+    id,
+    viewer.id
+  )
   refresh()
   return { ok: true, muted: muted === 1 }
 }

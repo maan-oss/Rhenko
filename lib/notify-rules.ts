@@ -124,6 +124,28 @@ export function messagePush(input: MessagePushInput): PushPayload {
   }
 }
 
+export type ReminderPushInput = {
+  conversationId: string
+  messageId: string
+  // The person who sent the message.
+  senderName: string
+  // What the message says, or what it was instead ("Sent a photo"). Used only with previews on.
+  preview: string
+  previewsOn: boolean
+}
+
+// A push for a reminder the person asked for. It names the sender, and the message's words only when previews are on.
+export function reminderPush(input: ReminderPushInput): PushPayload {
+  const preview = input.previewsOn ? input.preview.trim() : ""
+  return {
+    title: "Reminder",
+    body: preview ? `${input.senderName}: ${preview}` : `A message from ${input.senderName}`,
+    tag: `reminder:${input.messageId}`,
+    url: `/messages/${encodeURIComponent(input.conversationId)}?m=${encodeURIComponent(input.messageId)}`,
+    renotify: true,
+  }
+}
+
 export type CallPushInput = {
   conversationId: string
   callerName: string

@@ -22,6 +22,8 @@ import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib
 import { callSummary, type CallOutcome } from "@/lib/format"
 import { timerLine } from "@/lib/message-timers"
 import { snippetAround } from "@/lib/chat-message-rules"
+import type { ExportMessage } from "@/lib/chat-export"
+import { isAudioFile, isDocumentFile, isVoiceFile } from "@/lib/media-names"
 import { wallpaperOf, type WallpaperKey } from "@/lib/chat-wallpapers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
 import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
@@ -2252,6 +2254,10 @@ export type MessageView = {
   // A photo or video the recipients may open once. For the viewer, `viewOpened` says whether they already have.
   viewOnce: boolean
   viewOpened: boolean
+  // Whether the message is pinned to the top of its chat. Pins are shared by everyone in the chat.
+  pinned: boolean
+  // When the viewer asked to be reminded of this message, or null. Only the viewer sees it.
+  reminderAt: number | null
 }
 
 // A poll in a chat: its question and choices with the votes for each, how many people have voted, and the choices this
@@ -2439,6 +2445,16 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       (s) => s.message_id
     )
   )
+  const pinnedIds = new Set(
+    (await all<{ message_id: string }>(`SELECT message_id FROM chat_pinned_messages WHERE conversation_id = ? AND message_id IN (${marks})`, conversationId, ...ids)).map(
+      (p) => p.message_id
+    )
+  )
+  const reminders = new Map(
+    (await all<{ message_id: string; remind_at: number }>(`SELECT message_id, remind_at FROM chat_message_reminders WHERE user_id = ? AND message_id IN (${marks})`, viewerId, ...ids)).map(
+      (r) => [r.message_id, r.remind_at] as const
+    )
+  )
   const reactions = new Map<string, { emoji: string; count: number; mine: boolean }[]>()
   for (const r of reactionRows) {
     const list = reactions.get(r.message_id) ?? []
@@ -2535,8 +2551,124 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       editedAt: r.deleted_at !== null ? null : r.edited_at,
       viewOnce: r.view_once === 1 && !r.deleted_at,
       viewOpened: r.view_opened === 1,
+      pinned: pinnedIds.has(r.id) && !r.deleted_at,
+      reminderAt: r.deleted_at ? null : reminders.get(r.id) ?? null,
     }
   })
+}
+
+// The messages pinned in a chat that the viewer can still see, the latest pin first. A pinned message that is deleted, gone or hidden
+// from the viewer is left out. Empty for anyone who may not read the chat.
+export async function pinnedMessagesOf(conversationId: string, viewerId: string): Promise<MessageView[]> {
+  if (!(await canReadConversation(conversationId, viewerId))) return []
+  const query = messageSelect(conversationId, viewerId)
+  const rows = await all<MessageRow>(
+    `${query.select} AND m.deleted_at IS NULL AND m.id IN (SELECT p.message_id FROM chat_pinned_messages p WHERE p.conversation_id = ?)
+     ORDER BY (SELECT p.pinned_at FROM chat_pinned_messages p WHERE p.message_id = m.id) DESC`,
+    ...query.params,
+    conversationId
+  )
+  return await toMessageViews(rows, conversationId, viewerId)
+}
+
+// What the contact info shows for a chat, counted from the viewer's side: photos and videos, files, messages with a link, and the
+// messages the viewer starred. Only what the viewer can see is counted.
+export async function chatCounts(conversationId: string, viewerId: string): Promise<{ media: number; documents: number; links: number; starred: number }> {
+  const now = Date.now()
+  const shared = await all<{ media_file: string | null; attachment: string | null; body: string; view_once: number }>(
+    `SELECT m.media_file, m.attachment, m.body, m.view_once FROM chat_messages m
+     WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND (m.media_file IS NOT NULL OR m.body ~* 'https{0,1}://')
+       AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notClearedFor("m")}`,
+    conversationId,
+    viewerId,
+    viewerId,
+    now,
+    viewerId,
+    viewerId
+  )
+  const starred = await get<{ c: number }>(
+    `SELECT COUNT(*) AS c FROM chat_stars s JOIN chat_messages m ON m.id = s.message_id
+     WHERE s.user_id = ? AND m.conversation_id = ? AND m.deleted_at IS NULL
+       AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notClearedFor("m")}`,
+    viewerId,
+    conversationId,
+    viewerId,
+    viewerId,
+    now,
+    viewerId,
+    viewerId
+  )
+  let media = 0
+  let documents = 0
+  let links = 0
+  for (const row of shared) {
+    // A view-once photo is not counted: it is shown once and then gone.
+    if (row.media_file && row.view_once !== 1) {
+      const attachment = parseAttachment(row.attachment)
+      if (attachment?.kind === "document" || isDocumentFile(row.media_file)) documents++
+      else if (!isVoiceFile(row.media_file) && !isAudioFile(row.media_file)) media++
+    }
+    if (/https?:\/\//i.test(row.body)) links++
+  }
+  return { media, documents, links, starred: Number(starred?.c ?? 0) }
+}
+
+// Pages of messages the export reads at a time, and the most pages it reads. A longer chat is exported in part, and the file says so.
+const EXPORT_PAGE = 200
+const EXPORT_PAGES = 100
+
+// Every message the viewer can see in a chat, oldest first, for the export file. Null for anyone who may not read the chat.
+export async function exportableMessages(conversationId: string, viewerId: string): Promise<{ messages: ExportMessage[]; truncated: boolean } | null> {
+  if (!(await canReadConversation(conversationId, viewerId))) return null
+  const query = messageSelect(conversationId, viewerId)
+  const pages: MessageView[][] = []
+  let beforeAt: number | null = null
+  let truncated = false
+  for (;;) {
+    if (pages.length === EXPORT_PAGES) {
+      truncated = true
+      break
+    }
+    const page: { rows: MessageRow[]; next: number | null } = await pageBefore<MessageRow>(
+      query.select,
+      query.params,
+      "m.created_at",
+      "m.id",
+      (r) => r.created_at,
+      beforeAt,
+      EXPORT_PAGE
+    )
+    pages.unshift(await toMessageViews(page.rows.reverse(), conversationId, viewerId))
+    if (page.next === null) break
+    beforeAt = page.next
+  }
+  return { messages: pages.flat().map(exportMessageOf), truncated }
+}
+
+function exportMessageOf(message: MessageView): ExportMessage {
+  return {
+    createdAt: message.createdAt,
+    senderName: message.senderName,
+    body: message.body,
+    editedAt: message.editedAt,
+    deleted: message.deleted,
+    viewOnce: message.viewOnce,
+    hasMedia: message.mediaFile !== null,
+    attachment: exportAttachmentOf(message),
+    callOutcome: message.call ? message.call.outcome : null,
+    timerChange: message.timerChange,
+  }
+}
+
+function exportAttachmentOf(message: MessageView): ExportMessage["attachment"] {
+  const attachment = message.attachment
+  if (!attachment) return null
+  if (attachment.kind === "document") return { kind: "document", name: attachment.name }
+  if (attachment.kind === "scan") return { kind: "scan" }
+  if (attachment.kind === "contact") return { kind: "contact", name: message.contact?.name ?? null }
+  if (attachment.kind === "location") return { kind: "location", lat: attachment.lat, lng: attachment.lng }
+  if (attachment.kind === "poll") return { kind: "poll", question: attachment.question, options: attachment.options.map((option) => option.label) }
+  return null
 }
 
 // A poll's view: its options with their counts, the voters, and this viewer's choices, from the stored attachment and votes.

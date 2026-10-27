@@ -2,13 +2,15 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Timer } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
-import { chatWallpaper, conversationFor, conversationMessages, messagesFrom } from "@/lib/data"
+import { chatWallpaper, conversationFor, conversationMessages, messagesFrom, pinnedMessagesOf } from "@/lib/data"
 import { firstParam } from "@/lib/params"
+import { attachmentPreview } from "@/lib/message-attachments"
 import { timerNotice } from "@/lib/message-timers"
 import { AcceptBar } from "@/components/app/accept-bar"
 import { Avatar } from "@/components/app/avatar"
 import { CallButton } from "@/components/app/call-button"
 import { ChatComposer } from "@/components/app/chat-composer"
+import { SelectionScope } from "@/components/app/chat-selection"
 import { ChatOptionsMenu } from "@/components/app/chat-options-menu"
 import { ChatThread } from "@/components/app/chat-thread"
 import { GroupCallButton } from "@/components/app/group-call-button"
@@ -16,6 +18,7 @@ import { GroupPanel } from "@/components/app/group-panel"
 import { MessageTimerButton } from "@/components/app/message-timer-button"
 import { MuteConversationButton } from "@/components/app/mute-conversation-button"
 import { PageHeader } from "@/components/app/page-header"
+import { PinnedBar, type PinnedLine } from "@/components/app/pinned-bar"
 import { ThreadMarker } from "@/components/app/thread-marker"
 
 type Params = Promise<{ id: string }>
@@ -49,6 +52,12 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
   const focused = focus ? await messagesFrom(id, viewer.id, focus) : null
   const messages = focused ? focused.messages : await conversationMessages(id, viewer.id, THREAD_PAGE)
   const wallpaper = await chatWallpaper(id, viewer.id)
+  // The pinned messages, newest pin first. The header shows the newest one.
+  const pinLines: PinnedLine[] = (await pinnedMessagesOf(id, viewer.id)).map((message) => ({
+    id: message.id,
+    from: message.mine ? "You" : message.senderName,
+    text: message.body || attachmentPreview(message.attachment, message.mediaFile) || "Sent a message",
+  }))
   const others = conversation.members.filter((m) => m.id !== viewer.id)
   const isGroup = conversation.kind === "group"
   const title = isGroup ? conversation.title || others.map((o) => o.name).join(", ") : others[0]?.name ?? "Conversation"
@@ -56,6 +65,20 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
   // A direct conversation whose other person declined or left: its history stays, but nothing more can be sent to them.
   const closed = !isGroup && others.length > 0 && others.every((m) => m.departed)
   const orderedMembers = conversation.members.filter((m) => m.status === "requested" || m.status === "accepted")
+
+  // What sits at the bottom: the composer, or the notice that replaces it while a request waits or the other person has left.
+  const footer = requested ? (
+    // Left space matches the composer, so the folded dock on a phone never sits over the text.
+    <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
+      Accept the request to reply.
+    </p>
+  ) : closed ? (
+    <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
+      {others[0].name} can&apos;t receive messages here anymore.
+    </p>
+  ) : (
+    <ChatComposer conversationId={conversation.id} group={isGroup} people={others.filter((m) => m.status === "accepted" && !m.departed)} />
+  )
 
   // The page fills the screen, so the thread takes the room above and the composer (or the request notice) sits at the bottom.
   // On a phone the main column reserves room for the dock; a conversation has its own bottom row, so that room is given back.
@@ -115,33 +138,26 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
             <span className="truncate">{timerNotice(conversation.messageTimer)}</span>
           </p>
         ) : null}
+        <PinnedBar conversationId={conversation.id} pins={pinLines} canChange={!requested} />
       </PageHeader>
       <ThreadMarker conversationId={conversation.id} />
       {requested ? <AcceptBar conversationId={conversation.id} /> : null}
-      <div className="flex flex-1 flex-col" data-wallpaper={wallpaper}>
-        {/* A thread opened at a search hit is its own view, so it starts there and not at the newest message. */}
-        <ChatThread
-          key={focus ?? "latest"}
-          conversationId={conversation.id}
-          messages={messages}
-          showNames={isGroup}
-          mayHaveEarlier={focused ? focused.hasEarlier : messages.length >= THREAD_PAGE}
-          focusId={focused ? focus : null}
-          hasNewer={focused?.hasNewer ?? false}
-        />
-      </div>
-      {requested ? (
-        // Left space matches the composer, so the folded dock on a phone never sits over the text.
-        <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
-          Accept the request to reply.
-        </p>
-      ) : closed ? (
-        <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
-          {others[0].name} can&apos;t receive messages here anymore.
-        </p>
-      ) : (
-        <ChatComposer conversationId={conversation.id} group={isGroup} people={others.filter((m) => m.status === "accepted" && !m.departed)} />
-      )}
+      {/* Picking messages swaps the footer for a bar of actions. The footer stays mounted underneath, so a draft is kept. */}
+      <SelectionScope key={conversation.id} footer={footer}>
+        <div className="flex flex-1 flex-col" data-wallpaper={wallpaper}>
+          {/* A thread opened at a search hit is its own view, so it starts there and not at the newest message. */}
+          <ChatThread
+            key={focus ?? "latest"}
+            conversationId={conversation.id}
+            messages={messages}
+            showNames={isGroup}
+            mayHaveEarlier={focused ? focused.hasEarlier : messages.length >= THREAD_PAGE}
+            focusId={focused ? focus : null}
+            hasNewer={focused?.hasNewer ?? false}
+            canPin={!requested}
+          />
+        </div>
+      </SelectionScope>
     </div>
   )
 }

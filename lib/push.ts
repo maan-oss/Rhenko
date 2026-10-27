@@ -2,7 +2,8 @@ import { createHash } from "node:crypto"
 import { sendNotification, type Urgency } from "web-push"
 import { all, change, get, outsideTransaction, run } from "@/lib/db"
 import { canSeePost, type NotificationKind } from "@/lib/data"
-import { callPush, groupAddPush, mayNotify, messagePush, notificationPush, pushEventKey, vapidConfig, type CallPushInput, type GroupAddPushInput, type PushDeviceView, type PushPayload } from "@/lib/notify-rules"
+import { alertLevel, reachesMember } from "@/lib/chat-message-rules"
+import { callPush, groupAddPush, mayNotify, messagePush, notificationPush, pushEventKey, reminderPush, vapidConfig, type CallPushInput, type GroupAddPushInput, type PushDeviceView, type PushPayload, type ReminderPushInput } from "@/lib/notify-rules"
 
 // Web Push. When something notifies a person, each device they turned push on for gets a short encrypted message through
 // its browser's push service, and the service worker (public/sw.js) shows it, even with Rhenko closed. Nothing is sent
@@ -78,8 +79,8 @@ export async function pushMessage(
   mentioned: ReadonlySet<string> = new Set()
 ): Promise<void> {
   if (!pushReady()) return
-  const members = await all<{ user_id: string; status: string; muted: number; previews: number; blocked: number; sender_muted: number }>(
-    `SELECT m.user_id, m.status, m.muted, u.push_previews AS previews,
+  const members = await all<{ user_id: string; status: string; muted: number; silenced: number; previews: number; blocked: number; sender_muted: number }>(
+    `SELECT m.user_id, m.status, m.muted, m.silenced, u.push_previews AS previews,
        EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = m.user_id AND b.blocked_id = ?1) OR (b.blocker_id = ?1 AND b.blocked_id = m.user_id)) AS blocked,
        EXISTS (SELECT 1 FROM mutes x WHERE x.muter_id = m.user_id AND x.muted_id = ?1) AS sender_muted
      FROM conversation_members m JOIN users u ON u.id = m.user_id
@@ -90,7 +91,8 @@ export async function pushMessage(
   )
   for (const member of members) {
     const mention = mentioned.has(member.user_id)
-    const facts = { self: false, kindOn: true, blocked: member.blocked === 1, muted: member.sender_muted === 1, conversationMuted: member.muted === 1 && !mention }
+    const level = alertLevel(member.muted, member.silenced)
+    const facts = { self: false, kindOn: true, blocked: member.blocked === 1, muted: member.sender_muted === 1, conversationMuted: !reachesMember(level, mention) }
     if (!mayNotify(facts)) continue
     const devices = await devicesOf(member.user_id)
     if (devices.length === 0) continue
@@ -106,6 +108,15 @@ export async function pushMessage(
     })
     enqueue(devices, payload, "high")
   }
+}
+
+// A push for a reminder the person set on a message. It is theirs to receive, so it goes to every signed-in device.
+export async function pushReminder(recipientId: string, details: Omit<ReminderPushInput, "previewsOn">): Promise<void> {
+  if (!pushReady()) return
+  const devices = await devicesOf(recipientId)
+  if (devices.length === 0) return
+  const previewsOn = await messagePreviewsOn(recipientId)
+  enqueue(devices, reminderPush({ ...details, previewsOn }), "high")
 }
 
 type Job = { devices: Device[]; payload: PushPayload; urgency: Urgency; ttl: number }

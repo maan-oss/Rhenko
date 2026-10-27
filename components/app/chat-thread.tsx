@@ -2,12 +2,14 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { Eye, EyeOff, Forward, Info, MoreHorizontal, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
+import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
-import { deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, toggleReaction, toggleStarMessage } from "@/actions/messages"
+import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { ForwardDialog } from "@/components/app/forward-dialog"
 import { MessageInfoDialog } from "@/components/app/message-info-dialog"
+import { ReminderDialog } from "@/components/app/reminder-dialog"
+import { THREAD_CHANGE_EVENT, useSelection, type ThreadChangeDetail } from "@/components/app/chat-selection"
 import { MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { removePending, usePending } from "@/components/app/pending-messages"
@@ -64,6 +66,7 @@ export function ChatThread({
   mayHaveEarlier,
   focusId,
   hasNewer,
+  canPin,
 }: {
   conversationId: string
   messages: MessageView[]
@@ -73,7 +76,10 @@ export function ChatThread({
   focusId: string | null
   // Whether messages go on past the ones shown, so the newest are a link away.
   hasNewer: boolean
+  // Whether the viewer may pin messages here. Not while the chat is a request they haven't accepted.
+  canPin: boolean
 }) {
+  const selection = useSelection()
   const endRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const anchor = useRef<{ id: string; top: number } | null>(null)
@@ -154,6 +160,20 @@ export function ChatThread({
     if (row) window.scrollBy(0, row.getBoundingClientRect().top - saved.top)
   }, [earlier])
 
+  // A bulk action (star or delete for me on a selection) reports the messages it changed, so the thread shows them at once.
+  useEffect(() => {
+    function onChange(event: Event) {
+      const detail = (event as CustomEvent<ThreadChangeDetail>).detail
+      setChanges((current) => {
+        const next = { ...current }
+        for (const id of detail.ids) next[id] = { ...next[id], ...detail.change }
+        return next
+      })
+    }
+    window.addEventListener(THREAD_CHANGE_EVENT, onChange)
+    return () => window.removeEventListener(THREAD_CHANGE_EVENT, onChange)
+  }, [])
+
   useEffect(() => {
     function onTyping(event: Event) {
       const detail = (event as CustomEvent<{ conversationId: string; name: string }>).detail
@@ -230,6 +250,11 @@ export function ChatThread({
             joinsNext={sameRun(message, next)}
             // In a group, name the sender once at the start of each run of their messages.
             showName={showNames && !message.mine && !sameRun(previous, message)}
+            canPin={canPin}
+            selecting={selection?.picked != null}
+            picked={selection?.picked?.has(message.id) ?? false}
+            onPick={() => selection?.toggle(message.id, message.starred)}
+            onSelectStart={() => selection?.start(message.id, message.starred)}
           />
         )
       })}
@@ -429,6 +454,11 @@ function MessageRow({
   showName,
   joinsPrev,
   joinsNext,
+  canPin,
+  selecting,
+  picked,
+  onPick,
+  onSelectStart,
 }: {
   conversationId: string
   message: MessageView
@@ -437,6 +467,12 @@ function MessageRow({
   showName: boolean
   joinsPrev: boolean
   joinsNext: boolean
+  canPin: boolean
+  // Whether the thread is picking messages for a bulk action, and whether this one is picked.
+  selecting: boolean
+  picked: boolean
+  onPick: () => void
+  onSelectStart: () => void
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
   // Hover does not exist on a phone, so a tap on the bubble shows its actions instead.
@@ -444,6 +480,8 @@ function MessageRow({
   const [menuOpen, setMenuOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  // When the reminder dialog was opened, so its quick times are worked out from that moment. Null while it is closed.
+  const [reminderOpenedAt, setReminderOpenedAt] = useState<number | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   // A view-once photo or video this viewer has opened in this visit. Until they leave, it stays on screen.
@@ -476,7 +514,7 @@ function MessageRow({
   const viewOnceHidden = message.mediaFile !== null && message.viewOnce && !message.mine && !viewed
 
   function toggleOnTouch() {
-    if (message.deleted || editing) return
+    if (selecting || message.deleted || editing) return
     if (window.matchMedia("(pointer: coarse)").matches) setRevealed((open) => !open)
   }
 
@@ -509,6 +547,25 @@ function MessageRow({
       } else {
         toast.error(result.error)
       }
+    })
+  }
+
+  // Pins the message for everyone in the chat, or unpins it.
+  function togglePin() {
+    setRevealed(false)
+    startTransition(async () => {
+      const result = await pinMessage(message.id, !message.pinned)
+      if (!result.ok) toast.error(result.error)
+      else toast.success(message.pinned ? "Unpinned." : "Pinned.")
+    })
+  }
+
+  function clearReminder() {
+    setRevealed(false)
+    startTransition(async () => {
+      const result = await cancelMessageReminder(message.id)
+      if (!result.ok) toast.error(result.error)
+      else toast.success("Reminder removed.")
     })
   }
 
@@ -558,17 +615,74 @@ function MessageRow({
   if (message.call) return <CallEvent message={message} />
   if (message.timerChange !== null) return <TimerEvent message={message} />
 
+  // The marks a message carries. They sit on its time line, or on a line of their own when it is in the middle of a run.
+  const marks = (
+    <>
+      {message.viewOnce ? (
+        <>
+          <Eye className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+          <span className="sr-only">View once, </span>
+        </>
+      ) : null}
+      {message.starred ? (
+        <>
+          <Star className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+          <span className="sr-only">Starred, </span>
+        </>
+      ) : null}
+      {message.pinned ? (
+        <>
+          <Pin className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+          <span className="sr-only">Pinned, </span>
+        </>
+      ) : null}
+      {message.reminderAt !== null ? (
+        <>
+          <AlarmClock className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+          <span className="sr-only">Reminder set, </span>
+        </>
+      ) : null}
+    </>
+  )
+  const hasOwnMarks = message.viewOnce || message.starred || message.pinned || message.reminderAt !== null
+
   return (
     <div
       data-message-id={message.id}
-      className={cn("group flex flex-col gap-1 px-4", joinsPrev ? "pt-[3px]" : "pt-3", message.mine ? "items-end" : "items-start")}
+      // While picking messages, a tap anywhere on the row picks it. Its contents don't take the tap, so links and buttons don't fire.
+      onClick={selecting ? onPick : undefined}
+      className={cn(
+        "group flex flex-col gap-1 px-4",
+        joinsPrev ? "pt-[3px]" : "pt-3",
+        message.mine ? "items-end" : "items-start",
+        selecting && "cursor-pointer rounded-xl py-1 transition-colors",
+        selecting && picked && "bg-dusk/10"
+      )}
     >
       {showName ? <span className="text-xs text-muted-foreground">{message.senderName}</span> : null}
       <div className={cn("flex items-end gap-2", message.mine && "flex-row-reverse")}>
+        {selecting ? (
+          <button
+            type="button"
+            aria-pressed={picked}
+            aria-label={picked ? "Unselect message" : "Select message"}
+            onClick={(event) => {
+              event.stopPropagation()
+              onPick()
+            }}
+            className={cn(
+              "grid size-6 shrink-0 place-items-center self-center rounded-full border-2 transition-colors",
+              picked ? "border-dusk bg-dusk text-background" : "border-foreground/40"
+            )}
+          >
+            {picked ? <Check className="size-3.5" aria-hidden="true" /> : null}
+          </button>
+        ) : null}
         <div
           onClick={toggleOnTouch}
           className={cn(
             "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
+            selecting && "pointer-events-none",
             // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
             // Text links take the bubble's colour. The shared-post card is a link too, but it sits on its own surface, so it is skipped.
             message.mine ? "bg-dusk text-background [&_a:not([data-embed])]:text-background [&_a:not([data-embed])]:underline" : "bg-muted",
@@ -662,7 +776,7 @@ function MessageRow({
           )}
         </div>
 
-        {!message.deleted ? (
+        {!message.deleted && !selecting ? (
           <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed || menuOpen) && "opacity-100")}>
             <button type="button" aria-label="Reply" title="Reply" onClick={startReply} className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
               <Reply className="size-4" />
@@ -717,6 +831,36 @@ function MessageRow({
                     Forward
                   </DropdownMenuItem>
                 )}
+                {canPin && !message.deleted && message.call === null && message.timerChange === null && !message.viewOnce ? (
+                  <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={togglePin}>
+                    {message.pinned ? <PinOff className="size-4" aria-hidden="true" /> : <Pin className="size-4" aria-hidden="true" />}
+                    {message.pinned ? "Unpin" : "Pin"}
+                  </DropdownMenuItem>
+                ) : null}
+                {!message.deleted && message.call === null && message.timerChange === null ? (
+                  <>
+                    <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setReminderOpenedAt(Date.now())}>
+                      <AlarmClock className="size-4" aria-hidden="true" />
+                      {message.reminderAt !== null ? "Change reminder" : "Remind me"}
+                    </DropdownMenuItem>
+                    {message.reminderAt !== null ? (
+                      <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={clearReminder}>
+                        <AlarmClockOff className="size-4" aria-hidden="true" />
+                        Cancel reminder
+                      </DropdownMenuItem>
+                    ) : null}
+                  </>
+                ) : null}
+                <DropdownMenuItem
+                  className={MENU_ITEM_PHONE}
+                  onClick={() => {
+                    setRevealed(false)
+                    onSelectStart()
+                  }}
+                >
+                  <ListChecks className="size-4" aria-hidden="true" />
+                  Select
+                </DropdownMenuItem>
                 {message.mine && !message.call && message.timerChange === null ? (
                   <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setInfoOpen(true)}>
                     <Info className="size-4" aria-hidden="true" />
@@ -744,7 +888,7 @@ function MessageRow({
       ) : null}
 
       {message.reactions.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
+        <div className={cn("flex flex-wrap gap-1", selecting && "pointer-events-none")}>
           {message.reactions.map((reaction) => (
             <button
               key={reaction.emoji}
@@ -769,18 +913,7 @@ function MessageRow({
       {!joinsNext || showSeen ? (
         <p className="text-xs text-muted-foreground">
           {showSeen ? "Seen · " : null}
-          {message.viewOnce ? (
-            <>
-              <Eye className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-              <span className="sr-only">View once, </span>
-            </>
-          ) : null}
-          {message.starred ? (
-            <>
-              <Star className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-              <span className="sr-only">Starred, </span>
-            </>
-          ) : null}
+          {marks}
           {message.expiresAt !== null ? (
             <>
               <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
@@ -789,9 +922,20 @@ function MessageRow({
           ) : null}
           <LocalTime at={message.createdAt} variant="clock" />
         </p>
+      ) : hasOwnMarks ? (
+        <p className="text-xs text-muted-foreground">{marks}</p>
       ) : null}
       {forwardOpen ? <ForwardDialog messageId={message.id} onOpenChange={setForwardOpen} /> : null}
       {infoOpen ? <MessageInfoDialog messageId={message.id} onOpenChange={setInfoOpen} /> : null}
+      {reminderOpenedAt !== null ? (
+        <ReminderDialog
+          messageId={message.id}
+          openedAt={reminderOpenedAt}
+          onOpenChange={(open) => {
+            if (!open) setReminderOpenedAt(null)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

@@ -467,6 +467,8 @@ CREATE TABLE conversation_members (
   cleared_at bigint,
   -- Favourite chats are listed together under Favourites, for this person only.
   favourite bigint NOT NULL DEFAULT 0,
+  -- 1 when nothing notifies this person, mentions included. With muted set it is "off"; muted alone lets mentions through.
+  silenced bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (conversation_id, user_id)
 );
 
@@ -599,6 +601,24 @@ CREATE TABLE chat_wallpapers (
   wallpaper text NOT NULL,
   PRIMARY KEY (user_id, conversation_id)
 );
+
+-- A message pinned to the top of a chat, for everyone in it. At most PINNED_MESSAGES_MAX per chat (lib/chat-message-rules.ts).
+CREATE TABLE chat_pinned_messages (
+  conversation_id text NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  pinned_by text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  pinned_at bigint NOT NULL,
+  PRIMARY KEY (conversation_id, message_id)
+);
+
+-- A reminder one person set on a message. The maintenance pass sends it once when it comes due, then removes the row.
+CREATE TABLE chat_message_reminders (
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  remind_at bigint NOT NULL,
+  PRIMARY KEY (user_id, message_id)
+);
+CREATE INDEX chat_message_reminders_due ON chat_message_reminders (remind_at);
 
 CREATE TABLE community_notes (
   id text PRIMARY KEY,
