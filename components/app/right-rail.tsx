@@ -3,13 +3,14 @@ import { connection } from "next/server"
 import { getViewer } from "@/lib/auth"
 import { trendingTags, whoToFollow } from "@/lib/data"
 import { suggestionsFor, topPeople } from "@/lib/connections"
+import { topicLabel } from "@/lib/rules"
 import { Avatar } from "@/components/app/avatar"
 import { ProfileLink } from "@/components/app/profile-hover"
 import { cn } from "@/lib/utils"
 
-// The side panel is a short list, the way trending is on X: each hashtag sits on one line with its post count. People are a
-// stack of faces, each covering a quarter of the one before it, so the row takes little room. Pointing at a face opens its
-// card. Nothing here is a button, so the panel reads as something to look at, not something to act on.
+// The side panel is a short list, the way trending is on X: each hashtag or cashtag sits on one line with its post count.
+// People are a stack of faces, each covering a quarter of the one before it, so the row takes little room. Pointing at a
+// face opens its card. Nothing here is a button, so the panel reads as something to look at, not something to act on.
 
 // The time the panel is read. Read after connection(), so the page is never built with a fixed clock.
 async function clock(): Promise<number> {
@@ -19,7 +20,7 @@ async function clock(): Promise<number> {
 
 type Person = { id: string; handle: string; name: string; avatarFile: string | null }
 
-// How many hashtags the panel lists.
+// How many topics the panel lists.
 const TRENDING_LIMIT = 5
 
 function postCount(count: number): string {
@@ -43,7 +44,7 @@ export async function RightRail() {
           Trending
         </h2>
         {tags.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">Nothing yet. Put a #hashtag in a post and it lands here.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Nothing yet. Put a #hashtag or a $cashtag in a post and it lands here.</p>
         ) : (
           <>
             <ul className="mt-2">
@@ -51,10 +52,10 @@ export async function RightRail() {
                 <li key={item.tag} className="border-b border-border/60 last:border-b-0">
                   <Link
                     href={`/topics/${encodeURIComponent(item.tag)}`}
-                    aria-label={`#${item.tag}, ${postCount(item.count)} this week`}
+                    aria-label={`${topicLabel(item.tag)}, ${postCount(item.count)} this week`}
                     className="flex items-baseline justify-between gap-3 rounded-md py-2.5 outline-none transition-opacity duration-200 hover:opacity-70 focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="min-w-0 truncate font-semibold">#{item.tag}</span>
+                    <span className="min-w-0 truncate font-semibold">{topicLabel(item.tag)}</span>
                     <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{postCount(item.count)}</span>
                   </Link>
                 </li>

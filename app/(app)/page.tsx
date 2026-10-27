@@ -9,7 +9,7 @@ import { circlesFor } from "@/lib/circles"
 import { suggestionsFor, topPeople } from "@/lib/connections"
 import { followedTopics, whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
-import { normalizeTag } from "@/lib/rules"
+import { normalizeTag, topicLabel } from "@/lib/rules"
 import { snoozedTopics } from "@/lib/topic-snoozes"
 import { pinnedTimelines } from "@/lib/timelines"
 import { firstParam } from "@/lib/params"
@@ -115,7 +115,7 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         viewer={viewer}
         largeEmpty
         emptyTitle={
-          pin ? "Nothing in this timeline yet" : topic ? `No posts about #${topic} yet` : following ? "Nothing from people you follow yet" : "No posts yet"
+          pin ? "Nothing in this timeline yet" : topic ? `No posts about ${topicLabel(topic)} yet` : following ? "Nothing from people you follow yet" : "No posts yet"
         }
         emptyBody={
           pin

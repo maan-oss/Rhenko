@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { unsnoozeForYouTopic } from "@/actions/topic-snoozes"
+import { topicLabel } from "@/lib/rules"
 import { LocalTime } from "@/components/app/time-text"
 
 // The snoozed topics, each with a button to bring its posts back. A row leaves the list once it is unsnoozed.
@@ -19,7 +20,7 @@ export function SnoozedTopics({ rows }: { rows: { tag: string; untilAt: number }
       {list.map((row) => (
         <li key={row.tag} className="flex items-center justify-between gap-3 border-b border-border py-3.5">
           <div className="min-w-0">
-            <p className="truncate font-semibold">#{row.tag}</p>
+            <p className="truncate font-semibold">{topicLabel(row.tag)}</p>
             <p className="text-[13px] text-muted-foreground">
               Snoozed until <LocalTime at={row.untilAt} variant="day" />
             </p>

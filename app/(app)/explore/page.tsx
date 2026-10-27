@@ -7,6 +7,7 @@ import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { formatCount } from "@/lib/format"
 import { listOwnersVisibleTo } from "@/lib/people-state"
 import { firstParam } from "@/lib/params"
+import { topicLabel } from "@/lib/rules"
 import { ComposeAction } from "@/components/app/compose-action"
 import { EmptyState, emptyActionClass } from "@/components/app/empty-state"
 import { PackList } from "@/components/app/pack-list"
@@ -157,7 +158,7 @@ async function TrendingTab() {
   return (
     <>
       {tags.length === 0 ? (
-        <EmptyState title="Nothing is trending yet" body="Topics are the hashtags people use in posts during the last 7 days. Use one in a post and it starts the list.">
+        <EmptyState title="Nothing is trending yet" body="Topics are the hashtags and cashtags people use in posts during the last 7 days. Use one in a post and it starts the list.">
           <ComposeAction>Write a post</ComposeAction>
         </EmptyState>
       ) : (
@@ -166,7 +167,7 @@ async function TrendingTab() {
             <h2 id="trending-heading" className="text-lg font-semibold">
               Trending topics
             </h2>
-            <p className="text-[13px] text-muted-foreground">The hashtags used in the most posts during the last 7 days.</p>
+            <p className="text-[13px] text-muted-foreground">The hashtags and cashtags used in the most posts during the last 7 days.</p>
           </div>
           <ol>
             {tags.map((item, index) => (
@@ -179,7 +180,7 @@ async function TrendingTab() {
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-semibold">#{item.tag}</span>
+                    <span className="block truncate text-[15px] font-semibold">{topicLabel(item.tag)}</span>
                     <span className="block text-[13px] text-muted-foreground">
                       {formatCount(item.count)} {item.count === 1 ? "post" : "posts"} this week
                     </span>

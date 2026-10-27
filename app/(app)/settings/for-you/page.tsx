@@ -18,7 +18,7 @@ export default async function ForYouSettingsPage() {
           Snoozed topics
         </h2>
         <p className="pt-1 pb-2 text-[13px] leading-relaxed text-muted-foreground">
-          Posts with a snoozed hashtag stay out of For you until its snooze ends. The topic stays followed, so its own page still works.
+          Posts with a snoozed hashtag or cashtag stay out of For you until its snooze ends. The topic stays followed, so its own page still works.
         </p>
         <SnoozedTopics rows={rows} />
       </section>

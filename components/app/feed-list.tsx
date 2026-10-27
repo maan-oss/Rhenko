@@ -9,7 +9,7 @@ import { isAdItem, type FeedEntry } from "@/lib/ad-rules"
 import { AdCard } from "@/components/app/ad-card"
 import type { FeedSpec } from "@/lib/feeds"
 import type { Viewer } from "@/lib/auth"
-import { extractHashtags } from "@/lib/rules"
+import { extractTopics } from "@/lib/rules"
 
 // The post a feed entry shows, or null for an ad.
 function postIdOf(item: FeedEntry): string | null {
@@ -84,7 +84,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
     // A snoozed topic leaves at once, from every post on the screen that uses it, not only the one the reader acted on.
     const onSnoozed = (event: Event) => {
       const { tag } = (event as CustomEvent<{ tag: string }>).detail
-      setItems((current) => current.filter((item) => isAdItem(item) || !extractHashtags(item.post.body).includes(tag)))
+      setItems((current) => current.filter((item) => isAdItem(item) || !extractTopics(item.post.body).includes(tag)))
     }
     window.addEventListener("rhenko:hidden", onHidden)
     window.addEventListener("rhenko:snoozed", onSnoozed)

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { setTopicFollow } from "@/actions/social"
+import { topicLabel } from "@/lib/rules"
 import { Button } from "@/components/ui/button"
 
 // Follow a topic to see its posts in your Following feed. The page tells the button where to start, and after a press it
@@ -26,7 +27,7 @@ export function TopicFollowButton({ tag, following }: { tag: string; following: 
       disabled={pending}
       aria-busy={pending}
       aria-pressed={on}
-      aria-label={on ? `Following the topic #${tag}` : `Follow the topic #${tag}`}
+      aria-label={on ? `Following the topic ${topicLabel(tag)}` : `Follow the topic ${topicLabel(tag)}`}
       onClick={() =>
         startTransition(async () => {
           const result = await setTopicFollow(tag, !on)
@@ -35,7 +36,7 @@ export function TopicFollowButton({ tag, following }: { tag: string; following: 
             return
           }
           setOn(result.following)
-          toast.success(result.following ? `You follow #${tag}. Its posts show in your Following feed.` : `You unfollowed #${tag}.`)
+          toast.success(result.following ? `You follow ${topicLabel(tag)}. Its posts show in your Following feed.` : `You unfollowed ${topicLabel(tag)}.`)
         })
       }
       className="h-8 rounded-full px-4 font-semibold"

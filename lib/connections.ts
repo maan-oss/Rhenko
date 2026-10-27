@@ -12,7 +12,7 @@ import { all, get, run, transaction } from "@/lib/db"
 import { languageName, type SpeakLevel } from "@/lib/languages"
 import { areaKey, cleanArea, cleanRegion, countryName } from "@/lib/places"
 import { GROUP_ORDER, GROUP_TEXT, rankConnections, reasonsOf, type Candidate, type Group, type Me } from "@/lib/connection-rank"
-import { extractHashtags } from "@/lib/rules"
+import { extractTopics, topicNeedle } from "@/lib/rules"
 import { RETENTION } from "@/lib/legal"
 
 const DAY = 24 * 60 * 60 * 1000
@@ -331,10 +331,10 @@ async function matchedFor(viewerId: string, now: number, perGroup: number): Prom
        ORDER BY p.created_at DESC LIMIT ?`,
       now - INTEREST_MS,
       viewerId,
-      ...topics.map((tag) => `#${tag}`),
+      ...topics.map(topicNeedle),
       POST_POOL
     )) {
-      const matched = extractHashtags(row.body).filter((tag) => wanted.has(tag))
+      const matched = extractTopics(row.body).filter((tag) => wanted.has(tag))
       if (matched.length === 0) continue
       const set = topicsOf.get(row.author_id) ?? new Set<string>()
       for (const tag of matched) set.add(tag)

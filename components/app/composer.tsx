@@ -33,6 +33,7 @@ import {
   UNDO_WINDOW_MS,
   cleanTitle,
   countChars,
+  topicLabel,
   validateSchedule,
   type ReplySetting,
 } from "@/lib/rules"
@@ -126,6 +127,7 @@ type MediaPatch = Partial<Attachment> | ((current: Attachment) => Partial<Attach
 // The day a schedule starts from, and the first and last days the date field offers (the server's limits, in local days).
 type Schedule = { date: string; time: string; min: string; max: string }
 
+// A tag suggestion is a topic key: "aapl" for a hashtag, "$AAPL" for a cashtag. topicLabel writes it for a reader.
 type Suggestion = { kind: "user"; handle: string; name: string; avatarFile: string | null; id: string } | { kind: "tag"; tag: string }
 
 const DURATION_LABELS: Record<number, string> = {
@@ -557,7 +559,8 @@ function videoSeconds(file: File): Promise<number | null> {
 }
 
 function tokenBefore(text: string, caret: number): { token: string; start: number } | null {
-  const match = /(^|\s)([@#][\p{L}\p{N}_]*)$/u.exec(text.slice(0, caret))
+  // A cashtag is a $ and letters only, so "$5" and "$100" ask for nothing.
+  const match = /(^|\s)([@#][\p{L}\p{N}_]*|\$[A-Za-z]*)$/u.exec(text.slice(0, caret))
   if (!match) return null
   return { token: match[2], start: caret - match[2].length }
 }
@@ -772,7 +775,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
 
   function applySuggestion(item: Suggestion) {
     if (!word) return
-    const insert = item.kind === "user" ? `@${item.handle} ` : `#${item.tag} `
+    const insert = item.kind === "user" ? `@${item.handle} ` : `${topicLabel(item.tag)} `
     const next = text.slice(0, word.start) + insert + text.slice(caret)
     const position = word.start + insert.length
     setText(next)
@@ -1147,7 +1150,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                       applySuggestion(item)
                     }}
                     onMouseEnter={() => setActive(index)}
-                    className={cn("flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150", index === active && "bg-foreground/5")}
+                    className={cn("flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150", index === active && "bg-foreground/5")}
                   >
                     {item.kind === "user" ? (
                       <>
@@ -1158,7 +1161,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                         </span>
                       </>
                     ) : (
-                      <span className="text-sm font-semibold">#{item.tag}</span>
+                      <span className="text-sm font-semibold">{topicLabel(item.tag)}</span>
                     )}
                   </button>
                 </li>

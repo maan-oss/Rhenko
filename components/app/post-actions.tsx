@@ -8,7 +8,7 @@ import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle,
 import { toast } from "sonner"
 import { markNotInterested } from "@/actions/feed"
 import { snoozeForYouTopic } from "@/actions/topic-snoozes"
-import { extractHashtags } from "@/lib/rules"
+import { extractTopics, topicLabel } from "@/lib/rules"
 import { deletePost, pinPost, reportPost, setReplyHidden, toggleBookmark, toggleHighlight, toggleLike, toggleRepost } from "@/actions/posts"
 import { toggleBlock, toggleMute } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -365,19 +365,19 @@ export function PostActions(props: Props) {
               </DropdownMenuItem>,
             ]
           : []),
-        ...extractHashtags(props.body)
+        ...extractTopics(props.body)
           .slice(0, 2)
           .map((tag) => (
             <DropdownMenuItem
               key={`snooze-${tag}`}
               className={MENU_ITEM_PHONE}
               onClick={() =>
-                run(() => snoozeForYouTopic(tag), `#${tag} is snoozed. Its posts stay out of For you for 30 days.`, () =>
+                run(() => snoozeForYouTopic(tag), `${topicLabel(tag)} is snoozed. Its posts stay out of For you for 30 days.`, () =>
                   window.dispatchEvent(new CustomEvent("rhenko:snoozed", { detail: { tag } }))
                 )
               }
             >
-              <BellOff className="size-4" /> Snooze #{tag} in For you
+              <BellOff className="size-4" /> Snooze {topicLabel(tag)} in For you
             </DropdownMenuItem>
           )),
         <DropdownMenuItem
