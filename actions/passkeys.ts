@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server"
-import { clearChallenge, clientIp, createSession, findUserById, getViewer, readChallenge } from "@/lib/auth"
+import { clearChallenge, clientIp, createSession, findUserById, readChallenge, requireAgreedViewer } from "@/lib/auth"
 import { run, get } from "@/lib/db"
 import { checkAssertion, finishRegistration, registrationOptions, secondStepOptions, signInOptions } from "@/lib/passkeys"
 import { consume, waitLabel } from "@/lib/rate-limit"
@@ -23,8 +23,7 @@ function isId(value: unknown): value is string {
 
 // Adding a key is limited per account, so a stolen session can't fill the account with keys.
 export async function startPasskeyRegistration(): Promise<OptionsResult<Awaited<ReturnType<typeof registrationOptions>>>> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   const count = (await get<{ n: number }>("SELECT COUNT(*) AS n FROM passkeys WHERE user_id = ?", viewer.id))?.n ?? 0
   if (count >= MAX_PASSKEYS) return { ok: false, error: `You can keep up to ${MAX_PASSKEYS} passkeys and security keys.` }
   const allowed = await consume(`passkey-add:${viewer.id}`, 10, 60 * MINUTE)
@@ -34,8 +33,7 @@ export async function startPasskeyRegistration(): Promise<OptionsResult<Awaited<
 }
 
 export async function finishPasskeyRegistration(response: RegistrationResponseJSON, name: string): Promise<VoidResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   if (typeof name !== "string" || name.length > MAX_PASSKEY_NAME * 4) return { ok: false, error: "Give the key a shorter name." }
   const result = await finishRegistration(viewer.id, response, name)
   refresh()
@@ -43,8 +41,7 @@ export async function finishPasskeyRegistration(response: RegistrationResponseJS
 }
 
 export async function removePasskey(id: string): Promise<VoidResult> {
-  const viewer = await getViewer()
-  if (!viewer) return { ok: false, error: "Sign in first." }
+  const viewer = await requireAgreedViewer()
   if (!isId(id)) return { ok: false, error: "That key is already gone." }
   await run("DELETE FROM passkeys WHERE id = ? AND user_id = ?", id, viewer.id)
   refresh()
