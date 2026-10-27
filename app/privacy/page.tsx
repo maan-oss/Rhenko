@@ -532,6 +532,12 @@ const SECTIONS: LegalSection[] = [
             it up.
           </li>
           <li>
+            A GIF provider (GIPHY or KLIPY), only if the operator has turned GIF search on. When you search for a GIF or open the GIF panel,
+            the server asks it for results and sends the words you searched for, from the server&apos;s address and not yours. The
+            pictures in the panel are fetched by the server too, so the provider does not see your browser. A GIF you pick is
+            downloaded by the server and kept here like an uploaded picture. Nothing else is sent to it.
+          </li>
+          <li>
             Sarvam AI, the service Sahayak answers with, only if the operator has turned Sahayak on. When someone mentions @sahayak,
             it receives that post&apos;s question, and the posts it replies to or quotes that the person asking can see, with their authors&apos; handles. Nothing else is
             sent to it.

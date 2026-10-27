@@ -2,17 +2,22 @@
 
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent, type KeyboardEvent } from "react"
 import { useFormStatus } from "react-dom"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, AudioLines, ImagePlus, Mic, X } from "lucide-react"
 import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
+import { GifGlyph, useGifSetup } from "@/components/app/gif-setup"
 import { addPending, removePending } from "@/components/app/pending-messages"
 import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { MAX_DM, MAX_IMAGE_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
+
+// The GIF panel opens only when its button is pressed, so its code waits for that.
+const GifTray = dynamic(() => import("@/components/app/gif-tray").then((module) => module.GifTray), { ssr: false, loading: () => null })
 
 // Browser speech recognition, where the browser has it (Chromium and Safari). Elsewhere the mic is not offered.
 type SpokenResult = { isFinal: boolean; 0: { transcript: string } }
@@ -103,6 +108,9 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
   // A photo waiting to be framed in the crop dialog. Only the framed part is attached.
   const [framing, setFraming] = useState<File | null>(null)
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
+  // The GIF button shows only where the server has a GIF provider and key.
+  const gifSetup = useGifSetup()
+  const [gifOpen, setGifOpen] = useState(false)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState("")
@@ -254,6 +262,18 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
       input.value = ""
       attachPhoto(undefined)
     }
+  }
+
+  // A GIF from the panel goes into the photo field like a picture chosen on the device. It is a GIF within the upload limit, so
+  // it is not framed or made smaller, and it goes out alone, so a recorded voice message is dropped.
+  function keepGif(gif: File) {
+    const input = imageRef.current
+    if (!input) return
+    setVoice(null)
+    const transfer = new DataTransfer()
+    transfer.items.add(gif)
+    input.files = transfer.files
+    attachPhoto(gif)
   }
 
   function removePhoto() {
@@ -450,6 +470,18 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
           />
         </label>
 
+        {gifSetup.enabled ? (
+          <button
+            type="button"
+            onClick={() => setGifOpen(true)}
+            aria-label="Add a GIF"
+            title="Add a GIF"
+            className="tap-44 grid size-10 shrink-0 place-items-center rounded-full text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <GifGlyph />
+          </button>
+        ) : null}
+
         <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-[background-color,box-shadow] focus-within:bg-background focus-within:shadow-[0_0_0_3px_var(--halo)]">
           <textarea
             data-composer-field
@@ -528,6 +560,7 @@ export function ChatComposer({ conversationId }: { conversationId: string }) {
 
         <SendButton disabled={!canSend} />
       </form>
+      {gifOpen ? <GifTray open onOpenChange={setGifOpen} onPick={keepGif} /> : null}
       {framing ? (
         <PhotoCrop
           key={`${framing.name}-${framing.size}`}
