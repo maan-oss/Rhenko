@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { conversationSummaries, starredMessages } from "@/lib/data"
 import { attachmentPreview } from "@/lib/message-attachments"

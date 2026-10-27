@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useState, type ReactNode } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { AnimatePresence, motion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { SPRING_SELECT } from "@/components/app/motion"

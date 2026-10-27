@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 
 // A page in the app could not be shown. The sidebar stays on screen, so the reader can leave from here. The message says
 // what happened and what to do next. The reference, when there is one, matches the server's log for this failure.

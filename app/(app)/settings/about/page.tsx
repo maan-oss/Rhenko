@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { all, get } from "@/lib/db"
 import { AboutSettings } from "@/components/app/about-settings"

@@ -67,7 +67,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
               aria-pressed={isSelected}
               title={item.definition}
               onClick={() => setMeasureIndex(index)}
-              className="group relative flex min-w-0 flex-col gap-2.5 rounded-2xl px-2.5 py-3 text-left outline-none transition-transform duration-150 select-none active:scale-[0.97]"
+              className="group relative flex min-w-0 flex-col gap-2.5 rounded-2xl px-2.5 py-3 text-left outline-none transition-transform duration-150 select-none active:bg-foreground/10"
             >
               {isSelected ? (
                 <motion.span layoutId="analytics-measure" className="absolute inset-0 rounded-2xl border border-foreground bg-foreground/[0.03]" transition={TAB_FILL} />

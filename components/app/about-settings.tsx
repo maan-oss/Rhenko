@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, type FormEvent } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { toast } from "sonner"
 import { saveAbout } from "@/actions/social"
 import { TopicPicker } from "@/components/app/topic-picker"

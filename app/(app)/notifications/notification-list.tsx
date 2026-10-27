@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { AtSign, BellRing, Heart, ListChecks, MessageCircle, Quote, Repeat2, UserPlus, UserRound } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"

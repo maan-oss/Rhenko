@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { circlesFor, discoverCircles, type Circle } from "@/lib/circles"
 import { firstParam } from "@/lib/params"

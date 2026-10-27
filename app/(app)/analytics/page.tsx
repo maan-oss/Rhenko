@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { analyticsFor } from "@/lib/data"
 import { pluralize } from "@/lib/format"
@@ -58,14 +58,14 @@ export default async function AnalyticsPage() {
       <div className="flex flex-wrap gap-2 px-4 pt-5">
         <Link
           href="/analytics/posts"
-          className="tap-44 inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
+          className="tap-44 inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10"
         >
           See every post
         </Link>
         <a
           href="/analytics/export"
           download
-          className="tap-44 inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98]"
+          className="tap-44 inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10"
         >
           Download last 28 days as CSV
         </a>

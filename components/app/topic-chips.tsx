@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { topicLabel } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 

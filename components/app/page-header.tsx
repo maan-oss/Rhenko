@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import type { ReactNode } from "react"
 import { ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"

@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import Link, { useLinkStatus } from "next/link"
+import Link, { useLinkStatus } from "@/components/app/link"
 import { motion } from "motion/react"
 import { Clock, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"

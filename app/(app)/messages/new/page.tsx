@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { ArrowLeft } from "lucide-react"
 import { PageHeader } from "@/components/app/page-header"
 import { NewChatForm, NewGroupForm } from "@/components/app/new-message-forms"

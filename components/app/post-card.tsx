@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { CalendarClock, CircleDot, EyeOff, Info, PenLine, Pin, Repeat2, Sparkles } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { AiLabel, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"

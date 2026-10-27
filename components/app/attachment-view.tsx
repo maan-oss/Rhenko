@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Download, FileArchive, FileSpreadsheet, FileText, MapPin, Presentation } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import type { MiniUser } from "@/lib/data"

@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { useState, useTransition } from "react"
 import { dismissSuggestion } from "@/actions/connections"
 import { Avatar } from "@/components/app/avatar"

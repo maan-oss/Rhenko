@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Lock } from "lucide-react"
 import type { Circle } from "@/lib/circles"
 import type { CircleAccess } from "@/lib/rules"

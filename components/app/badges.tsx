@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils"
 
-// Verified accounts get a dusk check. Labelled for screen readers.
+// Verified accounts get an ink check. Labelled for screen readers.
 export function VerifiedBadge({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" role="img" aria-label="Verified account" className={cn("size-[1em] shrink-0 text-dusk", className)}>
+    <svg viewBox="0 0 24 24" role="img" aria-label="Verified account" className={cn("size-[1em] shrink-0 text-foreground", className)}>
       <path
         fill="currentColor"
         d="M12 1.5l2.6 2.1 3.3-.3.9 3.2 2.9 1.7-1.2 3.1 1.2 3.1-2.9 1.7-.9 3.2-3.3-.3L12 22.5l-2.6-2.1-3.3.3-.9-3.2-2.9-1.7 1.2-3.1-1.2-3.1 2.9-1.7.9-3.2 3.3.3z"

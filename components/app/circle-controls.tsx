@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, type FormEvent, type ReactNode } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {

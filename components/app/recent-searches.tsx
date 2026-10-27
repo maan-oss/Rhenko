@@ -1,7 +1,7 @@
 "use client"
 
 import { useOptimistic, useTransition } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Clock, X } from "lucide-react"
 import { clearSearches, forgetSearch } from "@/actions/search"
 

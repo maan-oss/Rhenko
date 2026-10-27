@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Lock } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { listsFor, type ListSummary } from "@/lib/data"

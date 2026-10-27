@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { chatInfo, setConversationAlerts, type ChatInfoResult } from "@/actions/messages"

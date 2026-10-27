@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Clock, Flame, Image as ImageIcon, List as ListIcon, Lock, Users } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
 import { parseSearch, recentSearches, savedSearches, searchLists, searchUsers, type ListSummary } from "@/lib/data"

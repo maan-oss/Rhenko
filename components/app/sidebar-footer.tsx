@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import type { AccountSummary } from "@/lib/auth"
 import { AccountSwitcher, LogoutButton } from "@/components/app/account-menu"
 import { Avatar } from "@/components/app/avatar"

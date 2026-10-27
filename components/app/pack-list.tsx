@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import type { ListSummary } from "@/lib/data"
 import { formatCount } from "@/lib/format"
 

@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { CASHTAG_JOINED_BEFORE } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 import { ExpandableText } from "@/components/app/expandable-text"

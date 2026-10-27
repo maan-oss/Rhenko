@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { skipSetup } from "@/actions/connections"
 
 // Shown on Home to a new account until it finishes or skips setup. "Not now" hides it for good; the steps stay in Connect

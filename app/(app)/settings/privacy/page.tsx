@@ -5,7 +5,7 @@ import { Avatar } from "@/components/app/avatar"
 import { HideCountsSwitch, MutedWordsPanel, ProtectedSwitch, ReleaseButton } from "@/components/app/privacy-controls"
 import { get } from "@/lib/db"
 import { PageHeader } from "@/components/app/page-header"
-import Link from "next/link"
+import Link from "@/components/app/link"
 
 export default function PrivacySettingsPage() {
   return (

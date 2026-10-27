@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
@@ -482,7 +482,7 @@ export function MobileTabBar({
                           setPressed({ from: served, to: href })
                           setHoldMenu(false)
                         }}
-                        className="flex h-11 items-center gap-3 rounded-2xl px-3 text-[15px] transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
+                        className="flex h-11 items-center gap-3 rounded-2xl px-3 text-[15px] transition-colors duration-150 hover:bg-foreground/5 active:bg-foreground/10"
                       >
                         <Icon
                           className="size-[20px] shrink-0"
@@ -509,7 +509,7 @@ export function MobileTabBar({
                     togglePin()
                     setHoldMenu(false)
                   }}
-                  className="flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
+                  className="flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold transition-colors duration-150 hover:bg-foreground/5 active:bg-foreground/10"
                 >
                   <Pin className="size-[20px] shrink-0" strokeWidth={1.9} aria-hidden="true" />
                   {pinned ? "Unpin" : "Pin"}
@@ -558,7 +558,7 @@ export function MobileTabBar({
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => setPressed({ from: served, to: href })}
                   style={{ width: slot, height: slot }}
-                  className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-black/5 active:scale-[0.94]"
+                  className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:bg-foreground/10"
                 >
                   {/* The current section is marked by a heavier, filled icon. No pill behind it. */}
                   <Icon
@@ -589,7 +589,7 @@ export function MobileTabBar({
               aria-expanded={open}
               aria-haspopup="dialog"
               style={{ width: slot, height: slot }}
-              className="grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-black/5 active:scale-[0.94]"
+              className="grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:bg-foreground/10"
             >
               <Avatar user={viewer} size={32} />
             </button>
@@ -616,7 +616,7 @@ export function MobileTabBar({
             opacity: away ? 0 : 1,
           }}
           className={cn(
-            "pointer-events-auto metal absolute grid size-14 place-items-center transition-[top,right,border-radius,transform,opacity,filter] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:opacity-85 active:scale-[0.94] motion-reduce:transition-none",
+            "pointer-events-auto metal absolute grid size-14 place-items-center transition-[top,right,border-radius,transform,opacity,filter] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:opacity-85 active:opacity-75 motion-reduce:transition-none",
           )}
         >
           <Plus
@@ -657,7 +657,7 @@ export function MobileTabBar({
                       setComposing(true)
                     }
                   }}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-colors duration-150 hover:bg-black/5 active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-colors duration-150 hover:bg-foreground/5 active:bg-foreground/10"
                 >
                   <Icon className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
                   {label}

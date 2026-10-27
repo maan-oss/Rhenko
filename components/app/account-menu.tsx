@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { Bookmark, FileText, LogOut, MoreHorizontal, Pencil, Plus, Settings, User } from "lucide-react"

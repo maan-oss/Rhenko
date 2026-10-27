@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Pin, Timer, Users } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
 import { ConversationMenu } from "@/components/app/conversation-menu"

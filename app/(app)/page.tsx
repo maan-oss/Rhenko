@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { connection } from "next/server"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useId } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { AnimatePresence, motion } from "motion/react"
 import { Heart, Images, Reply, Repeat2, Rows3, Sparkles, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"

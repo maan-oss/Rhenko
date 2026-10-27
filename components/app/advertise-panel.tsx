@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { useActionState, useState, useTransition } from "react"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"

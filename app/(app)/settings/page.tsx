@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { ChevronRight } from "lucide-react"
 import { SettingsLogout } from "@/components/app/account-menu"
 import { PageHeader } from "@/components/app/page-header"

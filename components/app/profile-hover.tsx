@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { PreviewCard } from "@base-ui/react/preview-card"
 import { Avatar } from "@/components/app/avatar"
 import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"

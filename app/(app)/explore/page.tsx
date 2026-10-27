@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { ChevronRight } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
 import { starterPacks, trendingTags } from "@/lib/data"

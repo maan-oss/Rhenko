@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import type { AdView } from "@/lib/ad-rules"
 import { AdReport } from "@/components/app/ad-report"
 

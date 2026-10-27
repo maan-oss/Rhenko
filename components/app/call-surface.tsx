@@ -423,7 +423,7 @@ function ShareButton({ sharing, starting, blocked, big }: { sharing: boolean; st
       aria-pressed={sharing}
       aria-busy={starting || undefined}
       className={cn(
-        "tap-44 inline-flex items-center gap-2 rounded-full font-semibold whitespace-nowrap outline-none transition-[transform,background-color,opacity] duration-200 focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:pointer-events-none disabled:opacity-50",
+        "tap-44 inline-flex items-center gap-2 rounded-full font-semibold whitespace-nowrap outline-none transition-[transform,background-color,opacity] duration-200 focus-visible:ring-2 focus-visible:ring-ring active:opacity-75 disabled:pointer-events-none disabled:opacity-50",
         big ? "h-11 px-5 text-[15px]" : "h-10 px-4 text-[14px]",
         sharing ? "bg-foreground text-background hover:opacity-90" : "bg-muted text-foreground hover:bg-foreground/10"
       )}
@@ -465,7 +465,7 @@ function Control({
         aria-pressed={pressed}
         aria-busy={busy || undefined}
         className={cn(
-          "grid place-items-center rounded-full outline-none transition-[transform,background-color,opacity] duration-200 focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:pointer-events-none disabled:opacity-50",
+          "grid place-items-center rounded-full outline-none transition-[transform,background-color,opacity] duration-200 focus-visible:ring-2 focus-visible:ring-ring active:opacity-75 disabled:pointer-events-none disabled:opacity-50",
           big ? "size-[76px]" : "size-14",
           tone === "plain" && "bg-muted text-foreground hover:bg-foreground/10",
           tone === "muted" && "bg-foreground text-background",

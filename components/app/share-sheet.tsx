@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition, type ReactNode } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { motion } from "motion/react"
 import { Check, Code2, Link2, Search, Send, Share2, X, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -303,7 +303,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
           type="button"
           onClick={send}
           disabled={selected.length === 0 || sending}
-          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground text-[15px] font-semibold text-background transition-[opacity,transform] duration-200 hover:opacity-90 active:scale-[0.99] disabled:opacity-35"
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground text-[15px] font-semibold text-background transition-[opacity,transform] duration-200 hover:opacity-90 active:opacity-80 disabled:opacity-35"
         >
           <Send className="size-[17px]" strokeWidth={2.2} aria-hidden="true" />
           {sending ? "Sending…" : label}

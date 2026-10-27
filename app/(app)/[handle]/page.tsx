@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
 import { BarChart3, Lock } from "lucide-react"

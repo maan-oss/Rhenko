@@ -1,7 +1,7 @@
 "use client"
 
 import { useOptimistic, useState, useTransition } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Bookmark, X } from "lucide-react"
 import { saveSearch, unsaveSearch } from "@/actions/search"
 

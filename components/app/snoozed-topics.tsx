@@ -35,7 +35,7 @@ export function SnoozedTopics({ rows }: { rows: { tag: string; untilAt: number }
                 else toast.error(result.error)
               })
             }
-            className="inline-flex h-9 shrink-0 items-center rounded-full border border-border px-3.5 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:scale-[0.98] disabled:opacity-50"
+            className="inline-flex h-9 shrink-0 items-center rounded-full border border-border px-3.5 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10 disabled:opacity-50"
           >
             Unsnooze
           </button>

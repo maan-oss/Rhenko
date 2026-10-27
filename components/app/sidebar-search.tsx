@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { motion } from "motion/react"
 import { ArrowUpRight, Clock, Search, X, type LucideIcon } from "lucide-react"

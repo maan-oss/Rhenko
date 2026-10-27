@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState, useSyncExternalStore, useTransition } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { toast } from "sonner"
 import { setEmailDigest } from "@/actions/digest"
 import { PreviewChoice } from "@/components/app/push-settings"

@@ -174,7 +174,7 @@ function SendButton({ disabled }: { disabled: boolean }) {
       disabled={pending || disabled}
       aria-label={pending ? "Sending" : "Send"}
       title="Send"
-      className="tap-44 grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:scale-[0.96] disabled:opacity-35"
+      className="tap-44 grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:opacity-70 disabled:opacity-35"
     >
       <ArrowUp className="size-[19px]" strokeWidth={2.3} aria-hidden="true" />
     </button>

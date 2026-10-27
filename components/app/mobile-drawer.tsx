@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { X } from "lucide-react"

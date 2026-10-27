@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { dismissedCount, settingsFor } from "@/lib/connections"
 import { ConnectionSettings } from "@/components/app/connection-settings"

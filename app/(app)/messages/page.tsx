@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import Link from "next/link"
+import Link from "@/components/app/link"
 import { Archive, ChevronRight, Plus, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { archivedCount, conversationSummaries, requestCount } from "@/lib/data"
