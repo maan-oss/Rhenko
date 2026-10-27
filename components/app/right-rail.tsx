@@ -39,7 +39,7 @@ export async function RightRail() {
 
   return (
     <aside data-right-rail className="sticky top-0 hidden h-dvh w-[340px] shrink-0 flex-col gap-4 overflow-y-auto py-4 pr-4 pl-8 xl:flex">
-      <section aria-labelledby="trending-title">
+      <section aria-labelledby="trending-title" className="raised rounded-2xl p-4">
         <h2 id="trending-title" className="text-[18px] font-semibold tracking-tight">
           Trending
         </h2>
@@ -69,7 +69,7 @@ export async function RightRail() {
       </section>
 
       {people.length > 0 ? (
-        <section aria-labelledby="meet-title" className="border-t border-border pt-5">
+        <section aria-labelledby="meet-title" className="raised rounded-2xl p-4">
           <h2 id="meet-title" className="text-[18px] font-semibold tracking-tight">
             People to meet
           </h2>

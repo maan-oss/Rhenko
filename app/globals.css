@@ -59,6 +59,8 @@
   --foreground: #0a0a0a;
   --card: #ffffff;
   --card-foreground: #0a0a0a;
+  /* The one-pixel light edge along the top of a raised surface. */
+  --raised-edge: rgb(255 255 255 / 0.9);
   --popover: #ffffff;
   --popover-foreground: #0a0a0a;
   --primary: #0a0a0a;
@@ -120,6 +122,7 @@
   --foreground: #f2f2f2;
   --card: #141414;
   --card-foreground: #f2f2f2;
+  --raised-edge: rgb(255 255 255 / 0.07);
   --popover: #141414;
   --popover-foreground: #f2f2f2;
   --primary: #f2f2f2;
@@ -305,6 +308,32 @@ textarea:-webkit-autofill {
     inset 0 1px 0 var(--glass-edge),
     0 1px 2px rgb(0 0 0 / 0.05),
     0 18px 40px -20px var(--glass-shadow);
+}
+
+/* Raised: a card one step above the ground. A one-pixel light edge along its top and a soft neutral shadow, nothing tinted. */
+@utility raised {
+  background-color: var(--card);
+  box-shadow:
+    inset 0 1px 0 var(--raised-edge),
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 10px 28px -20px rgb(0 0 0 / 0.22);
+}
+
+/* The phone's top bar tightens as the page scrolls: its row (data-bar-row) shrinks to 40px over the first 96px. This runs on
+   the browser's own scroll timeline. Where that is not supported, or the reader asks for less motion, the bar keeps its height. */
+@keyframes bar-tighten {
+  to {
+    height: 2.5rem;
+  }
+}
+@media (max-width: 1023.98px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    [data-bar-row] {
+      animation: bar-tighten linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0px 96px;
+    }
+  }
 }
 
 /* Metal: a glossy ink (or bright, on charcoal) fill with a bevel. Used for the active and primary controls. */

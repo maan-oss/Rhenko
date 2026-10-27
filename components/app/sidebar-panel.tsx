@@ -3,8 +3,10 @@
 import Link from "@/components/app/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
+import { motion } from "motion/react"
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
+import { SPRING_SELECT } from "@/components/app/motion"
 import { useLiveCounts } from "@/components/app/live-counts"
 import { SidebarFooter } from "@/components/app/sidebar-footer"
 import { SidebarSearch } from "@/components/app/sidebar-search"
@@ -137,17 +139,22 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
       <Link
         href={href}
         aria-current={active ? "page" : undefined}
-        className="group relative flex h-11 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "group relative flex h-11 items-center rounded-full text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active && "text-background"
+        )}
       >
+        {/* The current section sits on one filled pill. It slides from the section you left to this one. */}
+        {active ? <motion.span layoutId="rail-current" aria-hidden="true" className="absolute inset-0 rounded-full bg-foreground" transition={SPRING_SELECT} /> : null}
         <span className="relative grid size-11 shrink-0 place-items-center">
           <Icon
-            className={cn("size-[22px] text-foreground transition-transform duration-300", EASE)}
+            className={cn("size-[22px] transition-transform duration-300", EASE)}
             strokeWidth={active ? 2.2 : 1.75}
             fill={active ? "currentColor" : "none"}
             aria-hidden="true"
           />
           {collapsed && badge > 0 ? (
-            <span aria-hidden="true" className="absolute top-2 right-2 size-2 rounded-full bg-foreground ring-2 ring-sidebar" />
+            <span aria-hidden="true" className={cn("absolute top-2 right-2 size-2 rounded-full ring-2", active ? "bg-background ring-foreground" : "bg-foreground ring-sidebar")} />
           ) : null}
         </span>
         <span className={cn(LABEL_TRACK, collapsed ? "grid-cols-[0fr]" : "grid-cols-[1fr]")}>
@@ -160,7 +167,7 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
               )}
             >
               <span className={cn(active ? "font-semibold" : "font-medium")}>{label}</span>
-              {badge > 0 ? <CountPill count={badge} /> : null}
+              {badge > 0 ? <CountPill count={badge} inverted={active} /> : null}
             </span>
           </span>
         </span>
@@ -181,9 +188,15 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
   )
 }
 
-function CountPill({ count }: { count: number }) {
+// The unread count. On the current section's pill it takes the pill's colours, so it still reads against the ink.
+function CountPill({ count, inverted = false }: { count: number; inverted?: boolean }) {
   return (
-    <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold tabular-nums text-background">
+    <span
+      className={cn(
+        "ml-auto grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+        inverted ? "bg-background text-foreground" : "bg-foreground text-background"
+      )}
+    >
       {count > 99 ? "99+" : count}
     </span>
   )
