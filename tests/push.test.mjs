@@ -26,6 +26,7 @@ function message(overrides = {}) {
     isGroup: false,
     groupTitle: "",
     request: false,
+    mention: false,
     preview: SECRET,
     previewsOn: false,
     ...overrides,
@@ -94,6 +95,18 @@ test("a message request never shows the message, even with previews on", () => {
   const push = messagePush(message({ request: true, previewsOn: true }))
   assert.equal(push.body, "sent you a message request")
   assert.ok(!JSON.stringify(push).includes(SECRET))
+})
+
+test("a mention says so in place of the generic line, and its words appear only with previews on", () => {
+  const plain = messagePush(message({ isGroup: true, groupTitle: "Weekend", mention: true }))
+  assert.equal(plain.body, "Mentioned you")
+  assert.ok(!JSON.stringify(plain).includes(SECRET))
+  assert.equal(messagePush(message({ mention: true, previewsOn: true, preview: "see you at 5" })).body, "Mentioned you: see you at 5")
+  assert.equal(messagePush(message({ mention: true, previewsOn: true, preview: "  " })).body, "Mentioned you")
+})
+
+test("a request is never a mention in the push, so it says what the request says", () => {
+  assert.equal(messagePush(message({ mention: true, request: true, previewsOn: true })).body, messagePush(message({ request: true, previewsOn: true })).body)
 })
 
 test("a group message names the group", () => {

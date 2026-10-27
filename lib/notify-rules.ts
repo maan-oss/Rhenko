@@ -102,6 +102,8 @@ export type MessagePushInput = {
   groupTitle: string
   // The recipient hasn't accepted the conversation yet.
   request: boolean
+  // The message names the recipient with @handle. Says so in place of the generic line.
+  mention: boolean
   // What the conversation list shows for the message: its first words, or "Sent a photo". Used only with previews on.
   preview: string
   previewsOn: boolean
@@ -112,9 +114,10 @@ export type MessagePushInput = {
 export function messagePush(input: MessagePushInput): PushPayload {
   const line = messageLine(input.isGroup, input.request)
   const preview = input.previewsOn && !input.request ? input.preview.trim() : ""
+  const mentioned = input.mention && !input.request
   return {
     title: input.isGroup && input.groupTitle ? `${input.senderName} in ${input.groupTitle}` : input.senderName,
-    body: preview || line,
+    body: mentioned ? (preview ? `Mentioned you: ${preview}` : "Mentioned you") : preview || line,
     tag: `message:${input.conversationId}`,
     url: `/messages/${encodeURIComponent(input.conversationId)}`,
     renotify: true,

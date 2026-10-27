@@ -68,12 +68,14 @@ export async function pushNotification(recipientId: string, actorId: string, kin
 }
 
 // A push for a new message to each other member with push on. A muted conversation, a block either way, or a muted
-// sender gets none. The message itself is never stored for this: its preview goes into the encrypted push only.
+// sender gets none, except that a member the message mentions gets one even when the conversation is muted. The message
+// itself is never stored for this: its preview goes into the encrypted push only.
 export async function pushMessage(
   conversationId: string,
   sender: { id: string; name: string },
   conversation: { kind: "dm" | "group"; title: string },
-  preview: string
+  preview: string,
+  mentioned: ReadonlySet<string> = new Set()
 ): Promise<void> {
   if (!pushReady()) return
   const members = await all<{ user_id: string; status: string; muted: number; previews: number; blocked: number; sender_muted: number }>(
@@ -87,7 +89,8 @@ export async function pushMessage(
     conversationId
   )
   for (const member of members) {
-    const facts = { self: false, kindOn: true, blocked: member.blocked === 1, muted: member.sender_muted === 1, conversationMuted: member.muted === 1 }
+    const mention = mentioned.has(member.user_id)
+    const facts = { self: false, kindOn: true, blocked: member.blocked === 1, muted: member.sender_muted === 1, conversationMuted: member.muted === 1 && !mention }
     if (!mayNotify(facts)) continue
     const devices = await devicesOf(member.user_id)
     if (devices.length === 0) continue
@@ -97,6 +100,7 @@ export async function pushMessage(
       isGroup: conversation.kind === "group",
       groupTitle: conversation.title,
       request: member.status === "requested",
+      mention,
       preview,
       previewsOn: member.previews === 1,
     })

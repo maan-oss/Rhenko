@@ -4,7 +4,7 @@
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { EDIT_WINDOW_MS, editBodyInput, editRefusal, searchQueryInput, snippetAround, viewOnceRefusal } from "../lib/chat-message-rules.ts"
+import { EDIT_WINDOW_MS, editBodyInput, editRefusal, mentionedHandles, searchQueryInput, snippetAround, viewOnceRefusal } from "../lib/chat-message-rules.ts"
 import { WALLPAPERS, wallpaperInput, wallpaperOf } from "../lib/chat-wallpapers.ts"
 
 const SENT = 1_000_000
@@ -92,4 +92,14 @@ test("a wallpaper is one the app offers, and anything else is the default", () =
   assert.equal(wallpaperOf(null), "none")
   assert.equal(wallpaperOf("ink"), "ink")
   assert.equal(wallpaperOf("old-value"), "none")
+})
+
+test("a mention is an @handle that starts a word: lowercased, once, and never inside an address or a link", () => {
+  assert.deepEqual(mentionedHandles("hi @Maan_1 and @maan_1 and @ana"), ["maan_1", "ana"])
+  assert.deepEqual(mentionedHandles("@ab is too short but @abc is fine"), ["abc"])
+  assert.deepEqual(mentionedHandles("@averyveryverylonghandle can't be one"), [])
+  assert.deepEqual(mentionedHandles("(@maan_1) said so"), ["maan_1"])
+  assert.deepEqual(mentionedHandles("mail a@maan.com"), [])
+  assert.deepEqual(mentionedHandles("see https://rhenko.app/@maan_1"), [])
+  assert.deepEqual(mentionedHandles("no one named here"), [])
 })

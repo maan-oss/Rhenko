@@ -8,7 +8,7 @@ import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
 import { canReadConversation, canSeePost, conversationSummaries, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
 import { PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "@/lib/chat-organize-rules"
-import { editBodyInput, editRefusal, searchQueryInput, viewOnceRefusal } from "@/lib/chat-message-rules"
+import { editBodyInput, editRefusal, mentionedHandles, searchQueryInput, viewOnceRefusal } from "@/lib/chat-message-rules"
 import { wallpaperInput } from "@/lib/chat-wallpapers"
 import { blockedEitherWay } from "@/lib/notify"
 import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
@@ -240,8 +240,26 @@ async function insertMessage(
   await publish(await memberIds(conversationId), { type: "message", conversationId })
 }
 
-// A banner for each other member, and a push to their devices. A request says so, and a muted conversation gets neither.
-async function announceMessage(conversationId: string, senderId: string, preview: string): Promise<void> {
+// The accepted members of a group whose @handle the message names, other than its sender. A mention reaches them even when they
+// muted the group, as WhatsApp does. Only people who have joined count, so an invite can't ping someone outside the group.
+async function mentionedMembers(conversationId: string, senderId: string, body: string): Promise<Set<string>> {
+  const handles = mentionedHandles(body)
+  if (handles.length === 0) return new Set()
+  const marks = handles.map(() => "?").join(",")
+  const rows = await all<{ user_id: string }>(
+    `SELECT m.user_id FROM conversation_members m JOIN users u ON u.id = m.user_id
+     WHERE m.conversation_id = ? AND m.user_id <> ? AND m.status = 'accepted' AND u.deactivated_at IS NULL
+       AND LOWER(u.handle) IN (${marks})`,
+    conversationId,
+    senderId,
+    ...handles
+  )
+  return new Set(rows.map((row) => row.user_id))
+}
+
+// A banner for each other member, and a push to their devices. A request says so. A muted conversation gets neither, except for
+// a member who was mentioned in it.
+async function announceMessage(conversationId: string, senderId: string, preview: string, body = ""): Promise<void> {
   const sender = await get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
     "SELECT id, name, handle, avatar_file FROM users WHERE id = ?",
     senderId
@@ -255,21 +273,24 @@ async function announceMessage(conversationId: string, senderId: string, preview
     conversationId,
     senderId
   )
+  const mentioned = conversation.kind === "group" ? await mentionedMembers(conversationId, senderId, body) : new Set<string>()
   for (const member of members) {
-    if (member.muted === 1) continue
+    const mention = mentioned.has(member.user_id)
+    if (member.muted === 1 && !mention) continue
     const requested = member.status === "requested"
+    const line = requested ? "Sent you a message request" : mention ? (preview ? `Mentioned you: ${preview}` : "Mentioned you") : preview || "Sent a message"
     await publish([member.user_id], {
       type: "banner",
       kind: requested ? "request" : "message",
       conversationId,
       title,
-      line: requested ? "Sent you a message request" : preview || "Sent a message",
+      line,
       preview: requested && preview ? preview : null,
       href: `/messages/${conversationId}`,
       from,
     })
   }
-  await pushMessage(conversationId, { id: sender.id, name: sender.name }, conversation, preview)
+  await pushMessage(conversationId, { id: sender.id, name: sender.name }, conversation, preview, mentioned)
 }
 
 // A post goes into a message only when it is live and the sender can open it. Their recipient sees the embed under the
@@ -753,7 +774,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
       void publish([viewer.id, ...others], { type: "message", conversationId }).catch(() => undefined)
     })
   }
-  await announceMessage(conversationId, viewer.id, previewOf(body, mediaFile, attachment, postId !== null))
+  await announceMessage(conversationId, viewer.id, previewOf(body, mediaFile, attachment, postId !== null), body)
   refresh()
   return { sent: true }
 }
@@ -840,7 +861,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
       continue
     }
     await insertMessage(opened.id, viewer.id, clean, null, id, null, null)
-    await announceMessage(opened.id, viewer.id, previewOf(clean, null, null, true))
+    await announceMessage(opened.id, viewer.id, previewOf(clean, null, null, true), clean)
     sent.push({ handle: target.handle, conversationId: opened.id })
   }
   refresh()
@@ -1189,6 +1210,7 @@ export async function forwardMessage(messageId: string, targets: unknown): Promi
 
   for (const conversationId of chosen.ids) {
     await insertMessage(conversationId, viewer.id, message.body, message.media_file, message.post_id, null, attachment, true)
+    // A forwarded copy doesn't name anyone for a mention, so a forward can't ping someone past their mute.
     await announceMessage(conversationId, viewer.id, previewOf(message.body, message.media_file, attachment, message.post_id !== null))
   }
   refresh()

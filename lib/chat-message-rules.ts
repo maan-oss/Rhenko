@@ -78,3 +78,12 @@ export function snippetAround(body: string, query: string, context = 48): { befo
   const after = flat.slice(at + needle.length, end) + (end < flat.length ? "…" : "")
   return { before, match: flat.slice(at, at + needle.length), after }
 }
+
+// The handles a message mentions with "@", lowercased and each once. A mention is a handle that starts a word, so an address or a
+// link's path (x@y, /@handle) doesn't count. The same rule decides how the text is shown (components/app/post-body.tsx).
+const MENTION_WORD = /(?<![\p{L}\p{N}_@#./])@([A-Za-z0-9_]{3,15})(?![A-Za-z0-9_])/gu
+export function mentionedHandles(body: string): string[] {
+  const found = new Set<string>()
+  for (const match of body.matchAll(MENTION_WORD)) found.add(match[1].toLowerCase())
+  return [...found]
+}
