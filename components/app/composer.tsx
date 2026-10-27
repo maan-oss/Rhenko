@@ -1,9 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, MessageSquarePlus, Plus, Save, Sticker as StickerIcon, Trash2, X } from "lucide-react"
+import { CalendarClock, CircleDot, FileText, ImageIcon, ListChecks, LoaderCircle, MessageSquarePlus, Plus, Save, Scissors, Sticker as StickerIcon, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { motion, useReducedMotion } from "motion/react"
 import { createPost, undoPost, type CreateResult } from "@/actions/posts"
@@ -13,6 +13,7 @@ import type { Ratio } from "@/components/app/photo-crop"
 import { useProofGate } from "@/components/app/proof-dialog"
 import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
 import type { StickerPick } from "@/components/app/sticker-tray"
+import { usePreview } from "@/components/app/use-preview"
 import { MAX_STICKERS, TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_LOOK_FIELDS, clamp, type Sticker } from "@/lib/stickers"
 import { ReplyPicker } from "@/components/app/reply-picker"
 import { fullTimestamp, pluralize } from "@/lib/format"
@@ -37,6 +38,8 @@ import {
   validateSchedule,
   type ReplySetting,
 } from "@/lib/rules"
+import { MIN_TRIM_SECONDS, formatClock, rangeLabel, trimField, type Trim } from "@/lib/trim-rules"
+import { useTrimPlayback } from "@/lib/use-trim-playback"
 import { cn } from "@/lib/utils"
 
 // The composer: text, optional media or a poll, who can reply, and when it goes out.
@@ -76,9 +79,12 @@ type Attachment = {
   selected: number | null
   // The selected text sticker is being edited in place.
   editing: boolean
+  // A video's length in seconds, when the browser could read it, and the part of it to post. No trim means all of it.
+  duration: number | null
+  trim: Trim | null
 }
 
-function makeAttachment(file: File, kind: "image" | "video"): Attachment {
+function makeAttachment(file: File, kind: "image" | "video", duration: number | null = null, trim: Trim | null = null): Attachment {
   return {
     key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     file,
@@ -90,6 +96,8 @@ function makeAttachment(file: File, kind: "image" | "video"): Attachment {
     stickerOpen: false,
     selected: null,
     editing: false,
+    duration,
+    trim,
   }
 }
 
@@ -121,6 +129,13 @@ const BACKGROUND_OPTIONS: { value: (typeof TEXT_BACKGROUNDS)[number]; name: stri
 const StickerTray = dynamic(() => import("@/components/app/sticker-tray").then((module) => module.StickerTray), { ssr: false, loading: () => null })
 // The photo framing dialog opens only after a photo is picked, so its code waits for that.
 const PhotoCrop = dynamic(() => import("@/components/app/photo-crop").then((module) => module.PhotoCrop), { ssr: false, loading: () => null })
+
+// The trim sheet opens only after a video is picked, so its code waits for that.
+const VideoTrim = dynamic(() => import("@/components/app/video-trim").then((module) => module.VideoTrim), { ssr: false, loading: () => null })
+
+// A video waiting for its part to be chosen: a new pick that is too long to post whole, or a video already in the post whose
+// trim is being changed (`key`).
+type Trimming = { key: string | null; file: File; duration: number; trim: Trim | null }
 
 type MediaPatch = Partial<Attachment> | ((current: Attachment) => Partial<Attachment>)
 
@@ -198,42 +213,6 @@ function scheduledMs(date: string, time: string): number | null {
   const [hour, minute] = time.split(":").map(Number)
   const ms = new Date(year, month - 1, day, hour, minute, 0, 0).getTime()
   return Number.isFinite(ms) ? ms : null
-}
-
-// Each chosen file has one preview address, shared by whatever shows it and released when the last of those goes.
-// A page kept in the background lets go of its previews and takes them again when it comes back, so a preview never
-// points at an address that has been released.
-const previewUrls = new Map<File, { url: string; holders: number }>()
-
-function noPreview(): string | null {
-  return null
-}
-
-function usePreview(file: File): string | null {
-  const subscribe = useCallback(
-    (changed: () => void) => {
-      let entry = previewUrls.get(file)
-      const created = entry === undefined
-      if (!entry) {
-        entry = { url: URL.createObjectURL(file), holders: 0 }
-        previewUrls.set(file, entry)
-      }
-      entry.holders += 1
-      if (created) changed()
-      return () => {
-        const held = previewUrls.get(file)
-        if (!held) return
-        held.holders -= 1
-        if (held.holders <= 0) {
-          URL.revokeObjectURL(held.url)
-          previewUrls.delete(file)
-        }
-      }
-    },
-    [file]
-  )
-  const current = useCallback(() => previewUrls.get(file)?.url ?? null, [file])
-  return useSyncExternalStore(subscribe, current, noPreview)
 }
 
 // A toolbar icon. Hover shows a faint tint, like the close control on the America.gov menu.
@@ -317,13 +296,18 @@ function MediaTile({
   onRemove,
   onPatch,
   onOpenTray,
+  onTrim,
 }: {
   item: Attachment
   onRemove: () => void
   onPatch: (patch: MediaPatch) => void
   onOpenTray: () => void
+  onTrim: () => void
 }) {
   const url = usePreview(item.file)
+  // A video with a trim plays only the part that will be posted.
+  const player = useRef<HTMLVideoElement>(null)
+  useTrimPlayback(player, url, item.trim, true)
   const altId = useId()
   const video = item.kind === "video"
   const full = item.stickers.length >= MAX_STICKERS
@@ -367,7 +351,7 @@ function MediaTile({
         {url === null ? (
           <div className="aspect-video w-full" aria-hidden="true" />
         ) : video ? (
-          <video src={url} muted playsInline controls preload="metadata" className="max-h-72 w-full" aria-label={item.alt || "Selected video"} />
+          <video ref={player} src={url} muted playsInline controls preload="metadata" className="max-h-72 w-full" aria-label={item.alt || "Selected video"} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -432,6 +416,17 @@ function MediaTile({
           </button>
         )}
       </div>
+      {video && item.duration !== null && item.duration > MIN_TRIM_SECONDS ? (
+        <div className="flex items-center gap-2 text-[13px]">
+          <button type="button" onClick={onTrim} className={cn(PANEL_BUTTON, "tap-44 inline-flex items-center gap-1.5")}>
+            <Scissors className="size-4" aria-hidden />
+            {item.trim ? "Change trim" : "Trim"}
+          </button>
+          <span className="min-w-0 truncate text-muted-foreground tabular-nums">
+            {item.trim ? `Posting ${rangeLabel(item.trim)}` : `Length ${formatClock(item.duration)}`}
+          </span>
+        </div>
+      ) : null}
       {!video && item.stickerOpen && item.aspect !== null ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-2.5 text-[13px]">
           <div className="flex flex-wrap items-center gap-2">
@@ -586,6 +581,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [media, setMedia] = useState<Attachment[]>([])
   // Pictures waiting to be framed, one at a time. The first one is the dialog on screen.
   const [framing, setFraming] = useState<File[]>([])
+  // The video whose part is being chosen, if any. The sheet is on screen while this is set.
+  const [trimming, setTrimming] = useState<Trimming | null>(null)
   // The photo whose sticker tray is open. The tray sits outside the form, so its events never reach the form's handlers.
   const [trayFor, setTrayFor] = useState<string | null>(null)
   const [poll, setPoll] = useState(false)
@@ -686,6 +683,8 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     const next: Attachment[] = [...media]
     // Pictures (other than animated GIFs) are framed in a dialog first, which also makes them small enough to send.
     const queued: File[] = []
+    // A video too long for a post is trimmed in a sheet first. Like the pictures, it joins the post once the person has chosen.
+    let longVideo: Trimming | null = null
     for (const file of picked) {
       const isVideo = file.type.startsWith("video/")
       const isImage = file.type.startsWith("image/")
@@ -702,23 +701,26 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           toast.error(`Videos can be up to ${VIDEO_MB} MB.`)
           continue
         }
-        // Browsers that can't read a file's length let it through. The server still checks its type and size.
-        const seconds = await videoSeconds(file)
-        if (seconds !== null && seconds > MAX_VIDEO_SECONDS) {
-          toast.error(`Videos can be up to ${MAX_VIDEO_SECONDS} seconds long.`)
-          continue
-        }
-        if (next.length > 0) {
+        if (next.length > 0 || queued.length > 0 || framing.length > 0 || longVideo) {
           toast.error("A post can have one video and nothing else.")
           continue
         }
+        // Browsers that can't read a file's length let it through, and it can't be trimmed. The server still checks its type and size.
+        const seconds = await videoSeconds(file)
+        // Too long to post whole: the person chooses the part to keep. A video within the limit goes in as it is, with a Trim button.
+        if (seconds !== null && seconds > MAX_VIDEO_SECONDS) {
+          longVideo = { key: null, file, duration: seconds, trim: null }
+          continue
+        }
+        next.push(makeAttachment(file, "video", seconds))
+        continue
       } else if (file.type === "image/gif") {
         // A GIF moves, so it is sent as it is. It has to fit the upload limit on its own.
         if (file.size > MAX_IMAGE_BYTES) {
           toast.error("Animated GIFs can be up to 4 MB.")
           continue
         }
-        if (next.some((m) => m.kind === "video")) {
+        if (next.some((m) => m.kind === "video") || longVideo) {
           toast.error("A post can have one video and nothing else.")
           continue
         }
@@ -727,7 +729,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
           continue
         }
       } else {
-        if (next.some((m) => m.kind === "video")) {
+        if (next.some((m) => m.kind === "video") || longVideo) {
           toast.error("A post can have one video and nothing else.")
           continue
         }
@@ -738,10 +740,21 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
         queued.push(file)
         continue
       }
-      next.push(makeAttachment(file, isVideo ? "video" : "image"))
+      next.push(makeAttachment(file, "image"))
     }
     setMedia(next)
     if (queued.length > 0) setFraming((current) => [...current, ...queued])
+    if (longVideo) setTrimming(longVideo)
+  }
+
+  // The part chosen in the sheet. A new video joins the post with it; a video already in the post takes the new part.
+  function applyTrim(chosen: Trimming, trim: Trim | null) {
+    setTrimming(null)
+    if (chosen.key === null) {
+      setMedia((current) => (current.length > 0 ? current : [makeAttachment(chosen.file, "video", chosen.duration, trim)]))
+      return
+    }
+    patchMedia(chosen.key, { trim })
   }
 
   // A framed picture joins the post once the person has chosen the part to keep.
@@ -856,6 +869,9 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
       body.append("alt", m.alt)
       // The stickers of a photo, as a set with the photo's shape. An empty entry keeps the list in step with the files.
       body.append("stickers", m.kind === "image" && m.aspect !== null && m.stickers.length > 0 ? JSON.stringify({ aspect: m.aspect, items: m.stickers }) : "")
+      // The part of a video to keep. The whole video is sent, and the server cuts it. An empty entry keeps all of it.
+      body.append("trimStart", m.trim ? trimField(m.trim.start) : "")
+      body.append("trimEnd", m.trim ? trimField(m.trim.end) : "")
     })
     if (article) body.set("title", cleanTitle(title))
     if (poll) {
@@ -1185,6 +1201,17 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
             />
           ) : null}
 
+          {trimming ? (
+            <VideoTrim
+              key={`${trimming.file.name}-${trimming.file.size}-${trimming.key}`}
+              file={trimming.file}
+              duration={trimming.duration}
+              initial={trimming.trim}
+              onCancel={() => setTrimming(null)}
+              onApply={(trim) => applyTrim(trimming, trim)}
+            />
+          ) : null}
+
           {media.length > 0 ? (
             <div className={cn("grid gap-2", media.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
               {media.map((item) => (
@@ -1194,6 +1221,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                   onRemove={() => removeMedia(item.key)}
                   onPatch={(patch) => patchMedia(item.key, patch)}
                   onOpenTray={() => setTrayFor(item.key)}
+                  onTrim={() => item.duration !== null && setTrimming({ key: item.key, file: item.file, duration: item.duration, trim: item.trim })}
                 />
               ))}
             </div>

@@ -30,8 +30,8 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     RHENKO_DATA_DIR=/app/data \
     NODE_OPTIONS=--max-semi-space-size=64
-# ffmpeg rewrites each uploaded video without its location, device and time details (lib/video-metadata.ts). A video is
-# refused when it is missing.
+# ffmpeg rewrites each uploaded video without its location, device and time details, and cuts a trimmed one down to the part
+# chosen, with ffprobe from the same package (lib/video-metadata.ts). A video is refused when they are missing.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
