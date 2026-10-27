@@ -1,11 +1,13 @@
 import { Fragment, type ReactNode } from "react"
 import Link from "next/link"
+import { CASHTAG_JOINED_BEFORE } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 import { ExpandableText } from "@/components/app/expandable-text"
 
-const TOKEN = /(https?:\/\/[^\s]+)|(@[A-Za-z0-9_]{3,15}(?![A-Za-z0-9_]))|(#[\p{L}\p{N}_]{1,50}(?![\p{L}\p{N}_]))|(\$[A-Za-z]{1,6}\b)/gu
+const TOKEN = /(https?:\/\/[^\s]+)|(@[A-Za-z0-9_]{3,15}(?![A-Za-z0-9_]))|(#[\p{L}\p{N}_]{1,50}(?![\p{L}\p{N}_]))|(\$[A-Za-z]{1,10}(?![\p{L}\p{N}_]))/gu
 const TRAILING = /[.,!?;:)\]]+$/
 // A mark right after a letter, digit or one of @ # . / is part of an address, a URL path or "item#2". It stays plain.
+// A cashtag ($AAPL, 1 to 10 letters) has its own test, shared with the parser in lib/rules.ts: it may follow "." or "/".
 const JOINED_BEFORE = /[\p{L}\p{N}_@#./]/u
 
 // Emphasis: **bold**, ~~struck~~ and *italic*. A mark must touch its text (no space just inside it), so "2 * 3 * 4"
@@ -51,7 +53,8 @@ function plain(text: string, ctx: Context): ReactNode[] {
   for (const match of text.matchAll(TOKEN)) {
     const start = match.index ?? 0
     let token = match[0]
-    if (!match[1] && start > 0 && JOINED_BEFORE.test(text[start - 1])) continue
+    const joined = match[4] !== undefined ? CASHTAG_JOINED_BEFORE : JOINED_BEFORE
+    if (!match[1] && start > 0 && joined.test(text[start - 1])) continue
     if (start > last) nodes.push(<Fragment key={ctx.key++}>{text.slice(last, start)}</Fragment>)
     if (match[1]) {
       const trailing = token.match(TRAILING)
@@ -79,9 +82,11 @@ function renderToken(token: string, key: number): ReactNode {
       </Link>
     )
   }
+  // A cashtag links to its own topic page, in upper case ($aapl and $AAPL are one). The $ is part of the topic, so it
+  // is never the page of the hashtag with the same letters.
   if (token.startsWith("$")) {
     return (
-      <Link key={key} href={`/search?q=${encodeURIComponent(token)}`} className="relative z-10 font-medium text-foreground hover:underline">
+      <Link key={key} href={`/topics/${encodeURIComponent(token.toUpperCase())}`} className="relative z-10 text-foreground hover:underline">
         {token}
       </Link>
     )

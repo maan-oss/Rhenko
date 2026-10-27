@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { topicLabel } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 const CHIP =
@@ -22,7 +23,7 @@ export function TopicChips({ topics, active }: { topics: string[]; active: strin
           aria-current={active === tag ? "page" : undefined}
           className={cn(CHIP, active === tag ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted")}
         >
-          #{tag}
+          {topicLabel(tag)}
         </Link>
       ))}
     </nav>

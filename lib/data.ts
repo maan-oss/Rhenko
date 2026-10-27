@@ -3,14 +3,15 @@ import { clickCountsByPost, clickCountsFor, emptyClickCounts, type ClickCounts }
 import { snoozedTopics } from "@/lib/topic-snoozes"
 import {
   asReplySetting,
-  extractHashtags,
   extractMentions,
+  extractTopics,
   NOTE_SHOW_MIN_HELPFUL,
   NOTIFICATION_PAGE_SIZE,
   normalizeTag,
   RECENT_SEARCH_LIMIT,
   SAVED_SEARCH_LIMIT,
   replyAllowed,
+  topicNeedle,
   type NotificationTab,
   type ReplySetting,
 } from "@/lib/rules"
@@ -655,7 +656,7 @@ const FOLLOWING = "SELECT followee_id FROM follows WHERE follower_id = ?"
 //   repost    reposts by people the viewer follows
 //   social    posts that people the viewer follows liked in the last three days
 //   affinity  the recent posts of authors the viewer has liked, reposted or bookmarked lately
-//   topic     recent posts that use a hashtag the viewer follows
+//   topic     recent posts that use a hashtag or cashtag the viewer follows
 //   popular   the most engaged posts of the last three days
 //   explore   posts from the last day by authors with few followers, so new people get seen too
 //   fresh     the newest posts from anyone
@@ -724,7 +725,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
   const vis = await visibilityClause(viewerId)
   // A snoozed topic stays followed, but its posts are kept out of For you and it is not searched for.
   const snoozed = await snoozedTopics(viewerId, at)
-  const hidden = (body: string) => snoozed.size > 0 && extractHashtags(body).some((tag) => snoozed.has(tag))
+  const hidden = (body: string) => snoozed.size > 0 && extractTopics(body).some((tag) => snoozed.has(tag))
   const tags = (await followedTopics(viewerId)).filter((tag) => !snoozed.has(tag)).slice(0, TOPIC_TAGS)
   const tagSet = new Set(tags)
   const followed = new Set((await all<{ followee_id: string }>(FOLLOWING, viewerId)).map((r) => r.followee_id))
@@ -811,7 +812,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
           ...vis.params,
           POOL_SIZE.affinity
         )
-  // The instr test is a cheap first cut. The exact hashtag check (extractHashtags) runs on the rows it returns.
+  // The instr test is a cheap first cut. The exact topic check (extractTopics) runs on the rows it returns.
   const topicPosts =
     tags.length === 0
       ? []
@@ -823,7 +824,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
           since,
           at,
           ...vis.params,
-          ...tags.map((tag) => `#${tag}`.toLowerCase()),
+          ...tags.map(topicNeedle),
           POOL_SIZE.topic
         )
   const popularPosts = await all<CandidatePost>(
@@ -874,7 +875,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
   addPosts(socialRows, "social")
   addPosts(affinityPosts, "affinity")
   addPosts(
-    topicPosts.filter((row) => extractHashtags(row.body).some((tag) => tagSet.has(tag))),
+    topicPosts.filter((row) => extractTopics(row.body).some((tag) => tagSet.has(tag))),
     "topic"
   )
   addPosts(popularPosts, "popular")
@@ -894,7 +895,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
       reposterId,
       source,
       followed: byFollowed,
-      topic: extractHashtags(row.body).some((tag) => tagSet.has(tag)),
+      topic: extractTopics(row.body).some((tag) => tagSet.has(tag)),
       likes: row.likes,
       reposted: row.reposted,
       replies: row.replies,
@@ -948,7 +949,7 @@ async function rankedTopicFor(viewerId: string, at: number, topic: string): Prom
   const bodies = await bodiesOf(base.map((c) => c.postId))
   const list = base.filter((c) => {
     const body = bodies.get(c.postId)
-    return body !== undefined && extractHashtags(body).includes(topic)
+    return body !== undefined && extractTopics(body).includes(topic)
   })
   keepRanking(cacheKey, list)
   return list
@@ -1015,7 +1016,7 @@ async function forYouPage(viewerId: string, cursor: string | undefined, limit: n
   const at = resume?.at ?? snapshotFor(viewerId, now)
   const offset = resume?.offset ?? 0
   const hidden = await hiddenPosts(viewerId)
-  const usesTopic = (body: string) => topic === undefined || extractHashtags(body).includes(topic)
+  const usesTopic = (body: string) => topic === undefined || extractTopics(body).includes(topic)
   // A first page looks up the viewer's own new posts up to now, so they show at once even when the ranking is reused.
   const own = (await ownRecentPosts(viewerId, resume ? at : now)).filter((post) => !hidden.has(post.post_id) && usesTopic(post.body))
   const ownIds = new Set(own.map((post) => post.post_id))
@@ -1045,7 +1046,7 @@ async function forYouPage(viewerId: string, cursor: string | undefined, limit: n
 }
 
 // Following: the viewer's own posts, posts and reposts from accounts they follow, and
-// posts that use a hashtag they follow. Every row still passes the feed's visibility rules.
+// posts that use a hashtag or cashtag they follow. Every row still passes the feed's visibility rules.
 export async function homeFeed(mode: "for-you" | "following", viewerId: string, cursor?: string, limit = 25, topic?: string): Promise<Page<FeedItem>> {
   const vis = await visibilityClause(viewerId)
   // A post arm: `where` is the arm's own condition, placed before the visibility rules.
@@ -1080,12 +1081,13 @@ export async function homeFeed(mode: "for-you" | "following", viewerId: string, 
   ]
   if (tags.size === 0) return await timelinePage(arms, cursor, limit, viewerId, undefined, true)
 
-  // Posts that use a followed #tag, from accounts the viewer does not follow. SQL finds a substring; a tag that only
-  // starts the same way (#art in #artist) is dropped afterwards by reading the post's hashtags exactly.
+  // Posts that use a followed #tag or $TAG, from accounts the viewer does not follow. SQL finds a substring; a tag that only
+  // starts the same way (#art in #artist) is dropped afterwards by reading the post's topics exactly.
   arms.push(
     postArm(
       `${AUTHORED} AND p.author_id <> ? AND p.author_id NOT IN (${FOLLOWING})
-       AND EXISTS (SELECT 1 FROM topic_follows tf WHERE tf.user_id = ? AND strpos(lower(p.body), '#' || tf.tag) > 0)`,
+       AND EXISTS (SELECT 1 FROM topic_follows tf WHERE tf.user_id = ?
+         AND strpos(lower(p.body), CASE WHEN left(tf.tag, 1) = '$' THEN lower(tf.tag) ELSE '#' || tf.tag END) > 0)`,
       [viewerId, viewerId, viewerId]
     )
   )
@@ -1094,7 +1096,7 @@ export async function homeFeed(mode: "for-you" | "following", viewerId: string, 
     row.reposter_id !== null ||
     post.author.id === viewerId ||
     followed.has(post.author.id) ||
-    extractHashtags(post.body).some((tag) => tags.has(tag)),
+    extractTopics(post.body).some((tag) => tags.has(tag)),
     true
   )
 }
@@ -1213,8 +1215,8 @@ export async function topicFeed(tag: string, viewerId: string, cursor?: string, 
   const source = `
     SELECT 'post:' || p.id AS key, p.id AS post_id, p.created_at AS sort_at, NULL AS reposter_id, NULL AS folder_id
     FROM posts p WHERE lower(p.body) ILIKE ? ESCAPE '\\' AND ${AUTHORED}`
-  return await feedPage(source, [likePattern(`#${normalized}`)], cursor, limit, viewerId, (post) =>
-    extractHashtags(post.body).includes(normalized)
+  return await feedPage(source, [likePattern(topicNeedle(normalized))], cursor, limit, viewerId, (post) =>
+    extractTopics(post.body).includes(normalized)
   )
 }
 
@@ -1683,12 +1685,17 @@ export async function followRequestsFor(viewerId: string): Promise<(MiniUser & {
   )).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1, createdAt: r.created_at }))
 }
 
-// Hashtags used most in the last week, counted from live posts by active accounts. Every page shows them, so the
-// count is kept until a new post arrives or a minute passes. A post shows up at once: the newest post's id changes.
+// Hashtags and cashtags used most in the last week, counted from live posts by active accounts, in one list. A cashtag's
+// tag keeps its $ ("$AAPL") and a hashtag's has none ("aapl"), so the same letters count separately. Every page shows them,
+// so the count is kept until a new post arrives or a minute passes. A post shows up at once: the newest post's id changes.
 let trending: { generation: number; at: number; tags: { tag: string; count: number }[] } | null = null
 const TRENDING_TTL_MS = 60 * 1000
+// The list shows at most this many. The composer's suggestions read a longer list, so cashtags in the top places do not
+// crowd the hashtags out of them.
+const TRENDING_SHOWN = 20
+const TRENDING_KEPT = 200
 
-export async function trendingTags(limit = 6): Promise<{ tag: string; count: number }[]> {
+async function trendingPool(): Promise<{ tag: string; count: number }[]> {
   const now = Date.now()
   const generation = (await get<{ generation: number | null }>("SELECT MAX(created_at) AS generation FROM posts"))?.generation ?? 0
   if (!trending || trending.generation !== generation || now - trending.at > TRENDING_TTL_MS) {
@@ -1702,17 +1709,21 @@ export async function trendingTags(limit = 6): Promise<{ tag: string; count: num
     )
     const counts = new Map<string, number>()
     for (const row of rows) {
-      for (const tag of extractHashtags(row.body)) {
+      for (const tag of extractTopics(row.body)) {
         counts.set(tag, (counts.get(tag) ?? 0) + 1)
       }
     }
     const tags = [...counts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 20)
+      .slice(0, TRENDING_KEPT)
       .map(([tag, count]) => ({ tag, count }))
     trending = { generation, at: now, tags }
   }
-  return trending.tags.slice(0, limit)
+  return trending.tags
+}
+
+export async function trendingTags(limit = 6): Promise<{ tag: string; count: number }[]> {
+  return (await trendingPool()).slice(0, Math.min(limit, TRENDING_SHOWN))
 }
 
 export type NotificationKind = "like" | "repost" | "reply" | "quote" | "follow" | "mention" | "follow_request" | "poll" | "post"
@@ -2308,9 +2319,9 @@ export async function topicSummary(tag: string): Promise<{ postsThisWeek: number
        AND NOT EXISTS (SELECT 1 FROM communities c WHERE c.id = p.community_id AND c.access = 'closed')
      ORDER BY p.created_at DESC LIMIT 2000`,
     weekAgo,
-    `#${clean}`
+    topicNeedle(clean)
   )
-  const postsThisWeek = rows.filter((row) => extractHashtags(row.body).includes(clean)).length
+  const postsThisWeek = rows.filter((row) => extractTopics(row.body).includes(clean)).length
   const followers = (await get<{ n: number }>("SELECT COUNT(*) AS n FROM topic_follows WHERE tag = ?", clean))?.n ?? 0
   return { postsThisWeek, followers }
 }
@@ -2358,9 +2369,18 @@ export async function suggestHandles(prefix: string, viewerId: string, limit = 6
 
 export async function suggestTags(prefix: string, limit = 6): Promise<string[]> {
   const normalized = normalizeTag(prefix)
-  return (await trendingTags(200))
+  return (await trendingPool())
     .map((t) => t.tag)
     .filter((tag) => tag.startsWith(normalized))
+    .slice(0, limit)
+}
+
+// Cashtags to offer while someone types $AA: the ones used in posts this week, most used first, as keys ("$AAPL").
+export async function suggestCashtags(prefix: string, limit = 6): Promise<string[]> {
+  const wanted = normalizeTag(`$${prefix}`)
+  return (await trendingPool())
+    .map((t) => t.tag)
+    .filter((tag) => tag.startsWith(wanted))
     .slice(0, limit)
 }
 

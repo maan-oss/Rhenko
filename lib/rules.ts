@@ -101,20 +101,35 @@ export function validateTitle(title: string): string | null {
   return null
 }
 
-// Mentions and hashtags, read the same way the post text is drawn (components/app/post-body.tsx). Links are skipped
-// whole, and a mark that sits right after a letter, digit or one of @ # . / is part of something else (an address,
-// a URL path, "item#2"), so it is not counted. Handles and tags compare case-insensitively.
+// Mentions, hashtags and cashtags, read the same way the post text is drawn (components/app/post-body.tsx). Links are
+// skipped whole, and a mark that sits right after a letter, digit or one of @ # . / is part of something else (an
+// address, a URL path, "item#2"), so it is not counted. Handles and tags compare case-insensitively.
 export const MENTION_PATTERN = /@([A-Za-z0-9_]{3,15})(?![A-Za-z0-9_])/g
 const TAG_PATTERN = /#([\p{L}\p{N}_]{1,50})(?![\p{L}\p{N}_])/gu
 const JOINED_BEFORE = /[\p{L}\p{N}_@#./]/u
 
-function plainMarks(body: string, pattern: RegExp): string[] {
+// A cashtag is the $TICKER form X uses for stocks and crypto: a $ and then 1 to 10 letters, letters first, so "$5" and
+// "$100" are prices, not cashtags. The letters must end the word: "$AAPL2" and an 11-letter run are not cashtags, and
+// nothing is cut short to make one fit.
+export const MAX_CASHTAG = 10
+export const CASHTAG_PATTERN = /\$([A-Za-z]{1,10})(?![\p{L}\p{N}_])/gu
+// A cashtag stands at the start of the text or after whitespace or punctuation. It cannot sit inside a word ("US$AAPL")
+// or right after another sign ("$$AAPL", "#$AAPL", "@$AAPL"). Unlike a hashtag it may follow "." or "/", so "$BTC/$ETH"
+// holds two. The post text is drawn with this same test.
+export const CASHTAG_JOINED_BEFORE = /[\p{L}\p{N}_$#@]/u
+
+function plainMarks(
+  body: string,
+  pattern: RegExp,
+  joinedBefore: RegExp = JOINED_BEFORE,
+  form: (name: string) => string = (name) => name.toLowerCase()
+): string[] {
   const text = body.replace(/https?:\/\/\S+/g, " ")
   const found = new Set<string>()
   for (const match of text.matchAll(pattern)) {
     const at = match.index ?? 0
-    if (at > 0 && JOINED_BEFORE.test(text[at - 1])) continue
-    found.add(match[1].toLowerCase())
+    if (at > 0 && joinedBefore.test(text[at - 1])) continue
+    found.add(form(match[1]))
   }
   return [...found]
 }
@@ -125,6 +140,27 @@ export function extractMentions(body: string): string[] {
 
 export function extractHashtags(body: string): string[] {
   return plainMarks(body, TAG_PATTERN)
+}
+
+// The cashtags in a post as topic keys: "$" and the symbol in upper case, each once. "$aapl" and "$AAPL" are one.
+export function extractCashtags(body: string): string[] {
+  return plainMarks(body, CASHTAG_PATTERN, CASHTAG_JOINED_BEFORE, (symbol) => `$${symbol.toUpperCase()}`)
+}
+
+// Every topic a post uses, hashtags first. A hashtag's key has no # and is lower case ("aapl"); a cashtag's key keeps its $
+// and is upper case ("$AAPL"). No hashtag can hold a $, so the two never meet in storage, in a URL or in a count.
+export function extractTopics(body: string): string[] {
+  return [...extractHashtags(body), ...extractCashtags(body)]
+}
+
+// How a topic key is written for a reader: "#aapl" for a hashtag, "$AAPL" for a cashtag.
+export function topicLabel(key: string): string {
+  return key.startsWith("$") ? key : `#${key}`
+}
+
+// The text a post must contain, in lower case, to use this topic. A first cut for SQL; extractTopics makes the exact check.
+export function topicNeedle(key: string): string {
+  return key.startsWith("$") ? key.toLowerCase() : `#${key}`
 }
 
 // Media, polls, scheduling and the other post features.
@@ -260,7 +296,9 @@ export function validateSchedule(at: number, now: number): string | null {
   return null
 }
 
+// A topic key. A cashtag keeps its $ and goes to upper case; anything else loses a leading # and goes to lower case.
 export function normalizeTag(tag: string): string {
+  if (tag.startsWith("$")) return tag.toUpperCase()
   return tag.replace(/^#/, "").toLowerCase()
 }
 

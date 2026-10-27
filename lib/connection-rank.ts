@@ -121,7 +121,7 @@ export function reasonsOf(me: Me, candidate: Candidate, facts: Facts, nameOf: (c
   if (facts.shared.length > 0) reasons.push(`Speaks ${listOf(facts.shared.map(nameOf))}, like you`)
   if (!swap && facts.teaches.length > 0) reasons.push(`Speaks ${listOf(facts.teaches.map(nameOf))}, which you are learning`)
   if (!swap && facts.learnsFromYou.length > 0) reasons.push(`Learning ${listOf(facts.learnsFromYou.map(nameOf))}, which you speak`)
-  if (facts.topics.length > 0) reasons.push(`Writes about ${listOf(facts.topics.map((tag) => `#${tag}`))}, which you follow`)
+  if (facts.topics.length > 0) reasons.push(`Writes about ${listOf(facts.topics.map((tag) => (tag.startsWith("$") ? tag : `#${tag}`)))}, which you follow`)
   return reasons
 }
 

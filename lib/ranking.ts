@@ -49,7 +49,7 @@ export type Candidate = {
   source: Source
   // The viewer follows the author, or (for a repost) the person who reposted.
   followed: boolean
-  // The post uses a hashtag the viewer follows.
+  // The post uses a hashtag or cashtag the viewer follows.
   topic: boolean
   likes: number
   reposted: number
