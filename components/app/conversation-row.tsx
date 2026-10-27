@@ -1,6 +1,7 @@
 import Link from "next/link"
-import { Timer, Users } from "lucide-react"
+import { Pin, Timer, Users } from "lucide-react"
 import { Avatar } from "@/components/app/avatar"
+import { ConversationMenu } from "@/components/app/conversation-menu"
 import { RelativeTime } from "@/components/app/time-text"
 import type { ConversationSummary, MiniUser } from "@/lib/data"
 import { timerLabel } from "@/lib/message-timers"
@@ -32,21 +33,30 @@ function ConversationAvatar({ kind, people }: { kind: "dm" | "group"; people: Mi
   )
 }
 
-// A row in the messages list. It opens the conversation.
+// A row in the messages list. It opens the conversation. Accepted chats also carry their options menu, beside the link.
 export function ConversationRow({ conversation }: { conversation: ConversationSummary }) {
   const unread = conversation.unread > 0
+  const title = conversationTitle(conversation)
   const preview = conversation.lastBody
     ? `${conversation.lastFromMe ? "You: " : ""}${conversation.lastBody}`
     : conversation.lastDeleted
       ? "Message deleted"
       : "No messages yet"
   return (
-    <li className="border-b border-border">
-      <Link href={`/messages/${conversation.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+    <li className="relative border-b border-border">
+      <Link href={`/messages/${conversation.id}`} className="flex items-center gap-3 py-3 pr-14 pl-4 transition-colors hover:bg-muted/50">
         <ConversationAvatar kind={conversation.kind} people={conversation.others} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className={cn("truncate text-[15px]", unread ? "font-bold" : "font-semibold")}>{conversationTitle(conversation)}</span>
+            <span className={cn("flex min-w-0 items-center gap-1 text-[15px]", unread ? "font-bold" : "font-semibold")}>
+              {conversation.pinned ? (
+                <>
+                  <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="sr-only">Pinned. </span>
+                </>
+              ) : null}
+              <span className="truncate">{title}</span>
+            </span>
             <span className="shrink-0 text-xs text-muted-foreground">
               {conversation.messageTimer > 0 ? (
                 <>
@@ -70,6 +80,11 @@ export function ConversationRow({ conversation }: { conversation: ConversationSu
           </div>
         </div>
       </Link>
+      {conversation.status === "accepted" ? (
+        <div className="absolute top-1/2 right-2 -translate-y-1/2">
+          <ConversationMenu conversationId={conversation.id} title={title} pinned={conversation.pinned} archived={conversation.archived} />
+        </div>
+      ) : null}
     </li>
   )
 }

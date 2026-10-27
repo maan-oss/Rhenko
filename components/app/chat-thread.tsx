@@ -2,10 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, Timer, TimerOff, Trash2, Users } from "lucide-react"
+import { EyeOff, Forward, MoreHorizontal, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
-import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/messages"
+import { deleteMessage, hideMessageForMe, loadEarlierMessages, toggleReaction, toggleStarMessage } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
+import { ForwardDialog } from "@/components/app/forward-dialog"
+import { MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { removePending, usePending } from "@/components/app/pending-messages"
 import { PostBody } from "@/components/app/post-body"
 import { ContactCard, DocumentCard, LocationCard } from "@/components/app/attachment-view"
@@ -63,6 +66,9 @@ export function ChatThread({
   const [page, setPage] = useState(messages)
   // The moment the thread last checked for disappearing messages that are due. Zero until the first check.
   const [clock, setClock] = useState(0)
+  // What this viewer changed in the thread: a star, or a message deleted for them. The server's newest page is refreshed, but the
+  // copies of older messages kept here are not, so these changes are applied over the list.
+  const [changes, setChanges] = useState<Record<string, { starred?: boolean; hidden?: boolean }>>({})
 
   // The newest page moves on as messages arrive. Once older messages are showing, whatever slides out of the page
   // stays in the thread, so it never has a gap.
@@ -78,6 +84,8 @@ export function ChatThread({
 
   const pageIds = new Set(messages.map((message) => message.id))
   const listed = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
+    .filter((message) => !changes[message.id]?.hidden)
+    .map((message) => (changes[message.id]?.starred === undefined ? message : { ...message, starred: changes[message.id].starred as boolean }))
   // A disappearing message leaves the thread the moment its time is up, without waiting for a refresh. The clock starts at
   // zero, so the first render is the page the server sent, which had already left out anything that was gone.
   const shown = clock === 0 ? listed : listed.filter((message) => !isExpired(message.expiresAt, clock))
@@ -189,6 +197,7 @@ export function ChatThread({
             key={message.id}
             conversationId={conversationId}
             message={message}
+            onChange={(change) => setChanges((current) => ({ ...current, [message.id]: { ...current[message.id], ...change } }))}
             showSeen={message.id === lastOwn?.id && message.seen}
             // Messages from the same sender in quick succession stack into one run.
             joinsPrev={sameRun(previous, message)}
@@ -304,6 +313,7 @@ function jumpTo(id: string) {
 function MessageRow({
   conversationId,
   message,
+  onChange,
   showSeen,
   showName,
   joinsPrev,
@@ -311,6 +321,7 @@ function MessageRow({
 }: {
   conversationId: string
   message: MessageView
+  onChange: (change: { starred?: boolean; hidden?: boolean }) => void
   showSeen: boolean
   showName: boolean
   joinsPrev: boolean
@@ -319,6 +330,8 @@ function MessageRow({
   const [pickerOpen, setPickerOpen] = useState(false)
   // Hover does not exist on a phone, so a tap on the bubble shows its actions instead.
   const [revealed, setRevealed] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [forwardOpen, setForwardOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   function toggleOnTouch() {
@@ -341,6 +354,30 @@ function MessageRow({
     startTransition(async () => {
       const result = await toggleReaction(message.id, emoji)
       if (!result.ok) toast.error(result.error)
+    })
+  }
+
+  // Stars or unstars the message for this viewer alone.
+  function toggleStar() {
+    setRevealed(false)
+    startTransition(async () => {
+      const result = await toggleStarMessage(message.id)
+      if (result.ok) {
+        onChange({ starred: result.starred })
+        toast.success(result.starred ? "Starred." : "Unstarred.")
+      } else {
+        toast.error(result.error)
+      }
+    })
+  }
+
+  // Removes the message from this viewer's own view. It stays for everyone else in the chat.
+  function deleteForMe() {
+    setRevealed(false)
+    startTransition(async () => {
+      const result = await hideMessageForMe(message.id)
+      if (result.ok) onChange({ hidden: true })
+      else toast.error(result.error)
     })
   }
 
@@ -368,6 +405,12 @@ function MessageRow({
             <span>This message was deleted.</span>
           ) : (
             <>
+              {message.forwarded ? (
+                <p className="flex items-center gap-1 text-xs italic opacity-80">
+                  <Forward className="size-3" aria-hidden="true" />
+                  Forwarded
+                </p>
+              ) : null}
               {message.replyTo ? (
                 <button
                   type="button"
@@ -441,7 +484,7 @@ function MessageRow({
         </div>
 
         {!message.deleted ? (
-          <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed) && "opacity-100")}>
+          <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed || menuOpen) && "opacity-100")}>
             <button type="button" aria-label="Reply" title="Reply" onClick={startReply} className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
               <Reply className="size-4" />
             </button>
@@ -467,6 +510,25 @@ function MessageRow({
                 action={() => deleteMessage(message.id)}
               />
             ) : null}
+            <DropdownMenu onOpenChange={setMenuOpen}>
+              <DropdownMenuTrigger aria-label="More message options" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
+                <MoreHorizontal className="size-4" aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={message.mine ? "end" : "start"} className="min-w-44">
+                <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={toggleStar}>
+                  {message.starred ? <StarOff className="size-4" aria-hidden="true" /> : <Star className="size-4" aria-hidden="true" />}
+                  {message.starred ? "Unstar" : "Star"}
+                </DropdownMenuItem>
+                <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setForwardOpen(true)}>
+                  <Forward className="size-4" aria-hidden="true" />
+                  Forward
+                </DropdownMenuItem>
+                <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={deleteForMe}>
+                  <EyeOff className="size-4" aria-hidden="true" />
+                  Delete for me
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ) : null}
       </div>
@@ -507,6 +569,12 @@ function MessageRow({
       {!joinsNext || showSeen ? (
         <p className="text-xs text-muted-foreground">
           {showSeen ? "Seen · " : null}
+          {message.starred ? (
+            <>
+              <Star className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+              <span className="sr-only">Starred, </span>
+            </>
+          ) : null}
           {message.expiresAt !== null ? (
             <>
               <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
@@ -516,6 +584,7 @@ function MessageRow({
           <LocalTime at={message.createdAt} variant="clock" />
         </p>
       ) : null}
+      {forwardOpen ? <ForwardDialog messageId={message.id} onOpenChange={setForwardOpen} /> : null}
     </div>
   )
 }

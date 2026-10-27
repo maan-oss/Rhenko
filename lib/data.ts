@@ -1831,6 +1831,9 @@ export type ConversationSummary = {
   status: "accepted" | "requested"
   // The disappearing-messages timer in milliseconds, 0 when it is off.
   messageTimer: number
+  // Pinned chats are listed first. Archived chats are listed only under Archived.
+  pinned: boolean
+  archived: boolean
 }
 
 type LastMessage = {
@@ -1858,12 +1861,20 @@ async function lastMessageOf(conversationId: string, viewerId: string): Promise<
   return await get<LastMessage>(
     `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change
      FROM chat_messages m
-     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")}
+     ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
     conversationId,
     viewerId,
     viewerId,
-    Date.now()
+    Date.now(),
+    viewerId
   )
+}
+
+// A message the viewer has deleted for themselves is left out of their view of the chat and its previews. The clause takes the
+// viewer's id once, as its last parameter.
+function notHiddenFrom(alias: string): string {
+  return `NOT EXISTS (SELECT 1 FROM chat_hidden_messages hid WHERE hid.message_id = ${alias}.id AND hid.user_id = ?)`
 }
 
 // What the conversation list says about the latest message, from the viewer's side.
@@ -1927,14 +1938,31 @@ async function departedMembers(conversationId: string, currentIds: string[]): Pr
   return [...(await loadMiniUsers([...ids].filter((id) => !present.has(id)))).values()]
 }
 
-export async function conversationSummaries(viewerId: string, status: "accepted" | "requested", limit = 60): Promise<ConversationSummary[]> {
-  const rows = await all<{ id: string; kind: "dm" | "group"; title: string; updated_at: number; last_read_at: number; message_timer: number }>(
-    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer
+// The viewer's conversations of one status: the chats list (archived left out) or, with `archived`, the archived ones. Pinned
+// chats come first in the chats list, then the most recent.
+export async function conversationSummaries(
+  viewerId: string,
+  status: "accepted" | "requested",
+  limit = 60,
+  archived = false
+): Promise<ConversationSummary[]> {
+  const rows = await all<{
+    id: string
+    kind: "dm" | "group"
+    title: string
+    updated_at: number
+    last_read_at: number
+    message_timer: number
+    pinned: number
+    archived: number
+  }>(
+    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer, cm.pinned, cm.archived
      FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
-     WHERE cm.user_id = ? AND cm.status = ? AND NOT (${DM_BLOCKED})
-     ORDER BY c.updated_at DESC LIMIT ?`,
+     WHERE cm.user_id = ? AND cm.status = ? AND cm.archived = ? AND NOT (${DM_BLOCKED})
+     ORDER BY cm.pinned DESC, c.updated_at DESC LIMIT ?`,
     viewerId,
     status,
+    archived ? 1 : 0,
     viewerId,
     viewerId,
     viewerId,
@@ -1953,13 +1981,14 @@ export async function conversationSummaries(viewerId: string, status: "accepted"
       (await get<{ c: number }>(
         `SELECT COUNT(*) AS c FROM chat_messages m
          WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.created_at > ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")}
-           AND ${unexpired("m")}`,
+           AND ${unexpired("m")} AND ${notHiddenFrom("m")}`,
         row.id,
         viewerId,
         row.last_read_at,
         viewerId,
         viewerId,
-        Date.now()
+        Date.now(),
+        viewerId
       ))?.c ?? 0
     return {
       id: row.id,
@@ -1974,8 +2003,82 @@ export async function conversationSummaries(viewerId: string, status: "accepted"
       unread,
       status,
       messageTimer: row.message_timer,
+      pinned: row.pinned === 1,
+      archived: row.archived === 1,
     }
   }))
+}
+
+export type StarredMessage = {
+  id: string
+  conversationId: string
+  senderName: string
+  mine: boolean
+  body: string
+  mediaFile: string | null
+  attachment: Attachment | null
+  createdAt: number
+  starredAt: number
+}
+
+// The messages the viewer has starred, most recently starred first. A message that is gone, has disappeared, was deleted for the
+// viewer, or belongs to a chat they have left or a person they have blocked is left out.
+export async function starredMessages(viewerId: string, limit = 200): Promise<StarredMessage[]> {
+  const rows = await all<{
+    id: string
+    conversation_id: string
+    sender_id: string
+    sender_name: string
+    body: string
+    media_file: string | null
+    attachment: string | null
+    created_at: number
+    starred_at: number
+  }>(
+    `SELECT m.id, m.conversation_id, m.sender_id, u.name AS sender_name, m.body, m.media_file, m.attachment, m.created_at, s.created_at AS starred_at
+     FROM chat_stars s
+     JOIN chat_messages m ON m.id = s.message_id
+     JOIN users u ON u.id = m.sender_id
+     JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = s.user_id
+     JOIN conversations c ON c.id = m.conversation_id
+     WHERE s.user_id = ? AND cm.status = 'accepted' AND m.deleted_at IS NULL AND m.call_status IS NULL AND m.timer_change IS NULL
+       AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED})
+     ORDER BY s.created_at DESC LIMIT ?`,
+    viewerId,
+    Date.now(),
+    viewerId,
+    viewerId,
+    viewerId,
+    viewerId,
+    viewerId,
+    viewerId,
+    limit
+  )
+  return rows.map((r) => ({
+    id: r.id,
+    conversationId: r.conversation_id,
+    senderName: r.sender_name,
+    mine: r.sender_id === viewerId,
+    body: r.body,
+    mediaFile: r.media_file,
+    attachment: parseAttachment(r.attachment),
+    createdAt: r.created_at,
+    starredAt: r.starred_at,
+  }))
+}
+
+// How many of the viewer's accepted chats are archived, for the link to the Archived list.
+export async function archivedCount(viewerId: string): Promise<number> {
+  return (
+    (await get<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
+       WHERE cm.user_id = ? AND cm.status = 'accepted' AND cm.archived = 1 AND NOT (${DM_BLOCKED})`,
+      viewerId,
+      viewerId,
+      viewerId,
+      viewerId
+    ))?.c ?? 0
+  )
 }
 
 // Unread messages across the conversations the list shows, so the badge never counts a hidden conversation.
@@ -1986,7 +2089,7 @@ export async function unreadMessageCount(viewerId: string): Promise<number> {
        JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
        JOIN conversations c ON c.id = m.conversation_id
        WHERE cm.status = 'accepted' AND cm.muted = 0 AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL
-         AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED}) AND ${unexpired("m")}`,
+         AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED}) AND ${unexpired("m")} AND ${notHiddenFrom("m")}`,
       viewerId,
       viewerId,
       viewerId,
@@ -1994,7 +2097,8 @@ export async function unreadMessageCount(viewerId: string): Promise<number> {
       viewerId,
       viewerId,
       viewerId,
-      Date.now()
+      Date.now(),
+      viewerId
     ))?.c ?? 0
   )
 }
@@ -2116,6 +2220,10 @@ export type MessageView = {
   expiresAt: number | null
   // A line recording a change to the disappearing-messages timer: the new value in milliseconds, 0 for off.
   timerChange: number | null
+  // Whether the viewer has starred this message. Only the viewer sees it.
+  starred: boolean
+  // Whether the message was forwarded from another chat, so the thread can say so.
+  forwarded: boolean
   // What the message carries besides its text (a document, a scan, a contact or a location). Null when nothing else.
   attachment: Attachment | null
   // The person a contact card is about, when that account is still there. Null for any other message.
@@ -2162,17 +2270,19 @@ type MessageRow = {
   reply_sender_name: string | null
   expires_at: number | null
   timer_change: number | null
+  forwarded: number
 }
 
 // The messages of one conversation as this viewer may see them. The original of a reply is joined in the same chat only, so
 // a reply can never quote something from another conversation. A message from a blocked pair is left out, and so is a
-// reply's quote of one. A disappearing message whose time is up is left out, and so is a quote of one. The SQL takes the
-// viewer's id twice and the time for the quote, then the conversation, then the viewer twice and the time.
+// reply's quote of one. A disappearing message whose time is up is left out, and so is a quote of one, and so is a message the
+// viewer deleted for themselves. The SQL takes the viewer's id twice and the time for the quote, then the conversation, then the
+// viewer twice, the time, and the viewer once more for the hidden check.
 function messageSelect(conversationId: string, viewerId: string): { select: string; params: Param[] } {
   const now = Date.now()
   return {
     select: `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.attachment, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
-       m.expires_at, m.timer_change,
+       m.expires_at, m.timer_change, m.forwarded,
        u.name AS sender_name, u.handle AS sender_handle,
        m.reply_to_id, rm.id AS reply_id, rm.body AS reply_body, rm.media_file AS reply_media, rm.post_id AS reply_post,
        rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name, rm.attachment AS reply_attachment
@@ -2180,8 +2290,8 @@ function messageSelect(conversationId: string, viewerId: string): { select: stri
      JOIN users u ON u.id = m.sender_id
      LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")} AND ${unexpired("rm")}
      LEFT JOIN users ru ON ru.id = rm.sender_id
-     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")}`,
-    params: [viewerId, viewerId, now, conversationId, viewerId, viewerId, now],
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")}`,
+    params: [viewerId, viewerId, now, conversationId, viewerId, viewerId, now, viewerId],
   }
 }
 
@@ -2222,6 +2332,11 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
      FROM message_reactions WHERE message_id IN (${marks}) GROUP BY message_id, emoji ORDER BY MIN(created_at)`,
     viewerId,
     ...ids
+  )
+  const starredIds = new Set(
+    (await all<{ message_id: string }>(`SELECT message_id FROM chat_stars WHERE user_id = ? AND message_id IN (${marks})`, viewerId, ...ids)).map(
+      (s) => s.message_id
+    )
   )
   const reactions = new Map<string, { emoji: string; count: number; mine: boolean }[]>()
   for (const r of reactionRows) {
@@ -2307,6 +2422,8 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       reactions: reactions.get(r.id) ?? [],
       expiresAt: r.expires_at,
       timerChange: r.timer_change,
+      starred: starredIds.has(r.id),
+      forwarded: !r.deleted_at && r.forwarded === 1,
       attachment,
       contact: attachment?.kind === "contact" ? contacts.get(attachment.userId) ?? null : null,
       link: linkOf.has(r.id) ? linkPreviews.get(linkOf.get(r.id) as string) ?? null : null,

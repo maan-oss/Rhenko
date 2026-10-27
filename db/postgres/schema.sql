@@ -460,6 +460,9 @@ CREATE TABLE conversation_members (
   status text NOT NULL DEFAULT 'accepted',
   last_read_at bigint NOT NULL DEFAULT 0,
   joined_at bigint NOT NULL, muted bigint NOT NULL DEFAULT 0,
+  -- Per person: pinned chats stay at the top of their list, and archived chats move to the Archived list until a new message.
+  pinned bigint NOT NULL DEFAULT 0,
+  archived bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (conversation_id, user_id)
 );
 
@@ -543,7 +546,9 @@ CREATE TABLE chat_messages (
   timer_change bigint,
   -- What the message carries besides its text, as JSON (lib/message-attachments.ts). NULL for a photo, video, audio file or
   -- voice note, which are stored as media_file alone.
-  attachment text);
+  attachment text,
+  -- 1 when the message was forwarded from another chat, so it can say so.
+  forwarded bigint NOT NULL DEFAULT 0);
 
 -- A vote in a poll sent in a chat. The poll's choices are in the message's attachment; a person's vote is one row per choice
 -- they picked, so a single-answer poll has at most one row for them.
@@ -553,6 +558,21 @@ CREATE TABLE chat_poll_votes (
   option_id text NOT NULL,
   created_at bigint NOT NULL,
   PRIMARY KEY (message_id, user_id, option_id)
+);
+
+-- A message a person has starred. Only the person who starred it sees it in their starred list.
+CREATE TABLE chat_stars (
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  created_at bigint NOT NULL,
+  PRIMARY KEY (user_id, message_id)
+);
+
+-- A message one person has deleted for themselves. The message stays for everyone else.
+CREATE TABLE chat_hidden_messages (
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, message_id)
 );
 
 CREATE TABLE community_notes (

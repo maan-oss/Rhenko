@@ -42,7 +42,8 @@ function checkFor(parts: string[]): Check | null {
   const [first = "", second = "", third = ""] = parts
 
   if (parts.length === 2) {
-    if (first === "messages" && second !== "new") return async (viewer) => (await conversationFor(second, viewer)) === null
+    // "new" and "starred" are pages of their own under /messages, not conversations.
+    if (first === "messages" && second !== "new" && second !== "starred") return async (viewer) => (await conversationFor(second, viewer)) === null
     if (first === "lists") return async (viewer) => (await openList(second, viewer)) === null
     if (first === "circles" && second !== "new") return async (viewer) => (await openCircle(second, viewer)) === null
     if (first === "topics") return async () => !topicFromParam(second).ok

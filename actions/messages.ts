@@ -6,7 +6,8 @@ import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
-import { canReadConversation, canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
+import { canReadConversation, canSeePost, conversationSummaries, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
+import { PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "@/lib/chat-organize-rules"
 import { blockedEitherWay } from "@/lib/notify"
 import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
 import { firstLink, requestPreviews } from "@/lib/link-previews"
@@ -205,12 +206,13 @@ async function insertMessage(
   mediaFile: string | null,
   postId: string | null,
   replyToId: string | null,
-  attachment: Attachment | null
+  attachment: Attachment | null,
+  forwarded = false
 ): Promise<void> {
   const now = Date.now()
   const timer = (await get<{ message_timer: number }>("SELECT message_timer FROM conversations WHERE id = ?", conversationId))?.message_timer ?? 0
   await run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment, forwarded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     newId(),
     conversationId,
     senderId,
@@ -221,10 +223,13 @@ async function insertMessage(
     languageOf(body),
     replyToId,
     expiryFor(now, timer),
-    attachment ? attachmentText(attachment) : null
+    attachment ? attachmentText(attachment) : null,
+    forwarded ? 1 : 0
   )
   await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
+  // A new message brings an archived chat back to the chats list for everyone else in it, as WhatsApp does.
+  await run("UPDATE conversation_members SET archived = 0 WHERE conversation_id = ? AND user_id <> ? AND archived = 1", conversationId, senderId)
   await publish(await memberIds(conversationId), { type: "message", conversationId })
 }
 
@@ -903,7 +908,10 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   await run("UPDATE chat_messages SET deleted_at = ?, body = '', media_file = NULL, post_id = NULL WHERE id = ?", Date.now(), id)
   await run("DELETE FROM message_reactions WHERE message_id = ?", id)
   await run("DELETE FROM message_translations WHERE message_id = ?", id)
-  await removeUpload(message.media_file)
+  // A forwarded copy can share this file, so it is removed only once no message still points at it.
+  if (message.media_file && !(await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", message.media_file))) {
+    await removeUpload(message.media_file)
+  }
   await publish(await memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })
   refresh()
   return { ok: true }
@@ -922,6 +930,148 @@ export async function toggleConversationMute(conversationId: string): Promise<Vo
   await run("UPDATE conversation_members SET muted = ? WHERE conversation_id = ? AND user_id = ?", muted, id, viewer.id)
   refresh()
   return { ok: true, muted: muted === 1 }
+}
+
+// Pins or unpins a chat at the top of this viewer's list. A person can pin PINNED_CHATS_MAX chats at most.
+export async function toggleConversationPin(conversationId: string): Promise<VoidResult & { pinned?: boolean }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const member = id
+    ? await get<{ status: string; pinned: number }>("SELECT status, pinned FROM conversation_members WHERE conversation_id = ? AND user_id = ?", id, viewer.id)
+    : undefined
+  if (!id || !member || member.status !== "accepted") return { ok: false, error: "That conversation doesn't exist." }
+  const pinned = member.pinned === 1 ? 0 : 1
+  if (pinned === 1) {
+    const count = (
+      await get<{ c: number }>(
+        "SELECT COUNT(*) AS c FROM conversation_members WHERE user_id = ? AND status = 'accepted' AND archived = 0 AND pinned = 1",
+        viewer.id
+      )
+    )?.c ?? 0
+    if (count >= PINNED_CHATS_MAX) return { ok: false, error: `You can pin up to ${PINNED_CHATS_MAX} chats. Unpin one first.` }
+  }
+  await run("UPDATE conversation_members SET pinned = ? WHERE conversation_id = ? AND user_id = ?", pinned, id, viewer.id)
+  refresh()
+  return { ok: true, pinned: pinned === 1 }
+}
+
+// Archives or restores a chat for this viewer only. An archived chat leaves the chats list and comes back when someone else sends
+// a message in it. Archiving also unpins it.
+export async function toggleConversationArchive(conversationId: string): Promise<VoidResult & { archived?: boolean }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  const member = id
+    ? await get<{ status: string; archived: number }>("SELECT status, archived FROM conversation_members WHERE conversation_id = ? AND user_id = ?", id, viewer.id)
+    : undefined
+  if (!id || !member || member.status !== "accepted") return { ok: false, error: "That conversation doesn't exist." }
+  const archived = member.archived === 1 ? 0 : 1
+  await run("UPDATE conversation_members SET archived = ? WHERE conversation_id = ? AND user_id = ?", archived, id, viewer.id)
+  if (archived === 1) await run("UPDATE conversation_members SET pinned = 0 WHERE conversation_id = ? AND user_id = ?", id, viewer.id)
+  refresh()
+  return { ok: true, archived: archived === 1 }
+}
+
+// The message a viewer can act on: it exists, they may read its chat, and they have not deleted it for themselves. Null otherwise.
+async function visibleMessageFor(messageId: string | null, viewerId: string): Promise<{ conversation_id: string; body: string; media_file: string | null; post_id: string | null; attachment: string | null; deleted_at: number | null; call_status: string | null; timer_change: number | null; expires_at: number | null } | null> {
+  if (!messageId) return null
+  const message = await get<{ conversation_id: string; body: string; media_file: string | null; post_id: string | null; attachment: string | null; deleted_at: number | null; call_status: string | null; timer_change: number | null; expires_at: number | null }>(
+    "SELECT conversation_id, body, media_file, post_id, attachment, deleted_at, call_status, timer_change, expires_at FROM chat_messages WHERE id = ?",
+    messageId
+  )
+  if (!message || !(await canReadConversation(message.conversation_id, viewerId))) return null
+  if (await get("SELECT 1 AS found FROM chat_hidden_messages WHERE message_id = ? AND user_id = ?", messageId, viewerId)) return null
+  if (message.expires_at !== null && message.expires_at <= Date.now()) return null
+  return message
+}
+
+// Stars or unstars a message for this viewer alone. Calls and changes to the timer are not messages anyone stars.
+export async function toggleStarMessage(messageId: string): Promise<VoidResult & { starred?: boolean }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = await visibleMessageFor(id, viewer.id)
+  if (!id || !message) return { ok: false, error: "That message doesn't exist." }
+  if (message.deleted_at !== null || message.call_status !== null || message.timer_change !== null) {
+    return { ok: false, error: "This message can't be starred." }
+  }
+  const starred = await get("SELECT 1 AS found FROM chat_stars WHERE user_id = ? AND message_id = ?", viewer.id, id)
+  if (starred) await run("DELETE FROM chat_stars WHERE user_id = ? AND message_id = ?", viewer.id, id)
+  else await run("INSERT INTO chat_stars (user_id, message_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, id, Date.now())
+  refresh()
+  return { ok: true, starred: !starred }
+}
+
+// Removes a message from this viewer's own view only. It stays for everyone else in the chat, and can't be undone from here.
+export async function hideMessageForMe(messageId: string): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = id
+    ? await get<{ conversation_id: string }>("SELECT conversation_id FROM chat_messages WHERE id = ?", id)
+    : undefined
+  if (!id || !message || !(await canReadConversation(message.conversation_id, viewer.id))) return { ok: false, error: "That message doesn't exist." }
+  await run("INSERT INTO chat_hidden_messages (user_id, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING", viewer.id, id)
+  await publish([viewer.id], { type: "message", conversationId: message.conversation_id })
+  refresh()
+  return { ok: true }
+}
+
+export type ForwardTarget = { id: string; title: string; kind: "dm" | "group" }
+
+// The chats a viewer can forward to: every chat they are in, archived ones included, in the order the chats list uses.
+export async function listForwardTargets(): Promise<ForwardTarget[]> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return []
+  const chats = [...(await conversationSummaries(viewer.id, "accepted")), ...(await conversationSummaries(viewer.id, "accepted", 60, true))]
+  return chats.map((chat) => {
+    const names = chat.others.map((person) => person.name).join(", ")
+    const title = chat.kind === "group" ? chat.title || names || "Group" : (chat.others[0]?.name ?? "Conversation")
+    return { id: chat.id, title, kind: chat.kind }
+  })
+}
+
+// Sends a copy of a message to each chosen chat, in the viewer's name, marked as forwarded. The copy keeps its text, photo, file,
+// place, post or contact. A contact card goes only where that person is. Polls, calls and timer changes can't be forwarded.
+export async function forwardMessage(messageId: string, targets: unknown): Promise<VoidResult & { count?: number }> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = await visibleMessageFor(id, viewer.id)
+  if (!id || !message) return { ok: false, error: "That message doesn't exist." }
+  const attachment = parseAttachment(message.attachment)
+  const refused = forwardRefusal({
+    deleted: message.deleted_at !== null,
+    callStatus: message.call_status,
+    timerChange: message.timer_change,
+    attachmentKind: attachment?.kind ?? null,
+  })
+  if (refused) return { ok: false, error: refused }
+  const chosen = forwardTargetsInput(targets)
+  if (!chosen.ok) return { ok: false, error: chosen.error }
+  if (message.post_id && !(await sendablePost(message.post_id, viewer.id))) return { ok: false, error: POST_UNAVAILABLE }
+
+  for (const conversationId of chosen.ids) {
+    if ((await memberStatus(conversationId, viewer.id)) !== "accepted") return { ok: false, error: "You can only forward to chats you're in." }
+    if (await directConversationClosed(conversationId, viewer.id)) return { ok: false, error: "They can't receive messages here anymore." }
+    const others = (await memberIds(conversationId)).filter((memberId) => memberId !== viewer.id)
+    if ((await Promise.all(others.map((memberId) => blockedEitherWay(viewer.id, memberId)))).some(Boolean)) {
+      return { ok: false, error: "You can't message someone in one of those chats." }
+    }
+    if (attachment?.kind === "contact" && !others.includes(attachment.userId)) {
+      return { ok: false, error: "A contact card can only go to a chat with that person in it." }
+    }
+  }
+  const slowDown = await tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.")
+  if (slowDown) return { ok: false, error: slowDown }
+
+  for (const conversationId of chosen.ids) {
+    await insertMessage(conversationId, viewer.id, message.body, message.media_file, message.post_id, null, attachment, true)
+    await announceMessage(conversationId, viewer.id, previewOf(message.body, message.media_file, attachment, message.post_id !== null))
+  }
+  refresh()
+  return { ok: true, count: chosen.ids.length }
 }
 
 // A person can change a conversation's timer this many times in TIMER_WINDOW_MS. Each change writes a line in the thread.
