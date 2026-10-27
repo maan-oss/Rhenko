@@ -1,10 +1,9 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react"
-import { useFormStatus } from "react-dom"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { createGroup, startConversation, type ChatState } from "@/actions/messages"
+import { createGroup, startConversation } from "@/actions/messages"
 import { Button } from "@/components/ui/button"
 import { useProofGate } from "@/components/app/proof-dialog"
 import { MAX_GROUP_TITLE } from "@/lib/rules"
@@ -76,27 +75,44 @@ export function NewChatForm({ defaultHandle }: { defaultHandle?: string }) {
   )
 }
 
-function CreateButton() {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" disabled={pending} className="h-11 rounded-lg px-5">
-      {pending ? "Creating" : "Create group"}
-    </Button>
-  )
-}
-
-// A group with two or more other people. Message requests apply to each person who doesn't follow you.
+// A group with two or more other people. Message requests apply to each person who doesn't follow you, and each of those
+// counts as a new conversation, so a busy account may be asked for the human check first. The group is then sent again
+// with the answer.
 export function NewGroupForm() {
   const router = useRouter()
-  const [state, action] = useActionState(createGroup, {} as ChatState & { id?: string })
-  useEffect(() => {
-    if (state.id) {
-      toast.success("Group created.")
-      router.push(`/messages/${state.id}`)
-    }
-  }, [state.id, router])
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const proof = useProofGate()
+  const create = (data: FormData) => {
+    startTransition(async () => {
+      const result = await createGroup({}, data)
+      if (result.id) {
+        setError(null)
+        toast.success("Group created.")
+        router.push(`/messages/${result.id}`)
+        return
+      }
+      if (result.proofRequired) {
+        proof.askForProof((passed) => {
+          const again = new FormData()
+          for (const [key, value] of data) if (key !== "proof") again.append(key, value)
+          again.set("proof", passed)
+          create(again)
+        })
+        return
+      }
+      setError(result.error ?? "The group couldn't be created. Try again.")
+    })
+  }
   return (
-    <form action={action} className="flex flex-col gap-3">
+    <>
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault()
+        create(new FormData(event.currentTarget))
+      }}
+    >
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-semibold">Group name (optional)</span>
         <input name="title" maxLength={MAX_GROUP_TITLE} className={INPUT} />
@@ -111,14 +127,18 @@ export function NewGroupForm() {
           className="rounded-xl border border-input bg-background px-3 py-2 text-[15px] outline-none focus-visible:border-foreground/50"
         />
       </label>
-      {state.error ? (
+      {error ? (
         <p role="alert" className="text-sm text-destructive">
-          {state.error}
+          {error}
         </p>
       ) : null}
       <div className="flex justify-end">
-        <CreateButton />
+        <Button type="submit" disabled={pending} className="h-11 rounded-lg px-5">
+          {pending ? "Creating" : "Create group"}
+        </Button>
       </div>
     </form>
+    {proof.dialog}
+    </>
   )
 }

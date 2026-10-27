@@ -70,6 +70,41 @@ async function tooFast(key: string, limit: number, windowMs: number, what: strin
   return result.ok ? null : `${what} Try again in ${waitLabel(result.retryAfterSeconds)}.`
 }
 
+// New conversations an hour: fewer for an account made in the last week.
+const NEW_CHAT_WINDOW_MS = 60 * 60_000
+type ReachCheck = { ok: true } | { ok: false; error: string; proofRequired: boolean }
+
+// Reaching many new people at once is what spam and hijacked accounts do. So every way of reaching someone new passes the
+// account check and the hourly limit on new conversations: a new chat, a post shared with someone there is no chat with
+// yet, and a group that invites people who don't follow the sender. Each new person counts once against the limit.
+async function mayReachNewPeople(viewerId: string, proof: unknown, people: number): Promise<ReachCheck> {
+  if (people <= 0) return { ok: true }
+  const verdict = await gate(viewerId, proof)
+  if (!verdict.ok) return verdict
+  const limit = await isNewAccount(viewerId) ? 5 : 30
+  for (let i = 0; i < people; i++) {
+    const room = await consume(`newchat:${viewerId}`, limit, NEW_CHAT_WINDOW_MS)
+    if (!room.ok) {
+      return { ok: false, error: `You've started a lot of new conversations. Try again in ${waitLabel(room.retryAfterSeconds)}.`, proofRequired: false }
+    }
+  }
+  return { ok: true }
+}
+
+// The one-to-one chat between two people, or null when they have none yet.
+async function directBetween(a: string, b: string): Promise<string | null> {
+  return (await get<{ id: string }>(
+    `SELECT c.id FROM conversations c
+     WHERE c.kind = 'dm'
+       AND EXISTS (SELECT 1 FROM conversation_members m WHERE m.conversation_id = c.id AND m.user_id = ?)
+       AND EXISTS (SELECT 1 FROM conversation_members m WHERE m.conversation_id = c.id AND m.user_id = ?)
+       AND (SELECT COUNT(*) FROM conversation_members m WHERE m.conversation_id = c.id) = 2
+     LIMIT 1`,
+    a,
+    b
+  ))?.id ?? null
+}
+
 async function memberStatus(conversationId: unknown, userId: string): Promise<"accepted" | "requested" | null> {
   const id = asId(conversationId)
   if (!id) return null
@@ -101,17 +136,8 @@ async function openDirect(viewerId: string, targetId: string): Promise<IdResult>
   if (viewerId === targetId) return { ok: false, error: "You can't message yourself." }
   if (await blockedEitherWay(viewerId, targetId)) return { ok: false, error: "You can't message this account." }
 
-  const existing = await get<{ id: string }>(
-    `SELECT c.id FROM conversations c
-     WHERE c.kind = 'dm'
-       AND EXISTS (SELECT 1 FROM conversation_members m WHERE m.conversation_id = c.id AND m.user_id = ?)
-       AND EXISTS (SELECT 1 FROM conversation_members m WHERE m.conversation_id = c.id AND m.user_id = ?)
-       AND (SELECT COUNT(*) FROM conversation_members m WHERE m.conversation_id = c.id) = 2
-     LIMIT 1`,
-    viewerId,
-    targetId
-  )
-  if (existing) return { ok: true, id: existing.id }
+  const existing = await directBetween(viewerId, targetId)
+  if (existing) return { ok: true, id: existing }
 
   const id = newId()
   const now = Date.now()
@@ -151,15 +177,8 @@ export async function startConversation(
     viewer.id,
     target.id
   )
-  if (!existing) {
-    const verdict = await gate(viewer.id, proof)
-    if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
-    const fresh = await isNewAccount(viewer.id)
-    const limit = await consume(`newchat:${viewer.id}`, fresh ? 5 : 30, 60 * 60_000)
-    if (!limit.ok) {
-      return { ok: false, error: `You've started a lot of new conversations. Try again in ${waitLabel(limit.retryAfterSeconds)}.`, proofRequired: false }
-    }
-  }
+  const reach = await mayReachNewPeople(viewer.id, proof, existing ? 0 : 1)
+  if (!reach.ok) return reach
   const opened = await openDirect(viewer.id, target.id)
   if (opened.ok) refresh()
   return opened
@@ -245,7 +264,7 @@ async function sendablePost(postId: string, senderId: string): Promise<boolean> 
 
 const POST_UNAVAILABLE = "That post isn't available to share."
 
-export async function createGroup(_prev: ChatState, formData: FormData): Promise<ChatState & { id?: string }> {
+export async function createGroup(_prev: ChatState, formData: FormData): Promise<ChatState & { id?: string; proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to start a group." }
   const title = String(formData.get("title") ?? "").trim()
@@ -267,17 +286,22 @@ export async function createGroup(_prev: ChatState, formData: FormData): Promise
   }
   if (users.length < 2) return { error: "Add at least two other people." }
 
+  // People who follow the creator join at once. Everyone else gets a request, and each of those counts as a new conversation.
+  const statuses = await Promise.all(users.map(async (user) => (await follows(user.id, viewer.id) ? "accepted" : "requested")))
+  const reach = await mayReachNewPeople(viewer.id, formData.get("proof"), statuses.filter((status) => status === "requested").length)
+  if (!reach.ok) return { error: reach.error, proofRequired: reach.proofRequired }
+
   const id = newId()
   const now = Date.now()
   await transaction(async () => {
     await run("INSERT INTO conversations (id, kind, title, created_by, created_at, updated_at) VALUES (?, 'group', ?, ?, ?, ?)", id, title, viewer.id, now, now)
     await run("INSERT INTO conversation_members (conversation_id, user_id, status, last_read_at, joined_at) VALUES (?, ?, 'accepted', ?, ?)", id, viewer.id, now, now)
-    for (const user of users) {
+    for (const [index, user] of users.entries()) {
       await run(
         "INSERT INTO conversation_members (conversation_id, user_id, status, last_read_at, joined_at) VALUES (?, ?, ?, 0, ?)",
         id,
         user.id,
-        await follows(user.id, viewer.id) ? "accepted" : "requested",
+        statuses[index],
         now
       )
     }
@@ -430,7 +454,11 @@ export async function joinGroupWithInvite(token: string): Promise<IdResult> {
 
 // Adds someone to a group. Someone who follows the person adding them joins at once; anyone else is invited and joins when
 // they accept, and the result says which.
-export async function addToGroup(conversationId: string, handle: string): Promise<VoidResult & { status?: "accepted" | "requested" }> {
+export async function addToGroup(
+  conversationId: string,
+  handle: string,
+  proof?: string
+): Promise<VoidResult & { status?: "accepted" | "requested"; proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
@@ -450,6 +478,9 @@ export async function addToGroup(conversationId: string, handle: string): Promis
   }
   if ((await memberIds(id)).length >= MAX_GROUP_MEMBERS) return { ok: false, error: `Groups can have up to ${MAX_GROUP_MEMBERS} people.` }
   const joined = await follows(user.id, viewer.id) ? "accepted" : "requested"
+  // An invitation is a request to someone who doesn't follow the person adding them, so it counts as a new conversation.
+  const reach = await mayReachNewPeople(viewer.id, proof, joined === "requested" ? 1 : 0)
+  if (!reach.ok) return reach
   await run(
     "INSERT INTO conversation_members (conversation_id, user_id, status, last_read_at, joined_at) VALUES (?, ?, ?, 0, ?)",
     id,
@@ -668,6 +699,15 @@ export async function sharePostWith(postId: string, handles: string[], note: str
     if (slowDown) {
       failed.push({ handle: target.handle, error: slowDown })
       continue
+    }
+    // Sharing with someone there is no chat with yet starts one, so it passes the same check and limit as a new chat. The
+    // share sheet has no human check of its own, so when one is needed the person starts the chat from Messages.
+    if (!await directBetween(viewer.id, target.id) && !await blockedEitherWay(viewer.id, target.id)) {
+      const reach = await mayReachNewPeople(viewer.id, undefined, 1)
+      if (!reach.ok) {
+        failed.push({ handle: target.handle, error: reach.proofRequired ? "Start a chat with them from Messages first, then share." : reach.error })
+        continue
+      }
     }
     const opened = await openDirect(viewer.id, target.id)
     if (!opened.ok) {
