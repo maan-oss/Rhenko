@@ -2,12 +2,28 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Mic, MicOff, Phone, PhoneOff, Users, Video, VideoOff } from "lucide-react"
+import { Mic, MicOff, Phone, PhoneOff, ScreenShare, ScreenShareOff, Users, Video, VideoOff } from "lucide-react"
+import { toast } from "sonner"
 import { Avatar } from "@/components/app/avatar"
 import { GroupCallTiles } from "@/components/app/group-call-tiles"
-import { acceptCall, declineCall, getCallState, getServerCallState, hangUp, startCamera, subscribeCall, toggleCamera, toggleMute, type CallState } from "@/lib/call-engine"
+import {
+  acceptCall,
+  canCaptureScreen,
+  declineCall,
+  getCallState,
+  getServerCallState,
+  hangUp,
+  startCamera,
+  startScreenShare,
+  stopScreenShare,
+  subscribeCall,
+  toggleCamera,
+  toggleMute,
+  type CallState,
+} from "@/lib/call-engine"
 import type { EventPerson } from "@/lib/bus"
 import { formatDuration } from "@/lib/format"
+import { pictureFit, pictureLead, showsShareButton } from "@/lib/screen-share"
 import { cn } from "@/lib/utils"
 import { useIsDesktop } from "@/lib/use-media"
 
@@ -42,9 +58,32 @@ function labelOf(call: CallState): string {
   return `${call.video ? "Video" : "Voice"} call with ${call.peer?.name ?? ""}`
 }
 
-// The pictures of a video call are shown once the call has an answer, and until it ends.
+// The pictures of a video call, or of a shared screen, are shown once the call has an answer, and until it ends.
 function showsPicture(call: CallState): boolean {
-  return call.video && call.kind === "dm" && (call.status === "connecting" || call.status === "active" || call.status === "reconnecting" || call.status === "outgoing")
+  const live = call.status === "connecting" || call.status === "active" || call.status === "reconnecting" || call.status === "outgoing"
+  return call.kind === "dm" && live && leadOf(call) !== null
+}
+
+function leadOf(call: CallState) {
+  return pictureLead({ remoteScreen: call.remoteScreen, video: call.video, sharing: call.localScreen !== null })
+}
+
+// Share screen is offered in a connected one-to-one call, in a browser that can capture a screen. Group calls are voice
+// only (lib/screen-share.ts says why), and most phones can't share, so the button is hidden in both.
+function showsShare(call: CallState): boolean {
+  return showsShareButton({
+    kind: call.kind,
+    people: call.kind === "dm" ? 2 : call.tiles.length + 1,
+    status: call.status,
+    sharing: call.localScreen !== null,
+    supported: canCaptureScreen(),
+  })
+}
+
+// The desktop card widens while the other person shares their screen, so what they show can be read.
+function cardWidth(call: CallState): string {
+  if (call.kind === "group") return "w-[380px]"
+  return call.remoteScreen && showsPicture(call) ? "w-[560px]" : "w-[340px]"
 }
 
 // A ringing group call shows who is calling. Once in the call, the group itself.
@@ -58,7 +97,6 @@ function Lead({ call, size }: { call: CallState; size: number }) {
 }
 
 function CallCard({ call, self }: { call: CallState; self: EventPerson }) {
-  const group = call.kind === "group"
   return (
     <motion.section
       aria-label={labelOf(call)}
@@ -68,7 +106,8 @@ function CallCard({ call, self }: { call: CallState; self: EventPerson }) {
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       className={cn(
         "fixed right-6 bottom-6 z-[85] max-w-[calc(100vw-3rem)] overflow-hidden rounded-[30px] border border-border bg-popover text-popover-foreground shadow-[0_34px_80px_-24px_rgba(0,0,0,0.55)]",
-        group ? "w-[380px]" : "w-[340px]"
+        "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        cardWidth(call)
       )}
     >
       <div className="flex items-center gap-4 p-5 pb-4">
@@ -91,6 +130,7 @@ function CallCard({ call, self }: { call: CallState; self: EventPerson }) {
         </div>
       ) : null}
       <Controls call={call} size="card" />
+      <ShareNews call={call} />
     </motion.section>
   )
 }
@@ -127,27 +167,58 @@ function CallScreen({ call, self }: { call: CallState; self: EventPerson }) {
         </div>
       ) : null}
       {showsPicture(call) ? (
-        <div className="mt-4 mb-5 flex min-h-0 w-full max-w-[520px] flex-1">
+        <div className={cn("mt-4 mb-5 flex min-h-0 w-full flex-1", call.remoteScreen ? "max-w-[960px]" : "max-w-[520px]")}>
           <Picture call={call} className="size-full" />
         </div>
       ) : null}
       <Controls call={call} size="screen" />
+      <ShareNews call={call} />
     </motion.section>
   )
 }
 
-// The two pictures of a video call: the other person's, filling the frame, and this person's own in the corner. A
-// camera that is off shows as a plain frame, so the call stays readable.
+// Tells screen readers when the other person starts sharing their screen. The region is always there, so the change is
+// read out.
+function ShareNews({ call }: { call: CallState }) {
+  if (call.kind !== "dm") return null
+  return (
+    <span className="sr-only" aria-live="polite">
+      {call.remoteScreen && call.status !== "ended" ? `${call.peer?.name ?? "The other person"} is sharing their screen.` : ""}
+    </span>
+  )
+}
+
+// The two pictures of a call: the other person's, in the frame, and this person's own in the corner. A shared screen is
+// shown whole, with a label, since cropping it would cut off what is being shown. A camera fills the frame, and one
+// that is off shows as a plain frame, so the call stays readable. While this person shares, the corner shows the
+// screen going out rather than the camera it replaced. In a voice call their own screen fills the frame instead.
 function Picture({ call, className }: { call: CallState; className?: string }) {
   const name = call.peer?.name ?? "the other person"
+  const lead = leadOf(call)
+  const cornerScreen = lead === "my-screen" ? null : call.localScreen
   return (
     <div className={cn("relative overflow-hidden rounded-[22px] bg-muted", className)}>
-      {call.remoteVideo ? (
-        <VideoFeed stream={call.remoteVideo} label={`Video of ${name}`} />
-      ) : (
-        <p className="grid size-full place-items-center px-6 text-center text-[14px] text-muted-foreground">Waiting for their video…</p>
-      )}
-      {call.localVideo ? (
+      {lead === "their-screen" ? (
+        call.remoteVideo ? (
+          <VideoFeed stream={call.remoteVideo} label={`Screen shared by ${name}`} fit={pictureFit(lead)} />
+        ) : (
+          <Waiting>Waiting for their screen…</Waiting>
+        )
+      ) : lead === "their-camera" ? (
+        call.remoteVideo ? (
+          <VideoFeed stream={call.remoteVideo} label={`Video of ${name}`} fit={pictureFit(lead)} />
+        ) : (
+          <Waiting>Waiting for their video…</Waiting>
+        )
+      ) : lead === "my-screen" && call.localScreen ? (
+        <VideoFeed stream={call.localScreen} label="Your shared screen" fit={pictureFit(lead)} />
+      ) : null}
+      {lead === "their-screen" ? <ShareTag>Sharing screen</ShareTag> : lead === "my-screen" ? <ShareTag>You&apos;re sharing your screen</ShareTag> : null}
+      {cornerScreen ? (
+        <div className="absolute right-3 bottom-3 aspect-video w-[34%] max-w-[160px] overflow-hidden rounded-xl border border-border bg-background">
+          <VideoFeed stream={cornerScreen} label="Your shared screen" fit="contain" />
+        </div>
+      ) : call.localVideo ? (
         <div className="absolute right-3 bottom-3 aspect-[4/3] w-[30%] max-w-[132px] overflow-hidden rounded-xl border border-border bg-background">
           <VideoFeed stream={call.localVideo} label="Your camera" mirror muted hidden={call.cameraOff} />
         </div>
@@ -156,8 +227,37 @@ function Picture({ call, className }: { call: CallState; className?: string }) {
   )
 }
 
-// Plays a camera stream in a picture. The local picture is muted and mirrored, the way a mirror would show it.
-function VideoFeed({ stream, label, mirror = false, muted = true, hidden = false }: { stream: MediaStream; label: string; mirror?: boolean; muted?: boolean; hidden?: boolean }) {
+function Waiting({ children }: { children: ReactNode }) {
+  return <p className="grid size-full place-items-center px-6 text-center text-[14px] text-muted-foreground">{children}</p>
+}
+
+// The small label on a shared screen, at the top left, clear of this person's corner picture.
+function ShareTag({ children }: { children: ReactNode }) {
+  return (
+    <span className="pointer-events-none absolute top-3 left-3 inline-flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-xs font-semibold text-foreground">
+      <ScreenShare className="size-3.5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+      <span className="truncate">{children}</span>
+    </span>
+  )
+}
+
+// Plays a stream in a picture. The local camera is muted and mirrored, the way a mirror would show it. A camera fills
+// its frame (cover); a screen is fitted whole inside it (contain).
+function VideoFeed({
+  stream,
+  label,
+  mirror = false,
+  muted = true,
+  hidden = false,
+  fit = "cover",
+}: {
+  stream: MediaStream
+  label: string
+  mirror?: boolean
+  muted?: boolean
+  hidden?: boolean
+  fit?: "cover" | "contain"
+}) {
   const ref = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     const element = ref.current
@@ -175,7 +275,7 @@ function VideoFeed({ stream, label, mirror = false, muted = true, hidden = false
       playsInline
       muted={muted}
       aria-label={label}
-      className={cn("size-full object-cover", mirror && "-scale-x-100", hidden && "invisible")}
+      className={cn("size-full", fit === "contain" ? "object-contain" : "object-cover", mirror && "-scale-x-100", hidden && "invisible")}
     />
   )
 }
@@ -249,7 +349,9 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
   if (call.status === "ended") return null
   const big = size === "screen"
   const icon = big ? "size-7" : "size-5"
-  const row = cn("flex shrink-0 items-start justify-around", big ? "w-full max-w-[340px]" : "px-6 pb-6")
+  const share = showsShare(call)
+  const sharing = call.localScreen !== null
+  const row = cn("flex w-full shrink-0 items-start justify-around", big ? "max-w-[340px]" : "px-6 pb-6")
   if (call.status === "incoming") {
     // Both stay disabled while the microphone prompt and the answer run, so a second tap does nothing.
     return (
@@ -264,7 +366,7 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
     )
   }
   const endLabel = call.kind === "group" ? "Leave" : call.status === "outgoing" ? "Cancel" : "End"
-  return (
+  const controls = (
     <div className={row}>
       <Control label={call.muted ? "Unmute" : "Mute"} onClick={toggleMute} tone={call.muted ? "muted" : "plain"} big={big} pressed={call.muted}>
         {call.muted ? <MicOff className={icon} strokeWidth={2} aria-hidden="true" /> : <Mic className={icon} strokeWidth={2} aria-hidden="true" />}
@@ -281,7 +383,8 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
         </Control>
       ) : null}
       {call.kind === "dm" && !call.localVideo && (call.status === "active" || call.status === "connecting" || call.status === "reconnecting") ? (
-        <Control label="Start camera" onClick={() => void startCamera()} tone="plain" big={big} disabled={call.cameraStarting} busy={call.cameraStarting}>
+        // The screen holds this side's picture while it is shared, so the camera waits for the share to stop.
+        <Control label="Start camera" onClick={() => void startCamera()} tone="plain" big={big} disabled={call.cameraStarting || sharing} busy={call.cameraStarting}>
           <Video className={icon} strokeWidth={2} aria-hidden="true" />
         </Control>
       ) : null}
@@ -289,6 +392,45 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
         <PhoneOff className={icon} strokeWidth={2} aria-hidden="true" />
       </Control>
     </div>
+  )
+  if (!share) return controls
+  // Share screen sits on its own line above the round controls, so four controls never crowd a phone-width row and
+  // its label always reads in full.
+  return (
+    <div className={cn("flex w-full shrink-0 flex-col items-center", big ? "gap-6" : "gap-4")}>
+      <ShareButton sharing={sharing} starting={call.shareStarting} blocked={call.cameraStarting} big={big} />
+      {controls}
+    </div>
+  )
+}
+
+// Opens the browser's screen picker straight from the tap. Closing the picker says nothing; a real failure says why.
+function shareScreen(): void {
+  void startScreenShare().then((result) => {
+    if (!result.ok) toast.error(result.error)
+  })
+}
+
+// Starts or stops sharing this person's screen. While a share is on it is filled in ink, like the other controls
+// that are switched on, and names what a press does next.
+function ShareButton({ sharing, starting, blocked, big }: { sharing: boolean; starting: boolean; blocked: boolean; big: boolean }) {
+  const icon = big ? "size-5" : "size-[18px]"
+  return (
+    <button
+      type="button"
+      onClick={sharing ? stopScreenShare : shareScreen}
+      disabled={starting || blocked}
+      aria-pressed={sharing}
+      aria-busy={starting || undefined}
+      className={cn(
+        "tap-44 inline-flex items-center gap-2 rounded-full font-semibold whitespace-nowrap outline-none transition-[transform,background-color,opacity] duration-200 focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:pointer-events-none disabled:opacity-50",
+        big ? "h-11 px-5 text-[15px]" : "h-10 px-4 text-[14px]",
+        sharing ? "bg-foreground text-background hover:opacity-90" : "bg-muted text-foreground hover:bg-foreground/10"
+      )}
+    >
+      {sharing ? <ScreenShareOff className={icon} strokeWidth={2} aria-hidden="true" /> : <ScreenShare className={icon} strokeWidth={2} aria-hidden="true" />}
+      {sharing ? "Stop sharing" : "Share screen"}
+    </button>
   )
 }
 

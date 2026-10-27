@@ -91,7 +91,9 @@ function actionOf(value: unknown): CallAction | null {
       if (typeof action.sdp !== "string" || action.sdp.length === 0 || action.sdp.length > CALL_SDP_MAX) return null
       const to = action.to == null ? null : peerRef(action.to)
       if (action.to != null && !to) return null
-      return action.kind === "offer" ? { kind: "offer", to, sdp: action.sdp, restart: action.restart === true } : { kind: "answer", to, sdp: action.sdp }
+      return action.kind === "offer"
+        ? { kind: "offer", to, sdp: action.sdp, restart: action.restart === true, screen: action.screen === true }
+        : { kind: "answer", to, sdp: action.sdp }
     }
     case "ice": {
       const candidate = candidateOf(action.candidate)
