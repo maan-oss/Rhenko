@@ -187,7 +187,9 @@ CREATE TABLE conversations (
   updated_at bigint NOT NULL,
   -- Disappearing messages: how long, in milliseconds, a message sent now is kept. 0 is off. A change applies to messages
   -- sent after it.
-  message_timer bigint NOT NULL DEFAULT 0
+  message_timer bigint NOT NULL DEFAULT 0,
+  -- A group's invite link, /join/<token>. NULL when the group has none. Resetting the link replaces the token.
+  invite_token text
 );
 
 CREATE TABLE email_codes (
@@ -712,6 +714,7 @@ CREATE UNIQUE INDEX communities_slug ON communities(slug);
 CREATE INDEX community_members_user ON community_members(user_id);
 CREATE INDEX community_notes_post ON community_notes(post_id);
 CREATE INDEX conversation_members_user ON conversation_members(user_id);
+CREATE UNIQUE INDEX conversations_invite_token ON conversations (invite_token) WHERE invite_token IS NOT NULL;
 CREATE INDEX email_codes_user ON email_codes(user_id, purpose);
 CREATE INDEX events_created ON events (created_at);
 CREATE INDEX feed_impressions_served ON feed_impressions(served_at);

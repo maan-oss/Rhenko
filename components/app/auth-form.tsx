@@ -258,8 +258,9 @@ function isOldEnough(value: string): boolean {
   return age >= MINIMUM_AGE
 }
 
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
-  return mode === "login" ? <LoginForm /> : <SignupForm />
+// `next` is where a sign-in goes afterwards (a group invite), already checked by the page.
+export function AuthForm({ mode, next = null }: { mode: "login" | "signup"; next?: string | null }) {
+  return mode === "login" ? <LoginForm next={next} /> : <SignupForm />
 }
 
 // A field no person sees or fills in. Programs fill in every field they find, so a value here marks the form as sent by one.
@@ -291,7 +292,7 @@ function useCheckAnswer(reply: { error?: string; sent?: boolean; proofRequired?:
   return { proof, key, onReady: (value: string | null) => setProof(value ?? "") }
 }
 
-function LoginForm() {
+function LoginForm({ next }: { next: string | null }) {
   const [state, formAction] = useActionState(login, {} as AuthState)
   const [handle, setHandle] = useState("")
   const [password, setPassword] = useState("")
@@ -315,6 +316,7 @@ function LoginForm() {
       />
       <HoneyPot />
       <input type="hidden" name="proof" value={state.proofRequired ? check.proof : ""} />
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <ErrorText message={state.error} />
       {state.proofRequired ? <ProofCheck key={check.key} onReady={check.onReady} /> : null}
       <SubmitButton
@@ -329,7 +331,7 @@ function LoginForm() {
         or
         <span className="h-px flex-1 bg-border" />
       </div>
-      <PasskeyLoginButton />
+      <PasskeyLoginButton next={next} />
     </div>
     </>
   )
@@ -572,11 +574,12 @@ function BackButton({ onClick }: { onClick: () => void }) {
 
 // The second step of sign-in: a six-digit code from the authenticator app, or a recovery code. When the server
 // can't read the authenticator key, only recovery codes can work, and the field says so.
-export function VerifyCodeForm({ usable, hasKeys }: { usable: boolean; hasKeys: boolean }) {
+export function VerifyCodeForm({ usable, hasKeys, next = null }: { usable: boolean; hasKeys: boolean; next?: string | null }) {
   const [state, action] = useActionState(verifySecondFactor, {} as AuthState)
   const [code, setCode] = useState("")
   return (
     <form action={action} className="settle flex w-full flex-col gap-5">
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <TextField
         name="code"
         label={usable ? "Code" : "Recovery code"}
@@ -600,7 +603,7 @@ export function VerifyCodeForm({ usable, hasKeys }: { usable: boolean; hasKeys: 
             or
             <span className="h-px flex-1 bg-border" />
           </div>
-          <SecurityKeyButton />
+          <SecurityKeyButton next={next} />
         </>
       ) : null}
     </form>

@@ -1,6 +1,7 @@
 import { openCircle, openList } from "@/lib/access"
 import { get } from "@/lib/db"
 import { canSeePost, conversationFor } from "@/lib/data"
+import { groupForInvite } from "@/lib/group-invites"
 import { HANDLE_PATTERN, RESERVED_HANDLES } from "@/lib/rules"
 import { topicFromParam } from "@/lib/social-rules"
 import { hashToken } from "@/lib/session-hash"
@@ -45,6 +46,8 @@ function checkFor(parts: string[]): Check | null {
     if (first === "lists") return async (viewer) => (await openList(second, viewer)) === null
     if (first === "circles" && second !== "new") return async (viewer) => (await openCircle(second, viewer)) === null
     if (first === "topics") return async () => !topicFromParam(second).ok
+    // A group invite link that was never made, was reset, or was turned off.
+    if (first === "join") return async () => (await groupForInvite(second)) === null
   }
 
   // A profile, or one of its sections, and a post under the profile. The handle must be one an account can have and must

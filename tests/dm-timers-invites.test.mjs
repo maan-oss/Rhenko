@@ -1,8 +1,9 @@
 // Unit checks for disappearing messages (lib/message-timers.ts): the four choices, what the thread and the header say, and
-// when a message is gone. Run with: npm run test:unit
+// when a message is gone. Then group invite links (lib/invite-links.ts). Run with: npm run test:unit
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import { isInviteToken, joinPath, loginPathFor, returnPathFrom, withReturnPath } from "../lib/invite-links.ts"
 import {
   MESSAGE_TIMERS,
   asMessageTimer,
@@ -73,4 +74,46 @@ test("the open thread wakes for the soonest message still to go", () => {
   assert.equal(nextExpiry([200, 100], 300), null)
   assert.equal(nextExpiry([], 0), null)
   assert.equal(nextExpiry([null, undefined], 0), null)
+})
+
+// Group invite links (lib/invite-links.ts): what a token looks like, and that sign-in only ever returns to an invite page.
+
+test("an invite token is 22 base64url characters", () => {
+  assert.equal(isInviteToken("AbCdEfGhIjKlMnOpQrSt_-"), true)
+  for (const value of ["", "short", "AbCdEfGhIjKlMnOpQrSt_-x", "AbCdEfGhIjKlMnOpQrSt/+", "AbCdEfGhIjKlMnOpQrSt=_", null, 22]) {
+    assert.equal(isInviteToken(value), false, `${String(value)} was taken as a token`)
+  }
+})
+
+test("a link opens /join/<token>", () => {
+  assert.equal(joinPath("AbCdEfGhIjKlMnOpQrSt_-"), "/join/AbCdEfGhIjKlMnOpQrSt_-")
+})
+
+test("sign-in comes back to an invite page and nowhere else", () => {
+  assert.equal(returnPathFrom("/join/AbCdEfGhIjKlMnOpQrSt_-"), "/join/AbCdEfGhIjKlMnOpQrSt_-")
+  for (const value of [
+    "/",
+    "/settings",
+    "/join/",
+    "/join/short",
+    "/join/AbCdEfGhIjKlMnOpQrSt_-/x",
+    "/join/AbCdEfGhIjKlMnOpQrSt_-?x=1",
+    "//evil.example/join/AbCdEfGhIjKlMnOpQrSt_-",
+    "https://evil.example/join/AbCdEfGhIjKlMnOpQrSt_-",
+    "/join/AbCdEfGhIjKlMnOpQrSt_-\n",
+    " /join/AbCdEfGhIjKlMnOpQrSt_-",
+    null,
+    undefined,
+    ["/join/AbCdEfGhIjKlMnOpQrSt_-"],
+  ]) {
+    assert.equal(returnPathFrom(value), null, `${JSON.stringify(value)} was taken as a way back`)
+  }
+})
+
+test("a signed-out visitor to an invite is sent to sign in with the invite to come back to", () => {
+  assert.equal(loginPathFor("/join/AbCdEfGhIjKlMnOpQrSt_-"), "/login?next=%2Fjoin%2FAbCdEfGhIjKlMnOpQrSt_-")
+  assert.equal(loginPathFor("/messages"), "/login")
+  assert.equal(loginPathFor("/"), "/login")
+  assert.equal(withReturnPath("/login/verify", "/join/AbCdEfGhIjKlMnOpQrSt_-"), "/login/verify?next=%2Fjoin%2FAbCdEfGhIjKlMnOpQrSt_-")
+  assert.equal(withReturnPath("/login/verify", null), "/login/verify")
 })

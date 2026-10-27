@@ -37,6 +37,7 @@ import { emailReady } from "@/lib/settings-data"
 import { stampOk, verifyProof } from "@/lib/proof"
 import { parseAnswer } from "@/lib/proof-rules"
 import { recordSignal } from "@/lib/risk"
+import { returnPathFrom, withReturnPath } from "@/lib/invite-links"
 
 // proofRequired tells the form to run the human check again and send the answer with the next try.
 export type AuthState = { error?: string; proofRequired?: boolean }
@@ -138,6 +139,8 @@ export async function checkEmailFree(email: string): Promise<{ taken?: boolean; 
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const handle = cleanHandle(formData.get("handle"))
   const password = String(formData.get("password") ?? "")
+  // A group invite the person opened before signing in. Only an invite page is taken (lib/invite-links.ts).
+  const back = returnPathFrom(formData.get("next"))
   if (!handle || !password) return { error: "Enter your handle and password." }
   if (filledHoneypot(formData)) return { error: "Handle or password is wrong." }
   // After three wrong passwords for one handle, or ten from one network, in fifteen minutes, the sign-in needs the human check
@@ -176,12 +179,12 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   // A deactivated account comes back only after the whole sign-in, so with two-factor on it waits for the code.
   if (user.totp_enabled === 1) {
     await createChallenge(user.id)
-    redirect("/login/verify")
+    redirect(withReturnPath("/login/verify", back))
   }
   if (user.deactivated_at !== null) await run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
   await recordSignal(user.id, "login")
   await createSession(user.id)
-  redirect("/")
+  redirect(back ?? "/")
 }
 
 // Second step: an authenticator code or a one-time recovery code. Five wrong codes end this sign-in.
@@ -206,7 +209,7 @@ export async function verifySecondFactor(_prev: AuthState, formData: FormData): 
   await clearChallenge()
   if (user.deactivated_at !== null) await run("UPDATE users SET deactivated_at = NULL WHERE id = ?", user.id)
   await createSession(user.id)
-  redirect("/")
+  redirect(returnPathFrom(formData.get("next")) ?? "/")
 }
 
 // Logs out the active account. Another remembered account takes over if there is one. The caller loads the page it is

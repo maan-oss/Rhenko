@@ -7,18 +7,19 @@ import { toast } from "sonner"
 import { addToGroup, groupInfo, leaveConversation, removeFromGroup, renameGroup, type GroupMember } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
+import { GroupInviteLink } from "@/components/app/group-invite-link"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { MAX_GROUP_TITLE } from "@/lib/rules"
+import { MAX_GROUP_MEMBERS, MAX_GROUP_TITLE } from "@/lib/rules"
 
 type Member = { id: string; name: string; handle: string; status: "accepted" | "requested"; avatarFile?: string | null }
 
-type Info = { title: string; viewerIsCreator: boolean; members: GroupMember[] }
+type Info = { title: string; viewerIsCreator: boolean; members: GroupMember[]; inviteToken: string | null }
 
 const INPUT =
   "h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
-// Rename a group, see who is in it, add people, remove people (only the person who made it), or leave.
+// Rename a group, see who is in it, add people, share its invite link, remove people (only the person who made it), or leave.
 // The conversation page hands over the people it already knows. The panel asks the server who made the group each time it
 // opens, and again whenever the group changes while it is open, so the creator's controls always match the truth.
 export function GroupPanel({ conversationId, title, members }: { conversationId: string; title: string; members: Member[] }) {
@@ -41,7 +42,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
     void groupInfo(conversationId).then((result) => {
       if (!current) return
       if (result.ok) {
-        setInfo({ title: result.title, viewerIsCreator: result.viewerIsCreator, members: result.members })
+        setInfo({ title: result.title, viewerIsCreator: result.viewerIsCreator, members: result.members, inviteToken: result.inviteToken })
         setLost(null)
       } else {
         setLost(result.error)
@@ -54,7 +55,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
 
   async function reload() {
     const result = await groupInfo(conversationId)
-    if (result.ok) setInfo({ title: result.title, viewerIsCreator: result.viewerIsCreator, members: result.members })
+    if (result.ok) setInfo({ title: result.title, viewerIsCreator: result.viewerIsCreator, members: result.members, inviteToken: result.inviteToken })
     else setLost(result.error)
   }
 
@@ -223,6 +224,15 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
           ) : null}
         </form>
 
+        <GroupInviteLink
+          conversationId={conversationId}
+          token={info?.inviteToken ?? null}
+          ready={info !== null}
+          invited={invited}
+          full={rows.length >= MAX_GROUP_MEMBERS}
+          onChange={(inviteToken) => setInfo((current) => (current ? { ...current, inviteToken } : current))}
+        />
+
         <div className="pt-2">
           <ConfirmDialog
             trigger={
@@ -252,7 +262,9 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
             open={removeOpen}
             onOpenChange={setRemoveOpen}
             title={`Remove ${removeTarget.name} from the group?`}
-            description={`@${removeTarget.handle} stops getting this group's messages and can't see it. Anyone in the group can add them back.`}
+            description={`@${removeTarget.handle} stops getting this group's messages and can't see it. Anyone in the group can add them back.${
+              info?.inviteToken ? " The invite link is on, so they could join again with it. Reset the link to stop that." : ""
+            }`}
             confirmLabel="Remove"
             action={() => removeFromGroup(conversationId, removeTarget.id)}
             onDone={() => {

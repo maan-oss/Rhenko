@@ -3,10 +3,11 @@ import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { getViewer } from "@/lib/auth"
 import { firstParam } from "@/lib/params"
+import { returnPathFrom } from "@/lib/invite-links"
 import { AuthForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../auth-notice"
 
-type SearchParams = Promise<{ add?: string | string[]; notice?: string | string[] }>
+type SearchParams = Promise<{ add?: string | string[]; notice?: string | string[]; next?: string | string[] }>
 
 // Shown after something that sent the person back here, so they know what happened.
 const NOTICES = new Map<string, string>([
@@ -24,12 +25,14 @@ export default function LoginPage({ searchParams }: { searchParams: SearchParams
   )
 }
 
-// Signed-in people are sent home, except when they choose to add another account.
+// Signed-in people are sent home, except when they choose to add another account. Someone who opened a group invite link
+// goes back to the invite once they are in.
 async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
   const adding = firstParam(params.add) !== undefined
-  const notice = NOTICES.get(firstParam(params.notice) ?? "")
-  if (!adding && (await getViewer())) redirect("/")
+  const back = returnPathFrom(firstParam(params.next))
+  const notice = NOTICES.get(firstParam(params.notice) ?? "") ?? (back ? "Log in to open your group invite." : undefined)
+  if (!adding && (await getViewer())) redirect(back ?? "/")
   return (
     <>
       <div className="settle mb-5 flex flex-col gap-2">
@@ -37,7 +40,7 @@ async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
         <p className="text-[15px] leading-relaxed text-muted-foreground">Use your handle and password.</p>
       </div>
       {notice ? <div className="mb-4"><AuthNotice>{notice}</AuthNotice></div> : null}
-      <AuthForm mode="login" />
+      <AuthForm mode="login" next={back} />
       {adding ? (
         <p className="text-center text-sm text-muted-foreground">
           <Link href="/" className="font-semibold text-foreground underline underline-offset-4">
