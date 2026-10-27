@@ -2,7 +2,7 @@ import { openCircle, openList } from "@/lib/access"
 import { get } from "@/lib/db"
 import { canSeePost, conversationFor } from "@/lib/data"
 import { groupForInvite } from "@/lib/group-invites"
-import { HANDLE_PATTERN, RESERVED_HANDLES } from "@/lib/rules"
+import { HANDLE_PATTERN, PAGE_ROUTES, RESERVED_HANDLES } from "@/lib/rules"
 import { topicFromParam } from "@/lib/social-rules"
 import { hashToken } from "@/lib/session-hash"
 
@@ -40,6 +40,8 @@ export async function pageMissing(pathname: string, token: string): Promise<bool
 
 function checkFor(parts: string[]): Check | null {
   const [first = "", second = "", third = ""] = parts
+  // The root page, and Next's own development routes (two leading underscores), have no check here.
+  if (!first || first.startsWith("__")) return null
 
   if (parts.length === 2) {
     // "new" and "starred" are pages of their own under /messages, not conversations.
@@ -51,16 +53,19 @@ function checkFor(parts: string[]): Check | null {
     if (first === "join") return async () => (await groupForInvite(second)) === null
   }
 
-  // A profile, or one of its sections, and a post under the profile. The handle must be one an account can have and must
-  // not be a route name. Names that begin with two underscores are Next's own development routes.
-  if (HANDLE_PATTERN.test(first) && !RESERVED_HANDLES.has(first) && !first.startsWith("__")) {
-    if (parts.length === 1 || (parts.length === 2 && PROFILE_SECTIONS.has(second))) {
-      return (viewer) => profileMissing(first, viewer)
-    }
-    if (parts.length === 3 && second === "status") return async (viewer) => !(await canSeePost(third, viewer))
-    // A post's analytics: only its author sees them, and only for a published post. This is the first check of that page.
-    if (parts.length === 4 && second === "status" && parts[3] === "analytics") return async (viewer) => !(await ownPublishedPost(third, viewer))
+  // A page of the app or a public page answers for itself. Any other first segment that cannot be a handle is no page at all:
+  // the profile route would answer it only after the stream has begun, so it is refused here. A handle an account can have
+  // must not be a route name.
+  if (PAGE_ROUTES.has(first)) return null
+  if (!HANDLE_PATTERN.test(first) || RESERVED_HANDLES.has(first)) return async () => true
+
+  // A profile, or one of its sections, and a post under the profile.
+  if (parts.length === 1 || (parts.length === 2 && PROFILE_SECTIONS.has(second))) {
+    return (viewer) => profileMissing(first, viewer)
   }
+  if (parts.length === 3 && second === "status") return async (viewer) => !(await canSeePost(third, viewer))
+  // A post's analytics: only its author sees them, and only for a published post. This is the first check of that page.
+  if (parts.length === 4 && second === "status" && parts[3] === "analytics") return async (viewer) => !(await ownPublishedPost(third, viewer))
 
   return null
 }

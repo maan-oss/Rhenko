@@ -28,6 +28,10 @@ const RESERVED_WORDS = ["logout", "status", "kit", "home", "compose", "admin", "
 
 export const RESERVED_HANDLES: ReadonlySet<string> = new Set([...ROUTES_APP, ...ROUTES_AUTH, ...ROUTES_API, ...ROUTES_ROOT, ...RESERVED_WORDS])
 
+// Every first segment that is a page of its own, or a public page. The proxy uses it to tell a page from a path no page
+// claims. tests/page-routes.test.mjs checks that each folder under app/ is listed here.
+export const PAGE_ROUTES: ReadonlySet<string> = new Set([...ROUTES_APP, ...ROUTES_AUTH, ...ROUTES_ROOT, "unavailable"])
+
 export const HANDLE_PATTERN = /^[A-Za-z0-9_]{3,15}$/
 export const HANDLE_MIN = 3
 export const HANDLE_MAX = 15
