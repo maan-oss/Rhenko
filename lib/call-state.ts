@@ -568,11 +568,13 @@ async function dmSignal(call: DmCall, from: Device, action: CallAction): Promise
       call.connectedAt ??= Date.now()
       return OK
     // Either side can offer or answer once the call is answered: the first offer comes from the caller, and a camera
-    // started mid-call is a new offer from whichever side turned it on.
+    // or a screen share started mid-call is a new offer from whichever side turned it on. The offer says whether that
+    // side is sharing its screen, and goes only to the one tab on the other end of this call.
     case "offer": {
       if (!answered || !call.callee) return { ok: false, error: GONE }
       const to = isCaller ? call.callee : call.caller
-      await relay(to.userId, call.id, { kind: "offer", sdp: action.sdp, restart: action.restart, from: { userId: from.userId, deviceId: from.deviceId }, person: null }, to.deviceId)
+      const offer: CallSignal = { kind: "offer", sdp: action.sdp, restart: action.restart, from: { userId: from.userId, deviceId: from.deviceId }, person: null, screen: action.screen === true }
+      await relay(to.userId, call.id, offer, to.deviceId)
       return OK
     }
     case "answer": {
@@ -810,6 +812,7 @@ async function groupSignal(call: GroupCall, from: Device, action: CallAction): P
       const to = action.to ? call.participants.get(action.to.userId) : undefined
       if (!to || !action.to || to.deviceId !== action.to.deviceId) return { ok: false, error: "They left the call." }
       const ref = { userId: from.userId, deviceId: from.deviceId }
+      // A group call is voice only, so a screen flag on a group offer is dropped here.
       const signal: CallSignal =
         action.kind === "offer"
           ? { kind: "offer", sdp: action.sdp, restart: action.restart, from: ref, person: me.person }

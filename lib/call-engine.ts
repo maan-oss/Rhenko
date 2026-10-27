@@ -1,13 +1,14 @@
 // The browser side of voice calls, one to one and in groups. Signals travel through server actions and come back over
 // the realtime stream. Audio goes straight between browsers (WebRTC), with one connection to each other person in the
 // call. Each tab is its own device, and only one tab of a browser rings. The call is held outside React, so it
-// survives page changes.
+// survives page changes. A one-to-one call can also carry one side's screen (lib/screen-share.ts has the rules).
 
 import { callHeartbeat, joinGroupCall as joinGroupAction, sendCallSignal, startCall, startGroupCall, type BeatResult, type JoinedCall } from "@/actions/calls"
 import type { CallAction, CallEndReason, CallPeerRef, CallSignal, EventPerson, GroupMember, IceServerConfig, RealtimeEvent } from "@/lib/bus"
 import { CALL_CONNECT_MS, CALL_HEARTBEAT_MS, CALL_RECONNECT_MS, CALL_RESTART_WAIT_MS, ICE_GATHER_MS } from "@/lib/call-rules"
 import { formatDuration } from "@/lib/format"
 import { startRingtone, stopRingtone } from "@/lib/ringtone"
+import { screenShareAllowed, screenShareSupported, shareRoute } from "@/lib/screen-share"
 
 export type CallStatus = "outgoing" | "incoming" | "connecting" | "active" | "reconnecting" | "ended"
 export type TileStatus = "connecting" | "connected" | "reconnecting" | "failed"
@@ -48,6 +49,12 @@ export type CallState = {
   cameraOff: boolean
   // True while this person's camera is being started mid-call, so a second tap does nothing.
   cameraStarting: boolean
+  // One to one: the screen this person is sharing, for their own preview. Null when they are not sharing.
+  localScreen: MediaStream | null
+  // True while the browser's screen picker is open, so a second tap does nothing.
+  shareStarting: boolean
+  // The other person is sharing their screen. Their picture (remoteVideo) is then that screen.
+  remoteScreen: boolean
   // How the call ended, or why answering did not work, shown for a moment.
   note: string | null
   live: LiveGroupCall[]
@@ -76,6 +83,13 @@ type Peer = {
   // Offers and answers for one connection run one after another.
   chain: Promise<void>
   closed: boolean
+  // The sender this side added for a screen share when no camera was sending. Kept once the share stops, so the next
+  // share uses the same picture line again.
+  screenSender: RTCRtpSender | null
+  // The sender carrying this side's screen right now, and the camera it took the place of, if any.
+  sharing: { sender: RTCRtpSender; camera: MediaStreamTrack | null } | null
+  // The other side says, with each offer, whether it is sharing its screen.
+  remoteScreen: boolean
 }
 
 type Session = {
@@ -97,6 +111,8 @@ type Session = {
   boot: string | null
   reported: boolean
   video: boolean
+  // The screen this side is sharing. Only one-to-one calls share.
+  screen: MediaStreamTrack | null
 }
 
 type RingInfo = { kind: "dm" | "group"; conversationId: string; from: EventPerson; title: string | null; iceServers: IceServerConfig[]; video: boolean }
@@ -131,6 +147,16 @@ const NO_CONNECT = "Couldn't connect."
 const GONE = "That call has ended."
 // The camera asked for on a video call: a sensible picture size, facing the person.
 const CAMERA: MediaTrackConstraints = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }
+// A shared screen: no sound, and a modest frame rate, which leaves the bandwidth for sharp text. This tab itself is left
+// out of the picker, since sharing the call to the person on it shows them their own picture over and over. Browsers
+// that don't know an option skip it.
+const SCREEN: DisplayMediaStreamOptions & { selfBrowserSurface?: "include" | "exclude"; surfaceSwitching?: "include" | "exclude" } = {
+  video: { frameRate: { ideal: 15, max: 30 } },
+  audio: false,
+  selfBrowserSurface: "exclude",
+  surfaceSwitching: "include",
+}
+const NO_SHARE = "Couldn't share your screen."
 
 const IDLE: CallState = {
   status: "idle",
@@ -150,6 +176,9 @@ const IDLE: CallState = {
   remoteVideo: null,
   cameraOff: false,
   cameraStarting: false,
+  localScreen: null,
+  shareStarting: false,
+  remoteScreen: false,
 }
 
 let state: CallState = IDLE
@@ -219,6 +248,9 @@ function idle(): Partial<CallState> {
     remoteVideo: null,
     cameraOff: false,
     cameraStarting: false,
+    localScreen: null,
+    shareStarting: false,
+    remoteScreen: false,
   }
 }
 
@@ -234,7 +266,23 @@ function settle(note: string | null, extra: Partial<CallState> = {}): void {
     update(idle())
   } else {
     // The ended note keeps the kind of call, so its card still reads "Video call with" for as long as it is shown.
-    update({ ...extra, status: "ended", callId: null, tiles: [], muted: false, accepting: false, connectedAt: null, note, localVideo: null, remoteVideo: null, cameraOff: false, cameraStarting: false })
+    update({
+      ...extra,
+      status: "ended",
+      callId: null,
+      tiles: [],
+      muted: false,
+      accepting: false,
+      connectedAt: null,
+      note,
+      localVideo: null,
+      remoteVideo: null,
+      cameraOff: false,
+      cameraStarting: false,
+      localScreen: null,
+      shareStarting: false,
+      remoteScreen: false,
+    })
     noteTimer = window.setTimeout(() => {
       noteTimer = null
       if (state.status === "ended") update(idle())
@@ -360,6 +408,7 @@ function ringHere(ring: Ring): void {
     beat: null,
     boot: bootId,
     reported: false,
+    screen: null,
   }
   ring.elsewhere = null
   update({
@@ -370,6 +419,9 @@ function ringHere(ring: Ring): void {
     remoteVideo: null,
     cameraOff: false,
     cameraStarting: false,
+    localScreen: null,
+    shareStarting: false,
+    remoteScreen: false,
     callId: ring.callId,
     conversationId: info.conversationId,
     peer: info.from,
@@ -639,6 +691,9 @@ function createPeer(current: Session, key: string, ref: CallPeerRef | null, pers
     reconnectTimer: null,
     chain: Promise.resolve(),
     closed: false,
+    screenSender: null,
+    sharing: null,
+    remoteScreen: false,
   }
   current.peers.set(key, peer)
   current.hadPeers = true
@@ -657,9 +712,10 @@ function createPeer(current: Session, key: string, ref: CallPeerRef | null, pers
   }
   pc.ontrack = (event) => {
     if (peer.closed) return
-    // A one-to-one call shows the other person's camera. A group call is voice only.
+    // A one-to-one call shows the other person's camera or shared screen. A group call is voice only. A screen arrives
+    // as a picture too, but it doesn't turn a voice call into a video call.
     if (event.track.kind === "video") {
-      if (current.kind === "dm") update({ remoteVideo: event.streams[0] ?? new MediaStream([event.track]), video: true })
+      if (current.kind === "dm") update({ remoteVideo: event.streams[0] ?? new MediaStream([event.track]), video: state.video || !peer.remoteScreen })
       return
     }
     audio.srcObject = event.streams[0] ?? new MediaStream([event.track])
@@ -698,7 +754,7 @@ function closePeer(peer: Peer): void {
   }
   peer.audio.pause()
   peer.audio.srcObject = null
-  if (state.remoteVideo) update({ remoteVideo: null })
+  if (state.remoteVideo || state.remoteScreen) update({ remoteVideo: null, remoteScreen: false })
 }
 
 // Waits for the browser to gather its routes, at most ICE_GATHER_MS, so they go out in one description.
@@ -732,12 +788,14 @@ function makeOffer(current: Session, peer: Peer, restart: boolean): void {
       if (peer.closed || session !== current) return
       peer.sdpSent = false
       if (restart) peer.pc.restartIce()
+      // Each offer says whether this side is sharing its screen, as it stands when the offer is made.
+      const screen = current.kind === "dm" && current.screen !== null
       const offer = await peer.pc.createOffer(restart ? { iceRestart: true } : undefined)
       await peer.pc.setLocalDescription(offer)
       await gathered(peer.pc)
       if (peer.closed || session !== current) return
       peer.sdpSent = true
-      const result = await send(current, { kind: "offer", to: peer.ref, sdp: peer.pc.localDescription?.sdp ?? offer.sdp ?? "", restart })
+      const result = await send(current, { kind: "offer", to: peer.ref, sdp: peer.pc.localDescription?.sdp ?? offer.sdp ?? "", restart, screen })
       // The person left before the offer reached them. Their departure arrives with the group's next update.
       if (result && !result.ok && current.kind === "dm" && session === current) endLocally(current, result.error)
     })
@@ -778,9 +836,15 @@ function onOffer(current: Session, signal: OfferSignal): void {
     .then(async () => {
       if (target.closed || session !== current) return
       if (renegotiating && !polite && target.pc.signalingState !== "stable") return
+      // Yielding to their offer drops the one this side had out, such as a share just started. It goes again after
+      // this answer, so neither change is lost.
+      const again = renegotiating && polite && target.pc.signalingState === "have-local-offer"
+      // Set before the description, so the picture it brings is known to be a screen when it arrives.
+      if (current.kind === "dm") hearScreen(target, signal.screen === true)
       await target.pc.setRemoteDescription({ type: "offer", sdp: signal.sdp })
       target.remoteSet = true
       flushIce(target)
+      if (current.kind === "dm") dropEndedPicture()
       target.sdpSent = false
       const answer = await target.pc.createAnswer()
       await target.pc.setLocalDescription(answer)
@@ -788,6 +852,7 @@ function onOffer(current: Session, signal: OfferSignal): void {
       if (target.closed || session !== current) return
       target.sdpSent = true
       await send(current, { kind: "answer", to: target.ref, sdp: target.pc.localDescription?.sdp ?? answer.sdp ?? "" })
+      if (again) makeOffer(current, target, false)
     })
     .catch(() => {
       if (!target.closed && session === current) peerLost(current, target)
@@ -809,6 +874,18 @@ function onAnswer(current: Session, signal: AnswerSignal): void {
     .catch(() => {
       if (!peer.closed && session === current) peerLost(current, peer)
     })
+}
+
+// The other person started or stopped sharing their screen.
+function hearScreen(peer: Peer, on: boolean): void {
+  peer.remoteScreen = on
+  if (state.remoteScreen !== on) update({ remoteScreen: on })
+}
+
+// A share that ended without a camera to come back leaves their picture with nothing in it. It goes, so the frame says
+// it is waiting rather than show a frozen screen.
+function dropEndedPicture(): void {
+  if (state.remoteVideo && state.remoteVideo.getVideoTracks().length === 0) update({ remoteVideo: null })
 }
 
 // Routes can arrive before the description they belong to, so they wait for it.
@@ -934,6 +1011,9 @@ function teardown(current: Session): void {
   current.peers.clear()
   stopStream(current.local)
   current.local = null
+  // The browser stops showing that the screen is being shared.
+  current.screen?.stop()
+  current.screen = null
 }
 
 function endLocally(current: Session, note: string | null): void {
@@ -1184,6 +1264,7 @@ export async function placeCall(conversationId: string, peer: EventPerson, video
       beat: null,
       boot: started.bootId,
       reported: false,
+      screen: null,
     }
     kept = true
     clearNote()
@@ -1197,6 +1278,9 @@ export async function placeCall(conversationId: string, peer: EventPerson, video
       remoteVideo: null,
       cameraOff: false,
       cameraStarting: false,
+      localScreen: null,
+      shareStarting: false,
+      remoteScreen: false,
       callId: started.callId,
       conversationId,
       peer: current.other,
@@ -1277,6 +1361,7 @@ async function enterGroup(run: () => Promise<JoinedCall>): Promise<Placed> {
       boot: result.bootId,
       reported: false,
       video: false,
+      screen: null,
     }
     kept = true
     clearNote()
@@ -1419,6 +1504,8 @@ export async function startCamera(): Promise<Placed> {
     return { ok: false, error: "The camera can start once the call is connected." }
   }
   if (state.localVideo || state.cameraStarting) return { ok: true }
+  // The screen holds this side's picture while it is shared.
+  if (current.screen) return { ok: false, error: "Stop sharing your screen to start your camera." }
   update({ cameraStarting: true })
   let track: MediaStreamTrack | null = null
   try {
@@ -1469,4 +1556,139 @@ export function dismissLiveCall(callId: string): void {
   dismissed.add(callId)
   post({ t: "dismiss", callId })
   syncLive()
+}
+
+// ── Screen sharing ──────────────────────────────────────────────────────────────────────────────────────────────
+
+// Whether this browser can share a screen at all. Most iPhones can't, and the button is hidden there.
+export function canCaptureScreen(): boolean {
+  return typeof navigator !== "undefined" && screenShareSupported(navigator.mediaDevices)
+}
+
+// Shares this person's screen in a connected one-to-one call. A camera that is sending gives its place to the screen
+// and comes back when the share stops. A voice call gains a picture, and the other person gets a new offer for it.
+// Every offer says whether this side is sharing, so the other person's picture shows the whole screen.
+export async function startScreenShare(): Promise<Placed> {
+  const current = session
+  if (!current || !screenShareAllowed({ kind: current.kind, people: current.kind === "dm" ? 2 : current.peers.size + 1 })) {
+    return { ok: false, error: "Screens can be shared in one-to-one calls." }
+  }
+  if (current.screen || state.shareStarting || state.cameraStarting) return { ok: true }
+  const peer = current.peers.get(DM_PEER)
+  if (!peer || peer.closed || (state.status !== "active" && state.status !== "reconnecting")) {
+    return { ok: false, error: "You can share your screen once the call is connected." }
+  }
+  if (!canCaptureScreen()) return { ok: false, error: "This browser can't share its screen." }
+  update({ shareStarting: true })
+  let track: MediaStreamTrack | null = null
+  try {
+    // Nothing is awaited before the picker opens: browsers only open it straight from the tap.
+    const stream = await navigator.mediaDevices.getDisplayMedia(SCREEN)
+    track = stream.getVideoTracks()[0] ?? null
+    for (const other of stream.getTracks()) if (other !== track) other.stop()
+  } catch (error) {
+    if (session === current) update({ shareStarting: false })
+    return shareRefused(error)
+  }
+  if (session !== current || peer.closed) {
+    track?.stop()
+    return { ok: false, error: GONE }
+  }
+  if (!track) {
+    update({ shareStarting: false })
+    return { ok: false, error: NO_SHARE }
+  }
+  // Text and lines stay sharp, at the cost of smooth motion.
+  track.contentHint = "detail"
+  current.screen = track
+  const shared = track
+  // The browser's own "Stop sharing" control, or closing the shared window, ends it the same way the call's button does.
+  track.addEventListener("ended", () => {
+    if (session === current && current.screen === shared) stopScreenShare()
+  }, { once: true })
+  shareOn(current, peer, track)
+  update({ shareStarting: false, localScreen: new MediaStream([track]) })
+  return { ok: true }
+}
+
+// Stops sharing. The camera, if there was one, goes back out in its place, and the other person's picture says so.
+export function stopScreenShare(): void {
+  const current = session
+  const track = current?.screen
+  if (!current || !track) return
+  current.screen = null
+  track.stop()
+  update({ localScreen: null })
+  const peer = current.peers.get(DM_PEER)
+  if (peer && !peer.closed) shareOff(current, peer)
+}
+
+// Closing the picker is a choice, not a failure, so nothing is said. A computer that blocks the browser from the
+// screen says why.
+function shareRefused(error: unknown): Placed {
+  const name = error instanceof DOMException ? error.name : ""
+  const message = error instanceof Error ? error.message : ""
+  if (name === "NotAllowedError") {
+    return /system/i.test(message) ? { ok: false, error: "Your computer's settings don't let this browser share the screen." } : { ok: true }
+  }
+  if (name === "NotReadableError") return { ok: false, error: "Couldn't capture your screen. Another app may be using it." }
+  if (name === "NotSupportedError") return { ok: false, error: "This browser can't share its screen." }
+  return { ok: false, error: NO_SHARE }
+}
+
+// Changes what this side's picture sends, then tells the other side with a new offer. Both wait their turn behind any
+// offer or answer still in flight on the connection.
+function swapPicture(current: Session, peer: Peer, work: () => Promise<void>): void {
+  peer.chain = peer.chain
+    .then(async () => {
+      if (!peer.closed && session === current) await work()
+    })
+    .catch(() => {})
+  makeOffer(current, peer, false)
+}
+
+function setDirection(peer: Peer, sender: RTCRtpSender, direction: RTCRtpTransceiverDirection): void {
+  const transceiver = peer.pc.getTransceivers().find((item) => item.sender === sender)
+  if (transceiver && transceiver.direction !== "stopped" && transceiver.direction !== direction) transceiver.direction = direction
+}
+
+function shareOn(current: Session, peer: Peer, track: MediaStreamTrack): void {
+  swapPicture(current, peer, async () => {
+    // Stopped again before its turn came.
+    if (current.screen !== track) return
+    try {
+      const camera = current.local?.getVideoTracks()[0] ?? null
+      const cameraSender = camera ? (peer.pc.getSenders().find((sender) => sender.track === camera) ?? null) : null
+      const route = shareRoute({ cameraSending: cameraSender !== null, keptSender: peer.screenSender !== null })
+      if (route === "replace-camera" && cameraSender) {
+        peer.sharing = { sender: cameraSender, camera }
+        await cameraSender.replaceTrack(track)
+      } else if (route === "reuse" && peer.screenSender) {
+        peer.sharing = { sender: peer.screenSender, camera: null }
+        setDirection(peer, peer.screenSender, "sendrecv")
+        await peer.screenSender.replaceTrack(track)
+      } else {
+        peer.screenSender = peer.pc.addTrack(track, current.local ?? new MediaStream([track]))
+        peer.sharing = { sender: peer.screenSender, camera: null }
+      }
+    } catch {
+      // The screen couldn't go out, so the share ends here too rather than claim to be on.
+      if (current.screen === track) stopScreenShare()
+    }
+  })
+}
+
+function shareOff(current: Session, peer: Peer): void {
+  swapPicture(current, peer, async () => {
+    const on = peer.sharing
+    peer.sharing = null
+    if (!on) return
+    if (on.camera && on.camera.readyState === "live") {
+      await on.sender.replaceTrack(on.camera)
+      return
+    }
+    // No camera to bring back: this side stops sending on that line, so the other person's picture ends with it.
+    await on.sender.replaceTrack(null)
+    setDirection(peer, on.sender, "recvonly")
+  })
 }

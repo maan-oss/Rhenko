@@ -82,7 +82,8 @@ export type CallSignal =
   | { kind: "claimed"; device: string }
   | { kind: "decline" }
   | { kind: "end"; reason: CallEndReason; seconds: number }
-  | { kind: "offer"; sdp: string; restart: boolean; from: CallPeerRef; person: EventPerson | null }
+  // In a one-to-one call, screen says whether the side offering is sharing its screen. Group offers carry no screen.
+  | { kind: "offer"; sdp: string; restart: boolean; from: CallPeerRef; person: EventPerson | null; screen?: boolean }
   | { kind: "answer"; sdp: string; from: CallPeerRef }
   | { kind: "ice"; candidate: IceCandidateJson; from: CallPeerRef }
   // Who is in a group call, sent to every member whenever it changes. Quiet means the member muted the group.
@@ -94,7 +95,7 @@ export type CallAction =
   | { kind: "decline" }
   | { kind: "end"; lostMs?: number }
   | { kind: "connected" }
-  | { kind: "offer"; to: CallPeerRef | null; sdp: string; restart: boolean }
+  | { kind: "offer"; to: CallPeerRef | null; sdp: string; restart: boolean; screen?: boolean }
   | { kind: "answer"; to: CallPeerRef | null; sdp: string }
   | { kind: "ice"; to: CallPeerRef | null; candidate: IceCandidateJson }
 
