@@ -1,15 +1,18 @@
 import { isAudioFile, isDocumentFile, isVideoFile, isVoiceFile } from "@/lib/media-names"
+import { parsePollAttachment, type PollOptionSpec } from "@/lib/poll-rules"
 
 // What a chat message carries besides its text. A photo, video, audio file or voice note is stored as a media file, and
 // needs no extra detail. The other kinds are kept as JSON in chat_messages.attachment: a document's name and size, a scan
-// (a photo that was framed and cleaned up as a page), a contact (another Rhenko account) and a location. Parsing is strict,
-// so anything the server did not write is ignored rather than shown.
+// (a photo that was framed and cleaned up as a page), a contact (another Rhenko account), a location and a poll (its question
+// and choices; the votes are in chat_poll_votes). Parsing is strict, so anything the server did not write is ignored rather
+// than shown.
 
 export type Attachment =
   | { kind: "document"; name: string; size: number }
   | { kind: "scan" }
   | { kind: "contact"; userId: string }
   | { kind: "location"; lat: number; lng: number }
+  | { kind: "poll"; question: string; options: PollOptionSpec[]; multiple: boolean }
 
 const MAX_NAME = 120
 
@@ -45,6 +48,10 @@ export function parseAttachment(text: string | null | undefined): Attachment | n
     if (!Number.isFinite(v.lat) || !Number.isFinite(v.lng) || Math.abs(v.lat) > 90 || Math.abs(v.lng) > 180) return null
     return { kind: "location", lat: v.lat, lng: v.lng }
   }
+  if (v.kind === "poll") {
+    const poll = parsePollAttachment(v)
+    return poll ? { kind: "poll", ...poll } : null
+  }
   return null
 }
 
@@ -59,6 +66,7 @@ export function attachmentPreview(attachment: Attachment | null, mediaFile: stri
   if (attachment?.kind === "location") return "Shared a location"
   if (attachment?.kind === "document") return "Sent a file"
   if (attachment?.kind === "scan") return "Sent a scan"
+  if (attachment?.kind === "poll") return "Sent a poll"
   if (!mediaFile) return null
   if (isVoiceFile(mediaFile)) return "Sent a voice message"
   if (isAudioFile(mediaFile)) return "Sent an audio file"
@@ -81,6 +89,7 @@ export function quoteLabel(attachment: Attachment | null, media: string | null, 
   if (attachment?.kind === "location") return "Location"
   if (attachment?.kind === "scan") return "Scan"
   if (attachment?.kind === "document") return "File"
+  if (attachment?.kind === "poll") return "Poll"
   if (media) return mediaLabel(media)
   if (hasPost) return "Shared a post"
   return "Message"

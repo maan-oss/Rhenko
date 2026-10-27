@@ -4,11 +4,12 @@ import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, AudioLines, Camera, FileText, Image as ImageIcon, MapPin, Mic, Music, Plus, ScanLine, UserRound, X } from "lucide-react"
+import { ArrowUp, AudioLines, Camera, FileText, Image as ImageIcon, ListChecks, MapPin, Mic, Music, Plus, ScanLine, UserRound, X } from "lucide-react"
 import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { addPending, removePending } from "@/components/app/pending-messages"
+import { ChatPollDialog, type PollDraft } from "@/components/app/chat-poll-dialog"
 import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -76,6 +77,7 @@ type Pick =
   | { kind: "audio" | "document"; file: File }
   | { kind: "contact"; user: MiniUser }
   | { kind: "location"; lat: number; lng: number }
+  | { kind: "poll"; question: string; choices: string[]; multiple: boolean }
 
 // Puts one file into a hidden file input, or empties it. The form submits whatever the input holds.
 function fillInput(input: HTMLInputElement | null, file: File | null) {
@@ -155,6 +157,12 @@ function describePick(pick: Pick): { title: string; detail: string; thumb: React
       return { title: "Contact", detail: `${pick.user.name} · @${pick.user.handle}`, thumb: <Avatar user={pick.user} size={56} /> }
     case "location":
       return { title: "Location", detail: `${pick.lat.toFixed(5)}, ${pick.lng.toFixed(5)}`, thumb: <span className={tile}><MapPin className="size-5" aria-hidden="true" /></span> }
+    case "poll":
+      return {
+        title: "Poll",
+        detail: `${pick.question} · ${pick.choices.length} choices`,
+        thumb: <span className={tile}><ListChecks className="size-5" aria-hidden="true" /></span>,
+      }
   }
 }
 
@@ -194,8 +202,8 @@ const ATTACH = "tap-44 grid size-10 shrink-0 place-items-center rounded-full tex
 const ATTACH_ITEM = "min-h-11 gap-3 text-[15px]"
 
 // Sends a message. Enter sends, Shift+Enter starts a new line. Typing is signalled every few seconds.
-// One attachment can go with a message: a photo or video, a scan, a document, an audio file, a voice message, a contact or
-// a location. In a group, "@" suggests the people to mention. `people` are the others in the conversation who can be shared.
+// One attachment can go with a message: a photo or video, a scan, a document, an audio file, a voice message, a contact, a
+// location or a poll. In a group, "@" suggests the people to mention. `people` are the others in the conversation who can be shared.
 // The row sits low on the screen; on a phone it leaves room on the left for the folded dock.
 export function ChatComposer({ conversationId, people, group }: { conversationId: string; people: MiniUser[]; group: boolean }) {
   const [state, action] = useActionState(sendMessage, {} as ChatState)
@@ -212,6 +220,7 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
   const documentRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLInputElement>(null)
   const [contactOpen, setContactOpen] = useState(false)
+  const [pollOpen, setPollOpen] = useState(false)
   const [locating, setLocating] = useState(false)
   const [text, setText] = useState("")
   const [caret, setCaret] = useState(0)
@@ -399,6 +408,11 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
     setContactOpen(false)
     setVoice(null)
     setPick({ kind: "contact", user })
+  }
+
+  function choosePoll(poll: PollDraft) {
+    setVoice(null)
+    setPick({ kind: "poll", question: poll.question, choices: poll.choices, multiple: poll.multiple })
   }
 
   // The place is read once, when it is asked for, so it is the place the person is standing in.
@@ -662,6 +676,11 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
         <input type="hidden" name="contact" value={pick?.kind === "contact" ? pick.user.id : ""} />
         <input type="hidden" name="lat" value={pick?.kind === "location" ? String(pick.lat) : ""} />
         <input type="hidden" name="lng" value={pick?.kind === "location" ? String(pick.lng) : ""} />
+        <input
+          type="hidden"
+          name="poll"
+          value={pick?.kind === "poll" ? JSON.stringify({ question: pick.question, choices: pick.choices, multiple: pick.multiple }) : ""}
+        />
         {/* The file fields. Each holds only the attachment picked above; the menu opens them from its own items. */}
         <input ref={voiceInputRef} type="file" name="voice" accept="audio/webm,audio/mp4,audio/ogg" className="sr-only" tabIndex={-1} aria-hidden="true" />
         <input
@@ -754,6 +773,10 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
               <MapPin className="size-[18px]" aria-hidden="true" />
               Location
             </DropdownMenuItem>
+            <DropdownMenuItem className={ATTACH_ITEM} onClick={() => setPollOpen(true)}>
+              <ListChecks className="size-[18px]" aria-hidden="true" />
+              Poll
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -841,6 +864,8 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
 
         <SendButton disabled={!canSend} />
       </form>
+
+      <ChatPollDialog open={pollOpen} onOpenChange={setPollOpen} onCreate={choosePoll} />
 
       <Dialog open={contactOpen} onOpenChange={setContactOpen}>
         <DialogContent className="sm:max-w-sm">

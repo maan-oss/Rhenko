@@ -3,6 +3,7 @@ import { settingsFor } from "@/lib/connections"
 import { all, get } from "@/lib/db"
 import { digestSettingsFor } from "@/lib/digest"
 import { languageName } from "@/lib/languages"
+import { parseAttachment } from "@/lib/message-attachments"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { notificationPrefsFor } from "@/lib/settings-data"
 import { readUpload, uploadSize } from "@/lib/uploads"
@@ -177,17 +178,19 @@ async function collect(userId: string, media: Map<string, Media>) {
     userId
   )
   const messageRows = await all<{
+    id: string
     conversation_id: string
     sender: string
     body: string
     media_file: string | null
     post_id: string | null
+    attachment: string | null
     call_status: string | null
     call_seconds: number
     created_at: number
     lang: string | null
   }>(
-    `SELECT m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.call_status, m.call_seconds, m.created_at, m.lang
+    `SELECT m.id, m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.created_at, m.lang
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
      WHERE m.conversation_id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?) AND m.deleted_at IS NULL
        AND (m.expires_at IS NULL OR m.expires_at > ?)
@@ -201,15 +204,32 @@ async function collect(userId: string, media: Map<string, Media>) {
     list.push(row.handle)
     membersByConversation.set(row.conversation_id, list)
   }
+  // The choices this person picked in polls in their chats, so their own answers are in their export.
+  const myChoices = new Map<string, string[]>()
+  for (const vote of await all<{ message_id: string; option_id: string }>("SELECT message_id, option_id FROM chat_poll_votes WHERE user_id = ?", userId)) {
+    myChoices.set(vote.message_id, [...(myChoices.get(vote.message_id) ?? []), vote.option_id])
+  }
   const messagesByConversation = new Map<string, object[]>()
   for (const row of messageRows) {
     const list = messagesByConversation.get(row.conversation_id) ?? []
+    const attachment = parseAttachment(row.attachment)
     list.push({
       from: row.sender,
       sentAt: iso(row.created_at),
       text: row.body,
       photo: file(row.media_file),
       sharedPostId: row.post_id,
+      // What else the message carried: a document, a contact, a place or a poll, with the answers this person picked.
+      attachment: attachment
+        ? attachment.kind === "poll"
+          ? {
+              kind: "poll",
+              question: attachment.question,
+              choices: attachment.options.map((option) => option.label),
+              yourChoices: attachment.options.filter((option) => (myChoices.get(row.id) ?? []).includes(option.id)).map((option) => option.label),
+            }
+          : attachment
+        : null,
       call: row.call_status ? { outcome: row.call_status, seconds: row.call_seconds } : null,
       language: row.lang || null,
     })

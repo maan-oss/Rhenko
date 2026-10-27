@@ -8,7 +8,9 @@ import { all, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
 import { canReadConversation, canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
 import { blockedEitherWay } from "@/lib/notify"
-import { attachmentPreview, attachmentText, cleanFileName, type Attachment } from "@/lib/message-attachments"
+import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
+import { firstLink, requestPreviews } from "@/lib/link-previews"
+import { pollInput, pollVoteInput } from "@/lib/poll-rules"
 import { pushGroupAdded, pushMessage } from "@/lib/push"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
@@ -639,6 +641,9 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   const hasUpload = hasImage || hasVoice || hasAudio || hasDocument
   const scan = hasImage && formData.get("scan") === "on"
   const contactId = asId(formData.get("contact"))
+  // A poll is its question and choices as JSON, checked in full by lib/poll-rules.
+  const pollField = formData.get("poll")
+  const hasPoll = typeof pollField === "string" && pollField !== ""
   const lat = formData.get("lat")
   const lng = formData.get("lng")
   const hasPlace = typeof lat === "string" && typeof lng === "string" && lat !== "" && lng !== ""
@@ -646,12 +651,29 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   if (place && (!Number.isFinite(place.lat) || !Number.isFinite(place.lng) || Math.abs(place.lat) > 90 || Math.abs(place.lng) > 180)) {
     return { error: "That place isn't a real location. Try sharing it again." }
   }
-  const picks = [hasUpload, contactId !== null, place !== null].filter(Boolean).length
-  if (picks > 1) return { error: "Send one photo, file, contact or location at a time." }
-  if (!body && !hasUpload && !contactId && !place && !postId) {
-    return { error: "Write a message, or add a photo, file, contact or location." }
+  const picks = [hasUpload, contactId !== null, place !== null, hasPoll].filter(Boolean).length
+  if (picks > 1) return { error: "Send one photo, file, contact, location or poll at a time." }
+  if (!body && !hasUpload && !contactId && !place && !postId && !hasPoll) {
+    return { error: "Write a message, or add a photo, file, contact, location or poll." }
   }
   if ([...body].length > MAX_DM) return { error: `Messages can have up to ${MAX_DM} characters.` }
+  let poll: Attachment | null = null
+  if (hasPoll) {
+    let raw: unknown = null
+    try {
+      raw = JSON.parse(pollField)
+    } catch {
+      return { error: "That poll isn't valid. Make it again." }
+    }
+    const checked = pollInput(raw)
+    if (!checked.ok) return { error: checked.error }
+    poll = {
+      kind: "poll",
+      question: checked.question,
+      options: checked.choices.map((label) => ({ id: newId(), label })),
+      multiple: checked.multiple,
+    }
+  }
 
   const others = (await memberIds(conversationId)).filter((id) => id !== viewer.id)
   if ((await Promise.all(others.map(async (id) => await blockedEitherWay(viewer.id, id)))).some(Boolean)) {
@@ -699,6 +721,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   else if (hasDocument && document instanceof File) attachment = { kind: "document", name: cleanFileName(document.name), size: document.size }
   else if (contactId) attachment = { kind: "contact", userId: contactId }
   else if (place) attachment = { kind: "location", lat: place.lat, lng: place.lng }
+  else if (poll) attachment = poll
 
   const mediaFile = upload?.ok ? upload.name : null
   try {
@@ -707,9 +730,49 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
     await removeUpload(mediaFile)
     throw error
   }
+  // A text-only message with a link gets the link's preview. The members are told once it has been read, so it shows up
+  // without a reload.
+  const link = !mediaFile && !attachment && !postId ? firstLink(body) : null
+  if (link) {
+    void requestPreviews([link], () => {
+      void publish([viewer.id, ...others], { type: "message", conversationId }).catch(() => undefined)
+    })
+  }
   await announceMessage(conversationId, viewer.id, previewOf(body, mediaFile, attachment, postId !== null))
   refresh()
   return { sent: true }
+}
+
+// Casts, changes or takes back this viewer's vote in a poll sent in a chat. `choices` is every choice they pick now; none takes
+// the vote back. Only someone who is in the chat, and can still see the message, may vote.
+export async function voteInChatPoll(messageId: string, choices: unknown): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in to vote." }
+  const id = asId(messageId)
+  if (!id) return { ok: false, error: "That poll isn't here anymore." }
+  const message = await get<{ conversation_id: string; attachment: string | null; deleted_at: number | null; expires_at: number | null }>(
+    "SELECT conversation_id, attachment, deleted_at, expires_at FROM chat_messages WHERE id = ?",
+    id
+  )
+  if (!message || message.deleted_at !== null || (message.expires_at !== null && message.expires_at <= Date.now())) {
+    return { ok: false, error: "That poll isn't here anymore." }
+  }
+  const status = await memberStatus(message.conversation_id, viewer.id)
+  if (status !== "accepted") return { ok: false, error: "Accept this conversation to vote." }
+  const poll = parseAttachment(message.attachment)
+  if (poll?.kind !== "poll") return { ok: false, error: "That message isn't a poll." }
+  const picked = pollVoteInput(choices, poll.options, poll.multiple)
+  if (!picked.ok) return { ok: false, error: picked.error }
+  const now = Date.now()
+  await transaction(async () => {
+    await run("DELETE FROM chat_poll_votes WHERE message_id = ? AND user_id = ?", id, viewer.id)
+    for (const choice of picked.choices) {
+      await run("INSERT INTO chat_poll_votes (message_id, user_id, option_id, created_at) VALUES (?, ?, ?, ?)", id, viewer.id, choice, now)
+    }
+  })
+  await publish(await memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })
+  refresh()
+  return { ok: true }
 }
 
 export type ShareResult =

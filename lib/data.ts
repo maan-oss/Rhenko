@@ -2120,6 +2120,20 @@ export type MessageView = {
   attachment: Attachment | null
   // The person a contact card is about, when that account is still there. Null for any other message.
   contact: MiniUser | null
+  // The preview of the first link in a text-only message, once it has been read. Null otherwise.
+  link: LinkPreview | null
+  // A poll sent in the chat, with the votes so far. Null for any other message.
+  poll: ChatPoll | null
+}
+
+// A poll in a chat: its question and choices with the votes for each, how many people have voted, and the choices this
+// viewer picked. The counts are all anyone sees; who chose what stays private.
+export type ChatPoll = {
+  question: string
+  multiple: boolean
+  options: { id: string; label: string; votes: number }[]
+  voters: number
+  mine: string[]
 }
 
 type MessageRow = {
@@ -2231,6 +2245,33 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
   const contacts = await loadMiniUsers(
     [...attachments.values()].flatMap((a) => (a?.kind === "contact" ? [a.userId] : []))
   )
+  // Votes for the polls on this page: each option's count, the voters, and the viewer's own choices.
+  const pollIds = rows.flatMap((r) => (attachments.get(r.id)?.kind === "poll" ? [r.id] : []))
+  const votes = new Map<string, { counts: Map<string, number>; voters: Set<string>; mine: string[] }>()
+  if (pollIds.length > 0) {
+    const voteRows = await all<{ message_id: string; option_id: string; user_id: string }>(
+      `SELECT message_id, option_id, user_id FROM chat_poll_votes WHERE message_id IN (${pollIds.map(() => "?").join(",")})`,
+      ...pollIds
+    )
+    for (const id of pollIds) votes.set(id, { counts: new Map(), voters: new Set(), mine: [] })
+    for (const vote of voteRows) {
+      const tally = votes.get(vote.message_id)
+      if (!tally) continue
+      tally.counts.set(vote.option_id, (tally.counts.get(vote.option_id) ?? 0) + 1)
+      tally.voters.add(vote.user_id)
+      if (vote.user_id === viewerId) tally.mine.push(vote.option_id)
+    }
+  }
+  // A text-only message with a link shows the link's preview. The previews are read here as they are for posts, so a link
+  // seen for the first time gets its preview on the next visit.
+  const linkOf = new Map<string, string>()
+  for (const r of rows) {
+    if (r.deleted_at || r.media_file || r.post_id || attachments.get(r.id)) continue
+    const link = firstLink(r.body)
+    if (link) linkOf.set(r.id, link)
+  }
+  const linkPreviews = await previewsFor([...new Set(linkOf.values())])
+  await requestPreviews([...new Set(linkOf.values())])
   return rows.map((r) => {
     const attachment = attachments.get(r.id) ?? null
     const others = readers.filter((m) => m.user_id !== r.sender_id)
@@ -2268,8 +2309,27 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       timerChange: r.timer_change,
       attachment,
       contact: attachment?.kind === "contact" ? contacts.get(attachment.userId) ?? null : null,
+      link: linkOf.has(r.id) ? linkPreviews.get(linkOf.get(r.id) as string) ?? null : null,
+      poll:
+        attachment?.kind === "poll"
+          ? pollView(attachment, votes.get(r.id))
+          : null,
     }
   })
+}
+
+// A poll's view: its options with their counts, the voters, and this viewer's choices, from the stored attachment and votes.
+function pollView(
+  poll: { question: string; options: { id: string; label: string }[]; multiple: boolean },
+  tally: { counts: Map<string, number>; voters: Set<string>; mine: string[] } | undefined
+): ChatPoll {
+  return {
+    question: poll.question,
+    multiple: poll.multiple,
+    options: poll.options.map((option) => ({ id: option.id, label: option.label, votes: tally?.counts.get(option.id) ?? 0 })),
+    voters: tally?.voters.size ?? 0,
+    mine: tally?.mine ?? [],
+  }
 }
 
 export type ListSummary = {

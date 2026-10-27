@@ -550,7 +550,7 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>STUN servers, and any TURN server the operator sets up, see network addresses when you make or take a call.</li>
           <li>
-            A link in a post makes the server fetch that page once to build a preview. The page&apos;s site sees a request from this server,
+            A link in a post or a chat message makes the server fetch that page once to build a preview. The page&apos;s site sees a request from this server,
             not from you. The preview picture is stored here and can be opened by anyone who has its address.
           </li>
           <li>The host of this server, and anyone with access to its disks or backups, can reach everything stored on it.</li>

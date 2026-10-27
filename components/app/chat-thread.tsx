@@ -9,6 +9,8 @@ import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { removePending, usePending } from "@/components/app/pending-messages"
 import { PostBody } from "@/components/app/post-body"
 import { ContactCard, DocumentCard, LocationCard } from "@/components/app/attachment-view"
+import { ChatPollView } from "@/components/app/chat-poll"
+import { LinkCard } from "@/components/app/link-card"
 import { VideoPlayer } from "@/components/app/video-player"
 import { TranslateControl } from "@/components/app/translate-control"
 import { LocalTime } from "@/components/app/time-text"
@@ -417,6 +419,8 @@ function MessageRow({
                   </div>
                 </>
               ) : null}
+              {message.link ? <LinkCard preview={message.link} className="mt-0 w-72" /> : null}
+              {message.poll ? <ChatPollView messageId={message.id} poll={message.poll} /> : null}
               {message.post ? (
                 <Link
                   href={`/${message.post.author.handle}/status/${message.post.id}`}

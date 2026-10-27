@@ -545,6 +545,16 @@ CREATE TABLE chat_messages (
   -- voice note, which are stored as media_file alone.
   attachment text);
 
+-- A vote in a poll sent in a chat. The poll's choices are in the message's attachment; a person's vote is one row per choice
+-- they picked, so a single-answer poll has at most one row for them.
+CREATE TABLE chat_poll_votes (
+  message_id text NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  option_id text NOT NULL,
+  created_at bigint NOT NULL,
+  PRIMARY KEY (message_id, user_id, option_id)
+);
+
 CREATE TABLE community_notes (
   id text PRIMARY KEY,
   post_id text NOT NULL REFERENCES posts(id) ON DELETE CASCADE,

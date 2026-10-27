@@ -272,16 +272,42 @@ export async function previewsFor(links: string[]): Promise<Map<string, LinkPrev
 // The links whose previews are missing or stale. Fetching happens in the background, a few at a time.
 const waiting: string[] = []
 const pending = new Set<string>()
+// Callbacks to run once a link has been read, by link. A chat message uses one to show its preview as soon as it is ready.
+const waiters = new Map<string, Array<() => void>>()
 let working = 0
 
-export async function requestPreviews(links: string[]): Promise<void> {
+// Queues the links whose previews are missing or stale. `onReady` runs once every link it was given to read has been read,
+// or straight away when none needs reading, so the caller knows the previews can be shown now.
+export async function requestPreviews(links: string[], onReady?: () => void): Promise<void> {
   const stale = links.length === 0 ? [] : await staleLinks(links)
+  const reading = new Set<string>()
   for (const link of stale) {
-    if (pending.has(link) || waiting.length >= MAX_QUEUE) continue
-    pending.add(link)
-    waiting.push(link)
+    if (!pending.has(link)) {
+      if (waiting.length >= MAX_QUEUE) continue
+      pending.add(link)
+      waiting.push(link)
+    }
+    reading.add(link)
+  }
+  if (onReady) {
+    if (reading.size === 0) onReady()
+    else {
+      let left = reading.size
+      const done = () => {
+        left -= 1
+        if (left === 0) onReady()
+      }
+      for (const link of reading) waiters.set(link, [...(waiters.get(link) ?? []), done])
+    }
   }
   await pump()
+}
+
+// Runs the callbacks waiting on a link, once its row is written.
+function settle(link: string): void {
+  const done = waiters.get(link) ?? []
+  waiters.delete(link)
+  for (const callback of done) callback()
 }
 
 async function staleLinks(links: string[]): Promise<string[]> {
@@ -303,6 +329,7 @@ async function pump(): Promise<void> {
       .finally(async () => {
         working--
         pending.delete(link)
+        settle(link)
         await pump()
       })
   }
