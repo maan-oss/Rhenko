@@ -26,6 +26,14 @@ export function joinedLabel(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { month: "long", year: "numeric" })
 }
 
+// A short label from the browser's user agent string, like "Chrome on Android". The full string is not shown or kept.
+export function describeAgent(agent: string): string {
+  if (!agent) return "Unknown device"
+  const browser = /Edg\//.test(agent) ? "Edge" : /Chrome\//.test(agent) ? "Chrome" : /Firefox\//.test(agent) ? "Firefox" : /Safari\//.test(agent) ? "Safari" : "Browser"
+  const os = /iPhone|iPad/.test(agent) ? "iOS" : /Android/.test(agent) ? "Android" : /Mac OS X/.test(agent) ? "macOS" : /Windows/.test(agent) ? "Windows" : /Linux/.test(agent) ? "Linux" : ""
+  return os ? `${browser} on ${os}` : browser
+}
+
 export function formatCount(value: number): string {
   return new Intl.NumberFormat("en-US", { notation: value >= 10000 ? "compact" : "standard" }).format(value)
 }

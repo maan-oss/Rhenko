@@ -2,19 +2,11 @@ import { newId } from "@/lib/auth"
 import { get, run } from "@/lib/db"
 import { publish } from "@/lib/bus"
 import { canSeePost, type NotificationKind } from "@/lib/data"
+import { mayNotify, NOTICE, type DeliveryFacts } from "@/lib/notify-rules"
+import { pushNotification } from "@/lib/push"
 import { BANNER_PREVIEW_MAX } from "@/lib/rules"
 
 export type { NotificationKind }
-
-// True unless the person switched this kind of notification off in settings.
-export async function wantsNotification(recipientId: string, kind: NotificationKind): Promise<boolean> {
-  const row = await get<{ enabled: number }>(
-    "SELECT enabled FROM notification_prefs WHERE user_id = ? AND kind = ?",
-    recipientId,
-    kind
-  )
-  return row ? row.enabled === 1 : true
-}
 
 export async function blockedEitherWay(a: string, b: string): Promise<boolean> {
   return (
@@ -23,29 +15,24 @@ export async function blockedEitherWay(a: string, b: string): Promise<boolean> {
   )
 }
 
-// What each notification says, the same wording the notifications page uses.
-const NOTICE: Record<NotificationKind, string> = {
-  like: "liked your post",
-  repost: "reposted your post",
-  reply: "replied to you",
-  quote: "quoted your post",
-  follow: "followed you",
-  mention: "mentioned you",
-  follow_request: "asked to follow you",
-  poll: "A poll you voted in has ended",
-  post: "posted",
+// What decides whether an event reaches the recipient, in one read: their switch for this kind in settings (on unless they
+// turned it off), a block either way, and whether they muted the account that acted.
+async function deliveryFacts(recipientId: string, actorId: string, kind: NotificationKind): Promise<DeliveryFacts> {
+  const row = await get<{ kind_on: number; blocked: number; muted: number }>(
+    `SELECT COALESCE((SELECT enabled FROM notification_prefs WHERE user_id = ?1 AND kind = ?3), 1) AS kind_on,
+       EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = ?1 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?1)) AS blocked,
+       EXISTS (SELECT 1 FROM mutes WHERE muter_id = ?1 AND muted_id = ?2) AS muted`,
+    recipientId,
+    actorId,
+    kind
+  )
+  return { self: false, kindOn: row?.kind_on === 1, blocked: row?.blocked === 1, muted: row?.muted === 1 }
 }
 
-// True when `muterId` muted `mutedId`. A muted account's activity doesn't notify the person who muted it.
-export async function hasMuted(muterId: string, mutedId: string): Promise<boolean> {
-  return await get("SELECT 1 AS found FROM mutes WHERE muter_id = ? AND muted_id = ?", muterId, mutedId) !== undefined
-}
-
+// Writes a notification, tells the recipient's open tabs, and pushes it to their devices. The same rules decide all three.
 export async function notify(recipientId: string, actorId: string, kind: NotificationKind, postId: string | null): Promise<void> {
   if (recipientId === actorId) return
-  if (!await wantsNotification(recipientId, kind)) return
-  if (await blockedEitherWay(recipientId, actorId)) return
-  if (await hasMuted(recipientId, actorId)) return
+  if (!mayNotify(await deliveryFacts(recipientId, actorId, kind))) return
   await run(
     "INSERT INTO notifications (id, recipient_id, actor_id, kind, post_id, read, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)",
     newId(),
@@ -57,6 +44,7 @@ export async function notify(recipientId: string, actorId: string, kind: Notific
   )
   await publish([recipientId], { type: "notification" })
   await announceNotification(recipientId, actorId, kind, postId)
+  await pushNotification(recipientId, actorId, kind, postId)
 }
 
 // A banner for the notification, with a short excerpt of the post it is about. The excerpt appears only when the

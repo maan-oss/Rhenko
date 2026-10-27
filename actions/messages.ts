@@ -9,6 +9,7 @@ import { publish, type EventPerson } from "@/lib/bus"
 import { canSeePost, loadMiniUsers, messagesBefore, recentChatPartners, searchUsers, type MessageView, type MiniUser } from "@/lib/data"
 import { blockedEitherWay } from "@/lib/notify"
 import { isVoiceFile } from "@/lib/media-names"
+import { pushMessage } from "@/lib/push"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
@@ -193,7 +194,7 @@ async function insertMessage(
   await publish(await memberIds(conversationId), { type: "message", conversationId })
 }
 
-// A banner for each other member. A request says so, and a muted conversation gets none.
+// A banner for each other member, and a push to their devices. A request says so, and a muted conversation gets neither.
 async function announceMessage(conversationId: string, senderId: string, preview: string): Promise<void> {
   const sender = await get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
     "SELECT id, name, handle, avatar_file FROM users WHERE id = ?",
@@ -222,6 +223,7 @@ async function announceMessage(conversationId: string, senderId: string, preview
       from,
     })
   }
+  await pushMessage(conversationId, { id: sender.id, name: sender.name }, conversation, preview)
 }
 
 // A post goes into a message only when it is live and the sender can open it. Their recipient sees the embed under the

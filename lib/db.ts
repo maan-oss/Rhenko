@@ -139,6 +139,12 @@ export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
   return (await pool().begin((tx) => transactions.run(tx, fn))) as unknown as T
 }
 
+// Runs work that outlives the call that started it, such as sending pushes, outside any open transaction. Its queries then
+// use the pool, not a transaction that may have ended by the time they run.
+export function outsideTransaction<T>(fn: () => T): T {
+  return transactions.exit(fn)
+}
+
 // Refreshes the planner's statistics. Maintenance runs it now and then.
 export async function optimizeDatabase(): Promise<void> {
   await run("analyze")

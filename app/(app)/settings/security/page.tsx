@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { requireViewer, currentSessionHash } from "@/lib/auth"
 import { sessionsFor, twoFactorFor } from "@/lib/settings-data"
 import { passkeysOf } from "@/lib/passkeys"
-import { formatCount } from "@/lib/format"
+import { describeAgent, formatCount } from "@/lib/format"
 import { RelativeTime } from "@/components/app/time-text"
 import { PageHeader } from "@/components/app/page-header"
 import { ChangePasswordForm, RevokeOthersButton, RevokeSessionButton, TwoFactorPanel } from "@/components/app/security-panels"
@@ -54,14 +54,6 @@ async function SecurityBody() {
       </Section>
     </>
   )
-}
-
-// A short label from the browser's user agent string. Full strings are not shown.
-function describeAgent(agent: string): string {
-  if (!agent) return "Unknown device"
-  const browser = /Edg\//.test(agent) ? "Edge" : /Chrome\//.test(agent) ? "Chrome" : /Firefox\//.test(agent) ? "Firefox" : /Safari\//.test(agent) ? "Safari" : "Browser"
-  const os = /iPhone|iPad/.test(agent) ? "iOS" : /Android/.test(agent) ? "Android" : /Mac OS X/.test(agent) ? "macOS" : /Windows/.test(agent) ? "Windows" : /Linux/.test(agent) ? "Linux" : ""
-  return os ? `${browser} on ${os}` : browser
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
