@@ -1,4 +1,4 @@
-import { all, optimizeDatabase, run } from "@/lib/db"
+import { all, change, optimizeDatabase, run } from "@/lib/db"
 import { notify } from "@/lib/notify"
 import { publishDue } from "@/lib/screening"
 import { expireStaleCalls, pruneQueuedBanners } from "@/lib/call-state"
@@ -119,7 +119,9 @@ async function keepWithinRetention(now: number): Promise<void> {
   await prunePush(now)
 }
 
-// Tells everyone who voted in a poll that it has ended, once.
+// Tells everyone who voted in a poll that it has ended, once. The poll is marked before anyone is told, and only the pass
+// that marked it tells them. A pass that overlaps a slow one, or a lease that changed hands mid-pass, finds it marked. A
+// pass that stops part way leaves the rest of its voters untold, rather than telling the first ones twice.
 async function announceEndedPolls(now: number): Promise<void> {
   const ended = await all<{ post_id: string; author_id: string }>(
     `SELECT pl.post_id, p.author_id FROM polls pl
@@ -128,8 +130,9 @@ async function announceEndedPolls(now: number): Promise<void> {
     now
   )
   for (const poll of ended) {
+    const claimed = await change("UPDATE polls SET notified_at = ? WHERE post_id = ? AND notified_at IS NULL", now, poll.post_id)
+    if (claimed === 0) continue
     const voters = await all<{ user_id: string }>("SELECT user_id FROM poll_votes WHERE post_id = ?", poll.post_id)
     for (const voter of voters) await notify(voter.user_id, poll.author_id, "poll", poll.post_id)
-    await run("UPDATE polls SET notified_at = ? WHERE post_id = ?", now, poll.post_id)
   }
 }

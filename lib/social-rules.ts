@@ -51,3 +51,17 @@ export function topicFromParam(param: string): TopicCheck {
 
 // A person in a followers or following list: their card, and whether the viewer has asked to follow them and is waiting.
 export type PersonEntry = UserCard & { requested: boolean }
+
+// The SQL that keeps posts with a muted word out of the feeds, search, topic pages and reply threads (lib/data.ts), with
+// its values in order. Posts are alias p. A muted word or phrase matches anywhere in a post's text or an article's title,
+// ignoring case, and a %, _ or \ in it matches only itself. No words, no SQL.
+export function mutedWordFilter(words: readonly string[]): { sql: string; params: string[] } {
+  const clauses: string[] = []
+  const params: string[] = []
+  for (const word of words) {
+    const pattern = `%${word.toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+    clauses.push("AND lower(p.body) NOT ILIKE ? ESCAPE '\\' AND lower(p.title) NOT ILIKE ? ESCAPE '\\'")
+    params.push(pattern, pattern)
+  }
+  return { sql: clauses.join(" "), params }
+}

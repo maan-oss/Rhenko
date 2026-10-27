@@ -8,6 +8,7 @@ import { addToGroup, groupInfo, leaveConversation, removeFromGroup, renameGroup,
 import { Avatar } from "@/components/app/avatar"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { GroupInviteLink } from "@/components/app/group-invite-link"
+import { useProofGate } from "@/components/app/proof-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { MAX_GROUP_MEMBERS, MAX_GROUP_TITLE } from "@/lib/rules"
@@ -32,6 +33,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
   const [removeTarget, setRemoveTarget] = useState<GroupMember | null>(null)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [pending, startTransition] = useTransition()
+  const proof = useProofGate()
   const addRef = useRef<HTMLFormElement>(null)
 
   // Fetch the group's details whenever the panel is open and the group changes.
@@ -94,11 +96,14 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
     })
   }
 
-  function add(handle: string) {
+  // Inviting someone who doesn't follow you counts as a new conversation, so a busy account may be asked for the human
+  // check first. The invitation is then sent again with the answer.
+  function add(handle: string, answer?: string) {
     startTransition(async () => {
-      const result = await addToGroup(conversationId, handle)
+      const result = await addToGroup(conversationId, handle, answer)
       if (!result.ok) {
-        setAddError(result.error)
+        if (result.proofRequired) proof.askForProof((passed) => add(handle, passed))
+        else setAddError(result.error)
         return
       }
       setAddError(null)
@@ -274,6 +279,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
             }}
           />
         ) : null}
+        {proof.dialog}
       </DialogContent>
     </Dialog>
   )

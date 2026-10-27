@@ -4,7 +4,7 @@ import { languageOf } from "@/lib/languages"
 import { parseStickerSet, stickerSetJson } from "@/lib/stickers"
 import { revalidatePath } from "next/cache"
 import { getAgreedViewer, newId } from "@/lib/auth"
-import { all, get, run, transaction } from "@/lib/db"
+import { all, change, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost, canSeePost, editHistoryFor, visiblePostIds, type EditVersion } from "@/lib/data"
 import { memberRole } from "@/lib/circles"
 import { notify } from "@/lib/notify"
@@ -389,7 +389,7 @@ export async function getEditHistory(postId: string): Promise<EditHistoryResult>
   return { ok: true, versions }
 }
 
-export async function publishNow(postId: string): Promise<VoidResult> {
+export async function publishNow(postId: string, proof?: string): Promise<VoidResult & { proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to publish." }
   const post = isId(postId)
@@ -400,12 +400,28 @@ export async function publishNow(postId: string): Promise<VoidResult> {
     : undefined
   if (!post || post.author_id !== viewer.id) return { ok: false, error: "That post was deleted." }
   if (post.is_draft === 0 && post.publish_at === null) return { ok: false, error: "That post is already live." }
+  // A draft skipped the account check when it was saved, because only its author sees it. It passes the check now, as any
+  // post that goes out does, so a limited account cannot post by saving drafts and publishing them. A scheduled post
+  // passed it when it was scheduled.
+  if (post.is_draft === 1) {
+    const verdict = await gate(viewer.id, proof)
+    if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
+  }
   const now = Date.now()
-  // A poll runs its full length from the moment the post goes live.
-  await transaction(async () => {
-    await run("UPDATE posts SET is_draft = 0, publish_at = NULL, created_at = ? WHERE id = ?", now, postId)
+  // A poll runs its full length from the moment the post goes live. The update only takes a post that is still waiting, so
+  // a second tap, or a scheduled post that went live a moment ago, is not announced twice.
+  const claimed = await transaction(async () => {
+    const taken = await change(
+      "UPDATE posts SET is_draft = 0, publish_at = NULL, created_at = ? WHERE id = ? AND author_id = ? AND (is_draft = 1 OR publish_at IS NOT NULL)",
+      now,
+      postId,
+      viewer.id
+    )
+    if (taken === 0) return false
     await startPollClock(postId, now)
+    return true
   })
+  if (!claimed) return { ok: false, error: "That post is already live." }
   await goLive(postId, now)
   refresh()
   return { ok: true }
@@ -426,8 +442,9 @@ export async function toggleLike(postId: string): Promise<ToggleResult> {
   }
   const likes = await consume(`like:${viewer.id}`, await isNewAccount(viewer.id) ? 60 : 240, HOUR_MS)
   if (!likes.ok) return { ok: false, error: `You're liking posts too fast. Try again in ${waitLabel(likes.retryAfterSeconds)}.` }
-  await run("INSERT INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
-  await notify(author, viewer.id, "like", postId)
+  // Only the request that added the like notifies. A like sent twice at once, from two tabs say, adds one row and one notice.
+  const added = await change("INSERT INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
+  if (added > 0) await notify(author, viewer.id, "like", postId)
   return { ok: true, active: true }
 }
 
@@ -446,8 +463,8 @@ export async function toggleRepost(postId: string): Promise<ToggleResult> {
   }
   const reposts = await consume(`repost:${viewer.id}`, await isNewAccount(viewer.id) ? 30 : 120, HOUR_MS)
   if (!reposts.ok) return { ok: false, error: `You're reposting too fast. Try again in ${waitLabel(reposts.retryAfterSeconds)}.` }
-  await run("INSERT INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
-  await notify(author, viewer.id, "repost", postId)
+  const added = await change("INSERT INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())
+  if (added > 0) await notify(author, viewer.id, "repost", postId)
   return { ok: true, active: true }
 }
 

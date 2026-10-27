@@ -1,4 +1,4 @@
-import { all, get, run, transaction } from "@/lib/db"
+import { all, change, get, run, transaction } from "@/lib/db"
 import { assessPost, type AbuseVerdict } from "@/lib/abuse-rules"
 import { factsFor, textHash } from "@/lib/abuse"
 import { hidePost } from "@/lib/moderation"
@@ -58,17 +58,26 @@ export async function goLive(postId: string, now = Date.now()): Promise<AbuseVer
 }
 
 // Scheduled posts go live when their time passes. This runs before reads that show the public feed, so the post appears
-// and its notifications fire then, and the checks run at that moment.
+// and its notifications fire then, and the checks run at that moment. Many requests and the maintenance pass run it at
+// the same moment, so each post is claimed first: only the call whose update took it announces it, and the others skip it.
+// A post its author published or moved in the meantime is left alone.
 export async function publishDue(now = Date.now()): Promise<void> {
   const due = await all<{ id: string; publish_at: number }>(
     "SELECT id, publish_at FROM posts WHERE is_draft = 0 AND publish_at IS NOT NULL AND publish_at <= ?",
     now
   )
   for (const post of due) {
-    await transaction(async () => {
-      await run("UPDATE posts SET publish_at = NULL, created_at = ? WHERE id = ?", post.publish_at, post.id)
+    const claimed = await transaction(async () => {
+      const taken = await change(
+        "UPDATE posts SET publish_at = NULL, created_at = ? WHERE id = ? AND is_draft = 0 AND publish_at = ?",
+        post.publish_at,
+        post.id,
+        post.publish_at
+      )
+      if (taken === 0) return false
       await startPollClock(post.id, post.publish_at)
+      return true
     })
-    await goLive(post.id, now)
+    if (claimed) await goLive(post.id, now)
   }
 }
