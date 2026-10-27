@@ -19,6 +19,7 @@ import { RelativeTime } from "@/components/app/time-text"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MAX_PASSKEY_NAME } from "@/lib/rules"
+import { returnPathFrom } from "@/lib/invite-links"
 
 export type PasskeyItem = { id: string; name: string; createdAt: number; lastUsedAt: number | null }
 
@@ -146,8 +147,9 @@ function RemoveKeyButton({ id, name, onDone }: { id: string; name: string; onDon
   )
 }
 
-// The sign-in button on the login page. A passkey names the account, so the handle and password are not needed.
-export function PasskeyLoginButton() {
+// The sign-in button on the login page. A passkey names the account, so the handle and password are not needed. `next` is
+// a group invite to go back to afterwards.
+export function PasskeyLoginButton({ next = null }: { next?: string | null }) {
   const router = useRouter()
   const supported = useWebAuthnSupport()
   const [error, setError] = useState<string | null>(null)
@@ -167,7 +169,7 @@ export function PasskeyLoginButton() {
       }
       const done = await finishPasskeySignIn(response)
       if (!done.ok) return setError(done.error)
-      router.replace("/")
+      router.replace(returnPathFrom(next) ?? "/")
       router.refresh()
     })
   }
@@ -188,7 +190,7 @@ export function PasskeyLoginButton() {
 }
 
 // The second step after a password for an account with two-factor on: a passkey or security key in place of a code.
-export function SecurityKeyButton() {
+export function SecurityKeyButton({ next = null }: { next?: string | null }) {
   const router = useRouter()
   const supported = useWebAuthnSupport()
   const [error, setError] = useState<string | null>(null)
@@ -208,7 +210,7 @@ export function SecurityKeyButton() {
       }
       const done = await finishPasskeySecondStep(response)
       if (!done.ok) return setError(done.error)
-      router.replace("/")
+      router.replace(returnPathFrom(next) ?? "/")
       router.refresh()
     })
   }

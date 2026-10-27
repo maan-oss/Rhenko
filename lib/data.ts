@@ -20,6 +20,7 @@ import { isVoiceFile } from "@/lib/media-names"
 import { parseStickerSet, type StickerSet } from "@/lib/stickers"
 import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib/link-previews"
 import { callSummary, type CallOutcome } from "@/lib/format"
+import { timerLine } from "@/lib/message-timers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
 import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
 
@@ -1822,6 +1823,8 @@ export type ConversationSummary = {
   lastDeleted: boolean
   unread: number
   status: "accepted" | "requested"
+  // The disappearing-messages timer in milliseconds, 0 when it is off.
+  messageTimer: number
 }
 
 type LastMessage = {
@@ -1835,15 +1838,24 @@ type LastMessage = {
   call_seconds: number
   call_kind: "dm" | "group"
   call_people: number
+  timer_change: number | null
+}
+
+// A disappearing message whose time is up is gone for everyone, even in the moments before maintenance deletes it.
+// `alias` is the message table's alias. The SQL takes the current time once.
+function unexpired(alias: string): string {
+  return `(${alias}.expires_at IS NULL OR ${alias}.expires_at > ?)`
 }
 
 async function lastMessageOf(conversationId: string, viewerId: string): Promise<LastMessage | undefined> {
   return await get<LastMessage>(
-    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.call_status, m.call_seconds, m.call_kind, m.call_people FROM chat_messages m
-     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
+    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change
+     FROM chat_messages m
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
     conversationId,
     viewerId,
-    viewerId
+    viewerId,
+    Date.now()
   )
 }
 
@@ -1853,6 +1865,7 @@ function previewOfLast(last: LastMessage | undefined, viewerId: string): string 
   if (last.call_status) {
     return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId, last.call_kind, last.call_people)
   }
+  if (last.timer_change !== null) return timerLine(last.timer_change)
   if (last.media_file) return isVoiceFile(last.media_file) ? "Sent a voice message" : "Sent a photo"
   return last.body || (last.post_id ? "Shared a post" : "")
 }
@@ -1896,8 +1909,9 @@ async function departedMembers(conversationId: string, currentIds: string[]): Pr
     (await all<{ user_id: string }>("SELECT user_id FROM conversation_departures WHERE conversation_id = ?", conversationId)).map((row) => row.user_id)
   )
   for (const row of await all<{ sender_id: string }>(
-    "SELECT DISTINCT sender_id FROM chat_messages WHERE conversation_id = ? AND deleted_at IS NULL",
-    conversationId
+    `SELECT DISTINCT m.sender_id FROM chat_messages m WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND ${unexpired("m")}`,
+    conversationId,
+    Date.now()
   )) {
     ids.add(row.sender_id)
   }
@@ -1905,8 +1919,8 @@ async function departedMembers(conversationId: string, currentIds: string[]): Pr
 }
 
 export async function conversationSummaries(viewerId: string, status: "accepted" | "requested", limit = 60): Promise<ConversationSummary[]> {
-  const rows = await all<{ id: string; kind: "dm" | "group"; title: string; updated_at: number; last_read_at: number }>(
-    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at
+  const rows = await all<{ id: string; kind: "dm" | "group"; title: string; updated_at: number; last_read_at: number; message_timer: number }>(
+    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer
      FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
      WHERE cm.user_id = ? AND cm.status = ? AND NOT (${DM_BLOCKED})
      ORDER BY c.updated_at DESC LIMIT ?`,
@@ -1929,12 +1943,14 @@ export async function conversationSummaries(viewerId: string, status: "accepted"
     const unread =
       (await get<{ c: number }>(
         `SELECT COUNT(*) AS c FROM chat_messages m
-         WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.created_at > ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")}`,
+         WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.created_at > ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")}
+           AND ${unexpired("m")}`,
         row.id,
         viewerId,
         row.last_read_at,
         viewerId,
-        viewerId
+        viewerId,
+        Date.now()
       ))?.c ?? 0
     return {
       id: row.id,
@@ -1948,6 +1964,7 @@ export async function conversationSummaries(viewerId: string, status: "accepted"
       lastDeleted: Boolean(last?.deleted_at),
       unread,
       status,
+      messageTimer: row.message_timer,
     }
   }))
 }
@@ -1960,14 +1977,15 @@ export async function unreadMessageCount(viewerId: string): Promise<number> {
        JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
        JOIN conversations c ON c.id = m.conversation_id
        WHERE cm.status = 'accepted' AND cm.muted = 0 AND m.sender_id <> ? AND m.created_at > cm.last_read_at AND m.deleted_at IS NULL
-         AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED})`,
+         AND ${notFromBlocked("m.sender_id")} AND NOT (${DM_BLOCKED}) AND ${unexpired("m")}`,
       viewerId,
       viewerId,
       viewerId,
       viewerId,
       viewerId,
       viewerId,
-      viewerId
+      viewerId,
+      Date.now()
     ))?.c ?? 0
   )
 }
@@ -2012,6 +2030,8 @@ export type ConversationView = {
   members: ChatMemberView[]
   viewerIsCreator: boolean
   muted: boolean
+  // The disappearing-messages timer in milliseconds, 0 when it is off.
+  messageTimer: number
 }
 
 // The conversation, if the viewer is a member and it isn't a one-to-one chat across a block. Null otherwise.
@@ -2023,8 +2043,9 @@ export async function conversationFor(id: string, viewerId: string): Promise<Con
     created_by: string | null
     status: "accepted" | "requested"
     muted: number
+    message_timer: number
   }>(
-    `SELECT c.id, c.kind, c.title, c.created_by, cm.status, cm.muted
+    `SELECT c.id, c.kind, c.title, c.created_by, cm.status, cm.muted, c.message_timer
      FROM conversations c JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
      WHERE c.id = ? AND NOT (${DM_BLOCKED})`,
     viewerId,
@@ -2057,6 +2078,7 @@ export async function conversationFor(id: string, viewerId: string): Promise<Con
     members,
     viewerIsCreator: base.created_by === viewerId,
     muted: base.muted === 1,
+    messageTimer: base.message_timer,
   }
 }
 
@@ -2081,6 +2103,10 @@ export type MessageView = {
   createdAt: number
   seen: boolean
   reactions: { emoji: string; count: number; mine: boolean }[]
+  // When a disappearing message is gone for everyone. Null for a message that stays.
+  expiresAt: number | null
+  // A line recording a change to the disappearing-messages timer: the new value in milliseconds, 0 for off.
+  timerChange: number | null
 }
 
 type MessageRow = {
@@ -2105,23 +2131,28 @@ type MessageRow = {
   reply_post: string | null
   reply_deleted: number | null
   reply_sender_name: string | null
+  expires_at: number | null
+  timer_change: number | null
 }
 
 // The messages of one conversation as this viewer may see them. The original of a reply is joined in the same chat only, so
 // a reply can never quote something from another conversation. A message from a blocked pair is left out, and so is a
-// reply's quote of one. The SQL takes the viewer's id twice for the quote, then the conversation, then the viewer twice.
+// reply's quote of one. A disappearing message whose time is up is left out, and so is a quote of one. The SQL takes the
+// viewer's id twice and the time for the quote, then the conversation, then the viewer twice and the time.
 function messageSelect(conversationId: string, viewerId: string): { select: string; params: Param[] } {
+  const now = Date.now()
   return {
     select: `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
+       m.expires_at, m.timer_change,
        u.name AS sender_name, u.handle AS sender_handle,
        m.reply_to_id, rm.id AS reply_id, rm.body AS reply_body, rm.media_file AS reply_media, rm.post_id AS reply_post,
        rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name
      FROM chat_messages m
      JOIN users u ON u.id = m.sender_id
-     LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")}
+     LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")} AND ${unexpired("rm")}
      LEFT JOIN users ru ON ru.id = rm.sender_id
-     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")}`,
-    params: [viewerId, viewerId, conversationId, viewerId, viewerId],
+     WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")}`,
+    params: [viewerId, viewerId, now, conversationId, viewerId, viewerId, now],
   }
 }
 
@@ -2215,6 +2246,8 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       createdAt: r.created_at,
       seen,
       reactions: reactions.get(r.id) ?? [],
+      expiresAt: r.expires_at,
+      timerChange: r.timer_change,
     }
   })
 }
@@ -2746,11 +2779,14 @@ async function mediaAccessUncached(file: string, viewerId: string | null): Promi
   )
   if ((await visiblePostIds(posts.map((row) => row.post_id), viewerId)).size > 0) return "private"
   // A photo or voice note from someone this viewer has blocked is not theirs to open, even inside a shared group.
+  // A disappearing photo or voice message whose time is up is not served, even before maintenance deletes the file.
   const chats = await all<{ conversation_id: string }>(
-    `SELECT DISTINCT m.conversation_id FROM chat_messages m WHERE m.media_file = ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")}`,
+    `SELECT DISTINCT m.conversation_id FROM chat_messages m
+     WHERE m.media_file = ? AND m.deleted_at IS NULL AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")}`,
     file,
     viewerId,
-    viewerId
+    viewerId,
+    Date.now()
   )
   if ((await Promise.all(chats.map(async (row) => await canReadConversation(row.conversation_id, viewerId)))).some(Boolean)) return "private"
   return "none"

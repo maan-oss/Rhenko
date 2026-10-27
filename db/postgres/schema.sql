@@ -184,7 +184,12 @@ CREATE TABLE conversations (
   title text NOT NULL DEFAULT '',
   created_by text REFERENCES users(id) ON DELETE SET NULL,
   created_at bigint NOT NULL,
-  updated_at bigint NOT NULL
+  updated_at bigint NOT NULL,
+  -- Disappearing messages: how long, in milliseconds, a message sent now is kept. 0 is off. A change applies to messages
+  -- sent after it.
+  message_timer bigint NOT NULL DEFAULT 0,
+  -- A group's invite link, /join/<token>. NULL when the group has none. Resetting the link replaces the token.
+  invite_token text
 );
 
 CREATE TABLE email_codes (
@@ -491,7 +496,11 @@ CREATE TABLE chat_messages (
   post_id text REFERENCES posts(id) ON DELETE SET NULL,
   created_at bigint NOT NULL,
   deleted_at bigint
-, call_status text, call_seconds bigint NOT NULL DEFAULT 0, call_kind text NOT NULL DEFAULT 'dm', call_people bigint NOT NULL DEFAULT 2, lang text, reply_to_id text REFERENCES chat_messages (id) ON DELETE SET NULL);
+, call_status text, call_seconds bigint NOT NULL DEFAULT 0, call_kind text NOT NULL DEFAULT 'dm', call_people bigint NOT NULL DEFAULT 2, lang text, reply_to_id text REFERENCES chat_messages (id) ON DELETE SET NULL,
+  -- When a disappearing message is gone for everyone: its sent time plus the conversation's timer when it was sent.
+  expires_at bigint,
+  -- A line in the thread that records a change to the timer, with the new value (0 for off). NULL on every other message.
+  timer_change bigint);
 
 CREATE TABLE community_notes (
   id text PRIMARY KEY,
@@ -700,10 +709,12 @@ CREATE INDEX blocks_blocked ON blocks(blocked_id);
 CREATE INDEX calls_conversation ON calls (conversation_id);
 CREATE INDEX calls_due ON calls (due_at) WHERE due_at IS NOT NULL;
 CREATE INDEX chat_messages_conversation ON chat_messages(conversation_id, created_at);
+CREATE INDEX chat_messages_expiring ON chat_messages (expires_at) WHERE expires_at IS NOT NULL;
 CREATE UNIQUE INDEX communities_slug ON communities(slug);
 CREATE INDEX community_members_user ON community_members(user_id);
 CREATE INDEX community_notes_post ON community_notes(post_id);
 CREATE INDEX conversation_members_user ON conversation_members(user_id);
+CREATE UNIQUE INDEX conversations_invite_token ON conversations (invite_token) WHERE invite_token IS NOT NULL;
 CREATE INDEX email_codes_user ON email_codes(user_id, purpose);
 CREATE INDEX events_created ON events (created_at);
 CREATE INDEX feed_impressions_served ON feed_impressions(served_at);

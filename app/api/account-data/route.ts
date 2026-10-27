@@ -32,8 +32,9 @@ async function findMedia(userId: string): Promise<Map<string, Media>> {
   const messageFiles = (await all<{ media_file: string }>(
     `SELECT m.media_file FROM chat_messages m
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
-     WHERE m.media_file IS NOT NULL AND m.deleted_at IS NULL`,
-    userId
+     WHERE m.media_file IS NOT NULL AND m.deleted_at IS NULL AND (m.expires_at IS NULL OR m.expires_at > ?)`,
+    userId,
+    Date.now()
   )).map((row) => row.media_file)
   const found = new Map<string, Media>()
   for (const name of [profile?.avatar_file ?? null, profile?.banner_file ?? null, ...postFiles, ...messageFiles]) {
@@ -182,8 +183,10 @@ async function collect(userId: string, media: Map<string, Media>) {
     `SELECT m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.call_status, m.call_seconds, m.created_at, m.lang
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
      WHERE m.conversation_id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?) AND m.deleted_at IS NULL
+       AND (m.expires_at IS NULL OR m.expires_at > ?)
      ORDER BY m.conversation_id, m.created_at, m.id`,
-    userId
+    userId,
+    Date.now()
   )
   const membersByConversation = new Map<string, string[]>()
   for (const row of memberRows) {

@@ -2,24 +2,30 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { findUserById, readChallenge, secondFactorState } from "@/lib/auth"
+import { returnPathFrom, withReturnPath } from "@/lib/invite-links"
+import { firstParam } from "@/lib/params"
 import { passkeysOf } from "@/lib/passkeys"
 import { VerifyCodeForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../../auth-notice"
 
-export default function VerifyPage() {
+type SearchParams = Promise<{ next?: string | string[] }>
+
+export default function VerifyPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <Suspense fallback={null}>
-      <VerifyBody />
+      <VerifyBody searchParams={searchParams} />
     </Suspense>
   )
 }
 
-async function VerifyBody() {
+// A group invite opened before signing in is carried through this step, and opened once the code is in.
+async function VerifyBody({ searchParams }: { searchParams: SearchParams }) {
+  const back = returnPathFrom(firstParam((await searchParams).next))
   const challenge = await readChallenge()
-  if (!challenge) redirect("/login")
+  if (!challenge) redirect(withReturnPath("/login", back))
   const user = await findUserById(challenge.userId)
   const state = user ? await secondFactorState(user.id) : null
-  if (!user || !state?.enabled) redirect("/login")
+  if (!user || !state?.enabled) redirect(withReturnPath("/login", back))
   return (
     <>
       <div className="settle mb-5 flex flex-col gap-2">
@@ -35,9 +41,9 @@ async function VerifyBody() {
             : ` You have ${state.recoveryLeft} left.`}
         </AuthNotice></div>
       )}
-      <VerifyCodeForm usable={state.usable} hasKeys={(await passkeysOf(user.id)).length > 0} />
+      <VerifyCodeForm usable={state.usable} hasKeys={(await passkeysOf(user.id)).length > 0} next={back} />
       <p className="mt-5 text-center text-sm text-muted-foreground">
-        <Link href="/login" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
+        <Link href={withReturnPath("/login", back)} className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
           Use a different account
         </Link>
       </p>

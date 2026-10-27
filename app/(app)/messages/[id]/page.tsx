@@ -1,7 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Timer } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { conversationFor, conversationMessages } from "@/lib/data"
+import { timerNotice } from "@/lib/message-timers"
 import { AcceptBar } from "@/components/app/accept-bar"
 import { Avatar } from "@/components/app/avatar"
 import { CallButton } from "@/components/app/call-button"
@@ -9,6 +11,7 @@ import { ChatComposer } from "@/components/app/chat-composer"
 import { ChatThread } from "@/components/app/chat-thread"
 import { GroupCallButton } from "@/components/app/group-call-button"
 import { GroupPanel } from "@/components/app/group-panel"
+import { MessageTimerButton } from "@/components/app/message-timer-button"
 import { MuteConversationButton } from "@/components/app/mute-conversation-button"
 import { PageHeader } from "@/components/app/page-header"
 import { ThreadMarker } from "@/components/app/thread-marker"
@@ -89,9 +92,18 @@ async function ConversationBody({ params }: { params: Params }) {
               />
             ) : null}
             <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
+            <MessageTimerButton conversationId={conversation.id} timer={conversation.messageTimer} disabled={requested || closed} />
           </div>
         }
-      />
+      >
+        {conversation.messageTimer > 0 ? (
+          // Both sides see the timer while it is on, and that it is about new messages only.
+          <p className="-mt-1 flex items-center gap-1.5 px-4 pb-2 text-[13px] leading-tight text-muted-foreground">
+            <Timer className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{timerNotice(conversation.messageTimer)}</span>
+          </p>
+        ) : null}
+      </PageHeader>
       <ThreadMarker conversationId={conversation.id} />
       {requested ? <AcceptBar conversationId={conversation.id} /> : null}
       <div className="flex flex-1 flex-col">

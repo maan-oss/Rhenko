@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { MISSING_PAGE, pageMissing } from "@/lib/route-gate"
 import { contentSecurityPolicy } from "@/lib/csp"
 import { countryOf, isBlockedCountry, isOpenToBlocked } from "@/lib/geo-block"
+import { loginPathFor } from "@/lib/invite-links"
 
 // Every page of the app needs a signed-in person, except the few that anyone may read: the landing page at the root,
 // the sign-in and account pages, the policy pages, and the offline page. A visitor without a session cookie is sent to
@@ -40,7 +41,8 @@ export default async function proxy(request: NextRequest) {
   }
   if (isPublic(pathname)) return withPolicy(NextResponse.next())
   const token = request.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return withPolicy(NextResponse.redirect(new URL("/login", request.url)))
+  // A group invite link is kept through sign-in, so the person lands back on the invite.
+  if (!token) return withPolicy(NextResponse.redirect(new URL(loginPathFor(pathname), request.url)))
   if (request.headers.get(PREFETCH_HEADER) === "1") return withPolicy(NextResponse.next())
   if (await pageMissing(pathname, token)) return withPolicy(NextResponse.rewrite(new URL(MISSING_PAGE, request.url)))
   return withPolicy(NextResponse.next())

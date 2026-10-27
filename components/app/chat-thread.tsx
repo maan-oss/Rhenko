@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, Trash2, Users } from "lucide-react"
+import { PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Reply, SmilePlus, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { deleteMessage, loadEarlierMessages, toggleReaction } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -12,12 +12,16 @@ import { TranslateControl } from "@/components/app/translate-control"
 import { LocalTime } from "@/components/app/time-text"
 import { callSummary } from "@/lib/format"
 import { isVoiceFile } from "@/lib/media-names"
+import { isExpired, nextExpiry, timerLine } from "@/lib/message-timers"
 import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 // A call record as the thread reads it. Group records say so and how many people joined.
 type CallRecord = NonNullable<MessageView["call"]>
+
+// The longest the thread waits before it checks again for a disappearing message that is due.
+const EXPIRY_CHECK_MAX_MS = 60 * 60 * 1000
 
 // Oldest first, each message once.
 function mergeOlder(current: MessageView[], more: MessageView[]): MessageView[] {
@@ -52,6 +56,8 @@ export function ChatThread({
   const [atStart, setAtStart] = useState(false)
   const [loading, startLoading] = useTransition()
   const [page, setPage] = useState(messages)
+  // The moment the thread last checked for disappearing messages that are due. Zero until the first check.
+  const [clock, setClock] = useState(0)
 
   // The newest page moves on as messages arrive. Once older messages are showing, whatever slides out of the page
   // stays in the thread, so it never has a gap.
@@ -66,8 +72,19 @@ export function ChatThread({
   }
 
   const pageIds = new Set(messages.map((message) => message.id))
-  const shown = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
+  const listed = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
+  // A disappearing message leaves the thread the moment its time is up, without waiting for a refresh. The clock starts at
+  // zero, so the first render is the page the server sent, which had already left out anything that was gone.
+  const shown = clock === 0 ? listed : listed.filter((message) => !isExpired(message.expiresAt, clock))
+  const soonest = nextExpiry(shown.map((message) => message.expiresAt), clock)
   const newest = messages[messages.length - 1]?.id ?? null
+
+  // Wakes when the next message is due to go. A long wait is taken in steps, since a browser timer can't run for 30 days.
+  useEffect(() => {
+    if (soonest === null) return
+    const wake = window.setTimeout(() => setClock(Date.now()), Math.min(Math.max(0, soonest - Date.now()), EXPIRY_CHECK_MAX_MS))
+    return () => window.clearTimeout(wake)
+  }, [soonest, clock])
 
   // Text the person sent that the server has not shown yet. A message of theirs with the same text, sent within two
   // minutes of the time on this screen, is the saved copy: the waiting one is then dropped.
@@ -140,7 +157,7 @@ export function ChatThread({
     })
   }
 
-  const lastOwn = [...shown].reverse().find((m) => m.mine && !m.call)
+  const lastOwn = [...shown].reverse().find((m) => m.mine && !m.call && m.timerChange === null)
 
   return (
     <div ref={listRef} className="flex flex-col pt-4 pb-12">
@@ -205,7 +222,25 @@ const RUN_MS = 5 * 60 * 1000
 
 function sameRun(a: MessageView | undefined, b: MessageView | undefined): boolean {
   if (!a || !b) return false
+  if (a.timerChange !== null || b.timerChange !== null) return false
   return a.senderId === b.senderId && !a.deleted && !b.deleted && !a.call && !b.call && Math.abs(b.createdAt - a.createdAt) < RUN_MS
+}
+
+// A change to the disappearing-messages timer: a centred line in the thread, like a call, with who changed it and when.
+function TimerEvent({ message }: { message: MessageView }) {
+  const value = message.timerChange ?? 0
+  const Icon = value > 0 ? Timer : TimerOff
+  return (
+    <div data-message-id={message.id} className="flex flex-col items-center gap-1.5 px-4 pt-4">
+      <div className="inline-flex max-w-full items-center gap-2 rounded-[18px] border border-border px-3.5 py-1.5 text-center text-[14px] font-medium text-foreground/80">
+        <Icon className="size-[15px] shrink-0" strokeWidth={2} aria-hidden="true" />
+        <span className="min-w-0 text-balance">{timerLine(value)}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {message.mine ? "You" : message.senderName} · <LocalTime at={message.createdAt} variant="clock" />
+      </p>
+    </div>
+  )
 }
 
 // A call in the thread: a centred line with what happened, from the viewer's side. A missed call stands out. A group
@@ -307,6 +342,7 @@ function MessageRow({
   }
 
   if (message.call) return <CallEvent message={message} />
+  if (message.timerChange !== null) return <TimerEvent message={message} />
 
   return (
     <div
@@ -444,6 +480,12 @@ function MessageRow({
       {!joinsNext || showSeen ? (
         <p className="text-xs text-muted-foreground">
           {showSeen ? "Seen · " : null}
+          {message.expiresAt !== null ? (
+            <>
+              <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+              <span className="sr-only">Disappearing message, </span>
+            </>
+          ) : null}
           <LocalTime at={message.createdAt} variant="clock" />
         </p>
       ) : null}
