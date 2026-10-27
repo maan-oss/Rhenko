@@ -23,6 +23,7 @@ import { callSummary, type CallOutcome } from "@/lib/format"
 import { timerLine } from "@/lib/message-timers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
 import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
+import { mutedWordFilter } from "@/lib/social-rules"
 
 // Shared read models. Everything a page or API route renders comes from here,
 // so visibility rules (blocks, mutes, protected accounts, muted words) are
@@ -237,7 +238,7 @@ async function pageBefore<T>(
 // Feed visibility for a viewer, applied to posts (alias p) and their authors (alias au).
 async function visibilityClause(viewerId: string): Promise<{ sql: string; params: Param[] }> {
   const words = (await all<{ word: string }>("SELECT word FROM muted_words WHERE user_id = ?", viewerId)).map((r) => r.word)
-  const wordClauses = words.map(() => "AND lower(p.body) NOT ILIKE ? ESCAPE '\\'").join(" ")
+  const muted = mutedWordFilter(words)
   const sql = `${LIVE}
     AND au.deactivated_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = au.id) OR (b.blocker_id = au.id AND b.blocked_id = ?))
@@ -245,7 +246,7 @@ async function visibilityClause(viewerId: string): Promise<{ sql: string; params
     AND (p.hidden_by_parent = 0 OR p.author_id = ? OR EXISTS (SELECT 1 FROM posts pp WHERE pp.id = p.reply_to_id AND pp.author_id = ?))
     AND (au.protected = 0 OR au.id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = au.id))
     AND ${CIRCLE_VISIBLE}
-    ${wordClauses}`
+    ${muted.sql}`
   return {
     sql,
     params: [
@@ -258,7 +259,7 @@ async function visibilityClause(viewerId: string): Promise<{ sql: string; params
       viewerId, // protected: follows
       viewerId, // circle: the post's author
       viewerId, // circle: the viewer's membership
-      ...words.map((w) => likePattern(w.toLowerCase())),
+      ...muted.params,
     ],
   }
 }
@@ -1598,11 +1599,15 @@ function toCard(r: CardRow): UserCard {
 const NOT_HIDDEN = `u.deactivated_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))`
 
-export async function searchUsers(query: string, viewerId: string, limit = 20): Promise<UserCard[]> {
+// People whose handle or name matches. Blocked accounts never show. Muted ones are left out of people search too, as they
+// are from feeds and post search; the muted list in Settings is where to find them again. The share picker passes
+// includeMuted, since muting someone is not a reason to be unable to send them a post.
+export async function searchUsers(query: string, viewerId: string, limit = 20, options: { includeMuted?: boolean } = {}): Promise<UserCard[]> {
   const pattern = likePattern(query)
+  const muted = options.includeMuted ? "" : "AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = u.id)"
   return (await readAll<CardRow>(
     `${CARD_SQL}
-     WHERE (u.handle ILIKE ? ESCAPE '\\' OR u.name ILIKE ? ESCAPE '\\') AND u.id <> ? AND ${NOT_HIDDEN}
+     WHERE (u.handle ILIKE ? ESCAPE '\\' OR u.name ILIKE ? ESCAPE '\\') AND u.id <> ? AND ${NOT_HIDDEN} ${muted}
      ORDER BY u.followers_count DESC, u.created_at DESC
      LIMIT ?`,
     viewerId,
@@ -1612,6 +1617,7 @@ export async function searchUsers(query: string, viewerId: string, limit = 20): 
     viewerId,
     viewerId,
     viewerId,
+    ...(options.includeMuted ? [] : [viewerId]),
     limit
   )).map(toCard)
 }

@@ -3,6 +3,8 @@
 //   without fetching the end of the file first (lib/video-metadata.ts). Needs ffmpeg; skipped without it.
 //   Page policy: with Supabase storage, the media route redirects to the project address, so img-src and media-src name it
 //   (lib/csp.ts).
+//   Muted words: the SQL that keeps posts with a muted word out of feeds, search, topic pages and reply threads checks the
+//   text and an article title, ignoring case, and matches %, _ and \ literally (mutedWordFilter in lib/social-rules.ts).
 // Run with: npm run test:unit
 
 import { test, before, after } from "node:test"
@@ -13,6 +15,7 @@ import os from "node:os"
 import path from "node:path"
 import { withCleanVideo } from "../lib/video-metadata.ts"
 import { contentSecurityPolicy } from "../lib/csp.ts"
+import { mutedWordFilter } from "../lib/social-rules.ts"
 
 // ── Videos start fast on phones ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -109,4 +112,63 @@ test("a Supabase address that is not a web address is ignored, and no origin is 
   assert.deepEqual(policyOf({ SUPABASE_URL: "not a url" }).get("media-src"), ["'self'", "blob:"])
   const same = policyOf({ SUPABASE_URL: "https://store.example.com", RHENKO_R2_ENDPOINT: "https://store.example.com/bucket" })
   assert.deepEqual(same.get("media-src"), ["'self'", "blob:", "https://store.example.com"])
+})
+
+// ── Muted words: the exclusion lib/data.ts adds to feeds, search, topic pages and reply threads ─────────────────────
+
+// What Postgres does with `lower(text) NOT ILIKE pattern ESCAPE '\'`: true when the text does not match.
+function notIlike(text, pattern) {
+  let source = ""
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]
+    if (c === "\\") source += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    else if (c === "%") source += "[\\s\\S]*"
+    else if (c === "_") source += "[\\s\\S]"
+    else source += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  }
+  return !new RegExp(`^${source}$`, "iu").test(text.toLowerCase())
+}
+
+// Whether a post with this text and title is kept, by evaluating the filter's clauses on it.
+function kept(words, body, title = "") {
+  const { sql, params } = mutedWordFilter(words)
+  const clauses = sql.split(/\s+AND\s+/).filter((part) => part.trim() !== "" && part.trim() !== "AND")
+  assert.equal(clauses.length, params.length, "each clause should take one value")
+  return clauses.every((clause, i) => notIlike(clause.includes("p.title") ? title : body, params[i]))
+}
+
+test("no muted words add no SQL", () => {
+  assert.deepEqual(mutedWordFilter([]), { sql: "", params: [] })
+})
+
+test("each muted word checks the post's text and an article's title, ignoring case", () => {
+  const { sql, params } = mutedWordFilter(["spoiler"])
+  assert.match(sql, /lower\(p\.body\) NOT ILIKE \? ESCAPE '\\'/)
+  assert.match(sql, /lower\(p\.title\) NOT ILIKE \? ESCAPE '\\'/)
+  assert.deepEqual(params, ["%spoiler%", "%spoiler%"])
+  assert.equal(kept(["spoiler"], "No SPOILERS here"), false)
+  assert.equal(kept(["spoiler"], "Plain words", "The finale, with spoilers"), false)
+  assert.equal(kept(["spoiler"], "Plain words", "A fine title"), true)
+})
+
+test("a muted hashtag or phrase matches as written", () => {
+  assert.equal(kept(["worldcup"], "Watching #WorldCup tonight"), false)
+  assert.equal(kept(["new phone"], "Got a new phone today"), false)
+  assert.equal(kept(["new phone"], "A phone that is new"), true)
+})
+
+test("%, _ and \\ in a muted word match only themselves", () => {
+  assert.equal(kept(["100%"], "Scored 100% on it"), false)
+  assert.equal(kept(["100%"], "Scored 1000 on it"), true)
+  assert.equal(kept(["a_b"], "a_b test"), false)
+  assert.equal(kept(["a_b"], "axb test"), true)
+  assert.equal(kept(["c:\\temp"], "saved in c:\\temp today"), false)
+  assert.equal(kept(["c:\\temp"], "saved in c:temp today"), true)
+  assert.deepEqual(mutedWordFilter(["50%_\\"]).params[0], "%50\\%\\_\\\\%")
+})
+
+test("several muted words all apply", () => {
+  assert.equal(kept(["alpha", "beta"], "beta only"), false)
+  assert.equal(kept(["alpha", "beta"], "gamma only"), true)
+  assert.equal(mutedWordFilter(["alpha", "beta"]).params.length, 4)
 })

@@ -692,7 +692,7 @@ export async function shareRecipients(query: string): Promise<MiniUser[]> {
   if (!viewer) return []
   const clean = typeof query === "string" ? query.trim().replace(/^@/, "").slice(0, 50) : ""
   if (!clean) return await recentChatPartners(viewer.id)
-  return (await searchUsers(clean, viewer.id, 8)).map(({ id, handle, name, avatarFile, verified }) => ({ id, handle, name, avatarFile, verified }))
+  return (await searchUsers(clean, viewer.id, 8, { includeMuted: true })).map(({ id, handle, name, avatarFile, verified }) => ({ id, handle, name, avatarFile, verified }))
 }
 
 // Older messages in a conversation, for the "Load earlier messages" button. Only members get them, and a member only gets
