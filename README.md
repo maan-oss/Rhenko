@@ -126,7 +126,7 @@ The scripts read the same database as the app, and the server can keep running w
 **Home and posts**
 - The top bar has Home, For you and Following, a Drafts icon, and a plus button for lists and timelines. Trending topics are in the right-hand column and on Explore, and link to `/topics/[tag]`.
 - Tabs show only their icon, except the active one, which also shows its name. Choosing a tab folds the old name back to its icon, then opens the new tab's name. The solid fill (black on a light page, white on a dark one) slides across to the chosen tab.
-- The composer posts text up to 25,000 characters, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, up to 100 MB and 140 seconds) with alt text, or a poll with two to four options. A video that runs longer than 140 seconds is refused when it is picked.
+- The composer posts text up to 25,000 characters, up to four images (JPEG, PNG, WebP, GIF, 4 MB each) or one video (MP4, WebM, MOV, up to 100 MB and 140 seconds) with alt text, or a poll with two to four options. A video over 140 seconds opens a trim sheet, and Trim is on any video. The server makes the cut.
 - Articles: the article button in the composer adds a title (up to 120 characters) and a longer body (up to 50,000 characters). The title heads the post in feeds and on its own page, and it can be changed while the post is still editable. An article can carry photos or a video, and it can be drafted or scheduled. It can't be a poll, a thread, a reply or a quote.
 - Stickers: a photo can carry emoji (from the Twemoji set, credited in the tray) and short text stickers, up to 40 characters in three styles. Stickers are placed from the photo itself, so they stay on the same part of the picture in the feed, on the post page and in the composer. They can be dragged, or moved, resized and turned from the keyboard. A photo carries up to 12 stickers, and a video does not take them.
 - Long posts fold after their opening lines, with Show more and Show less. Posts can use **bold**, *italic* and ~~strike~~. A mark must touch its text, so "2 * 3 * 4" stays as written.
@@ -237,7 +237,7 @@ The scripts read the same database as the app, and the server can keep running w
 - The likes tab shows only to the account's owner, matching X's default.
 - Home has two tabs, For you and Following. Lists and timelines are reached from the plus button, not pinned as tabs. Circles have their own page in the navigation, and a post is put in a circle from the composer on Home or from the circle itself. Drafts and scheduled posts are reached from the Drafts icon.
 - Passkeys need the address people use set in `RHENKO_PUBLIC_URL`. Without it the server reads the address from each request, so a passkey made on one address will not work on another.
-- The 140-second video limit is checked in the browser when a video is picked. The server checks the file's type and size, not its length.
+- The 140-second video limit is checked in the browser when a video is picked, and on the server for every video: a trimmed video is cut to the window, and an untrimmed one over the limit is refused.
 - Server actions accept request bodies up to 110 MB (`next.config.ts`), so a video can be sent to any of them. The body is read whole before the server checks it.
 - Push needs `RHENKO_VAPID_PUBLIC_KEY`, `RHENKO_VAPID_PRIVATE_KEY` and `RHENKO_VAPID_SUBJECT`. Development has no service worker, so push can't be turned on there.
 - Screen sharing is one to one and has no sound. Group calls stay voice only.

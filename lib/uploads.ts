@@ -136,7 +136,7 @@ export async function saveUpload(
     if (body !== null) await storeObject(name, body, type)
     // A video keeps its picture and sound only. Location, device and time details are removed before anything is stored,
     // and a video that cannot be cleaned is refused. The original is never kept.
-    else await withCleanVideo(value, type, (clean) => storeObject(name, clean, stored.mime), cut)
+    else await withCleanVideo(value, type, (clean) => storeObject(name, clean, stored.mime), cut, MAX_VIDEO_SECONDS)
   } catch (error) {
     // A video that could not be cleaned was refused before anything reached storage.
     if (error instanceof VideoRefused) return { ok: false, error: error.message }

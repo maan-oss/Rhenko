@@ -30,6 +30,11 @@ const INCOMPLETE = "That file didn't finish uploading. Try again."
 const TRIM_FAILED = "That video couldn't be trimmed. Pick another part, or export it again as an MP4."
 const TRIM_TOO_LONG = "Trimming that video took too long. Pick a shorter part."
 const TRIM_TOO_BIG = "That part of the video is too big to post. Pick a shorter part."
+// A video posted without a trim must fit the limit on its own. Half a second of slack covers how ffprobe rounds the length.
+const LENGTH_SLACK_SECONDS = 0.5
+// The caller passes the limit in seconds (lib/rules.ts), so this file has no imports from the app.
+const UNTRIMMED_TOO_LONG = (seconds: number) => `Videos can be up to ${seconds} seconds. Trim this one to a shorter part first.`
+const UNTRIMMED_NO_LENGTH = "That video's length can't be read. Export it again as an MP4 and try again."
 const NO_LENGTH = "That video's length can't be read, so it can't be trimmed. Post it as it is, or export it again as an MP4."
 
 // An error whose message is safe to show to the person who uploaded the video.
@@ -286,7 +291,13 @@ async function cutInto(input: string, output: string, container: Container, cut:
 // part of the video, re-encoded as an MP4 (its Blob type is video/mp4, whatever the upload was). The copy is deleted when
 // `receive` ends, so `receive` must finish with it (the upload to storage has to complete) before it returns. Throws
 // VideoRefused when the video cannot be cleaned or cut; anything `receive` throws goes on unchanged.
-export async function withCleanVideo<T>(video: Blob, mime: string, receive: (clean: Blob) => Promise<T>, cut: VideoCut | null = null): Promise<T> {
+export async function withCleanVideo<T>(
+  video: Blob,
+  mime: string,
+  receive: (clean: Blob) => Promise<T>,
+  cut: VideoCut | null = null,
+  untrimmedLimit: number | null = null
+): Promise<T> {
   const container = CONTAINERS[mime]
   if (!container) throw new VideoRefused(UNREADABLE)
   return await limited(async () => {
@@ -310,7 +321,14 @@ export async function withCleanVideo<T>(video: Blob, mime: string, receive: (cle
       }
 
       if (cut) await cutInto(input, output, container, cut)
-      else await stripInto(input, output, container, video)
+      else {
+        // Without a trim, the whole video is posted, so its length is checked here as well as in the browser.
+        if (untrimmedLimit !== null) {
+          const seconds = await lengthOf(input, container, UNTRIMMED_NO_LENGTH)
+          if (seconds > untrimmedLimit + LENGTH_SLACK_SECONDS) throw new VideoRefused(UNTRIMMED_TOO_LONG(untrimmedLimit))
+        }
+        await stripInto(input, output, container, video)
+      }
 
       const clean = await fs.openAsBlob(output, { type: outType })
       return await receive(clean)
