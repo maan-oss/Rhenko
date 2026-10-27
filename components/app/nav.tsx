@@ -27,12 +27,12 @@ export type NavItemConfig = {
   mobile: boolean
 }
 
-// The sidebar and the phone panel keep every section. The white dock on phones keeps the four used most.
+// The sidebar and the phone panel keep every section. The white dock on phones keeps the five used most.
 export function buildItems(notifications: number, messages: number): NavItemConfig[] {
   return [
     { href: "/", label: "Home", Icon: House, filled: true, active: (p) => p === "/", mobile: true },
     { href: "/explore", label: "Explore", Icon: Search, filled: false, active: (p) => p.startsWith("/explore") || p.startsWith("/search") || p.startsWith("/topics"), mobile: true },
-    { href: "/connect", label: "Connect", Icon: UsersRound, filled: false, active: (p) => p.startsWith("/connect"), mobile: false },
+    { href: "/connect", label: "Connect", Icon: UsersRound, filled: false, active: (p) => p.startsWith("/connect"), mobile: true },
     { href: "/notifications", label: "Notifications", Icon: Bell, badge: notifications, filled: true, active: (p) => p.startsWith("/notifications"), mobile: true },
     { href: "/messages", label: "Messages", Icon: MessageCircle, badge: messages, filled: true, active: (p) => p.startsWith("/messages"), mobile: true },
     { href: "/bookmarks", label: "Bookmarks", Icon: Bookmark, filled: true, active: (p) => p.startsWith("/bookmarks"), mobile: false },
@@ -109,7 +109,7 @@ function isConversation(path: string): boolean {
   return path.startsWith("/messages/") && path !== "/messages/new"
 }
 
-// The phone dock. Expanded, it is a floating white pill of the four main sections and your avatar, with the + square beside
+// The phone dock. Expanded, it is a floating white pill of the five main sections and your avatar, with the + square beside
 // it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, in the top-left corner,
 // and the + square moves to the top-right corner. Scrolling up, or a tap, brings it back. A conversation starts folded, though
 // the dock stays away there so the composer keeps the foot of the screen. A sideways swipe on the folded square moves to the
@@ -298,7 +298,7 @@ export function MobileTabBar({
   }, [])
 
   const expandedWidth = Math.max(0, navWidth - RESERVED)
-  // Four sections and the avatar share the pill. On a 320px phone they shrink to fit beside the + square, and they never
+  // Five sections and the avatar share the pill. On a 320px phone they shrink to fit beside the + square, and they never
   // grow past DOCK_ITEM. The 4px padding on each side of the pill is 8px in all.
   const slot = navWidth ? Math.min(DOCK_ITEM, Math.floor((expandedWidth - 8) / (items.length + 1))) : DOCK_ITEM
 
@@ -483,7 +483,8 @@ export function MobileTabBar({
                   style={{ width: slot, height: slot }}
                   className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:bg-foreground/10"
                 >
-                  {/* The current section is marked by a heavier, filled icon. No pill behind it. */}
+                  {/* The current section sits on a soft pill that slides from the section you left to this one, and its icon fills in. */}
+                  {isActive ? <motion.span layoutId="dock-current" aria-hidden="true" className="absolute inset-0 rounded-full bg-black/10" transition={spring} /> : null}
                   <Icon
                     className={cn("relative size-[22px]", isActive ? "text-black" : "text-black/45")}
                     fill={isActive ? "currentColor" : "none"}
