@@ -13,6 +13,7 @@ import { prunePush } from "@/lib/push"
 import { recordMissingLanguages } from "@/lib/translate"
 import { answerQuestions } from "@/lib/sahayak"
 import { expireMessages } from "@/lib/message-expiry"
+import { sendDueDigests } from "@/lib/digest"
 
 // Background work that does not wait for anyone to open a page. Several server processes run this timer. Each tick asks
 // the database for the maintenance lease, and only the holder does the shared work: scheduled posts go live on time, polls
@@ -72,6 +73,9 @@ export async function runMaintenance(now = Date.now()): Promise<void> {
   } catch (error) {
     console.error("[maintenance] removing expired messages failed", error)
   }
+  // Daily email digests that have come due are sent in the background, a capped few per pass (lib/digest.ts). The pass does not
+  // wait for the mail server.
+  sendDueDigests(now).catch((error) => console.error("[maintenance] sending digests failed", error))
   if (now - lastRetentionPass >= HOUR) {
     lastRetentionPass = now
     await keepWithinRetention(now)

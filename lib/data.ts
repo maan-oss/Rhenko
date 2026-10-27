@@ -1746,7 +1746,7 @@ export type NotificationView = {
 
 // The notifications a person's list shows (alias n, with the actor as u): from active accounts, with no block either
 // way and no mute from the recipient. The unread badge counts the same rows.
-const SHOWN_NOTIFICATION = `n.recipient_id = ?
+export const SHOWN_NOTIFICATION = `n.recipient_id = ?
   AND u.deactivated_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = n.recipient_id AND b.blocked_id = n.actor_id) OR (b.blocker_id = n.actor_id AND b.blocked_id = n.recipient_id))
   AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = n.recipient_id AND m.muted_id = n.actor_id)`
@@ -1849,7 +1849,7 @@ type LastMessage = {
 
 // A disappearing message whose time is up is gone for everyone, even in the moments before maintenance deletes it.
 // `alias` is the message table's alias. The SQL takes the current time once.
-function unexpired(alias: string): string {
+export function unexpired(alias: string): string {
   return `(${alias}.expires_at IS NULL OR ${alias}.expires_at > ?)`
 }
 
@@ -1879,7 +1879,7 @@ function previewOfLast(last: LastMessage | undefined, viewerId: string): string 
 // A one-to-one conversation (alias c) where the viewer and the other person have blocked each other, in either
 // direction. Such a conversation stays out of the viewer's lists and can't be opened. Groups are unaffected. It takes
 // the viewer's id three times.
-const DM_BLOCKED = `c.kind = 'dm' AND EXISTS (
+export const DM_BLOCKED = `c.kind = 'dm' AND EXISTS (
   SELECT 1 FROM conversation_members o JOIN blocks b
     ON (b.blocker_id = ? AND b.blocked_id = o.user_id) OR (b.blocker_id = o.user_id AND b.blocked_id = ?)
   WHERE o.conversation_id = c.id AND o.user_id <> ?)`
@@ -1887,7 +1887,7 @@ const DM_BLOCKED = `c.kind = 'dm' AND EXISTS (
 // A message from someone the viewer has blocked, or who has blocked the viewer, is hidden from the viewer. In a one-to-one
 // chat DM_BLOCKED hides the whole conversation. In a group only the messages of the blocked pair go, so the rest of the
 // group stays readable. `column` is the sender's id. The SQL takes the viewer's id twice.
-function notFromBlocked(column: string): string {
+export function notFromBlocked(column: string): string {
   return `NOT EXISTS (SELECT 1 FROM blocks bl WHERE (bl.blocker_id = ? AND bl.blocked_id = ${column}) OR (bl.blocker_id = ${column} AND bl.blocked_id = ?))`
 }
 

@@ -166,8 +166,12 @@ function ThisDevice({ publicKey, serverOn }: { publicKey: string; serverOn: bool
   )
 }
 
-// When on, a push for a message shows its first words. Off by default.
-function PreviewChoice({ initial }: { initial: boolean }) {
+const PREVIEW_HINT =
+  "A push, and the daily email digest, show a message's first words. When this is off, they say only who sent it. Message requests never show a preview."
+
+// When on, a push for a message shows its first words, and so does the email digest. Off by default. The digest section
+// shows it too when push is not set up on this server, so the setting can still be reached.
+export function PreviewChoice({ initial, hint = PREVIEW_HINT }: { initial: boolean; hint?: string }) {
   const [on, setOn] = useState(initial)
   const [pending, startTransition] = useTransition()
 
@@ -195,9 +199,7 @@ function PreviewChoice({ initial }: { initial: boolean }) {
     >
       <span className="flex flex-col gap-0.5">
         <span className="text-[15px] font-semibold">Show message previews</span>
-        <span className="text-sm text-muted-foreground">
-          A push for a message shows its first words. When this is off, it says only who sent it. Message requests never show a preview.
-        </span>
+        <span className="text-sm text-muted-foreground">{hint}</span>
       </span>
       <span aria-hidden className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-dusk" : "bg-muted-foreground/40")}>
         <span className={cn("absolute top-0.5 left-0.5 size-5 rounded-full bg-background shadow transition-transform", on && "translate-x-5")} />

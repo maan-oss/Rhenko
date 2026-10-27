@@ -336,6 +336,8 @@ export async function removeEmail(_prev: EmailState, formData: FormData): Promis
   await transaction(async () => {
     await run("UPDATE users SET email = NULL, email_verified_at = NULL WHERE id = ?", viewer.id)
     await run("DELETE FROM email_codes WHERE user_id = ?", viewer.id)
+    // The daily digest goes only to a confirmed address, so it turns off with it; a new address starts from the switch again.
+    await run("UPDATE email_digests SET enabled = 0 WHERE user_id = ?", viewer.id)
   })
   refresh()
   return { ok: true, email: null, verified: false }

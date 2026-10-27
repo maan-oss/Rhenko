@@ -203,6 +203,21 @@ CREATE TABLE email_codes (
   created_at bigint NOT NULL
 );
 
+-- The daily email digest. A row appears when a person first turns the digest on. Turning it off keeps the row, so the record
+-- of the last send survives. Nothing a person wrote is kept here (lib/digest.ts).
+CREATE TABLE email_digests (
+  user_id text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  enabled bigint NOT NULL DEFAULT 1,
+  -- The hour of the UTC day, 0 to 23, from which the digest may go out. Rhenko stores no time zone for a person.
+  send_hour bigint NOT NULL DEFAULT 8 CHECK (send_hour BETWEEN 0 AND 23),
+  -- The UTC day (days since 1970-01-01) the digest was last sent, or found to have nothing to send. At most one a day.
+  checked_day bigint NOT NULL DEFAULT 0,
+  -- The digest covers what arrived after this moment (milliseconds).
+  covered_until bigint NOT NULL DEFAULT 0,
+  -- When a digest was last sent. NULL if none has been.
+  last_sent_at bigint
+);
+
 CREATE TABLE follow_requests (
   requester_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   target_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -741,6 +756,7 @@ CREATE INDEX community_notes_post ON community_notes(post_id);
 CREATE INDEX conversation_members_user ON conversation_members(user_id);
 CREATE UNIQUE INDEX conversations_invite_token ON conversations (invite_token) WHERE invite_token IS NOT NULL;
 CREATE INDEX email_codes_user ON email_codes(user_id, purpose);
+CREATE INDEX email_digests_due ON email_digests (send_hour, checked_day) WHERE enabled = 1;
 CREATE INDEX events_created ON events (created_at);
 CREATE INDEX feed_impressions_served ON feed_impressions(served_at);
 CREATE INDEX follow_requests_target ON follow_requests(target_id);
