@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { deletePost, publishNow } from "@/actions/posts"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
+import { useProofGate } from "@/components/app/proof-dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -25,25 +26,29 @@ export function PendingActions({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const proof = useProofGate()
+
+  // A draft passes the same account check as a new post. When the server asks for the human check, it opens, and the
+  // publish is sent again with the answer.
+  function publish(answer?: string) {
+    startTransition(async () => {
+      const result = await publishNow(postId, answer)
+      if (!result.ok) {
+        if (result.proofRequired) proof.askForProof((passed) => publish(passed))
+        else toast.error(result.error)
+        return
+      }
+      toast.success(mode === "draft" ? "Draft published." : "Published now.")
+      router.refresh()
+    })
+  }
+
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
-      <Button
-        type="button"
-        disabled={pending}
-        className="h-10 rounded-full px-4 font-semibold sm:h-8"
-        onClick={() =>
-          startTransition(async () => {
-            const result = await publishNow(postId)
-            if (!result.ok) toast.error(result.error)
-            else {
-              toast.success(mode === "draft" ? "Draft published." : "Published now.")
-              router.refresh()
-            }
-          })
-        }
-      >
+      <Button type="button" disabled={pending} className="h-10 rounded-full px-4 font-semibold sm:h-8" onClick={() => publish()}>
         {pending ? "Publishing" : "Publish now"}
       </Button>
+      {proof.dialog}
       <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)} className="h-10 rounded-full px-4 text-destructive sm:h-8">
         Delete
       </Button>

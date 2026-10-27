@@ -389,7 +389,7 @@ export async function getEditHistory(postId: string): Promise<EditHistoryResult>
   return { ok: true, versions }
 }
 
-export async function publishNow(postId: string): Promise<VoidResult> {
+export async function publishNow(postId: string, proof?: string): Promise<VoidResult & { proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to publish." }
   const post = isId(postId)
@@ -400,6 +400,13 @@ export async function publishNow(postId: string): Promise<VoidResult> {
     : undefined
   if (!post || post.author_id !== viewer.id) return { ok: false, error: "That post was deleted." }
   if (post.is_draft === 0 && post.publish_at === null) return { ok: false, error: "That post is already live." }
+  // A draft skipped the account check when it was saved, because only its author sees it. It passes the check now, as any
+  // post that goes out does, so a limited account cannot post by saving drafts and publishing them. A scheduled post
+  // passed it when it was scheduled.
+  if (post.is_draft === 1) {
+    const verdict = await gate(viewer.id, proof)
+    if (!verdict.ok) return { ok: false, error: verdict.error, proofRequired: verdict.proofRequired }
+  }
   const now = Date.now()
   // A poll runs its full length from the moment the post goes live. The update only takes a post that is still waiting, so
   // a second tap, or a scheduled post that went live a moment ago, is not announced twice.
