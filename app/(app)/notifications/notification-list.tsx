@@ -112,7 +112,7 @@ export function NotificationList({ initial, tab, viewerHandle }: Props) {
             type="button"
             onClick={loadMore}
             disabled={loading}
-            className="h-9 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+            className="h-9 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
           >
             {loading ? "Loading" : "Show more"}
           </button>

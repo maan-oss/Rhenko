@@ -135,7 +135,7 @@ export function DigestSettings({ state, address, enabled, chosen, hour, lastSent
           disabled={pending || !ready}
           onClick={toggle}
           className={cn(
-            "tap-44 relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors disabled:opacity-60",
+            "tap-44 relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50",
             on ? "border-dusk bg-dusk" : "border-border bg-muted"
           )}
         >
@@ -165,7 +165,7 @@ export function DigestSettings({ state, address, enabled, chosen, hour, lastSent
             disabled={pending}
             aria-describedby="digest-hour-note"
             onChange={(event) => pick(event.target.value)}
-            className="h-10 w-full shrink-0 rounded-lg border border-border bg-background px-3 text-[15px] outline-none transition-colors focus:border-foreground disabled:opacity-60 sm:w-auto"
+            className="h-10 w-full shrink-0 rounded-lg border border-border bg-background px-3 text-[15px] outline-none transition-colors focus:border-foreground disabled:opacity-50 sm:w-auto"
           >
             {Array.from({ length: 24 }, (_, value) => (
               <option key={value} value={value}>

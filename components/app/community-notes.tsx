@@ -135,7 +135,7 @@ function RatingButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] tabular-nums transition-colors disabled:opacity-60",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] tabular-nums transition-colors disabled:opacity-50",
         active ? "border-foreground bg-foreground/5 text-foreground" : "border-border text-muted-foreground hover:bg-muted"
       )}
     >

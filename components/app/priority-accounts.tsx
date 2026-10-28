@@ -50,7 +50,7 @@ export function PriorityAccounts({ initial, limit }: { initial: PriorityRow[]; l
               aria-label={`Priority notifications from ${row.name}`}
               disabled={pending}
               onClick={() => toggle(row)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted disabled:opacity-60"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted disabled:opacity-50"
             >
               <Avatar user={row} size={36} />
               <span className="flex min-w-0 flex-1 flex-col">

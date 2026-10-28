@@ -51,7 +51,7 @@ export function GroupCallButton({ conversationId, disabled }: { conversationId: 
         aria-busy={pending}
         aria-label={count > 0 ? `Join the group call, ${count} ${pluralize(count, "person", "people")} in it` : "Join the group call"}
         title={disabled ? "Accept the request to join calls" : "Join the call"}
-        className="metal inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold whitespace-nowrap outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-35"
+        className="metal inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold whitespace-nowrap outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
       >
         <Phone className="size-3.5" aria-hidden="true" />
         Join

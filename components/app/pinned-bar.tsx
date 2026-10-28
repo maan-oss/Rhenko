@@ -44,7 +44,7 @@ export function PinnedBar({ conversationId, pins, canChange }: { conversationId:
           aria-label="Unpin message"
           disabled={pending}
           onClick={unpin}
-          className="tap-44 grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          className="tap-44 grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
         >
           <X className="size-4" aria-hidden="true" />
         </button>

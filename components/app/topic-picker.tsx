@@ -77,7 +77,7 @@ function Chip({ on, onClick, disabled, children }: { on: boolean; onClick: () =>
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "tap-44 inline-flex h-9 max-sm:h-11 items-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-[background-color,border-color,color,transform] duration-200 active:bg-foreground/10 disabled:opacity-60",
+        "tap-44 inline-flex h-9 max-sm:h-11 items-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-[background-color,border-color,color,transform] duration-200 active:bg-foreground/10 disabled:opacity-50",
         on ? "border-foreground bg-foreground text-background" : "border-border hover:border-foreground/30 hover:bg-foreground/5"
       )}
     >

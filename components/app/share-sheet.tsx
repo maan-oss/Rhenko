@@ -303,7 +303,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
           type="button"
           onClick={send}
           disabled={selected.length === 0 || sending}
-          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground text-[15px] font-semibold text-background transition-[opacity,transform] duration-200 hover:opacity-90 active:opacity-80 disabled:opacity-35"
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground text-[15px] font-semibold text-background transition-[opacity,transform] duration-200 hover:opacity-90 active:opacity-80 disabled:opacity-50"
         >
           <Send className="size-[17px]" strokeWidth={2.2} aria-hidden="true" />
           {sending ? "Sending…" : label}

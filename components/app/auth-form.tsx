@@ -209,7 +209,7 @@ function SubmitButton({ label, pendingLabel, disabled }: { label: string; pendin
       type="submit"
       disabled={pending || disabled}
       aria-busy={pending || undefined}
-      className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {pending ? pendingLabel : label}
     </button>
@@ -553,7 +553,7 @@ function Button({ onClick, disabled, children }: { onClick: () => void; disabled
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>

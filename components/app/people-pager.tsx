@@ -86,7 +86,7 @@ export function PeoplePager({
             type="button"
             onClick={() => void showMore()}
             disabled={loading}
-            className="h-10 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+            className="h-10 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
           >
             {loading ? "Loading" : "Show more"}
           </button>

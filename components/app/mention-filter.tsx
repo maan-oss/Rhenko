@@ -30,7 +30,7 @@ export function MentionFilterChoice({ initial }: { initial: boolean }) {
       aria-label="Mentions from verified accounts only"
       disabled={pending}
       onClick={toggle}
-      className="flex w-full items-center justify-between gap-4 rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-muted disabled:opacity-60"
+      className="flex w-full items-center justify-between gap-4 rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-muted disabled:opacity-50"
     >
       <span className="flex flex-col gap-0.5">
         <span className="text-[15px] font-semibold">Only verified accounts can notify you by mention</span>

@@ -195,7 +195,7 @@ export function PreviewChoice({ initial, hint = PREVIEW_HINT }: { initial: boole
       aria-label="Show message previews"
       disabled={pending}
       onClick={toggle}
-      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-card px-4 py-4 text-left transition-colors hover:bg-muted disabled:opacity-60"
+      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-card px-4 py-4 text-left transition-colors hover:bg-muted disabled:opacity-50"
     >
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[15px] font-semibold">Show message previews</span>

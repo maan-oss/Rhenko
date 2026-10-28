@@ -155,7 +155,7 @@ export function DateField({
               onClick={() => shiftMonth(1)}
               aria-label="Next month"
               disabled={view.year > maxParts.year || (view.year === maxParts.year && view.month >= maxParts.month)}
-              className="grid size-9 place-items-center rounded-full transition-colors hover:bg-muted disabled:opacity-30"
+              className="grid size-9 place-items-center rounded-full transition-colors hover:bg-muted disabled:opacity-50"
             >
               <ChevronRight className="size-4" />
             </button>

@@ -45,7 +45,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="h-12 w-full rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+      className="h-12 w-full rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {pending ? "Saving…" : "Agree and continue"}
     </button>

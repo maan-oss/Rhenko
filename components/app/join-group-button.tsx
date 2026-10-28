@@ -34,7 +34,7 @@ export function JoinGroupButton({ token, title }: { token: string; title: string
         onClick={join}
         disabled={pending}
         aria-busy={pending}
-        className={cn(emptyActionClass("primary"), "w-full disabled:opacity-60")}
+        className={cn(emptyActionClass("primary"), "w-full disabled:opacity-50")}
       >
         {pending ? "Joining…" : "Join group"}
       </button>

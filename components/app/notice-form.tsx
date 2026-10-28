@@ -56,7 +56,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="h-12 w-full rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+      className="h-12 w-full rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-50"
     >
       {pending ? "Sending…" : "Send notice"}
     </button>

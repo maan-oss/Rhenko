@@ -194,7 +194,7 @@ function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void 
           onClick={join}
           disabled={pending}
           aria-busy={pending}
-          className="metal h-10 shrink-0 rounded-full px-4 text-[14px] font-semibold whitespace-nowrap outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-35"
+          className="metal h-10 shrink-0 rounded-full px-4 text-[14px] font-semibold whitespace-nowrap outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           Join
         </button>

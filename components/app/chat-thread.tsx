@@ -227,7 +227,7 @@ export function ChatThread({
             onClick={loadEarlier}
             disabled={loading}
             aria-busy={loading}
-            className="glass h-9 rounded-full px-4 text-[14px] font-medium text-foreground outline-none transition-colors duration-200 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            className="glass h-9 rounded-full px-4 text-[14px] font-medium text-foreground outline-none transition-colors duration-200 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {loading ? "Loading earlier messages…" : "Load earlier messages"}
           </button>
@@ -407,7 +407,7 @@ function EditBox({
           type="button"
           onClick={onSave}
           disabled={pending}
-          className="tap-44 rounded-full bg-background px-3 py-1 font-semibold text-foreground transition-opacity disabled:opacity-60"
+          className="tap-44 rounded-full bg-background px-3 py-1 font-semibold text-foreground transition-opacity disabled:opacity-50"
         >
           Save
         </button>
@@ -434,7 +434,7 @@ function ViewOnceTile({ video, opened, pending, onOpen }: { video: boolean; open
     )
   }
   return (
-    <button type="button" onClick={onOpen} disabled={pending} className={cn(tone, "hover:bg-foreground/5 disabled:opacity-60")}>
+    <button type="button" onClick={onOpen} disabled={pending} className={cn(tone, "hover:bg-foreground/5 disabled:opacity-50")}>
       <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-foreground/10">
         <Eye className="size-5" aria-hidden="true" />
       </span>

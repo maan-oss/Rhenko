@@ -53,7 +53,7 @@ export function WallpaperDialog({
                 aria-checked={on}
                 disabled={pending}
                 onClick={() => choose(wallpaper.key)}
-                className="tap-44 group flex flex-col gap-2 rounded-2xl p-1.5 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                className="tap-44 group flex flex-col gap-2 rounded-2xl p-1.5 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 <span
                   data-wallpaper={wallpaper.key}

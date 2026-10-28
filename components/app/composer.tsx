@@ -238,7 +238,7 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled && hint ? hint : label}
       className={cn(
-        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent max-[429px]:size-8 max-[369px]:size-[30px] sm:size-8",
+        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent max-[429px]:size-8 max-[369px]:size-[30px] sm:size-8",
         pressed && "bg-foreground/5"
       )}
     >
@@ -1472,7 +1472,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                   disabled={!canDraft}
                   aria-label="Save draft"
                   title="Save draft"
-                  className="tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-35 max-[429px]:size-8 max-[369px]:size-[30px] sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                  className="tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-50 max-[429px]:size-8 max-[369px]:size-[30px] sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
                 >
                   <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
                   <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
@@ -1482,7 +1482,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 type="submit"
                 disabled={!canPost}
                 className={cn(
-                  "tap-44 metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-35 sm:px-5",
+                  "tap-44 metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-50 sm:px-5",
                   iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : "px-3.5"
                 )}
               >

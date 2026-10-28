@@ -57,7 +57,7 @@ export function ForwardDialog({ messageId, onOpenChange }: { messageId: string; 
               type="button"
               disabled={picked.length === 0 || pending}
               onClick={send}
-              className="tap-44 rounded-full bg-foreground px-4 py-2 font-semibold text-background transition-opacity duration-200 disabled:opacity-35"
+              className="tap-44 rounded-full bg-foreground px-4 py-2 font-semibold text-background transition-opacity duration-200 disabled:opacity-50"
             >
               Forward
             </button>
