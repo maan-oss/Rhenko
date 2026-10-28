@@ -27,12 +27,12 @@ export type NavItemConfig = {
   mobile: boolean
 }
 
-// The sidebar and the phone panel keep every section. The white dock on phones keeps the five used most.
+// The sidebar and the phone panel keep every section. The white dock on phones keeps the four used most, and your profile.
 export function buildItems(notifications: number, messages: number): NavItemConfig[] {
   return [
     { href: "/", label: "Home", Icon: House, filled: true, active: (p) => p === "/", mobile: true },
     { href: "/explore", label: "Explore", Icon: Search, filled: false, active: (p) => p.startsWith("/explore") || p.startsWith("/search") || p.startsWith("/topics"), mobile: true },
-    { href: "/connect", label: "Connect", Icon: UsersRound, filled: false, active: (p) => p.startsWith("/connect"), mobile: true },
+    { href: "/connect", label: "Connect", Icon: UsersRound, filled: false, active: (p) => p.startsWith("/connect"), mobile: false },
     { href: "/notifications", label: "Notifications", Icon: Bell, badge: notifications, filled: true, active: (p) => p.startsWith("/notifications"), mobile: true },
     { href: "/messages", label: "Messages", Icon: MessageCircle, badge: messages, filled: true, active: (p) => p.startsWith("/messages"), mobile: true },
     { href: "/bookmarks", label: "Bookmarks", Icon: Bookmark, filled: true, active: (p) => p.startsWith("/bookmarks"), mobile: false },
@@ -58,6 +58,8 @@ const SPRING = { type: "spring", stiffness: 420, damping: 40 } as const
 // People who asked their system for less motion get the bar moving in one step, not a spring.
 const INSTANT = { duration: 0 } as const
 const DOCK_ITEM = 48
+// The sections in the dock, left to right: Home, Search, Messages, Notifications. Your profile is the avatar at the end.
+const DOCK_ORDER = ["/", "/explore", "/messages", "/notifications"]
 // The pill and the Post square are this tall and this round. Expanded, they sit 16px in from each side and 10px apart, so
 // the pill is the screen less RESERVED.
 const BAR = 56
@@ -109,13 +111,13 @@ function isConversation(path: string): boolean {
   return path.startsWith("/messages/") && path !== "/messages/new"
 }
 
-// The phone dock. Expanded, it is a floating white pill of the five main sections and your avatar, with the + square beside
-// it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, in the top-left corner,
-// and the + square moves to the top-right corner. Scrolling up, or a tap, brings it back. A conversation starts folded, though
-// the dock stays away there so the composer keeps the foot of the screen. A sideways swipe on the folded square moves to the
-// next or previous section without opening it. Holding the + square spins it and opens a menu of the things to do next.
-// Holding a page button (the pill, folded or open) pins the dock in its corners, and holding it again unpins it. A pinned dock
-// ignores scrolling. The avatar, or a swipe from the left edge, opens the left panel, which has every section.
+// The phone dock. Expanded, it is a floating white pill of Home, Search, Messages, Notifications and your profile (the avatar),
+// with the + square beside it at the bottom. Scrolling down folds it: the pill becomes the square of the page you are on, in the
+// top-left corner, and the + square moves to the top-right corner. Scrolling up, or a tap, brings it back. A conversation starts
+// folded, though the dock stays away there so the composer keeps the foot of the screen. A sideways swipe on the folded square
+// moves to the next or previous section without opening it. Holding the + square spins it and opens a menu of the things to do
+// next. Holding a page button (the pill, folded or open) pins the dock in its corners, and holding it again unpins it. A pinned
+// dock ignores scrolling. The sidebar button on each page, or a swipe from the left edge, opens the left panel, which has every section.
 export function MobileTabBar({
   viewer,
   accounts,
@@ -164,7 +166,10 @@ export function MobileTabBar({
   const unreadNotifications = live?.notifications ?? notifications
   const unreadMessages = live?.messages ?? messages
   const everyItem = buildItems(unreadNotifications, unreadMessages)
-  const items = everyItem.filter((item) => item.mobile)
+  // The dock's sections, in the order the design gives them. Your profile is the avatar beside them, not a section.
+  const items = everyItem.filter((item) => item.mobile).sort((a, b) => DOCK_ORDER.indexOf(a.href) - DOCK_ORDER.indexOf(b.href))
+  const profileHref = `/${viewer.handle}`
+  const onProfile = path === profileHref || path.startsWith(`${profileHref}/`)
   // The section the person has just pressed. The fill moves on the press, before the page has loaded, and the page follows.
   // It is dropped once the page shows that section, or if the page still shows the section it started from.
   const served = items.find((item) => item.active(path))?.href ?? null
@@ -298,7 +303,7 @@ export function MobileTabBar({
   }, [])
 
   const expandedWidth = Math.max(0, navWidth - RESERVED)
-  // Five sections and the avatar share the pill. On a 320px phone they shrink to fit beside the + square, and they never
+  // Four sections and your profile share the pill. On a 320px phone they shrink to fit beside the + square, and they never
   // grow past DOCK_ITEM. The 4px padding on each side of the pill is 8px in all.
   const slot = navWidth ? Math.min(DOCK_ITEM, Math.floor((expandedWidth - 8) / (items.length + 1))) : DOCK_ITEM
 
@@ -365,14 +370,13 @@ export function MobileTabBar({
       event.stopPropagation()
       return
     }
-    // A folded dock does not navigate on a tap. Elsewhere the first tap opens the sections. In a conversation the dock stays
-    // folded, because the composer needs the room, so the tap opens the left panel, which has every section. With no section
-    // open the avatar is all that shows, so the tap opens the panel too.
+    // A folded dock does not navigate on a tap: the first tap opens the sections again. With no section open, the avatar is all
+    // that shows, and it is a link to your profile, so the tap goes through to the profile.
     if (!folded) return
+    if (!sectionOpen) return
     event.preventDefault()
     event.stopPropagation()
-    if (conversation || !sectionOpen) setOpen(true)
-    else setFolded(false)
+    setFolded(false)
   }
 
   function toggleMenu(next: boolean) {
@@ -506,17 +510,19 @@ export function MobileTabBar({
             transition={spring}
             className={cn(DOCK_CLIP, folded && sectionOpen && "pointer-events-none")}
           >
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              aria-label="Open menu"
-              aria-expanded={open}
-              aria-haspopup="dialog"
+            {/* Your profile. On the profile itself the soft pill sits behind the avatar, as it sits behind a section. */}
+            <Link
+              href={profileHref}
+              aria-label="Profile"
+              aria-current={onProfile ? "page" : undefined}
               style={{ width: slot, height: slot }}
-              className="grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:bg-foreground/10"
+              className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:bg-foreground/10"
             >
-              <Avatar user={viewer} size={32} />
-            </button>
+              {onProfile ? <motion.span layoutId="dock-current" aria-hidden="true" className="absolute inset-0 rounded-full bg-black/10" transition={spring} /> : null}
+              <span className="relative grid place-items-center">
+                <Avatar user={viewer} size={32} />
+              </span>
+            </Link>
           </motion.li>
         </ul>
 
