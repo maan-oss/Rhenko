@@ -149,8 +149,9 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
         <span className="relative grid size-11 shrink-0 place-items-center">
           <Icon
             className={cn("size-[22px] transition-transform duration-300", EASE)}
+            // The active section keeps the outline and gets a heavier stroke. The black pill already marks it, so the icon is never a solid blob.
             strokeWidth={active ? 2.2 : 1.75}
-            fill={active ? "currentColor" : "none"}
+            fill="none"
             aria-hidden="true"
           />
           {collapsed && badge > 0 ? (
