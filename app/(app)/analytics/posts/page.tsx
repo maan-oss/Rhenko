@@ -112,7 +112,7 @@ export default async function PostsAnalyticsPage({
           <a
             href="/analytics/posts/export"
             download
-            className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10"
+            className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm font-semibold sm:h-10 transition-[background-color,transform] duration-200 hover:bg-foreground/5 active:bg-foreground/10"
           >
             Download all posts as CSV
           </a>

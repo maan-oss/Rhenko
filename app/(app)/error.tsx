@@ -22,7 +22,7 @@ export default function AppError({ error, retry }: { error: Error & { digest?: s
         >
           Try again
         </button>
-        <Link href="/" className="inline-flex h-10 items-center rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:bg-muted">
+        <Link href="/" className="inline-flex h-11 items-center rounded-full border border-border px-5 sm:h-10 text-sm font-semibold transition-colors hover:bg-muted">
           Go to Home
         </Link>
       </div>

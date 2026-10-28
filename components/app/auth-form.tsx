@@ -144,7 +144,7 @@ function PasswordField({
           aria-label={shown ? "Hide password" : "Show password"}
           aria-pressed={shown}
           tabIndex={-1}
-          className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="absolute top-1/2 right-0 grid size-11 -translate-y-1/2 sm:right-2 sm:size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
         >
           {shown ? <EyeOff className="size-[18px]" aria-hidden="true" /> : <Eye className="size-[18px]" aria-hidden="true" />}
         </button>

@@ -103,7 +103,7 @@ export function ProfileSetup({ initial }: { initial: ProfileStart }) {
             <button
               type="button"
               onClick={() => bannerInput.current?.click()}
-              className="glass absolute top-3 right-3 inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold text-foreground transition-colors duration-200 hover:bg-foreground/5"
+              className="glass absolute top-3 right-3 inline-flex h-11 items-center sm:h-9 gap-1.5 rounded-full px-3.5 text-[13px] font-semibold text-foreground transition-colors duration-200 hover:bg-foreground/5"
             >
               <Camera className="size-4" aria-hidden="true" />
               {bannerUrl || initial.bannerFile ? "Change banner" : "Add banner"}
