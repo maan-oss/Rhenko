@@ -457,7 +457,7 @@ export function MobileTabBar({
             top: folded ? FOLDED_TOP : expandedTop,
             left: folded ? 0 : 16,
             width: folded ? BAR : `calc(100% - ${RESERVED}px)`,
-            borderRadius: folded ? "0px 0px 20px 0px" : "20px",
+            borderRadius: folded ? "0px 0px 20px 0px" : BAR / 2,
             transform: away ? (folded ? "translateY(-160px)" : "translateY(160px)") : undefined,
             opacity: away ? 0 : 1,
           }}
@@ -487,11 +487,11 @@ export function MobileTabBar({
                   style={{ width: slot, height: slot }}
                   className="relative grid place-items-center rounded-full transition-[background-color,transform] duration-200 select-none hover:bg-foreground/5 active:bg-foreground/10"
                 >
-                  {/* The current section sits on a soft pill that slides from the section you left to this one, and its icon fills in. */}
+                  {/* The current section sits on a soft pill that slides from the section you left to this one. Its icon keeps the outline and gets a heavier stroke. */}
                   {isActive ? <motion.span layoutId="dock-current" aria-hidden="true" className="absolute inset-0 rounded-full bg-black/10" transition={spring} /> : null}
                   <Icon
                     className={cn("relative size-[22px]", isActive ? "text-black" : "text-black/45")}
-                    fill={isActive ? "currentColor" : "none"}
+                    fill="none"
                     strokeWidth={isActive ? 2.2 : 1.75}
                     aria-hidden="true"
                   />
@@ -540,7 +540,7 @@ export function MobileTabBar({
                 top: folded ? FOLDED_TOP : expandedTop,
                 left: folded ? 0 : 16,
                 width: folded ? BAR : `calc(100% - ${RESERVED}px)`,
-                borderRadius: folded ? "0px 0px 20px 0px" : "20px",
+                borderRadius: folded ? "0px 0px 20px 0px" : BAR / 2,
               }}
               className="pointer-events-none absolute grid h-14 place-items-center bg-white text-black shadow-[0_10px_28px_-10px_rgba(0,0,0,0.35),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
             >
@@ -564,7 +564,7 @@ export function MobileTabBar({
           style={{
             top: folded ? FOLDED_TOP : expandedTop,
             right: folded ? 0 : 16,
-            borderRadius: folded ? "0px 0px 0px 20px" : "20px",
+            borderRadius: folded ? "0px 0px 0px 20px" : "50%",
             transform: away ? (folded ? "translateY(-160px)" : "translateY(160px)") : undefined,
             opacity: away ? 0 : 1,
           }}
