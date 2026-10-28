@@ -1,11 +1,11 @@
 import { Suspense } from "react"
-import Link from "@/components/app/link"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { settingsFor, suggestionsFor } from "@/lib/connections"
 import { ConnectionCard } from "@/components/app/connection-card"
-import { EmptyState, emptyActionClass } from "@/components/app/empty-state"
+import { EmptyState } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
+import { LanguageSection, WhereSection } from "@/components/app/connection-settings"
 
 export default function ConnectPage() {
   return (
@@ -15,37 +15,44 @@ export default function ConnectPage() {
   )
 }
 
-// People to connect with, in groups. Each card gives its reason. Nothing here is a feed post, and nobody is told they
-// were suggested to someone else.
 // The time the page is read. Read after connection(), so the page is never built with a fixed clock.
 async function clock(): Promise<number> {
   await connection()
   return Date.now()
 }
 
+// People to connect with, in groups. Each card gives its reason. Nothing here is a feed post, and nobody is told they
+// were suggested to someone else. Someone who has added nothing yet sees the adding page instead, and no one else. Where
+// and languages are changed here or in Settings.
 async function ConnectBody() {
   const viewer = await requireViewer()
-  const suggestions = await suggestionsFor(viewer.id, await clock(), 6)
   const settings = await settingsFor(viewer.id)
-  const groups = suggestions.groups.filter((group) => group.people.length > 0)
+  const nothingAdded = settings.country === "" && settings.area === "" && settings.speak.length === 0 && settings.learn.length === 0
 
-  // What is missing, each with the one thing that fixes it. Settings is where both are changed.
-  const missing: { text: string; action: string }[] = []
-  if (settings.country === "" || settings.area === "") missing.push({ text: "Add your city or town to see people nearby.", action: "Add" })
-  else if (!settings.suggestNearby) missing.push({ text: "Nearby suggestions are off.", action: "Turn on" })
-  if (settings.speak.length === 0 && settings.learn.length === 0) missing.push({ text: "Add a language to find partners.", action: "Add" })
-  else if (!settings.suggestLanguage) missing.push({ text: "Language suggestions are off.", action: "Turn on" })
+  if (nothingAdded) {
+    return (
+      <>
+        <PageHeader title="Connect" />
+        <div className="border-b border-border px-4 py-5">
+          <p className="text-[15px] leading-relaxed text-muted-foreground">
+            Add where you are and the languages you speak. Connect then shows people nearby and people to practise with.
+          </p>
+        </div>
+        <WhereSection initial={{ country: settings.country, area: settings.area, region: settings.region, suggestNearby: settings.suggestNearby }} />
+        <LanguageSection initial={{ speak: settings.speak, learn: settings.learn, suggestLanguage: settings.suggestLanguage }} />
+      </>
+    )
+  }
+
+  const suggestions = await suggestionsFor(viewer.id, await clock(), 6)
+  const groups = suggestions.groups.filter((group) => group.people.length > 0)
 
   return (
     <>
       <PageHeader title="Connect" />
 
       {groups.length === 0 ? (
-        <EmptyState title="Nobody to show yet" body="Add where you are and your languages to find people.">
-          <Link href="/welcome" className={emptyActionClass("primary")}>
-            Set up
-          </Link>
-        </EmptyState>
+        <EmptyState title="Nobody to show yet" body="No one matches you yet. Check back as more people join." />
       ) : null}
 
       {groups.map((group) => (
@@ -63,21 +70,6 @@ async function ConnectBody() {
           </ul>
         </section>
       ))}
-
-      {missing.length > 0 ? (
-        <section aria-label="To finish" className="px-4 pt-4 pb-6">
-          <ul className="divide-y divide-border rounded-2xl border border-border">
-            {missing.map((item) => (
-              <li key={item.text} className="flex items-center justify-between gap-4 px-4 py-3.5">
-                <span className="text-[14px] leading-snug">{item.text}</span>
-                <Link href="/settings/connections" className="tap-44 shrink-0 text-[14px] font-semibold underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
-                  {item.action}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
     </>
   )
 }

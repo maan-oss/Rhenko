@@ -20,7 +20,7 @@ export function ConnectionSettings({ initial, dismissed }: { initial: Initial; d
   )
 }
 
-function WhereSection({ initial }: { initial: WhereValue }) {
+export function WhereSection({ initial }: { initial: WhereValue }) {
   const [value, setValue] = useState(initial)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -55,7 +55,7 @@ function WhereSection({ initial }: { initial: WhereValue }) {
   )
 }
 
-function LanguageSection({ initial }: { initial: LanguageValue }) {
+export function LanguageSection({ initial }: { initial: LanguageValue }) {
   const [value, setValue] = useState(initial)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()

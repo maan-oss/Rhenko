@@ -175,10 +175,9 @@ async function connectionsFlow() {
     assert.equal(await ana.page.locator("#language-partners").isChecked(), false, "the switch came back on after a reload")
   })
 
-  await check("with language suggestions off, Connect says so and offers no language swaps", async () => {
-    await go(ana.page, "/connect", ana.page.getByText("Language suggestions are off.", { exact: true }))
+  await check("with language suggestions off, Connect offers no language swaps", async () => {
+    await go(ana.page, "/connect", ana.page.getByRole("heading", { level: 1, name: "Connect", exact: true }))
     assert.equal(await gone(ana.page.getByRole("region", { name: SWAPS })), 0, "a language swap is still suggested")
-    await ana.page.getByText("Language suggestions are off.", { exact: true }).waitFor()
   })
 
   await check("the data export lists the connection choices", async () => {
@@ -202,14 +201,14 @@ async function promptFlow() {
     await dave.page.getByRole("region", { name: SETUP_BANNER }).waitFor()
     await dave.page.getByRole("link", { name: "Set up", exact: true }).waitFor()
   })
-  await check("Not now hides the prompt, and Connect says where to start", async () => {
+  await check("Not now hides the prompt, and Connect asks Dave to add where he is before showing anyone", async () => {
     await acted(dave.page, () => dave.page.getByRole("region", { name: SETUP_BANNER }).getByRole("button", { name: "Not now", exact: true }).click())
     await go(dave.page, "/", homeComposer(dave.page))
     assert.equal(await gone(dave.page.getByRole("region", { name: SETUP_BANNER })), 0, "the prompt is back after Not now")
-    // Nothing matches Dave yet, so Connect shows people to start with, and says what is missing.
-    await go(dave.page, "/connect", dave.page.getByRole("region", { name: "People to start with" }))
-    await dave.page.getByRole("region", { name: "People to start with" }).locator("li").first().waitFor()
-    await dave.page.getByText("Add your city or town to see people nearby.", { exact: true }).waitFor()
+    // Dave has added nothing, so Connect is the adding page: where he is, and his languages. It shows nobody else.
+    await go(dave.page, "/connect", dave.page.getByRole("region", { name: "Where you are" }))
+    await dave.page.getByRole("region", { name: "Languages" }).waitFor()
+    assert.equal(await gone(dave.page.getByRole("region", { name: "People to start with" })), 0, "Connect showed people to someone who has added nothing")
   })
 }
 
