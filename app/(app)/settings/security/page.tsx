@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { requireViewer, currentSessionHash } from "@/lib/auth"
 import { sessionsFor, twoFactorFor } from "@/lib/settings-data"
 import { passkeysOf } from "@/lib/passkeys"
@@ -7,12 +6,13 @@ import { RelativeTime } from "@/components/app/time-text"
 import { PageHeader } from "@/components/app/page-header"
 import { ChangePasswordForm, RevokeOthersButton, RevokeSessionButton, TwoFactorPanel } from "@/components/app/security-panels"
 import { PasskeysPanel } from "@/components/app/passkey-panel"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function SecuritySettingsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <SecurityBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

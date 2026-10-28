@@ -1,16 +1,16 @@
-import { Suspense } from "react"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { all } from "@/lib/db"
 import { categoryLabel } from "@/lib/legal"
 import { PageHeader } from "@/components/app/page-header"
 import { AppealForm } from "@/components/app/appeal-form"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function NoticesPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <NoticesBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

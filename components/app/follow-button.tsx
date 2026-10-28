@@ -77,8 +77,11 @@ export function FollowButton({ handle, state, className, from }: { handle: strin
         aria-label={requested ? `Withdraw follow request to @${handle}` : `Unfollow @${handle}`}
         className={cn("tap-44 group h-10 min-w-24 rounded-full px-4 font-semibold sm:h-8", className)}
       >
-        <span className="group-hover:hidden">{requested ? "Requested" : "Following"}</span>
-        <span className="hidden group-hover:inline">{requested ? "Withdraw" : "Unfollow"}</span>
+        {/* Both labels share one cell, so the button keeps its width and the words cross-fade on hover, rather than swapping. */}
+        <span className="grid">
+          <span className="col-start-1 row-start-1 transition-opacity duration-150 group-hover:opacity-0">{requested ? "Requested" : "Following"}</span>
+          <span className="col-start-1 row-start-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">{requested ? "Withdraw" : "Unfollow"}</span>
+        </span>
       </Button>
       {proof.dialog}
     </>

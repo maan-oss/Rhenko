@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { currentSessionHash, requireViewer } from "@/lib/auth"
 import { mentionsVerifiedOnly } from "@/lib/data"
 import { digestAvailable, digestSettingsFor } from "@/lib/digest"
@@ -11,12 +10,13 @@ import { MentionFilterChoice } from "@/components/app/mention-filter"
 import { PriorityAccounts } from "@/components/app/priority-accounts"
 import { PushSettings } from "@/components/app/push-settings"
 import { PageHeader } from "@/components/app/page-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function NotificationSettingsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <NotificationBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

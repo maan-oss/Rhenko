@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { all, get } from "@/lib/db"
 import { MICRO_PER_CENT } from "@/lib/ad-rules"
@@ -7,6 +6,7 @@ import { ageFrom } from "@/lib/rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { AdvertisePanel, type AdvertiseData, type CampaignRow } from "@/components/app/advertise-panel"
 import { PageHeader } from "@/components/app/page-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ credit?: string | string[] }>
 
@@ -14,9 +14,9 @@ export default function AdvertisePage({ searchParams }: { searchParams: SearchPa
   return (
     <>
       <PageHeader title="Advertising" backHref="/settings" />
-      <Suspense fallback={null}>
+      <RevealSuspense>
         <AdvertiseBody searchParams={searchParams} />
-      </Suspense>
+      </RevealSuspense>
     </>
   )
 }

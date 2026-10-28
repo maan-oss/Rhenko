@@ -1,15 +1,15 @@
-import { Suspense } from "react"
 import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { dismissedCount, settingsFor } from "@/lib/connections"
 import { ConnectionSettings } from "@/components/app/connection-settings"
 import { PageHeader } from "@/components/app/page-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function ConnectionsSettingsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <ConnectionsBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

@@ -1,15 +1,15 @@
-import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { starterPacks } from "@/lib/data"
 import { listOwnersVisibleTo } from "@/lib/people-state"
 import { PackList } from "@/components/app/pack-list"
 import { PageHeader } from "@/components/app/page-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function PacksPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <PacksBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

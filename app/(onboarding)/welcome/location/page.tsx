@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
-import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
 import { get } from "@/lib/db"
 import { settingsFor } from "@/lib/connections"
 import { TERMS_VERSION } from "@/lib/legal"
 import { LocationSetup } from "@/components/app/location-setup"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export const metadata: Metadata = {
   title: { absolute: "Where you are · Rhenko" },
@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 // The second setup screen: where someone is. It stays open for anyone who wants to come back to it.
 export default function WelcomeLocationPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <LocationBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

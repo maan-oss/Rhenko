@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { followRequestsFor, notificationsPage } from "@/lib/data"
 import { firstParam } from "@/lib/params"
@@ -8,14 +7,15 @@ import { NotificationsMarker } from "@/components/app/notifications-marker"
 import { PageHeader } from "@/components/app/page-header"
 import { TabLinks } from "@/components/app/tabs"
 import { NotificationList } from "./notification-list"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
 export default function NotificationsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <NotificationsBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { Suspense } from "react"
 import { connection } from "next/server"
 import { all } from "@/lib/db"
 import { LegalPage, List, P, TextLink, type LegalSection } from "@/app/_legal/shell"
@@ -7,6 +6,7 @@ import { LEGAL_UPDATED, MINIMUM_AGE } from "@/lib/legal"
 import { AD_EVERY, cpmCents, hostOf } from "@/lib/ad-rules"
 import { CURRENCY } from "@/lib/payments"
 import { formatMoney } from "@/lib/money"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export const metadata: Metadata = {
   title: { absolute: "Advertising policy and ad library · Rhenko" },
@@ -114,9 +114,9 @@ export default function AdsTransparencyPage() {
           id: "library",
           title: "Ad library",
           body: (
-            <Suspense fallback={null}>
+            <RevealSuspense>
               <Library />
-            </Suspense>
+            </RevealSuspense>
           ),
         },
       ]}

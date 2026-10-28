@@ -1,15 +1,15 @@
 import Link from "next/link"
 import { connection } from "next/server"
-import { Suspense } from "react"
 import { emailReady } from "@/lib/settings-data"
 import { ForgotPasswordForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../auth-notice"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function ForgotPasswordPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <ForgotBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { Bookmark, Folder, Inbox } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
@@ -9,14 +8,15 @@ import { FeedList } from "@/components/app/feed-list"
 import { FolderManager } from "@/components/app/folder-manager"
 import { PageHeader } from "@/components/app/page-header"
 import { TabLinks } from "@/components/app/tabs"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ folder?: string | string[] }>
 
 export default function BookmarksPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <BookmarksBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

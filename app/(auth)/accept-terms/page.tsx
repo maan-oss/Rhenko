@@ -1,10 +1,10 @@
-import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
 import { LEGAL_UPDATED, TERMS_VERSION } from "@/lib/legal"
 import { AcceptTermsForm, LogOutForm } from "@/components/app/accept-terms-form"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export const metadata: Metadata = {
   title: { absolute: "Review the updated terms · Rhenko" },
@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 // that account can reach until then.
 export default function AcceptTermsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <AcceptTermsBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

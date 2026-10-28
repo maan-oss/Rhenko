@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import Link from "@/components/app/link"
 import { ChevronRight } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
@@ -17,6 +16,7 @@ import { MediaSwitch, RankingButton } from "@/components/app/explore-controls"
 import { SearchField } from "@/components/app/search-field"
 import { MenuButton } from "@/components/app/menu-button"
 import { TabLinks } from "@/components/app/tabs"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ tab?: string | string[]; sort?: string | string[]; media?: string | string[] }>
 
@@ -27,9 +27,9 @@ const PACKS_LIMIT = 30
 
 export default function ExplorePage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <ExploreBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

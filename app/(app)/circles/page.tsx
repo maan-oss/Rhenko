@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
 import { circlesFor, discoverCircles, type Circle } from "@/lib/circles"
@@ -7,14 +7,15 @@ import { CircleRow } from "@/components/app/circle-bits"
 import { emptyActionClass } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
 import { cn } from "@/lib/utils"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ q?: string | string[] }>
 
 export default function CirclesPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <CirclesBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

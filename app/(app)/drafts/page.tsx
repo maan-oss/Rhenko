@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { CalendarClock, PenLine } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { ownPending } from "@/lib/data"
@@ -8,14 +7,15 @@ import { EmptyState } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
 import { TabLinks } from "@/components/app/tabs"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
 export default function DraftsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <DraftsBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

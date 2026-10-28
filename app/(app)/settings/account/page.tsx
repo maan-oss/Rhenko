@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { getProfileByHandle } from "@/lib/data"
 import { codeNeedFor, emailSettingsFor } from "@/lib/settings-data"
@@ -12,12 +11,13 @@ import {
 import { EmailPanel } from "@/components/app/email-panel"
 import { StatusForm } from "@/components/app/status-form"
 import { PageHeader } from "@/components/app/page-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function AccountSettingsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <AccountBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { connection } from "next/server"
 import { requireViewer } from "@/lib/auth"
 import { settingsFor, suggestionsFor } from "@/lib/connections"
@@ -6,12 +5,13 @@ import { ConnectionCard } from "@/components/app/connection-card"
 import { EmptyState } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
 import { LanguageSection, WhereSection } from "@/components/app/connection-settings"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function ConnectPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <ConnectBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

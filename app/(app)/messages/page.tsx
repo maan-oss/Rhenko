@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import Link from "@/components/app/link"
 import { Archive, ChevronRight, Plus, Star } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
@@ -10,14 +9,15 @@ import { EmptyState, emptyActionClass } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
 import { TabLinks } from "@/components/app/tabs"
 import { Button } from "@/components/ui/button"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ tab?: string | string[] }>
 
 export default function MessagesPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <MessagesBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

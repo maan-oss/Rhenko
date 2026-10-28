@@ -1,11 +1,11 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Suspense } from "react"
 import { getViewer } from "@/lib/auth"
 import { firstParam } from "@/lib/params"
 import { returnPathFrom } from "@/lib/invite-links"
 import { AuthForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../auth-notice"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ add?: string | string[]; notice?: string | string[]; next?: string | string[] }>
 
@@ -19,9 +19,9 @@ const NOTICES = new Map<string, string>([
 
 export default function LoginPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <LoginBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

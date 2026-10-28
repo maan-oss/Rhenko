@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import Link from "@/components/app/link"
 import { Lock } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
@@ -6,12 +5,13 @@ import { listsFor, type ListSummary } from "@/lib/data"
 import { formatCount } from "@/lib/format"
 import { listOwnersVisibleTo } from "@/lib/people-state"
 import { ListsHeader } from "@/components/app/lists-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function ListsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <ListsBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

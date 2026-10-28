@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { blockedUsers, mutedUsers, mutedWords } from "@/lib/data"
 import { Avatar } from "@/components/app/avatar"
@@ -6,12 +5,13 @@ import { HideCountsSwitch, MutedWordsPanel, ProtectedSwitch, ReleaseButton } fro
 import { get } from "@/lib/db"
 import { PageHeader } from "@/components/app/page-header"
 import Link from "@/components/app/link"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function PrivacySettingsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <PrivacyBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

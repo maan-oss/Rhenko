@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
-import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
 import { get } from "@/lib/db"
 import { TERMS_VERSION } from "@/lib/legal"
 import { ProfileSetup } from "@/components/app/profile-setup"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export const metadata: Metadata = {
   title: { absolute: "Set up your profile · Rhenko" },
@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 // while setup is pending; these pages stay open for anyone who wants to come back to them.
 export default function WelcomePage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <WelcomeBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

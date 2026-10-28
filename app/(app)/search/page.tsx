@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import Link from "@/components/app/link"
 import { Clock, Flame, Image as ImageIcon, List as ListIcon, Lock, Users } from "lucide-react"
 import { requireViewer, type Viewer } from "@/lib/auth"
@@ -16,6 +15,7 @@ import { RecentSearches } from "@/components/app/recent-searches"
 import { SaveSearchButton, SavedSearches } from "@/components/app/saved-searches"
 import { TabLinks } from "@/components/app/tabs"
 import { SearchField } from "@/components/app/search-field"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ q?: string | string[]; f?: string | string[] }>
 
@@ -29,9 +29,9 @@ const TYPES = [
 
 export default function SearchPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <SearchBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

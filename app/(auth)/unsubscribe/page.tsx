@@ -1,9 +1,10 @@
-import { Suspense, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { checkUnsubscribeToken } from "@/lib/digest"
 import { firstParam } from "@/lib/params"
 import { AuthNotice } from "../auth-notice"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export const metadata: Metadata = {
   title: { absolute: "Turn off the daily digest · Rhenko" },
@@ -22,9 +23,9 @@ const TEXT_LINK = "font-semibold text-foreground underline decoration-foreground
 // changes nothing; the button does, so a link checker that opens every link cannot turn anyone's digest off.
 export default function UnsubscribePage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <UnsubscribeBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

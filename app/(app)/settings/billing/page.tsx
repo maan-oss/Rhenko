@@ -1,8 +1,8 @@
-import { Suspense } from "react"
 import { requireViewer } from "@/lib/auth"
 import { billingState, priceIdFor, priceLabel } from "@/lib/payments"
 import { BillingPanel } from "@/components/app/billing-panel"
 import { PageHeader } from "@/components/app/page-header"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ checkout?: string | string[]; payouts?: string | string[] }>
 
@@ -17,9 +17,9 @@ export default function BillingPage({ searchParams }: { searchParams: SearchPara
   return (
     <>
       <PageHeader title="Subscriptions and tips" backHref="/settings" />
-      <Suspense fallback={null}>
+      <RevealSuspense>
         <BillingBody searchParams={searchParams} />
-      </Suspense>
+      </RevealSuspense>
     </>
   )
 }

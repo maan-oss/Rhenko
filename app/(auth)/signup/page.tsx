@@ -1,18 +1,18 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Suspense } from "react"
 import { getViewer } from "@/lib/auth"
 import { firstParam } from "@/lib/params"
 import { AuthForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../auth-notice"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ notice?: string | string[] }>
 
 export default function SignupPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <SignupBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

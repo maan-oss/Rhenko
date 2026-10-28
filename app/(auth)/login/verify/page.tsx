@@ -1,20 +1,20 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Suspense } from "react"
 import { findUserById, readChallenge, secondFactorState } from "@/lib/auth"
 import { returnPathFrom, withReturnPath } from "@/lib/invite-links"
 import { firstParam } from "@/lib/params"
 import { passkeysOf } from "@/lib/passkeys"
 import { VerifyCodeForm } from "@/components/app/auth-form"
 import { AuthNotice } from "../../auth-notice"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ next?: string | string[] }>
 
 export default function VerifyPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <VerifyBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

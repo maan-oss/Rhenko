@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
-import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
 import { all } from "@/lib/db"
 import { TERMS_VERSION } from "@/lib/legal"
 import { InterestsSetup } from "@/components/app/interests-setup"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export const metadata: Metadata = {
   title: { absolute: "What you're into · Rhenko" },
@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 // The last setup screen: interests. It stays open for anyone who wants to come back to it.
 export default function WelcomeInterestsPage() {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <InterestsBody />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 

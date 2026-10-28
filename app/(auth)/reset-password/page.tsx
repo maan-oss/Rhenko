@@ -1,16 +1,16 @@
 import Link from "next/link"
-import { Suspense } from "react"
 import { firstParam } from "@/lib/params"
 import { MAX_EMAIL } from "@/lib/account-rules"
 import { ResetPasswordForm } from "@/components/app/auth-form"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 type SearchParams = Promise<{ email?: string | string[] }>
 
 export default function ResetPasswordPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={null}>
+    <RevealSuspense>
       <ResetBody searchParams={searchParams} />
-    </Suspense>
+    </RevealSuspense>
   )
 }
 
