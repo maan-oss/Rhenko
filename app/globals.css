@@ -75,12 +75,12 @@
   --destructive-foreground: #ffffff;
   --border: #ddd7c9;
   --input: #cdc6b5;
-  /* Focus rings and checked controls are ink, so a tap or a click never flashes a second colour. */
-  --ring: var(--foreground);
+  /* Focus rings take the halo colour, so no focus is a hard outline. Checked controls use the ink (see accent-color). */
+  --ring: var(--halo);
   /* The accent is the ink itself: the verified check, the reader's own messages and on-switches are black. */
   --dusk: var(--foreground);
   /* Focus halo: a soft ring of the ink, never a dark or coloured outline. */
-  --halo: rgb(31 29 25 / 0.2);
+  --halo: rgb(31 29 25 / 0.5);
   --chart-1: #1f1d19;
   --chart-2: #6d675b;
   --chart-3: #9a9486;
@@ -137,10 +137,10 @@
   --destructive-foreground: #212121;
   --border: #3a3a3a;
   --input: #4a4a4a;
-  --ring: var(--foreground);
+  --ring: var(--halo);
   /* The accent is the ink, as in light. */
   --dusk: var(--foreground);
-  --halo: rgb(236 236 236 / 0.22);
+  --halo: rgb(236 236 236 / 0.42);
   --chart-1: #ececec;
   --chart-2: #a6a6a6;
   --chart-3: #6e6e6e;
@@ -198,7 +198,7 @@
     @apply font-sans;
     -webkit-font-smoothing: antialiased;
     /* Native checkboxes, radios and sliders take the neutral gray, not the browser's blue. */
-    accent-color: var(--ring);
+    accent-color: var(--foreground);
   }
   p,
   h1,
@@ -222,6 +222,8 @@
 :focus-visible {
   outline: 3px solid var(--halo);
   outline-offset: 2px;
+  /* The halo is the whole focus mark, so a control's own ring utility adds nothing and is cleared here. */
+  --tw-ring-color: transparent;
 }
 
 /* A composer's text field sits inside its own pill, and the pill shows the focus instead of the field. */
