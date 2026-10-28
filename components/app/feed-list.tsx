@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { EmptyState } from "@/components/app/empty-state"
 import { MoveBookmark } from "@/components/app/move-bookmark"
@@ -58,6 +58,8 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
   const [failed, setFailed] = useState(false)
   // Posts from people the reader follows that arrived since the page was drawn. Only the Following tab counts them.
   const [fresh, setFresh] = useState<string[]>([])
+  // The posts that arrived with the last server refresh. Only these rise in; every other post is drawn as it is.
+  const [arriving, setArriving] = useState<string[]>([])
   const sentinel = useRef<HTMLDivElement>(null)
   const busy = useRef(false)
   const following = spec?.kind === "home" && spec.mode === "following"
@@ -67,6 +69,9 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
   if (seed !== initialItems) {
     setSeed(initialItems)
     const merged = mergeFirstPage(items, next, initialItems, initialNext)
+    const known = new Set(items.map((item) => item.key))
+    const incoming = merged.items.filter((item) => !known.has(item.key)).map((item) => item.key)
+    if (incoming.length > 0) setArriving(incoming)
     setItems(merged.items)
     setNext(merged.next)
     const shown = new Set(initialItems.map(postIdOf))
@@ -103,6 +108,13 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
     window.addEventListener("rhenko:posts", onPost)
     return () => window.removeEventListener("rhenko:posts", onPost)
   }, [following])
+
+  // An arriving post rises in once, then the mark is cleared so it is never animated again.
+  useEffect(() => {
+    if (arriving.length === 0) return
+    const timer = window.setTimeout(() => setArriving([]), 700)
+    return () => window.clearTimeout(timer)
+  }, [arriving])
 
   // Loads the first page again. The new posts come in above what the reader has, and the pill clears once they do.
   const showFresh = () => {
@@ -188,9 +200,13 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
             {folders ? <MoveBookmark postId={item.post.id} folderId={item.folderId} folders={folders} /> : null}
           </>
         )
-        // Posts are drawn as they arrive. No per-post entrance animation: it started every post hidden and blurred, which
-        // costs a filter and an observer per post and makes long feeds stutter on a phone.
-        return <Fragment key={item.key}>{body}</Fragment>
+        // Posts are drawn as they arrive. Only a post that arrived with the last refresh rises in, once. Every post keeps
+        // the same wrapper, so the class changing never remounts it.
+        return (
+          <div key={item.key} className={arriving.includes(item.key) ? "reveal-in" : undefined}>
+            {body}
+          </div>
+        )
       })}
       {next ? (
         <div ref={sentinel} className="flex flex-col items-center gap-2 px-4 py-5">
