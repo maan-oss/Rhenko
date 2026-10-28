@@ -54,7 +54,7 @@ export function MessageTimerButton({ conversationId, timer, disabled }: { conver
         {on ? (
           <span
             aria-hidden="true"
-            className="metal pointer-events-none absolute -right-1.5 -bottom-1 h-[15px] rounded-full px-1 text-[10px] leading-[15px] font-semibold tabular-nums ring-2 ring-background"
+            className="metal pointer-events-none absolute -right-1.5 -bottom-1 h-[15px] rounded-full px-1 text-xs leading-[15px] font-semibold tabular-nums ring-2 ring-background"
           >
             {timerShort(timer)}
           </span>

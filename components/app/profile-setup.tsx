@@ -31,7 +31,7 @@ const GHOST =
 
 // A field that reads as plain text until someone points at it. Hover and focus show a light well, and focus adds a ring.
 const INLINE =
-  "w-full rounded-lg bg-transparent px-2 -mx-2 py-1 outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 hover:bg-foreground/5 focus:bg-foreground/5"
+  "w-full rounded-lg bg-transparent px-2 -mx-2 py-1 outline-none transition-colors duration-200 placeholder:text-muted-foreground hover:bg-foreground/5 focus:bg-foreground/5"
 
 export function ProfileSetup({ initial }: { initial: ProfileStart }) {
   const router = useRouter()

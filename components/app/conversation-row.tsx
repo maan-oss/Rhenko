@@ -72,7 +72,7 @@ export function ConversationRow({ conversation }: { conversation: ConversationSu
             {unread ? (
               <span
                 aria-label={`${conversation.unread} unread ${conversation.unread === 1 ? "message" : "messages"}`}
-                className="ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold text-background tabular-nums"
+                className="ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-foreground px-1.5 text-xs font-semibold text-background tabular-nums"
               >
                 {conversation.unread}
               </span>

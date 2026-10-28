@@ -496,7 +496,7 @@ export function MobileTabBar({
                     aria-hidden="true"
                   />
                   {badge && badge > 0 ? (
-                    <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">
+                    <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black px-1 text-xs font-semibold text-white">
                       {badge > 9 ? "9+" : badge}
                     </span>
                   ) : null}

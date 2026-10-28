@@ -156,7 +156,7 @@ export function MobileDrawer({ open, onClose, viewer, accounts, path, notificati
                         />
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                         {count > 0 ? (
-                          <span className="metal grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
+                          <span className="metal grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-xs font-semibold tabular-nums">
                             {count > 99 ? "99+" : count}
                           </span>
                         ) : null}

@@ -13,7 +13,7 @@ function AltBadge({ alt, position = "bottom" }: { alt: string; position?: "top" 
   return (
     <span
       className={cn(
-        "absolute left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white",
+        "absolute left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold tracking-wide text-white",
         position === "top" ? "top-2" : "bottom-2"
       )}
       title={alt}

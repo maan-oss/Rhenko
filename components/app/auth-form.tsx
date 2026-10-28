@@ -194,7 +194,7 @@ function HandleField({
           aria-invalid={problem ? true : undefined}
           value={value}
           onChange={(event) => onChange(event.target.value.replace(/^@+/, ""))}
-          className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground/70"
+          className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
         />
       </div>
     </Field>

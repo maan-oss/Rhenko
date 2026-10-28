@@ -125,7 +125,7 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
             ) : null}
             {item.label}
             {item.badge ? (
-              <span className="grid min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-[11px] leading-5 font-semibold text-background">
+              <span className="grid min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-xs leading-5 font-semibold text-background">
                 {item.badge > 99 ? "99+" : item.badge}
               </span>
             ) : null}

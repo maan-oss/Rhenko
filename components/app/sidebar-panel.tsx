@@ -194,7 +194,7 @@ function CountPill({ count, inverted = false }: { count: number; inverted?: bool
   return (
     <span
       className={cn(
-        "ml-auto grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+        "ml-auto grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-xs font-semibold tabular-nums",
         inverted ? "bg-background text-foreground" : "bg-foreground text-background"
       )}
     >

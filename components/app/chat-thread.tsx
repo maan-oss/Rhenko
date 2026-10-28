@@ -736,7 +736,7 @@ function MessageRow({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} loading="lazy" decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
                   {message.attachment?.kind === "scan" ? (
-                    <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">Scan</span>
+                    <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
                   ) : null}
                 </span>
               ) : null}
@@ -771,7 +771,7 @@ function MessageRow({
                   This post is unavailable.
                 </p>
               ) : null}
-              {message.editedAt !== null ? <span className="-mt-1 self-end text-[11px] leading-none opacity-70">Edited</span> : null}
+              {message.editedAt !== null ? <span className="-mt-1 self-end text-xs leading-none opacity-70">Edited</span> : null}
             </>
           )}
         </div>

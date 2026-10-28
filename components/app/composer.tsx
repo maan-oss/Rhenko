@@ -1161,7 +1161,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               maxLength={MAX_TITLE * 2}
-              className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
+              className="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground"
             />
           ) : null}
           <div className="-mx-2 flex items-start gap-2 px-2">

@@ -30,7 +30,7 @@ export function AiLabel({ className }: { className?: string }) {
     <span
       aria-label="AI account"
       title="An AI account"
-      className={cn("ml-1 inline-flex items-center rounded-[4px] border border-foreground/30 px-1 align-[1px] text-[11px] font-semibold leading-4 tracking-normal text-foreground", className)}
+      className={cn("ml-1 inline-flex items-center rounded-[4px] border border-foreground/30 px-1 align-[1px] text-xs font-semibold leading-4 tracking-normal text-foreground", className)}
     >
       AI
     </span>
