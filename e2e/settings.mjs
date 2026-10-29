@@ -207,7 +207,10 @@ async function settingsPages({ phone }) {
 
   await check(`${where}: Notifications: nine switches, all on at first, each saves with a message and holds after a reload`, async () => {
     await openSection(page, "Notifications")
-    assert.equal(await page.locator("main").getByRole("switch").count(), NOTIFICATION_TITLES.length + 1, "the page does not have nine notification switches and the mention filter")
+    // The page also has the push and daily-digest switches, so each named switch is checked rather than counting them all.
+    for (const name of [...NOTIFICATION_TITLES, MENTION_FILTER]) {
+      assert.equal(await switchNamed(page, name).count(), 1, `${name} is not on the notifications page`)
+    }
     for (const title of NOTIFICATION_TITLES) {
       assert.equal(await switchIsOn(page, title), true, `${title} starts off`)
       const hint = await switchNamed(page, title).getAttribute("aria-describedby")
