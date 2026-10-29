@@ -8,6 +8,8 @@ import { ClearChatDialog } from "@/components/app/clear-chat-dialog"
 import { ContactInfoDialog } from "@/components/app/contact-info-dialog"
 import { JumpToDateDialog } from "@/components/app/jump-to-date-dialog"
 import { MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
+import { MuteMenuItem } from "@/components/app/mute-conversation-button"
+import { TimerMenuItem } from "@/components/app/message-timer-button"
 import { WallpaperDialog } from "@/components/app/wallpaper-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { WallpaperKey } from "@/lib/chat-wallpapers"
@@ -17,8 +19,21 @@ import { cn } from "@/lib/utils"
 const FALLBACK_NAME = "rhenko-chat.txt"
 
 // The chat's own options, from the header: search its words, jump to a day, see who is in it, choose its background, export it,
-// and clear this person's copy. Each opens a dialog over the thread, or saves a file.
-export function ChatOptionsMenu({ conversationId, wallpaper }: { conversationId: string; wallpaper: WallpaperKey }) {
+// and clear this person's copy. Each opens a dialog over the thread, or saves a file. On a phone the header has no room for the
+// mute and disappearing-messages buttons, so their rows are here, and a computer shows those buttons in the header instead.
+export function ChatOptionsMenu({
+  conversationId,
+  wallpaper,
+  muted,
+  timer,
+  timerDisabled,
+}: {
+  conversationId: string
+  wallpaper: WallpaperKey
+  muted: boolean
+  timer: number
+  timerDisabled: boolean
+}) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [dateOpen, setDateOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
@@ -70,6 +85,8 @@ export function ChatOptionsMenu({ conversationId, wallpaper }: { conversationId:
             <ContactRound className="size-4" aria-hidden="true" />
             Contact info
           </DropdownMenuItem>
+          <MuteMenuItem conversationId={conversationId} muted={muted} className={cn(MENU_ITEM_PHONE, "sm:hidden")} />
+          <TimerMenuItem conversationId={conversationId} timer={timer} disabled={timerDisabled} className={cn(MENU_ITEM_PHONE, "sm:hidden")} />
           <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setWallpaperOpen(true)}>
             <Palette className="size-4" aria-hidden="true" />
             Chat wallpaper

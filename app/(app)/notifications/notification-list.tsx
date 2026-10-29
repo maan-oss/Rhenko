@@ -168,7 +168,9 @@ function NoteRow({ note, viewerHandle }: { note: NotificationView; viewerHandle:
             <RelativeTime at={note.createdAt} />
           </p>
           {note.post?.body ? (
-            <p className="mt-1 line-clamp-2 rounded-xl bg-muted px-3 py-2 text-[14px] leading-snug text-muted-foreground">{note.post.body}</p>
+            <div className="mt-1 rounded-xl bg-muted px-3 py-2">
+              <p className="line-clamp-2 text-[14px] leading-snug text-muted-foreground">{note.post.body}</p>
+            </div>
           ) : null}
         </div>
         {note.read ? null : <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-foreground" />}

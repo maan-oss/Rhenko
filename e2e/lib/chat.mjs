@@ -9,7 +9,8 @@ export function chatBox(page) {
 // Opens a conversation by id and waits for the button every conversation has in its header, and for the live stream
 // that brings new messages and calls to the open page.
 export async function openChat(page, id) {
-  await go(page, `/messages/${id}`, page.getByRole("button", { name: /^(Mute|Unmute) conversation$/ }))
+  // The options button is in the header on every screen; the mute button is there on a computer only.
+  await go(page, `/messages/${id}`, page.getByRole("button", { name: "Chat options" }))
   await streamOpen(page)
 }
 

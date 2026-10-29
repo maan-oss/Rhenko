@@ -125,9 +125,18 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
                 video
               />
             ) : null}
-            <ChatOptionsMenu conversationId={conversation.id} wallpaper={wallpaper} />
-            <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
-            <MessageTimerButton conversationId={conversation.id} timer={conversation.messageTimer} disabled={requested || closed} />
+            <ChatOptionsMenu
+              conversationId={conversation.id}
+              wallpaper={wallpaper}
+              muted={conversation.muted}
+              timer={conversation.messageTimer}
+              timerDisabled={requested || closed}
+            />
+            {/* A phone keeps these two in the options menu, so the title has room. */}
+            <div className="hidden items-center gap-2 sm:flex">
+              <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
+              <MessageTimerButton conversationId={conversation.id} timer={conversation.messageTimer} disabled={requested || closed} />
+            </div>
           </div>
         }
       >

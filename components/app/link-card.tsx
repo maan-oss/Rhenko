@@ -22,8 +22,8 @@ export function LinkCard({ preview, className }: { preview: LinkPreview; classNa
       ) : null}
       <span className="block px-4 py-3">
         {preview.site ? <span className="block truncate text-[13px] text-muted-foreground">{preview.site}</span> : null}
-        <span className="mt-0.5 block line-clamp-2 font-semibold tracking-tight [overflow-wrap:anywhere]">{preview.title}</span>
-        {preview.description ? <span className="mt-1 block line-clamp-2 text-[14px] text-muted-foreground [overflow-wrap:anywhere]">{preview.description}</span> : null}
+        <span className="mt-0.5 line-clamp-2 font-semibold tracking-tight [overflow-wrap:anywhere]">{preview.title}</span>
+        {preview.description ? <span className="mt-1 line-clamp-2 text-[14px] text-muted-foreground [overflow-wrap:anywhere]">{preview.description}</span> : null}
       </span>
     </a>
   )

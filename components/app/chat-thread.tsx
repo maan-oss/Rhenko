@@ -763,7 +763,7 @@ function MessageRow({
                   className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
                 >
                   <span className="text-sm font-semibold">{message.post.author.name}</span>
-                  {message.post.body ? <span className="mt-1 line-clamp-3 block text-sm">{message.post.body}</span> : null}
+                  {message.post.body ? <span className="mt-1 line-clamp-3 text-sm">{message.post.body}</span> : null}
                 </Link>
               ) : null}
               {message.postUnavailable ? (

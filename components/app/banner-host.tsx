@@ -126,9 +126,11 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
         </span>
         <span className="min-w-0 flex-1 pt-0.5">
           <span className="block truncate text-[15px] leading-tight font-semibold">{banner.title}</span>
-          <span className="mt-0.5 line-clamp-2 block text-[14px] leading-snug text-muted-foreground">{banner.line}</span>
+          <span className="mt-0.5 line-clamp-2 text-[14px] leading-snug text-muted-foreground">{banner.line}</span>
           {banner.preview ? (
-            <span className="mt-2 line-clamp-2 block rounded-xl bg-muted px-3 py-2 text-[13px] leading-snug text-foreground/80">{banner.preview}</span>
+            <span className="mt-2 block rounded-xl bg-muted px-3 py-2 text-[13px] leading-snug text-foreground/80">
+              <span className="line-clamp-2">{banner.preview}</span>
+            </span>
           ) : null}
         </span>
       </button>
