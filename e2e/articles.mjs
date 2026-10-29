@@ -4,7 +4,7 @@ import { area, assert, check, guard } from "./lib/harness.mjs"
 import { RUN_ID, randomWord } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { query } from "./lib/db.mjs"
-import { cardMenu, cardPostId, homeComposer, openHome, typeIn, waitForPost } from "./lib/posts.mjs"
+import { cardMenu, cardPostId, homeComposer, openHome, showTools, typeIn, waitForPost } from "./lib/posts.mjs"
 import { acted, go, toastText } from "./lib/ui.mjs"
 
 // Longer than an ordinary post can be (25,000 characters) and well inside the article limit.
@@ -26,6 +26,7 @@ async function articleBasics() {
   await check("an article is posted with a title and a body longer than a post", async () => {
     await openHome(author.page)
     const form = homeComposer(author.page)
+    await showTools(form)
     await form.getByRole("button", { name: "Write an article", exact: true }).click()
     await form.getByLabel("Article title").fill(title)
     await typeIn(form, body)
@@ -73,6 +74,7 @@ async function articleRules() {
   await check("a title longer than 120 characters keeps the post button off", async () => {
     await openHome(author.page)
     const form = homeComposer(author.page)
+    await showTools(form)
     await form.getByRole("button", { name: "Write an article", exact: true }).click()
     await form.getByLabel("Article title").fill("x".repeat(130))
     await typeIn(form, "A short article.")
@@ -82,6 +84,7 @@ async function articleRules() {
   await check("an article without a title can't be posted", async () => {
     await openHome(author.page)
     const form = homeComposer(author.page)
+    await showTools(form)
     await form.getByRole("button", { name: "Write an article", exact: true }).click()
     await typeIn(form, "Still no title.")
     assert.ok(await form.getByRole("button", { name: "Post", exact: true }).isDisabled(), "an article without a title could be posted")
@@ -90,7 +93,9 @@ async function articleRules() {
   await check("an article can't carry a poll or a thread", async () => {
     await openHome(author.page)
     const form = homeComposer(author.page)
+    await showTools(form)
     await form.getByRole("button", { name: "Write an article", exact: true }).click()
+    await showTools(form)
     assert.ok(await form.getByRole("button", { name: "Add a poll" }).isDisabled(), "the poll button is still on for an article")
     assert.ok(await form.getByRole("button", { name: "Add to thread" }).isDisabled(), "the thread button is still on for an article")
   })

@@ -24,6 +24,7 @@ import {
   openProfile,
   openSearch,
   repostTrigger,
+  showTools,
   typeIn,
   waitForPost,
   writePost,
@@ -502,6 +503,7 @@ async function draftsFlow({ phone }) {
     await openHome(author.page)
     form = homeComposer(author.page)
     await typeIn(form, text.scheduled)
+    await showTools(form)
     await form.getByRole("button", { name: "Schedule this post" }).click()
     await form.getByText(/Goes out/).waitFor()
     await acted(author.page, () => form.getByRole("button", { name: "Schedule", exact: true }).click())

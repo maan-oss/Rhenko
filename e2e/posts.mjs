@@ -24,6 +24,7 @@ import {
   openProfile,
   replyButton,
   repostTrigger,
+  showTools,
   startPoll,
   typeIn,
   waitForPost,
@@ -95,6 +96,7 @@ async function postFlows({ phone }) {
     await openHome(author.page)
     const form = homeComposer(author.page)
     await typeIn(form, threadHead)
+    await showTools(form)
     await form.getByRole("button", { name: "Add to thread", exact: true }).click()
     await author.page.getByRole("textbox", { name: "Thread part 2 of 2" }).fill(threadTail)
     await acted(author.page, () => form.getByRole("button", { name: "Post all", exact: true }).click())
@@ -588,6 +590,7 @@ async function scheduledPost() {
     await openHome(author.page)
     const form = homeComposer(author.page)
     await typeIn(form, text)
+    await showTools(form)
     await form.getByRole("button", { name: "Schedule this post" }).click()
     await form.getByText(/Goes out/).waitFor()
     await acted(author.page, () => form.getByRole("button", { name: "Schedule", exact: true }).click())

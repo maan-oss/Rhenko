@@ -63,12 +63,19 @@ export async function attach(form, files) {
 }
 
 export async function addAlt(form, text) {
-  await form.getByRole("button", { name: "ALT", exact: true }).first().click()
+  await form.getByRole("button", { name: /^(Add|Edit) alt text$/ }).first().click()
   await form.getByLabel(/Describe this for people/).fill(text)
+}
+
+// The composer's tools (poll, thread, schedule, photos) sit behind a plus. This opens them when they are shut.
+export async function showTools(form) {
+  const toggle = form.getByRole("button", { name: "Show the tools", exact: true })
+  if (await toggle.count()) await toggle.first().click()
 }
 
 // Opens the poll box in a composer, fills the choices given, and picks a length when one is named.
 export async function startPoll(form, options, length) {
+  await showTools(form)
   await form.getByRole("button", { name: "Add a poll" }).click()
   const group = form.getByRole("group", { name: "Poll" })
   await group.waitFor()
