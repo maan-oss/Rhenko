@@ -46,18 +46,26 @@ async function openMessages(page, tab) {
 // One-to-one chat
 // ---------------------------------------------------------------------------------------------------------------------
 
-// The mute switch is a row in the chat's options menu, on a computer as on a phone.
-async function clickMuteSwitch(page, label) {
-  await page.getByRole("button", { name: "Chat options" }).click()
-  await acted(page, () => page.getByRole("menuitem", { name: label, exact: true }).click())
+// The mute switch is a row in the chat's options: a menu item on a computer, and a button in the drawer on a phone.
+function muteRow(page, label) {
+  return page
+    .getByRole("menuitem", { name: label, exact: true })
+    .or(page.getByRole("dialog", { name: "Chat options" }).getByRole("button", { name: label, exact: true }))
 }
 
-// Waits until the mute switch offers this label. That means opening the options menu to read its row.
+async function clickMuteSwitch(page, label) {
+  await page.getByRole("button", { name: "Chat options" }).click()
+  await acted(page, () => muteRow(page, label).click())
+  // The phone drawer stays open after a tap, where the menu closed by itself, so close it here.
+  await page.keyboard.press("Escape")
+}
+
+// Waits until the mute switch offers this label. That means opening the options to read its row.
 async function waitForMuteLabel(page, label) {
   await page.getByRole("button", { name: "Chat options" }).click()
-  await page.getByRole("menuitem", { name: label, exact: true }).waitFor()
+  await muteRow(page, label).waitFor()
   await page.keyboard.press("Escape")
-  await page.getByRole("menuitem", { name: label, exact: true }).waitFor({ state: "detached" })
+  await muteRow(page, label).waitFor({ state: "detached" })
 }
 
 async function directFlow({ phone }) {
