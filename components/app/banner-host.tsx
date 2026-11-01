@@ -33,7 +33,7 @@ const LIFETIME_MS = 6000
 const MAX_SHOWN = 3
 
 const CARD =
-  "group pointer-events-auto relative overflow-hidden rounded-[24px] border border-border bg-popover/95 text-popover-foreground shadow-[0_26px_60px_-20px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+  "group pointer-events-auto relative overflow-hidden rounded-[24px] border border-border bg-popover text-popover-foreground shadow-[0_26px_60px_-20px_rgba(0,0,0,0.5)]"
 
 let nextKey = 0
 

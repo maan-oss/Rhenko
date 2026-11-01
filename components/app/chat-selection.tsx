@@ -91,7 +91,7 @@ function SelectionBar({ picked, onDone }: { picked: Map<string, boolean>; onDone
     <div
       role="toolbar"
       aria-label="Selected messages"
-      className="sticky bottom-0 z-10 flex items-center gap-1 border-t border-border bg-background/95 pt-3 pr-3 pb-6 pl-[72px] backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4"
+      className="sticky bottom-0 z-10 flex items-center gap-1 border-t border-border bg-background pt-3 pr-3 pb-6 pl-[72px] lg:pt-4 lg:pb-4 lg:pl-4"
     >
       <Button type="button" variant="ghost" size="icon" aria-label="Cancel selection" onClick={onDone} className="size-10 rounded-full">
         <X className="size-5" aria-hidden="true" />

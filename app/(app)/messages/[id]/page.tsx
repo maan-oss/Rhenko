@@ -67,11 +67,11 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
   // What sits at the bottom: the composer, or the notice that replaces it while a request waits or the other person has left.
   const footer = requested ? (
     // Left space matches the composer, so the folded dock on a phone never sits over the text.
-    <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
+    <p className="sticky bottom-0 z-10 border-t border-border bg-background px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground lg:pt-4 lg:pb-4 lg:pl-4">
       Accept the request to reply.
     </p>
   ) : closed ? (
-    <p className="sticky bottom-0 z-10 border-t border-border bg-background/95 px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground backdrop-blur lg:pt-4 lg:pb-4 lg:pl-4">
+    <p className="sticky bottom-0 z-10 border-t border-border bg-background px-4 pt-3 pb-6 pl-[72px] text-sm text-muted-foreground lg:pt-4 lg:pb-4 lg:pl-4">
       {others[0].name} can&apos;t receive messages here anymore.
     </p>
   ) : (

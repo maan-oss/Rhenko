@@ -570,7 +570,7 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
   const summary = pick ? describePick(pick) : null
 
   return (
-    <div className="sticky bottom-0 z-10 border-t border-border bg-background/95 backdrop-blur">
+    <div className="sticky bottom-0 z-10 border-t border-border bg-background">
       {mentionMatches.length > 0 ? (
         <ul
           role="listbox"

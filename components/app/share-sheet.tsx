@@ -208,7 +208,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
         <p className="text-[19px] font-semibold tracking-tight">Share post</p>
       </div>
 
-      <div className="mx-5 flex gap-3 rounded-[20px] border border-border bg-background/70 p-3.5">
+      <div className="mx-5 flex gap-3 rounded-[20px] border border-border bg-background p-3.5">
         <Avatar user={{ id: post.id, name: post.author.name, avatarFile: post.author.avatarFile }} size={34} />
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold">

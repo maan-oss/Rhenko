@@ -7,8 +7,9 @@ import { toggleConversationMute } from "@/actions/messages"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// Mutes a conversation for this account, or lets it count again. It lives in the chat's options menu.
-function useMuteToggle(conversationId: string) {
+// Mutes a conversation for this account, or lets it count again. Its messages stop counting as unread while it is muted.
+// It lives in the chat's options, in the menu on a computer and in the drawer on a phone.
+export function useMuteToggle(conversationId: string) {
   const [pending, startTransition] = useTransition()
 
   function toggle() {
@@ -21,8 +22,6 @@ function useMuteToggle(conversationId: string) {
 
   return { pending, toggle }
 }
-
-// Its messages stop counting as unread while it is muted.
 
 export function MuteMenuItem({ conversationId, muted, className }: { conversationId: string; muted: boolean; className?: string }) {
   const { pending, toggle } = useMuteToggle(conversationId)

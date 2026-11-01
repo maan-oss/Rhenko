@@ -17,8 +17,8 @@ import {
 import { MESSAGE_TIMERS, timerLabel, timerLine } from "@/lib/message-timers"
 import { cn } from "@/lib/utils"
 
-// The choices, as radio rows. Choosing one sets it for the whole conversation and says so; the rows wait while it is saved.
-function TimerChoices({ conversationId, timer }: { conversationId: string; timer: number }) {
+// Sets the timer for the whole conversation and says so. The menu and the drawer both choose through it; the choices wait while it is saved.
+export function useTimerChoice(conversationId: string, timer: number) {
   const [pending, startTransition] = useTransition()
 
   function choose(next: number) {
@@ -29,6 +29,13 @@ function TimerChoices({ conversationId, timer }: { conversationId: string; timer
       else toast.error(result.error)
     })
   }
+
+  return { pending, choose }
+}
+
+// The choices, as radio rows, in the desktop menu.
+function TimerChoices({ conversationId, timer }: { conversationId: string; timer: number }) {
+  const { pending, choose } = useTimerChoice(conversationId, timer)
 
   return (
     <DropdownMenuRadioGroup value={timer} onValueChange={(value) => choose(Number(value))}>
@@ -47,7 +54,7 @@ function TimerChoices({ conversationId, timer }: { conversationId: string; timer
   )
 }
 
-function TimerNote() {
+export function TimerNote() {
   return (
     <p className="px-3 pt-1.5 pb-2 text-[13px] leading-snug text-muted-foreground">
       Applies to messages sent after it changes. Messages already sent keep the timer they had. Everyone here sees the change in the chat.
@@ -62,8 +69,8 @@ export function TimerMenuItem({ conversationId, timer, disabled, className }: { 
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={disabled} title={disabled ? "Accept the request to change this" : undefined} className={cn(className)}>
         <Timer className="size-4" aria-hidden="true" />
-        Disappearing messages
-        <span className="ml-auto pl-3 text-[13px] text-muted-foreground tabular-nums">{timer > 0 ? timerLabel(timer) : "Off"}</span>
+        <span className="min-w-0 flex-1">Disappearing messages</span>
+        <span className="text-[13px] text-muted-foreground tabular-nums">{timer > 0 ? timerLabel(timer) : "Off"}</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-72 p-1.5">
         <DropdownMenuGroup>
