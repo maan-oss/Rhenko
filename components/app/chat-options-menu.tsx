@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils"
 // The file name the server gives an export, when the response doesn't say.
 const FALLBACK_NAME = "rhenko-chat.txt"
 
-// The chat's own options, from the header: search its words, jump to a day, see who is in it, choose its background, export it,
-// and clear this person's copy. Each opens a dialog over the thread, or saves a file. On a phone the header has no room for the
-// mute and disappearing-messages buttons, so their rows are here, and a computer shows those buttons in the header instead.
+// The chat's own options, from the header: search its words, jump to a day, see who is in it, mute it, set disappearing messages,
+// choose its background, export it, and clear this person's copy. Each opens a dialog over the thread, or saves a file. The
+// header keeps to the call, the video call and this menu, on every screen size.
 export function ChatOptionsMenu({
   conversationId,
   wallpaper,
@@ -85,8 +85,8 @@ export function ChatOptionsMenu({
             <ContactRound className="size-4" aria-hidden="true" />
             Contact info
           </DropdownMenuItem>
-          <MuteMenuItem conversationId={conversationId} muted={muted} className={cn(MENU_ITEM_PHONE, "sm:hidden")} />
-          <TimerMenuItem conversationId={conversationId} timer={timer} disabled={timerDisabled} className={cn(MENU_ITEM_PHONE, "sm:hidden")} />
+          <MuteMenuItem conversationId={conversationId} muted={muted} className={MENU_ITEM_PHONE} />
+          <TimerMenuItem conversationId={conversationId} timer={timer} disabled={timerDisabled} className={MENU_ITEM_PHONE} />
           <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setWallpaperOpen(true)}>
             <Palette className="size-4" aria-hidden="true" />
             Chat wallpaper

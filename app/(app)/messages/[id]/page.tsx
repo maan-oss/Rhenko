@@ -15,8 +15,6 @@ import { ChatOptionsMenu } from "@/components/app/chat-options-menu"
 import { ChatThread } from "@/components/app/chat-thread"
 import { GroupCallButton } from "@/components/app/group-call-button"
 import { GroupPanel } from "@/components/app/group-panel"
-import { MessageTimerButton } from "@/components/app/message-timer-button"
-import { MuteConversationButton } from "@/components/app/mute-conversation-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PinnedBar, type PinnedLine } from "@/components/app/pinned-bar"
 import { ThreadMarker } from "@/components/app/thread-marker"
@@ -86,7 +84,7 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
     <div className="-mb-24 flex min-h-dvh flex-col lg:mb-0">
       <PageHeader
         title={title}
-        subtitle={!isGroup && others[0] ? `@${others[0].handle}` : isGroup ? `${conversation.members.length} people` : undefined}
+        subtitle={isGroup ? `${conversation.members.length} people` : undefined}
         backHref="/messages"
         lead={
           !isGroup && others[0] ? (
@@ -132,11 +130,6 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
               timer={conversation.messageTimer}
               timerDisabled={requested || closed}
             />
-            {/* A phone keeps these two in the options menu, so the title has room. */}
-            <div className="hidden items-center gap-2 sm:flex">
-              <MuteConversationButton conversationId={conversation.id} muted={conversation.muted} />
-              <MessageTimerButton conversationId={conversation.id} timer={conversation.messageTimer} disabled={requested || closed} />
-            </div>
           </div>
         }
       >

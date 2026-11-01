@@ -46,22 +46,14 @@ async function openMessages(page, tab) {
 // One-to-one chat
 // ---------------------------------------------------------------------------------------------------------------------
 
-// The mute switch is a button in the header on a computer and a row in the chat's options menu on a phone.
-async function clickMuteSwitch(page, phone, label) {
-  if (!phone) {
-    await acted(page, () => page.getByRole("button", { name: label, exact: true }).click())
-    return
-  }
+// The mute switch is a row in the chat's options menu, on a computer as on a phone.
+async function clickMuteSwitch(page, label) {
   await page.getByRole("button", { name: "Chat options" }).click()
   await acted(page, () => page.getByRole("menuitem", { name: label, exact: true }).click())
 }
 
-// Waits until the mute switch offers this label. On a phone that means opening the options menu to read its row.
-async function waitForMuteLabel(page, phone, label) {
-  if (!phone) {
-    await page.getByRole("button", { name: label, exact: true }).waitFor()
-    return
-  }
+// Waits until the mute switch offers this label. That means opening the options menu to read its row.
+async function waitForMuteLabel(page, label) {
   await page.getByRole("button", { name: "Chat options" }).click()
   await page.getByRole("menuitem", { name: label, exact: true }).waitFor()
   await page.keyboard.press("Escape")
@@ -247,9 +239,9 @@ async function directFlow({ phone }) {
     const quiet = uniq("Quiet message")
     const loud = uniq("Loud message")
     await openChat(receiver.page, convId)
-    await clickMuteSwitch(receiver.page, phone, "Mute conversation")
+    await clickMuteSwitch(receiver.page, "Mute conversation")
     await toastText(receiver.page, /^Conversation muted/)
-    await waitForMuteLabel(receiver.page, phone, "Unmute conversation")
+    await waitForMuteLabel(receiver.page, "Unmute conversation")
     await idleOnSettings(receiver.page)
     const missing = expectBanner(receiver.page, quiet, 5000)
     await openChat(sender.page, convId)
@@ -257,7 +249,7 @@ async function directFlow({ phone }) {
     assert.equal(await missing, false, "a muted conversation produced a banner")
 
     await openChat(receiver.page, convId)
-    await clickMuteSwitch(receiver.page, phone, "Unmute conversation")
+    await clickMuteSwitch(receiver.page, "Unmute conversation")
     await toastText(receiver.page, /^Conversation unmuted/)
     await idleOnSettings(receiver.page)
     const shown = expectBanner(receiver.page, loud)
