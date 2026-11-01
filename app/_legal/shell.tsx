@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { RhenkoSymbol } from "@/components/brand/symbol"
+import { HashScroll } from "@/components/marketing/hash-scroll"
 
 // The frame the Terms of Service and the Privacy Policy share: the sign-in card style in a column about 680px wide,
 // a back link, a row of links to each section, then the sections in order.
@@ -16,8 +17,16 @@ const LINK = "font-semibold text-foreground underline underline-offset-4"
 const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 export function TextLink({ href, children }: { href: string; children: ReactNode }) {
+  // A section of this page is a plain link, so it glides there (see HashScroll). Another page slides in.
+  if (href.startsWith("#")) {
+    return (
+      <a href={href} className={LINK}>
+        {children}
+      </a>
+    )
+  }
   return (
-    <Link href={href} className={LINK}>
+    <Link href={href} transitionTypes={["nav-forward"]} className={LINK}>
       {children}
     </Link>
   )
@@ -67,9 +76,11 @@ export function LegalPage({
 }) {
   return (
     <main className="app-canvas min-h-dvh px-4 py-8 sm:py-12">
+      <HashScroll />
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-5">
         <Link
           href="/"
+          transitionTypes={["nav-back"]}
           className={`glass inline-flex h-10 w-fit items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors hover:bg-foreground/5 ${FOCUS}`}
         >
           <ArrowLeft className="size-4" aria-hidden />
@@ -113,7 +124,7 @@ export function LegalPage({
           ))}
         </article>
         <p className="text-center text-sm text-muted-foreground">
-          <Link href={other.href} className={LINK}>
+          <Link href={other.href} transitionTypes={["nav-forward"]} className={LINK}>
             {other.label}
           </Link>
         </p>

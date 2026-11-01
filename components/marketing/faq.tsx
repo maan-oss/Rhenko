@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 
 // Each answer states a limit or behaviour the product enforces, and links to the page that explains it.
@@ -48,9 +49,13 @@ export function Faq() {
           <div className="mk-rise pt-3 pr-10">
             <p className="max-w-[60ch] text-[15.5px] leading-relaxed text-muted-foreground">{item.a}</p>
             {item.href ? (
-              <a href={item.href} className="mt-3 inline-flex text-[14px] font-semibold text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
+              <Link
+                href={item.href}
+                transitionTypes={["nav-forward"]}
+                className="mt-3 inline-flex text-[14px] font-semibold text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+              >
                 {item.cta}
-              </a>
+              </Link>
             ) : null}
           </div>
         </details>

@@ -48,10 +48,10 @@ export function SiteFooter() {
       <div className="mx-auto w-full max-w-[1240px] px-5 pt-20 sm:px-8">
         <div className="grid gap-14 md:grid-cols-[1.2fr_repeat(4,1fr)]">
           <div className="grid content-start gap-5">
-            <Link href="#top" className="flex w-fit items-center gap-2.5 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+            <a href="#top" className="flex w-fit items-center gap-2.5 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
               <RhenkoSymbol className="size-7" />
               <span className="text-[17px] font-semibold tracking-tight">Rhenko</span>
-            </Link>
+            </a>
             <p className="max-w-[28ch] text-[15px] leading-relaxed text-muted-foreground">Public conversation, on your terms.</p>
             <p className="text-[13px] text-muted-foreground">Accounts are for people 18 and older.</p>
           </div>
@@ -61,9 +61,20 @@ export function SiteFooter() {
               <ul className="grid gap-2.5">
                 {column.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-[15px] text-foreground/85 underline-offset-4 transition-colors hover:text-foreground hover:underline">
-                      {link.label}
-                    </Link>
+                    {/* A section of this page glides there (see HashScroll); a page opens with the same slide as the header's links. */}
+                    {link.href.startsWith("#") ? (
+                      <a href={link.href} className="text-[15px] text-foreground/85 underline-offset-4 transition-colors hover:text-foreground hover:underline">
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        transitionTypes={["nav-forward"]}
+                        className="text-[15px] text-foreground/85 underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

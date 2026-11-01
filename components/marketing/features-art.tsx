@@ -303,7 +303,8 @@ const LISTS = ["Saved", "Ridge walks", "Local news"]
 export function ListsArt() {
   return (
     <Frame>
-      <Rise className="flex gap-2 overflow-hidden">
+      {/* On a narrow frame the last chip runs past the edge, so it fades out there instead of stopping at a hard line. */}
+      <Rise className="flex gap-2 overflow-hidden [-webkit-mask-image:linear-gradient(90deg,#000_78%,transparent)] [mask-image:linear-gradient(90deg,#000_78%,transparent)]">
         {LISTS.map((name, index) => (
           <span
             key={name}
@@ -316,7 +317,7 @@ export function ListsArt() {
           </span>
         ))}
       </Rise>
-      <div className="grid gap-3">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
         {(["iris", "dev", "sam"] as PersonId[]).map((id, index) => (
           <Rise key={id} delay={0.25 + index * 0.12} className="flex items-start gap-3 border-t border-border pt-3 first:border-t-0 first:pt-0">
             <Bookmark className="mt-0.5 size-4 shrink-0 fill-foreground" aria-hidden />

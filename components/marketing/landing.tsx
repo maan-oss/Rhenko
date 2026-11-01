@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/marketing/site-header"
 import { IntroLoader } from "@/components/marketing/intro-loader"
 import { Magnetic } from "@/components/marketing/magnetic"
 import { Faq } from "@/components/marketing/faq"
+import { HashScroll } from "@/components/marketing/hash-scroll"
 import { SiteFooter } from "@/components/marketing/site-footer"
 import { HeroWindow } from "@/components/marketing/hero-window"
 import { FeaturesShowcase } from "@/components/marketing/features-showcase"
@@ -50,7 +51,8 @@ const STATS = [
 export function Landing() {
   return (
     <RhenkoMotion>
-      <div className="overflow-x-clip bg-background text-foreground">
+      <div data-marketing className="overflow-x-clip bg-background text-foreground">
+        <HashScroll />
         <IntroLoader />
         <SiteHeader />
 
@@ -78,7 +80,7 @@ export function Landing() {
               </p>
               <div className="mk-rise mk-delay-3 flex flex-wrap items-center gap-3">
                 <Magnetic>
-                  <Button render={<Link href="/signup" />} size="lg" className="h-13 rounded-full px-7 text-[15px] font-semibold">
+                  <Button render={<Link href="/signup" transitionTypes={["nav-forward"]} />} size="lg" className="h-13 rounded-full px-7 text-[15px] font-semibold">
                     Create an account
                   </Button>
                 </Magnetic>
@@ -107,21 +109,24 @@ export function Landing() {
           </div>
         </GrainBackdrop>
 
-        <section aria-label="What Rhenko does" className="mk-marquee-band overflow-hidden border-y border-border bg-foreground text-background">
-          <div className="flex w-max py-6">
-            {[0, 1].map((copy) => (
-              <ul key={copy} aria-hidden={copy === 1} className="mk-marquee flex shrink-0 items-center">
-                {MARQUEE.map((item) => (
-                  <li
-                    key={item}
-                    className="flex items-center gap-10 pr-10 text-[clamp(1.5rem,3.4vw,2.6rem)] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap"
-                  >
-                    {item}
-                    <span aria-hidden className="size-2.5 rounded-full bg-background" />
-                  </li>
-                ))}
-              </ul>
-            ))}
+        <section aria-label="What Rhenko does" className="overflow-hidden border-y border-border bg-foreground text-background">
+          {/* The ticker's ends dissolve into the band, so a phrase cut by the edge fades out rather than stopping at a hard line. */}
+          <div className="mk-marquee-fade overflow-hidden">
+            <div className="flex w-max py-6">
+              {[0, 1].map((copy) => (
+                <ul key={copy} aria-hidden={copy === 1} className="mk-marquee flex shrink-0 items-center">
+                  {MARQUEE.map((item) => (
+                    <li
+                      key={item}
+                      className="flex items-center gap-10 pr-10 text-[clamp(1.5rem,3.4vw,2.6rem)] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap"
+                    >
+                      {item}
+                      <span aria-hidden className="size-2.5 rounded-full bg-background" />
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -169,10 +174,10 @@ export function Landing() {
             <h2 className={KICK}>Questions people ask first.</h2>
             <p className={LEAD}>Each answer states a rule the product keeps. The Rules and Safety pages go further.</p>
             <div className="flex flex-wrap gap-3 pt-2">
-              <Link href="/rules" className="inline-flex h-10 items-center rounded-full border border-border px-5 text-[14px] font-medium transition-colors hover:bg-foreground/5">
+              <Link href="/rules" transitionTypes={["nav-forward"]} className="inline-flex h-10 items-center rounded-full border border-border px-5 text-[14px] font-medium transition-colors hover:bg-foreground/5">
                 Read the rules
               </Link>
-              <Link href="/safety" className="inline-flex h-10 items-center rounded-full border border-border px-5 text-[14px] font-medium transition-colors hover:bg-foreground/5">
+              <Link href="/safety" transitionTypes={["nav-forward"]} className="inline-flex h-10 items-center rounded-full border border-border px-5 text-[14px] font-medium transition-colors hover:bg-foreground/5">
                 Safety
               </Link>
             </div>
@@ -193,12 +198,13 @@ export function Landing() {
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Magnetic>
-                  <Button render={<Link href="/signup" />} size="lg" className="h-13 rounded-full px-7 text-[15px] font-semibold">
+                  <Button render={<Link href="/signup" transitionTypes={["nav-forward"]} />} size="lg" className="h-13 rounded-full px-7 text-[15px] font-semibold">
                     Create an account
                   </Button>
                 </Magnetic>
                 <Link
                   href="/login"
+                  transitionTypes={["nav-forward"]}
                   className="inline-flex h-13 items-center rounded-full border border-border bg-background/60 px-6 text-[15px] font-medium backdrop-blur transition-colors hover:bg-foreground/5"
                 >
                   Log in

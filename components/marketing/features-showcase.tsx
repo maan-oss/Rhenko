@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, type ComponentType, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { Bookmark, CalendarClock, History, KeyRound, Languages, ListChecks, MessageCircle, Smile, Sparkles, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -86,10 +86,37 @@ const FEATURES: { key: string; icon: LucideIcon; title: string; body: string; Ar
   },
 ]
 
+// The panel slides in from the side the reader moved toward, and the old one slides out the other way, so a tab reads as a step
+// along a row rather than a swap.
+const SLIDE = 48
+const PANEL = {
+  enter: (direction: number) => ({ opacity: 0, x: direction * SLIDE, filter: "blur(6px)" }),
+  center: { opacity: 1, x: 0, filter: "blur(0px)" },
+  exit: (direction: number) => ({ opacity: 0, x: direction * -SLIDE, filter: "blur(4px)" }),
+}
+
 export function FeaturesShowcase() {
   const [active, setActive] = useState(0)
+  const [direction, setDirection] = useState(1)
   const tabs = useRef<(HTMLButtonElement | null)[]>([])
+  const strip = useRef<HTMLDivElement>(null)
   const feature = FEATURES[active]
+
+  function choose(index: number) {
+    if (index === active) return
+    setDirection(index > active ? 1 : -1)
+    setActive(index)
+  }
+
+  // On a phone the tabs run along a strip that scrolls sideways. The chosen tab glides into its middle.
+  useEffect(() => {
+    const list = strip.current
+    const tab = tabs.current[active]
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const offset = tab.getBoundingClientRect().left - list.getBoundingClientRect().left
+    list.scrollTo({ left: list.scrollLeft + offset - (list.clientWidth - tab.offsetWidth) / 2, behavior: reduced ? "auto" : "smooth" })
+  }, [active])
 
   function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next: number | null = null
@@ -99,8 +126,8 @@ export function FeaturesShowcase() {
     if (event.key === "End") next = FEATURES.length - 1
     if (next === null) return
     event.preventDefault()
-    setActive(next)
-    tabs.current[next]?.focus()
+    choose(next)
+    tabs.current[next]?.focus({ preventScroll: true })
   }
 
   return (
@@ -116,6 +143,7 @@ export function FeaturesShowcase() {
 
       <div className="mt-14 grid gap-6 lg:mt-16 lg:grid-cols-[0.34fr_0.66fr] lg:items-start lg:gap-12">
         <div
+          ref={strip}
           role="tablist"
           aria-label="Features"
           className="-mx-5 flex snap-x snap-mandatory gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:-mx-8 sm:px-8 lg:mx-0 lg:snap-none lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden"
@@ -134,7 +162,7 @@ export function FeaturesShowcase() {
                 aria-selected={selected}
                 aria-controls="feature-panel"
                 tabIndex={selected ? 0 : -1}
-                onClick={() => setActive(index)}
+                onClick={() => choose(index)}
                 onKeyDown={(event) => move(event, index)}
                 className={cn(
                   "relative isolate flex shrink-0 snap-start items-center gap-2.5 rounded-full px-4 py-2.5 text-[15px] font-medium whitespace-nowrap outline-none transition-colors duration-300 focus-visible:ring-3 focus-visible:ring-ring/50 lg:rounded-2xl lg:px-5 lg:py-4 lg:text-[16.5px] [-webkit-tap-highlight-color:transparent]",
@@ -157,22 +185,27 @@ export function FeaturesShowcase() {
         </div>
 
         <div id="feature-panel" role="tabpanel" aria-labelledby={`feature-tab-${feature.key}`} className={cn(STAGE, "min-w-0")}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={feature.key}
-              initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-              transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}
-              className="grid gap-6"
-            >
-              <feature.Art />
-              <div className="grid gap-2 px-1 pb-1">
-                <h3 className="text-[22px] font-semibold tracking-tight">{feature.title}</h3>
-                <p className="max-w-[52ch] text-[15.5px] leading-relaxed text-muted-foreground">{feature.body}</p>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+          {/* The old and new panels share one cell, so they slide past each other and the frame never changes height. */}
+          <div className="grid overflow-hidden [&>*]:col-start-1 [&>*]:row-start-1">
+            <AnimatePresence initial={false} custom={direction}>
+              <motion.div
+                key={feature.key}
+                custom={direction}
+                variants={PANEL}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.45, ease: [0.2, 0.7, 0.2, 1] }}
+                className="grid gap-6"
+              >
+                <feature.Art />
+                <div className="grid gap-2 px-1 pb-1">
+                  <h3 className="text-[22px] font-semibold tracking-tight">{feature.title}</h3>
+                  <p className="max-w-[52ch] text-[15.5px] leading-relaxed text-muted-foreground">{feature.body}</p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </section>

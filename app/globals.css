@@ -539,8 +539,12 @@ input[type="radio"]:focus-visible {
 .mk-delay-2 { animation-delay: 240ms; }
 .mk-delay-3 { animation-delay: 380ms; }
 .mk-delay-4 { animation-delay: 520ms; }
+/* The ticker keeps moving under the pointer: a pause froze a phrase half across the edge. Its two ends fade out instead of cutting. */
 .mk-marquee { animation: mk-marquee 46s linear infinite; }
-.mk-marquee-band:hover .mk-marquee { animation-play-state: paused; }
+.mk-marquee-fade {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
 
 
 /* The landing's opening (components/marketing/intro-loader.tsx). It is in the markup but hidden. The head script sets

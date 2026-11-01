@@ -137,7 +137,7 @@ export function SiteHeader() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" sideOffset={10} className="w-[300px] rounded-2xl p-2">
                 {TRUST.map((item) => (
-                  <DropdownMenuItem key={item.href} render={<Link href={item.href} />} className="flex-col items-start gap-0.5 rounded-xl px-3 py-2.5">
+                  <DropdownMenuItem key={item.href} render={<Link href={item.href} transitionTypes={["nav-forward"]} />} className="flex-col items-start gap-0.5 rounded-xl px-3 py-2.5">
                     <span className="text-[14px] font-semibold">{item.label}</span>
                     <span className="text-[12.5px] text-muted-foreground">{item.detail}</span>
                   </DropdownMenuItem>
@@ -145,7 +145,7 @@ export function SiteHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Link href="/advertise" className={cn(TRIGGER, "no-underline")}>
+            <Link href="/advertise" transitionTypes={["nav-forward"]} className={cn(TRIGGER, "no-underline")}>
               Advertise
             </Link>
           </div>
@@ -153,11 +153,12 @@ export function SiteHeader() {
           <div className="ml-auto flex items-center gap-1">
             <Link
               href="/login"
+              transitionTypes={["nav-forward"]}
               className="hidden h-9 items-center rounded-full px-3.5 text-[14px] font-medium text-foreground/80 transition-colors hover:text-foreground md:inline-flex"
             >
               Log in
             </Link>
-            <Button render={<Link href="/signup" />} size="lg" className="hidden h-9 rounded-full px-4 text-[14px] font-semibold md:inline-flex">
+            <Button render={<Link href="/signup" transitionTypes={["nav-forward"]} />} size="lg" className="hidden h-9 rounded-full px-4 text-[14px] font-semibold md:inline-flex">
               Create account
             </Button>
             <button
@@ -219,26 +220,38 @@ export function SiteHeader() {
                 <nav key={group.label} aria-label={group.label} className="grid gap-3">
                   <p className="text-[13px] font-medium text-muted-foreground">{group.label}</p>
                   <ul className="grid">
-                    {group.items.map((item, index) => (
-                      <motion.li
-                        key={item.href}
-                        initial={{ opacity: 0, y: 18 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.18 + (groupIndex * 4 + index) * 0.045, duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
-                      >
-                        <Link
-                          href={item.href}
-                          onClick={close}
-                          className="group flex items-center justify-between gap-4 border-t border-border py-3.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [-webkit-tap-highlight-color:transparent]"
-                        >
+                    {group.items.map((item, index) => {
+                      const className =
+                        "group flex items-center justify-between gap-4 border-t border-border py-3.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [-webkit-tap-highlight-color:transparent]"
+                      const row = (
+                        <>
                           <span className="grid gap-1">
                             <span className="text-[24px] leading-tight font-semibold tracking-[-0.025em]">{item.label}</span>
                             {item.detail ? <span className="text-[13.5px] leading-snug text-muted-foreground">{item.detail}</span> : null}
                           </span>
                           <ArrowUpRight className="size-[18px] shrink-0 text-muted-foreground transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden />
-                        </Link>
-                      </motion.li>
-                    ))}
+                        </>
+                      )
+                      return (
+                        <motion.li
+                          key={item.href}
+                          initial={{ opacity: 0, y: 18 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.18 + (groupIndex * 4 + index) * 0.045, duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
+                        >
+                          {/* A section of this page is a plain link, so the page glides to it (see HashScroll). A page is a Link. */}
+                          {item.href.startsWith("#") ? (
+                            <a href={item.href} onClick={close} className={className}>
+                              {row}
+                            </a>
+                          ) : (
+                            <Link href={item.href} onClick={close} transitionTypes={["nav-forward"]} className={className}>
+                              {row}
+                            </Link>
+                          )}
+                        </motion.li>
+                      )
+                    })}
                   </ul>
                 </nav>
               ))}
@@ -250,12 +263,13 @@ export function SiteHeader() {
               transition={{ delay: 0.3, duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
               className="sticky bottom-0 mt-auto grid gap-3 border-t border-border bg-background px-6 pt-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
-              <Button render={<Link href="/signup" onClick={close} />} size="lg" className="h-12 w-full rounded-full text-[15px] font-semibold">
+              <Button render={<Link href="/signup" onClick={close} transitionTypes={["nav-forward"]} />} size="lg" className="h-12 w-full rounded-full text-[15px] font-semibold">
                 Create an account
               </Button>
               <Link
                 href="/login"
                 onClick={close}
+                transitionTypes={["nav-forward"]}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-border text-[15px] font-medium outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 Log in
