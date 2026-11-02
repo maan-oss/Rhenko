@@ -1,18 +1,22 @@
-// A message you send leaves the place you sent it from and flies into the chat. The words lift out of the message box and
-// turn into the bubble on the way; a photo or video leaves its preview and grows into the bubble around it. Ported from
-// Parley's lib/send-flight.ts.
+// A message you send leaves the place you sent it from and flies into the chat in a straight line. The words lift out of the
+// message box and turn into the bubble on the way; a photo or video leaves its preview and grows into the bubble around it.
+// Ported from Parley's lib/send-flight.ts.
+//
+// One progress value drives everything the copy does at once: where it is, how big it is, its colours and, for a photo, its
+// frame. So it moves along a single straight line from where it starts to the bubble, and never sideways first. Only one
+// copy is ever drawn, so no word or picture shows twice. The real bubble stays hidden until the copy lands, and is shown in
+// the same frame the copy is removed, so the swap does not flicker.
 //
 // Words: the composer arms a flight (armText) just before it sends, and the pending bubble takes it when it mounts (launch).
 // A photo or video: the composer starts the copy at once (startPicture), so the preview never just vanishes. Either way the
-// copy flies to the real bubble on each frame, and the real bubble stays hidden until the copy lands. The saved bubble
-// arrives after the pending one has gone; receive() hands the flight to it, so the copy never stops short. With reduced
-// motion, nothing flies.
+// copy flies to the real bubble on each frame. The saved bubble arrives after the pending one has gone; receive() hands the
+// flight to it, so the copy never stops short. With reduced motion, nothing flies.
 
 type Rect = { left: number; top: number; width: number; height: number }
 
 export type FlightOrigin =
-  // The words in the box: where their first line starts, and the line height they sit on.
-  | { kind: "text"; x: number; y: number; lineHeight: number }
+  // The words in the box: where their first line starts, the line height they sit on, and their colour.
+  | { kind: "text"; x: number; y: number; lineHeight: number; color: string }
   // A photo or video: the preview it leaves from, and the preview element itself, copied so the picture flies with it.
   | { kind: "picture"; rect: Rect; source: HTMLElement }
 
@@ -46,13 +50,16 @@ interface Flight {
   moving: boolean
   // Where the copy is heading: the landing, kept while the bubble is between replacements.
   to: Rect
+  // The landing as it was last frame, and how many frames it has held still.
+  seen: Rect | null
+  steady: number
   lostAt: number | null
   onLanded?: () => void
 }
 
 // A flight not taken this soon after it was armed is dropped (the send did not make a bubble here).
 const TTL = 6000
-// A words flight whose pending bubble has gone waits this long for the saved one to take it on.
+// A words flight whose pending bubble has gone waits this long after landing for the saved one to take it on.
 const ORPHAN_WAIT = 1500
 // A photo's copy waits this long, from the send, for its message to arrive and its picture to load.
 const PICTURE_WAIT = 9000
@@ -60,6 +67,14 @@ const PICTURE_WAIT = 9000
 const ARRIVAL_TTL = 3000
 // A photo's own corner (rounded-xl), which its copy keeps while it grows.
 const CORNER = 12
+// How much of the way the copy turns to follow a bubble that has moved, each frame.
+const GLIDE = 0.2
+// The copy sets off only once its bubble has held still this many frames: a bubble that has just mounted can still be moving
+// into place (the thread scrolls to its end as it appears).
+const SETTLE_FRAMES = 3
+// The copy's spring, critically damped: it reaches the bubble without passing it or swaying back, so the path stays straight.
+const STIFFNESS = 210
+const DAMPING = 29
 
 const armed = new Map<string, Armed>()
 const flights = new Set<Flight>()
@@ -91,7 +106,7 @@ export function textOrigin(ta: HTMLTextAreaElement): FlightOrigin | null {
   const rtl = cs.direction === "rtl"
   const x = rtl ? r.right - parseFloat(cs.paddingRight) : r.left + parseFloat(cs.paddingLeft)
   const y = r.top + parseFloat(cs.paddingTop) - ta.scrollTop + lineHeight / 2
-  return { kind: "text", x, y, lineHeight }
+  return { kind: "text", x, y, lineHeight, color: cs.color }
 }
 
 // A photo or video's origin: the largest visible preview marked as the thing being sent (data-flight-source).
@@ -120,8 +135,7 @@ function take(id: string): FlightOrigin | null {
   return own && Date.now() - own.at < TTL ? own.origin : null
 }
 
-// One spring, integrated in small steps so it is steady at any frame rate. These sit a little under critically damped, so
-// the bubble lands with the faintest give.
+// One spring, integrated in small steps so it is steady at any frame rate. It runs from 0 to 1 and does not overshoot.
 function spring(stiffness: number, damping: number) {
   let x = 0
   let v = 0
@@ -140,9 +154,6 @@ function spring(stiffness: number, damping: number) {
   }
 }
 
-const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n)
-const easeOut = (n: number) => 1 - (1 - n) ** 3
-
 // A copy of a bubble as it looks: no ids or test hooks, inert, at the given width.
 function copyOf(bubble: HTMLElement, width: number): HTMLElement {
   const copy = bubble.cloneNode(true) as HTMLElement
@@ -153,16 +164,6 @@ function copyOf(bubble: HTMLElement, width: number): HTMLElement {
   copy.setAttribute("inert", "")
   copy.style.cssText = `position:absolute;left:0;top:0;width:${width}px;max-width:none;margin:0;transform:none;opacity:1;visibility:visible`
   return copy
-}
-
-// The opacity the bubble is drawn at, counting the rows around it (the pending row is faded while it is being sent).
-function effectiveOpacity(el: HTMLElement): number {
-  let opacity = 1
-  let node: HTMLElement | null = el
-  for (let depth = 0; node && depth < 3; depth++, node = node.parentElement) {
-    opacity *= parseFloat(getComputedStyle(node).opacity) || 1
-  }
-  return opacity
 }
 
 function makeGhost(from: Rect): HTMLElement {
@@ -196,19 +197,33 @@ function newFlight(chatId: string, kind: "text" | "picture", ghost: HTMLElement,
     radius: CORNER,
     moving: false,
     to: from,
+    seen: null,
+    steady: 0,
     lostAt: null,
     onLanded,
   }
 }
 
-// The copy's rectangle between where it started and where it is heading, at the progress of each spring.
-function between(from: Rect, to: Rect, px: number, py: number, ps: number): Rect {
+// The copy's rectangle a part of the way from where it started to where it is heading. Every edge and the size use the same
+// part, so the copy's corner runs in a straight line.
+function between(from: Rect, to: Rect, p: number): Rect {
   return {
-    left: from.left + (to.left - from.left) * px,
-    top: from.top + (to.top - from.top) * py,
-    width: from.width + (to.width - from.width) * ps,
-    height: from.height + (to.height - from.height) * ps,
+    left: from.left + (to.left - from.left) * p,
+    top: from.top + (to.top - from.top) * p,
+    width: from.width + (to.width - from.width) * p,
+    height: from.height + (to.height - from.height) * p,
   }
+}
+
+function sameRect(a: Rect, b: Rect): boolean {
+  return Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5
+}
+
+// A colour a part of the way from one colour to another, mixed by the browser (so any colour the page uses works).
+function mix(a: string, b: string, p: number): string {
+  if (p <= 0) return a
+  if (p >= 1) return b
+  return `color-mix(in srgb, ${b} ${(p * 100).toFixed(2)}%, ${a})`
 }
 
 // The newest bubble of this chat that a flight may land on, taken off the list.
@@ -237,21 +252,15 @@ function ready(f: Flight): boolean {
   return !(picture instanceof HTMLImageElement) || (picture.complete && picture.naturalWidth > 0)
 }
 
-// Flies a flight's copy frame by frame: springs toward the landing, and paints it through `paint`. It ends once it has
-// landed, or after waiting too long for a bubble to land on.
-function run(
-  f: Flight,
-  from: Rect,
-  paint: (p: { px: number; py: number; ps: number; to: Rect; elapsed: number }) => void
-) {
+// Flies a flight's copy frame by frame. `paint` draws the copy at progress p (0 at the start, 1 at the landing) towards `to`.
+// It ends once it has landed, or after waiting too long for a bubble to land on.
+function run(f: Flight, paint: (p: number, to: Rect) => void) {
   flights.add(f)
-  const sy = spring(224, 24.5)
-  const sx = spring(158, 22.6)
-  const ss = spring(247, 31.4)
+  const sp = spring(STIFFNESS, DAMPING)
   const t0 = performance.now()
   let last = t0
   let raf = 0
-  // Slow motion for checking the flight by eye (set window.__flightSlow = 8 in the console).
+  // Slow motion for checking the flight by eye (set window.__flightSlow = 5 in the console).
   const slow = Math.max(1, Number((window as unknown as { __flightSlow?: number }).__flightSlow) || 1)
 
   const end = () => {
@@ -276,22 +285,34 @@ function run(
     if (landing) {
       f.lostAt = null
       if (ready(f)) {
-        f.moving = true
-        f.to = rectOf(landing)
+        const live = rectOf(landing)
+        f.steady = f.seen && sameRect(f.seen, live) ? f.steady + 1 : 0
+        f.seen = live
+        // The copy sets off once the bubble is in place, aiming straight at it. After that it glides after the bubble, so a
+        // bubble that moves on (the saved one takes the pending one's place, or the thread scrolls) turns the path gently.
+        if (!f.moving && f.steady >= SETTLE_FRAMES) {
+          f.to = live
+          f.moving = true
+        } else if (f.moving) {
+          f.to = between(f.to, live, GLIDE)
+        }
       }
     } else if (f.lostAt === null) {
       f.lostAt = now
     }
     const waiting = f.kind === "picture" && !f.moving
-    if (waiting ? now - t0 > PICTURE_WAIT : !landing && f.lostAt !== null && now - f.lostAt > ORPHAN_WAIT) return end()
+    const gaveUp = waiting
+      ? now - t0 > PICTURE_WAIT
+      : !landing && (now - t0 > TTL || (sp.done && f.lostAt !== null && now - f.lostAt > ORPHAN_WAIT))
+    if (gaveUp) return end()
 
-    const p = f.moving ? { px: sx.step(dt), py: sy.step(dt), ps: ss.step(dt) } : { px: 0, py: 0, ps: 0 }
-    paint({ ...p, to: f.to, elapsed: (now - t0) / slow })
-    f.ghost.style.opacity = landing ? String(effectiveOpacity(landing)) : "1"
-    if (f.moving && landing && sy.done && sx.done && ss.done) return end()
+    const x = f.moving ? sp.step(dt) : 0
+    const arrived = f.moving && landing !== null && sp.done
+    paint(arrived ? 1 : x, f.to)
+    if (arrived) return end()
     raf = requestAnimationFrame(frame)
   }
-  paint({ px: 0, py: 0, ps: 0, to: f.to, elapsed: 0 })
+  paint(0, f.to)
   raf = requestAnimationFrame(frame)
 }
 
@@ -304,8 +325,8 @@ export function launch(bubble: HTMLElement, id: string, chatId: string, onLanded
   const start = bubble.getBoundingClientRect()
   if (!start.width || !start.height) return false
 
-  // The words: a second copy in the box's colours sits on top and fades as the bubble's colour comes in, so the words seem
-  // to turn into the bubble as they lift. The copy is placed so its first line sits where the box's first line was.
+  // The copy is the bubble itself, so it wraps its words exactly as the bubble does from its first frame. It starts looking
+  // like the words in the box (no fill, the box's colour) and turns into the bubble's fill and colour as it travels.
   let x0 = origin.x
   let y0 = origin.y - origin.lineHeight / 2
   const words = bubble.querySelector<HTMLElement>("[data-flight-text]")
@@ -317,16 +338,15 @@ export function launch(bubble: HTMLElement, id: string, chatId: string, onLanded
   }
   const from: Rect = { left: x0, top: y0, width: start.width, height: start.height }
 
+  // The bubble's colours, read now: its live style goes blank once the pending bubble unmounts (when the saved one arrives).
+  const cs = getComputedStyle(bubble)
+  const fill = cs.backgroundColor
+  const ink = cs.color
   const ghost = makeGhost(from)
-  const look = copyOf(bubble, start.width)
-  look.style.opacity = "0"
-  ghost.appendChild(look)
-  let field: HTMLElement | null = null
-  if (words) {
-    field = copyOf(bubble, start.width)
-    field.classList.add("flight-field")
-    ghost.appendChild(field)
-  }
+  const copy = copyOf(bubble, start.width)
+  copy.style.backgroundColor = "transparent"
+  copy.style.color = origin.color
+  ghost.appendChild(copy)
 
   bubble.style.visibility = "hidden"
   document.body.appendChild(ghost)
@@ -334,21 +354,15 @@ export function launch(bubble: HTMLElement, id: string, chatId: string, onLanded
   f.target = bubble
   f.hidden = bubble
 
-  run(f, from, ({ px, py, ps, to, elapsed }) => {
-    const r = between(from, to, px, py, ps)
+  run(f, (p, to) => {
+    const r = between(from, to, p)
     ghost.style.transform = `translate3d(${r.left}px, ${r.top}px, 0)`
     ghost.style.width = `${r.width}px`
     ghost.style.height = `${r.height}px`
-    look.style.width = `${r.width}px`
-    look.style.height = `${r.height}px`
-    const fade = easeOut(clamp01(elapsed / 170))
-    if (field) {
-      // The colour change is quick, so the bubble is itself almost as soon as it leaves.
-      field.style.width = `${r.width}px`
-      field.style.height = `${r.height}px`
-      field.style.opacity = String(1 - fade)
-    }
-    look.style.opacity = String(fade)
+    copy.style.width = `${r.width}px`
+    copy.style.height = `${r.height}px`
+    copy.style.backgroundColor = mix("transparent", fill, p)
+    copy.style.color = mix(origin.color, ink, p)
   })
   return true
 }
@@ -369,15 +383,23 @@ export function startPicture(chatId: string, origin: FlightOrigin | null) {
   ghost.appendChild(copy)
   document.body.appendChild(ghost)
 
-  const f = newFlight(chatId, "picture", ghost, from)
-  run(f, from, ({ px, py, ps, to }) => {
-    const r = between(from, to, px, py, ps)
+  // The preview is hidden while its copy is in the air, so the picture is not shown twice. It comes back when the flight ends,
+  // which is only still needed if the send failed (on success the preview is cleared).
+  const source = origin.source
+  const shown = source.style.visibility
+  source.style.visibility = "hidden"
+
+  const f = newFlight(chatId, "picture", ghost, from, () => {
+    source.style.visibility = shown
+  })
+  run(f, (p, to) => {
+    const r = between(from, to, p)
     ghost.style.transform = `translate3d(${r.left}px, ${r.top}px, 0)`
     ghost.style.width = `${r.width}px`
     ghost.style.height = `${r.height}px`
     // The bubble's own padding and corner come in as it grows, so the picture settles inside the bubble's frame.
-    ghost.style.padding = `${f.pad.y * ps}px ${f.pad.x * ps}px`
-    ghost.style.borderRadius = `${CORNER + (f.radius - CORNER) * ps}px`
+    ghost.style.padding = `${f.pad.y * p}px ${f.pad.x * p}px`
+    ghost.style.borderRadius = `${CORNER + (f.radius - CORNER) * p}px`
   })
 }
 

@@ -288,8 +288,9 @@ function followLatest() {
   document.querySelector<HTMLElement>("[data-thread-end]")?.scrollIntoView({ block: "end" })
 }
 
-// A message being sent: it shows at once, a little faded, until the saved copy arrives in the thread. The words leave the
-// message box and turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then.
+// A message being sent: it shows at once, until the saved copy arrives in the thread. The words leave the message box and
+// turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then. It stays at full
+// strength while it flies, so the saved bubble that replaces it looks exactly the same; with no flight, it is faded as before.
 function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body: string }) {
   const [flies] = useState(() => hasFlight(id))
   const bubbleRef = useRef<HTMLDivElement>(null)
@@ -307,7 +308,7 @@ function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body:
   return (
     <motion.div
       initial={flies ? false : { opacity: 0, y: 12, scale: 0.96 }}
-      animate={{ opacity: 0.72, y: 0, scale: 1 }}
+      animate={{ opacity: flies ? 1 : 0.72, y: 0, scale: 1 }}
       transition={SEND_RISE}
       style={{ transformOrigin: "100% 100%" }}
       className="flex flex-col items-end gap-1 px-4 pt-3"
