@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "rea
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "@/components/app/link"
 import { SEND_RISE, SPRING_BUBBLE, SPRING_POP } from "@/components/app/motion"
-import { hasFlight, launch, receive } from "@/components/app/send-flight"
+import { comeOut, hasFlight, launch, receive } from "@/components/app/send-flight"
 import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
@@ -292,23 +292,21 @@ function followLatest() {
 // A message being sent: it shows at once, until the saved copy arrives in the thread. The words leave the message box and
 // turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then. It stays at full
 // strength while it flies, so the saved bubble that replaces it looks exactly the same; with no flight, it is faded as before.
-// The status line at the foot of a bubble: the time and what became of the message, in small text inside the bubble. It takes
-// one short line, and a message in a run shows it only at the end of the run.
-const FOOT = "-mt-1 flex h-3 items-center gap-1 self-end whitespace-nowrap text-[11px] leading-none"
+// The status line under a bubble, outside it: the time, and on the last of your messages in a run whether it is delivered or
+// seen. Every message has one, so a message that joins a run moves nothing.
+const FOOT = "mt-0.5 flex h-3.5 items-center gap-1 px-1 whitespace-nowrap text-[11px] leading-none text-muted-foreground"
 
 function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string; body: string; joins: boolean }) {
   const [flies] = useState(() => hasFlight(id))
+  const columnRef = useRef<HTMLDivElement>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
   const statusRef = useRef<HTMLSpanElement>(null)
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
-    if (!flies || !bubble) return
-    // The status waits for the bubble to land, so "Sending…" does not fly with the words.
-    const status = statusRef.current
-    if (status) status.style.visibility = "hidden"
-    launch(bubble, id, chatId, () => {
-      if (status) status.style.visibility = ""
-    })
+    const column = columnRef.current
+    // The bubble and its line stay hidden while the words fly; the line comes out once the bubble has landed.
+    if (!flies || !bubble || !column) return
+    launch(bubble, id, chatId, () => comeOut(statusRef.current), column)
   }, [flies, id, chatId])
   return (
     <motion.div
@@ -318,12 +316,14 @@ function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string
       style={{ transformOrigin: "100% 100%" }}
       className={cn("flex flex-col items-end px-4", joins ? "pt-[3px]" : "pt-3")}
     >
-      {/* Built the same as the saved bubble (words, then the status line), so the swap does not move it. */}
-      <div ref={bubbleRef} className="flex max-w-[min(78%,30rem)] flex-col gap-2 whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
-        <span data-flight-text className="block">
-          {body}
-        </span>
-        <span ref={statusRef} aria-live="polite" className={cn(FOOT, "text-background/70")}>
+      {/* Built the same as the saved message (the bubble, then its line underneath), so the swap does not move it. */}
+      <div ref={columnRef} className="flex max-w-[min(78%,30rem)] min-w-0 flex-col items-end">
+        <div ref={bubbleRef} className="flex max-w-full flex-col gap-2 whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
+          <span data-flight-text className="block">
+            {body}
+          </span>
+        </div>
+        <span ref={statusRef} aria-live="polite" className={FOOT}>
           Sending…
         </span>
       </div>
@@ -563,9 +563,15 @@ function MessageRow({
   // A new bubble of yours may be where a flight from the composer lands (components/app/send-flight.ts). It is held until the
   // flight claims it, so a photo shows only once its picture is in place.
   const bubbleRef = useRef<HTMLDivElement>(null)
+  // The bubble and the line under it, held together until a flight lands; the line then comes out.
+  const columnRef = useRef<HTMLDivElement>(null)
+  const statusRef = useRef<HTMLSpanElement>(null)
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
-    if (message.mine && fresh && bubble) receive(conversationId, bubble, bubble.querySelector<HTMLElement>("[data-flight-picture]"))
+    const column = columnRef.current
+    if (message.mine && fresh && bubble && column) {
+      receive(conversationId, bubble, bubble.querySelector<HTMLElement>("[data-flight-picture]"), column, () => comeOut(statusRef.current))
+    }
     // Only the message as it arrived; later renders of the same row are not new arrivals.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -759,129 +765,133 @@ function MessageRow({
             {picked ? <Check className="size-3.5" aria-hidden="true" /> : null}
           </button>
         ) : null}
-        <motion.div
-          ref={bubbleRef}
-          onClick={toggleOnTouch}
-          // A message of theirs rises in as it arrives, growing out of its own corner, with the spring of Parley's bubbles. Yours
-          // comes in on its flight from the composer, or not at all, so the text does not rise a second time after it lands.
-          initial={fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={SPRING_BUBBLE}
-          style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
-          className={cn(
-            "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
-            selecting && "pointer-events-none",
-            // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
-            // Text links take the bubble's colour. The shared-post card is a link too, but it sits on its own surface, so it is skipped.
-            message.mine ? "bg-dusk text-background [&_a:not([data-embed])]:text-background [&_a:not([data-embed])]:underline" : "bg-muted",
-            message.deleted && "italic opacity-70"
-          )}
-        >
-          {message.deleted ? (
-            <span>This message was deleted.</span>
-          ) : (
-            <>
-              {message.forwarded ? (
-                <p className="flex items-center gap-1 text-xs italic opacity-80">
-                  <Forward className="size-3" aria-hidden="true" />
-                  Forwarded
-                </p>
-              ) : null}
-              {message.replyTo ? (
-                <button
-                  type="button"
-                  onClick={() => jumpTo(message.replyTo?.id ?? "")}
-                  className={cn(
-                    "block w-full rounded-xl border-l-2 px-2.5 py-1.5 text-left text-[13px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    message.mine ? "border-background/70 bg-background/15 text-background" : "border-foreground/40 bg-background text-foreground"
-                  )}
-                >
-                  <span className="block truncate font-semibold">{message.replyTo.senderName}</span>
-                  <span className={cn("block truncate", message.mine ? "text-background/80" : "text-muted-foreground")}>
-                    {message.replyTo.deleted ? "This message was deleted." : message.replyTo.snippet}
-                  </span>
-                </button>
-              ) : null}
-              {viewOnceHidden ? (
-                <ViewOnceTile video={isVideoFile(message.mediaFile ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
-              ) : message.mediaFile && isVoiceFile(message.mediaFile) ? (
-                <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
-              ) : message.mediaFile && isVideoFile(message.mediaFile) ? (
-                <div className="w-full max-w-[300px] overflow-hidden rounded-xl">
-                  <VideoPlayer src={`/media/${message.mediaFile}`} label="Shared video" maxHeight="320px" />
-                </div>
-              ) : message.mediaFile && isAudioFile(message.mediaFile) ? (
-                <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Audio file" className="block h-10 w-[260px] max-w-full" />
-              ) : message.mediaFile && isDocumentFile(message.mediaFile) ? (
-                <DocumentCard
-                  file={message.mediaFile}
-                  name={message.attachment?.kind === "document" ? message.attachment.name : "File"}
-                  size={message.attachment?.kind === "document" ? message.attachment.size : 0}
-                  mine={message.mine}
-                />
-              ) : message.mediaFile ? (
-                <span className="relative block w-fit max-w-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} data-flight-picture loading={message.mine && fresh ? "eager" : "lazy"} onLoad={message.mine && fresh ? followLatest : undefined} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
-                  {message.attachment?.kind === "scan" ? (
-                    <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
-                  ) : null}
-                </span>
-              ) : null}
-              {message.attachment?.kind === "contact" ? <ContactCard user={message.contact} mine={message.mine} /> : null}
-              {message.attachment?.kind === "location" ? (
-                <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} mine={message.mine} />
-              ) : null}
-              {editing ? (
-                <EditBox value={draft} onChange={setDraft} onSave={saveEdit} onCancel={() => setEditing(false)} pending={pending} />
-              ) : message.body ? (
-                <>
-                  <PostBody text={message.body} className="text-[15px]" />
-                  {/* Empty unless a translate control shows, so it adds no space (and no gap) under the words. */}
-                  <div className="relative z-10 empty:hidden">
-                    <TranslateControl kind="message" id={message.id} lang={message.lang} />
+        <div ref={columnRef} className={cn("flex min-w-0 max-w-[min(78%,30rem)] flex-col", message.mine ? "items-end" : "items-start")}>
+          <motion.div
+            ref={bubbleRef}
+            onClick={toggleOnTouch}
+            // A message of theirs rises in as it arrives, growing out of its own corner, with the spring of Parley's bubbles. Yours
+            // comes in on its flight from the composer, or not at all, so the text does not rise a second time after it lands.
+            initial={fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={SPRING_BUBBLE}
+            style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
+            className={cn(
+              "flex max-w-full flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
+              selecting && "pointer-events-none",
+              // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
+              // Text links take the bubble's colour. The shared-post card is a link too, but it sits on its own surface, so it is skipped.
+              message.mine ? "bg-dusk text-background [&_a:not([data-embed])]:text-background [&_a:not([data-embed])]:underline" : "bg-muted",
+              message.deleted && "italic opacity-70"
+            )}
+          >
+            {message.deleted ? (
+              <span>This message was deleted.</span>
+            ) : (
+              <>
+                {message.forwarded ? (
+                  <p className="flex items-center gap-1 text-xs italic opacity-80">
+                    <Forward className="size-3" aria-hidden="true" />
+                    Forwarded
+                  </p>
+                ) : null}
+                {message.replyTo ? (
+                  <button
+                    type="button"
+                    onClick={() => jumpTo(message.replyTo?.id ?? "")}
+                    className={cn(
+                      "block w-full rounded-xl border-l-2 px-2.5 py-1.5 text-left text-[13px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      message.mine ? "border-background/70 bg-background/15 text-background" : "border-foreground/40 bg-background text-foreground"
+                    )}
+                  >
+                    <span className="block truncate font-semibold">{message.replyTo.senderName}</span>
+                    <span className={cn("block truncate", message.mine ? "text-background/80" : "text-muted-foreground")}>
+                      {message.replyTo.deleted ? "This message was deleted." : message.replyTo.snippet}
+                    </span>
+                  </button>
+                ) : null}
+                {viewOnceHidden ? (
+                  <ViewOnceTile video={isVideoFile(message.mediaFile ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
+                ) : message.mediaFile && isVoiceFile(message.mediaFile) ? (
+                  <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
+                ) : message.mediaFile && isVideoFile(message.mediaFile) ? (
+                  <div className="w-full max-w-[300px] overflow-hidden rounded-xl">
+                    <VideoPlayer src={`/media/${message.mediaFile}`} label="Shared video" maxHeight="320px" />
                   </div>
+                ) : message.mediaFile && isAudioFile(message.mediaFile) ? (
+                  <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Audio file" className="block h-10 w-[260px] max-w-full" />
+                ) : message.mediaFile && isDocumentFile(message.mediaFile) ? (
+                  <DocumentCard
+                    file={message.mediaFile}
+                    name={message.attachment?.kind === "document" ? message.attachment.name : "File"}
+                    size={message.attachment?.kind === "document" ? message.attachment.size : 0}
+                    mine={message.mine}
+                  />
+                ) : message.mediaFile ? (
+                  <span className="relative block w-fit max-w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} data-flight-picture loading={message.mine && fresh ? "eager" : "lazy"} onLoad={message.mine && fresh ? followLatest : undefined} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
+                    {message.attachment?.kind === "scan" ? (
+                      <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
+                    ) : null}
+                  </span>
+                ) : null}
+                {message.attachment?.kind === "contact" ? <ContactCard user={message.contact} mine={message.mine} /> : null}
+                {message.attachment?.kind === "location" ? (
+                  <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} mine={message.mine} />
+                ) : null}
+                {editing ? (
+                  <EditBox value={draft} onChange={setDraft} onSave={saveEdit} onCancel={() => setEditing(false)} pending={pending} />
+                ) : message.body ? (
+                  <>
+                    <PostBody text={message.body} className="text-[15px]" />
+                    {/* Empty unless a translate control shows, so it adds no space (and no gap) under the words. */}
+                    <div className="relative z-10 empty:hidden">
+                      <TranslateControl kind="message" id={message.id} lang={message.lang} />
+                    </div>
+                  </>
+                ) : null}
+                {message.link ? <LinkCard preview={message.link} className="mt-0 w-72" /> : null}
+                {message.poll ? <ChatPollView messageId={message.id} poll={message.poll} /> : null}
+                {message.post ? (
+                  <Link
+                    href={`/${message.post.author.handle}/status/${message.post.id}`}
+                    data-embed=""
+                    className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
+                  >
+                    <span className="text-sm font-semibold">{message.post.author.name}</span>
+                    {message.post.body ? <span className="mt-1 line-clamp-3 text-sm">{message.post.body}</span> : null}
+                  </Link>
+                ) : null}
+                {message.postUnavailable ? (
+                  <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                    This post is unavailable.
+                  </p>
+                ) : null}
+                {message.editedAt !== null ? <span className="-mt-1 self-end text-xs leading-none opacity-70">Edited</span> : null}
+              </>
+            )}
+          </motion.div>
+          {/* The status line, under the bubble: the time on every message, and on the last of your messages in a run whether it is
+              delivered or seen. Every message keeps its line, so one that joins a run does not move the rest of the thread. */}
+          {message.deleted ? null : (
+            <span ref={statusRef} className={FOOT}>
+              {marks}
+              {message.expiresAt !== null ? (
+                <>
+                  <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+                  <span className="sr-only">Disappearing message, </span>
                 </>
               ) : null}
-              {message.link ? <LinkCard preview={message.link} className="mt-0 w-72" /> : null}
-              {message.poll ? <ChatPollView messageId={message.id} poll={message.poll} /> : null}
-              {message.post ? (
-                <Link
-                  href={`/${message.post.author.handle}/status/${message.post.id}`}
-                  data-embed=""
-                  className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
-                >
-                  <span className="text-sm font-semibold">{message.post.author.name}</span>
-                  {message.post.body ? <span className="mt-1 line-clamp-3 text-sm">{message.post.body}</span> : null}
-                </Link>
+              <LocalTime at={message.createdAt} variant="clock" />
+              {message.mine && !joinsNext ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{message.seen ? "Seen" : "Delivered"}</span>
+                </>
               ) : null}
-              {message.postUnavailable ? (
-                <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                  This post is unavailable.
-                </p>
-              ) : null}
-              {message.editedAt !== null ? <span className="-mt-1 self-end text-xs leading-none opacity-70">Edited</span> : null}
-              {/* The status line: the time on every bubble, and on the last of your messages in a run whether it is delivered or
-                  seen. Every bubble keeps its line, so a message that joins a run does not move the rest of the thread. */}
-              <span className={cn(FOOT, message.mine ? "text-background/70" : "text-muted-foreground")}>
-                {marks}
-                {message.expiresAt !== null ? (
-                  <>
-                    <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-                    <span className="sr-only">Disappearing message, </span>
-                  </>
-                ) : null}
-                <LocalTime at={message.createdAt} variant="clock" />
-                {message.mine && !joinsNext ? (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>{message.seen ? "Seen" : "Delivered"}</span>
-                  </>
-                ) : null}
-              </span>
-            </>
+            </span>
           )}
-        </motion.div>
+        </div>
 
         {!message.deleted && !selecting ? (
           <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed || menuOpen) && "opacity-100")}>
