@@ -590,3 +590,23 @@ html[data-nav-away="true"] [data-app-main] {
 [data-wallpaper="ink"] {
   background: color-mix(in oklab, var(--foreground) 13%, var(--background));
 }
+
+/* The answer key while a call rings: a soft halo breathes out from it, as Parley's answer key does. The ink halo keeps the
+   light and dark themes both visible. Still under reduced motion. */
+@keyframes call-answer {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--foreground) 35%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 16px color-mix(in oklab, var(--foreground) 0%, transparent);
+  }
+}
+.call-answer {
+  animation: call-answer 1.8s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-answer {
+    animation: none;
+  }
+}

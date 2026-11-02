@@ -290,8 +290,8 @@ function Pulse({ active, children }: { active: boolean; children: ReactNode }) {
               key={ring}
               aria-hidden="true"
               className="absolute inset-0 rounded-full border-2 border-foreground/35"
-              animate={{ scale: [1, 1.5], opacity: [0.7, 0] }}
-              transition={{ duration: 2.2, repeat: Infinity, delay: ring * 1.1, ease: "easeOut" }}
+              animate={{ scale: [1, 1.85], opacity: [0.5, 0] }}
+              transition={{ duration: 2.4, repeat: Infinity, delay: ring * 1.2, ease: [0.2, 0.6, 0.35, 1] }}
             />
           ))
         : null}
@@ -345,6 +345,15 @@ function Elapsed({ since }: { since: number }) {
   return <>{formatDuration((now - since) / 1000)}</>
 }
 
+// The row of call controls rises in as one piece, as Parley's call controls do, rather than appearing at once.
+function Island({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.16, ease: [0.2, 0.7, 0.3, 1] }} className={className}>
+      {children}
+    </motion.div>
+  )
+}
+
 function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) {
   if (call.status === "ended") return null
   const big = size === "screen"
@@ -355,19 +364,19 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
   if (call.status === "incoming") {
     // Both stay disabled while the microphone prompt and the answer run, so a second tap does nothing.
     return (
-      <div className={row}>
+      <Island className={row}>
         <Control label="Decline" onClick={declineCall} tone="end" big={big} disabled={call.accepting}>
           <PhoneOff className={icon} strokeWidth={2} aria-hidden="true" />
         </Control>
         <Control label="Accept" onClick={() => void acceptCall()} tone="accept" big={big} disabled={call.accepting} busy={call.accepting}>
           <Phone className={icon} strokeWidth={2} aria-hidden="true" />
         </Control>
-      </div>
+      </Island>
     )
   }
   const endLabel = call.kind === "group" ? "Leave" : call.status === "outgoing" ? "Cancel" : "End"
   const controls = (
-    <div className={row}>
+    <Island className={row}>
       <Control label={call.muted ? "Unmute" : "Mute"} onClick={toggleMute} tone={call.muted ? "muted" : "plain"} big={big} pressed={call.muted}>
         {call.muted ? <MicOff className={icon} strokeWidth={2} aria-hidden="true" /> : <Mic className={icon} strokeWidth={2} aria-hidden="true" />}
       </Control>
@@ -391,7 +400,7 @@ function Controls({ call, size }: { call: CallState; size: "card" | "screen" }) 
       <Control label={endLabel} onClick={hangUp} tone="end" big={big}>
         <PhoneOff className={icon} strokeWidth={2} aria-hidden="true" />
       </Control>
-    </div>
+    </Island>
   )
   if (!share) return controls
   // Share screen sits on its own line above the round controls, so four controls never crowd a phone-width row and
@@ -469,7 +478,7 @@ function Control({
           big ? "size-[76px]" : "size-14",
           tone === "plain" && "bg-muted text-foreground hover:bg-foreground/10",
           tone === "muted" && "bg-foreground text-background",
-          tone === "accept" && "bg-foreground text-background hover:opacity-90",
+          tone === "accept" && "call-answer bg-foreground text-background hover:opacity-90",
           tone === "end" && "bg-destructive text-destructive-foreground hover:opacity-90"
         )}
       >

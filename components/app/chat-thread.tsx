@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "@/components/app/link"
+import { SEND_RISE, SPRING_BUBBLE, SPRING_POP } from "@/components/app/motion"
 import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
@@ -88,6 +90,8 @@ export function ChatThread({
   const [earlier, setEarlier] = useState<MessageView[]>([])
   const [atStart, setAtStart] = useState(false)
   const [loading, startLoading] = useTransition()
+  // The messages the thread opened with. Only a message that arrives after that rises in; the ones already there sit still.
+  const [openedWith] = useState(() => new Set(messages.map((message) => message.id)))
   const [page, setPage] = useState(messages)
   // The moment the thread last checked for disappearing messages that are due. Zero until the first check.
   const [clock, setClock] = useState(0)
@@ -217,6 +221,7 @@ export function ChatThread({
   }
 
   const lastOwn = [...shown].reverse().find((m) => m.mine && !m.call && m.timerChange === null)
+  const earlierIds = new Set(earlier.map((message) => message.id))
 
   return (
     <div ref={listRef} className="flex flex-col pt-4 pb-12">
@@ -245,6 +250,7 @@ export function ChatThread({
             message={message}
             onChange={(change) => setChanges((current) => ({ ...current, [message.id]: { ...current[message.id], ...change } }))}
             showSeen={message.id === lastOwn?.id && message.seen}
+            fresh={!openedWith.has(message.id) && !earlierIds.has(message.id)}
             // Messages from the same sender in quick succession stack into one run.
             joinsPrev={sameRun(previous, message)}
             joinsNext={sameRun(message, next)}
@@ -261,7 +267,7 @@ export function ChatThread({
       {waiting.map((item) => (
         <PendingBubble key={item.key} body={item.body} />
       ))}
-      {typing ? <p className="px-4 text-sm text-muted-foreground">{typing} is typing…</p> : null}
+      <AnimatePresence>{typing ? <TypingBubble key="typing" name={typing} /> : null}</AnimatePresence>
       {hasNewer ? (
         <div className="flex justify-center px-4 pt-4">
           <Link href={`/messages/${conversationId}`} className="glass inline-flex h-9 items-center rounded-full px-4 text-[14px] font-medium text-foreground transition-colors hover:bg-foreground/5">
@@ -278,14 +284,50 @@ export function ChatThread({
 // A message being sent: it shows at once, a little faded, until the saved copy arrives in the thread.
 function PendingBubble({ body }: { body: string }) {
   return (
-    <div className="flex flex-col items-end gap-1 px-4 pt-3 animate-in fade-in slide-in-from-bottom-1 duration-200">
-      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[20px] bg-dusk px-3.5 py-2 text-[15px] leading-relaxed text-background opacity-70">
+    <motion.div
+      initial={{ opacity: 0, y: 12, scale: 0.96 }}
+      animate={{ opacity: 0.72, y: 0, scale: 1 }}
+      transition={SEND_RISE}
+      style={{ transformOrigin: "100% 100%" }}
+      className="flex flex-col items-end gap-1 px-4 pt-3"
+    >
+      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
         {body}
       </div>
       <span className="text-xs text-muted-foreground" aria-live="polite">
         Sending…
       </span>
-    </div>
+    </motion.div>
+  )
+}
+
+// The other person is typing: three dots that rise in turn, in a bubble that opens up from the corner where the reply
+// will land. It leaves with a fade. The same dots and timing as Parley's typing indicator.
+function TypingBubble({ name }: { name: string }) {
+  const still = useReducedMotion()
+  return (
+    <motion.div
+      role="status"
+      initial={{ opacity: 0, y: 10, scale: 0.86 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.12 } }}
+      transition={SPRING_BUBBLE}
+      style={{ transformOrigin: "0% 100%" }}
+      className="flex items-end gap-2 px-4 pt-3"
+    >
+      <span className="flex items-center gap-[5px] rounded-[22px] bg-muted px-3.5 py-3.5">
+        {[0, 1, 2].map((dot) => (
+          <motion.span
+            key={dot}
+            aria-hidden="true"
+            className="size-[7px] rounded-full bg-foreground/55"
+            animate={still ? undefined : { y: [0, -3.5, 0], opacity: [0.35, 1, 0.35] }}
+            transition={{ duration: 1.05, repeat: Infinity, delay: dot * 0.16, ease: "easeInOut" }}
+          />
+        ))}
+      </span>
+      <span className="sr-only">{name} is typing</span>
+    </motion.div>
   )
 }
 
@@ -451,6 +493,7 @@ function MessageRow({
   message,
   onChange,
   showSeen,
+  fresh,
   showName,
   joinsPrev,
   joinsNext,
@@ -464,6 +507,8 @@ function MessageRow({
   message: MessageView
   onChange: (change: ThreadChange) => void
   showSeen: boolean
+  // A message that arrived while the thread was open: its bubble rises in once.
+  fresh: boolean
   showName: boolean
   joinsPrev: boolean
   joinsNext: boolean
@@ -678,8 +723,13 @@ function MessageRow({
             {picked ? <Check className="size-3.5" aria-hidden="true" /> : null}
           </button>
         ) : null}
-        <div
+        <motion.div
           onClick={toggleOnTouch}
+          // A new message rises from below, growing out of its own corner, with the same spring as Parley's bubbles.
+          initial={fresh ? (message.mine ? { opacity: 0, y: 12, scale: 0.96 } : { opacity: 0, y: 10, scale: 0.86 }) : false}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={SPRING_BUBBLE}
+          style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
           className={cn(
             "flex max-w-[min(78%,30rem)] flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
             selecting && "pointer-events-none",
@@ -774,7 +824,7 @@ function MessageRow({
               {message.editedAt !== null ? <span className="-mt-1 self-end text-xs leading-none opacity-70">Edited</span> : null}
             </>
           )}
-        </div>
+        </motion.div>
 
         {!message.deleted && !selecting ? (
           <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed || menuOpen) && "opacity-100")}>
@@ -888,7 +938,13 @@ function MessageRow({
       ) : null}
 
       {message.reactions.length > 0 ? (
-        <div className={cn("flex flex-wrap gap-1", selecting && "pointer-events-none")}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.55 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={SPRING_POP}
+          style={{ transformOrigin: message.mine ? "100% 0%" : "0% 0%" }}
+          className={cn("flex flex-wrap gap-1", selecting && "pointer-events-none")}
+        >
           {message.reactions.map((reaction) => (
             <button
               key={reaction.emoji}
@@ -906,7 +962,7 @@ function MessageRow({
               <span>{reaction.count}</span>
             </button>
           ))}
-        </div>
+        </motion.div>
       ) : null}
 
       {/* The time sits under the last message of a run; the run shares it. */}

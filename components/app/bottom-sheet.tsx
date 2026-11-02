@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { SPRING_SHEET } from "@/components/app/motion"
+import { SHEET_SETTLE, SPRING_SHEET } from "@/components/app/motion"
 
 const noopSubscribe = () => () => {}
 function useMounted(): boolean {
@@ -109,7 +109,7 @@ export function BottomSheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             className="fixed inset-0 z-[80] bg-foreground/30 backdrop-blur-[3px]"
           />
           <motion.div
@@ -119,7 +119,7 @@ export function BottomSheet({
             aria-label={label}
             initial={{ y: "100%", maxHeight: REST_HEIGHT }}
             animate={{ y: offset, height: full ? FULL_HEIGHT : "auto", maxHeight: full ? FULL_HEIGHT : REST_HEIGHT }}
-            exit={{ y: "100%" }}
+            exit={{ y: "100%", transition: SHEET_SETTLE }}
             transition={dragging || reduce ? { duration: 0 } : SPRING_SHEET}
             className="fixed inset-x-0 bottom-0 z-[90] mx-auto flex w-full max-w-[560px] flex-col overflow-hidden rounded-t-[32px] border-x border-t border-border bg-popover text-popover-foreground shadow-[0_-30px_70px_-20px_rgba(0,0,0,0.5)]"
           >
