@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { addPending, removePending } from "@/components/app/pending-messages"
-import { armNext, armText, placeOrigin, textOrigin } from "@/components/app/send-flight"
+import { armText, placeOrigin, startPicture, textOrigin } from "@/components/app/send-flight"
 import { ChatPollDialog, type PollDraft } from "@/components/app/chat-poll-dialog"
 import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -332,7 +332,10 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
   useEffect(() => {
     if (pick?.kind !== "media") return
     const url = pick.url
-    return () => URL.revokeObjectURL(url)
+    // Kept a moment past the send: the flight's copy of the picture still reads it.
+    return () => {
+      window.setTimeout(() => URL.revokeObjectURL(url), 12000)
+    }
   }, [pick])
 
   // A reply starts from a message in the thread. The composer shows who is answered and takes the focus.
@@ -690,8 +693,8 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
         onSubmit={() => {
           stopDictation()
           queueOptimistic()
-          // A photo or video leaves its preview and flies into the chat once the server has it.
-          if (pick?.kind === "media") armNext(conversationId, placeOrigin())
+          // A photo or video leaves its preview at once and grows into its bubble when the saved message arrives.
+          if (pick?.kind === "media") startPicture(conversationId, placeOrigin())
         }}
         onReset={() => {
           setPick(null)

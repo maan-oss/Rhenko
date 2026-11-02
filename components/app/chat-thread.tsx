@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "rea
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "@/components/app/link"
 import { SEND_RISE, SPRING_BUBBLE, SPRING_POP } from "@/components/app/motion"
-import { hasFlight, launch } from "@/components/app/send-flight"
+import { hasFlight, launch, receive } from "@/components/app/send-flight"
 import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
@@ -277,15 +277,21 @@ export function ChatThread({
         </div>
       ) : null}
       {/* The margin is the sticky composer, so the newest message clears it when the thread scrolls to the end. */}
-      <div ref={endRef} className="scroll-mb-[88px] lg:scroll-mb-[80px]" />
+      <div ref={endRef} data-thread-end className="scroll-mb-[88px] lg:scroll-mb-[80px]" />
     </div>
   )
+}
+
+// A photo of yours takes its height only when it loads, after the thread has already scrolled to the newest message. When it
+// does load, the thread follows, so the bubble is not left under the composer.
+function followLatest() {
+  document.querySelector<HTMLElement>("[data-thread-end]")?.scrollIntoView({ block: "end" })
 }
 
 // A message being sent: it shows at once, a little faded, until the saved copy arrives in the thread. The words leave the
 // message box and turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then.
 function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body: string }) {
-  const [flies] = useState(() => hasFlight(id, chatId))
+  const [flies] = useState(() => hasFlight(id))
   const bubbleRef = useRef<HTMLDivElement>(null)
   const captionRef = useRef<HTMLSpanElement>(null)
   useLayoutEffect(() => {
@@ -306,10 +312,12 @@ function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body:
       style={{ transformOrigin: "100% 100%" }}
       className="flex flex-col items-end gap-1 px-4 pt-3"
     >
-      <div ref={bubbleRef} className="max-w-[78%] whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
+      {/* Laid out as the saved bubble is (a column with its gap and an empty row under the words), so the swap does not move it. */}
+      <div ref={bubbleRef} className="flex max-w-[min(78%,30rem)] flex-col gap-2 whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
         <span data-flight-text className="block">
           {body}
         </span>
+        <span aria-hidden="true" className="block" />
       </div>
       <span ref={captionRef} className="text-xs text-muted-foreground" aria-live="polite">
         Sending…
@@ -549,12 +557,15 @@ function MessageRow({
   // A view-once photo or video this viewer has opened in this visit. Until they leave, it stays on screen.
   const [viewed, setViewed] = useState(false)
   const [pending, startTransition] = useTransition()
-  // Your own photo or video, sent from the composer, flies from its preview into this bubble (components/app/send-flight.ts).
+  // A new bubble of yours may be where a flight from the composer lands (components/app/send-flight.ts). It is held until the
+  // flight claims it, so a photo shows only once its picture is in place.
   const bubbleRef = useRef<HTMLDivElement>(null)
-  const [flies] = useState(() => message.mine && hasFlight(message.id, conversationId))
   useLayoutEffect(() => {
-    if (flies && bubbleRef.current) launch(bubbleRef.current, message.id, conversationId)
-  }, [flies, message.id, conversationId])
+    const bubble = bubbleRef.current
+    if (message.mine && fresh && bubble) receive(conversationId, bubble, bubble.querySelector<HTMLElement>("[data-flight-picture]"))
+    // Only the message as it arrived; later renders of the same row are not new arrivals.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // A sender can change the words of a message for a short time after sending it. The menu asks the rule when it opens, so the
   // window is judged at that moment, and the server judges it again when the change is sent.
@@ -751,7 +762,7 @@ function MessageRow({
           onClick={toggleOnTouch}
           // A message of theirs rises in as it arrives, growing out of its own corner, with the spring of Parley's bubbles. Yours
           // comes in on its flight from the composer, or not at all, so the text does not rise a second time after it lands.
-          initial={flies ? false : fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
+          initial={fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={SPRING_BUBBLE}
           style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
@@ -809,7 +820,7 @@ function MessageRow({
               ) : message.mediaFile ? (
                 <span className="relative block w-fit max-w-full">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} loading="lazy" decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
+                  <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} data-flight-picture loading={message.mine && fresh ? "eager" : "lazy"} onLoad={message.mine && fresh ? followLatest : undefined} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
                   {message.attachment?.kind === "scan" ? (
                     <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
                   ) : null}
