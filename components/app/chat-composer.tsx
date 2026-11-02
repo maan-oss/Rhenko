@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { addPending, removePending } from "@/components/app/pending-messages"
+import { armNext, armText, placeOrigin, textOrigin } from "@/components/app/send-flight"
 import { ChatPollDialog, type PollDraft } from "@/components/app/chat-poll-dialog"
 import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -142,10 +143,10 @@ function describePick(pick: Pick): { title: string; detail: string; thumb: React
     case "media": {
       const video = pick.file.type.startsWith("video/")
       const thumb = video ? (
-        <video src={pick.url} muted playsInline preload="metadata" aria-hidden="true" className="size-14 shrink-0 rounded-xl object-cover" />
+        <video src={pick.url} muted playsInline preload="metadata" aria-hidden="true" data-flight-source="solid" className="size-14 shrink-0 rounded-xl object-cover" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={pick.url} alt="" className="size-14 shrink-0 rounded-xl object-cover" />
+        <img src={pick.url} alt="" data-flight-source="solid" className="size-14 shrink-0 rounded-xl object-cover" />
       )
       return { title: pick.scan ? "Scan" : video ? "Video" : "Photo", detail: pick.file.name, thumb }
     }
@@ -263,6 +264,11 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
     if (!body || pick !== null || voice !== null || replyTo !== null) return
     const key = crypto.randomUUID()
     pendingKey.current = key
+    // The words leave the box and turn into the bubble as it lands (components/app/send-flight.ts). While they fly, the
+    // box's own words are hidden, so they do not show twice; the next settled send clears the box as before.
+    const from = textRef.current ? textOrigin(textRef.current) : null
+    armText(key, from)
+    if (from && textRef.current) textRef.current.style.color = "transparent"
     addPending(conversationId, { key, body, createdAt: Date.now() })
   }
 
@@ -284,6 +290,8 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
   // A sent text stays in the thread until the saved message arrives; a refresh brings it in. A failed send takes the
   // waiting message away, and the text stays in the box with the error.
   useEffect(() => {
+    // The box's words come back once the send has settled (see queueOptimistic).
+    if (textRef.current) textRef.current.style.color = ""
     const key = pendingKey.current
     if (!key) return
     pendingKey.current = null
@@ -682,6 +690,8 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
         onSubmit={() => {
           stopDictation()
           queueOptimistic()
+          // A photo or video leaves its preview and flies into the chat once the server has it.
+          if (pick?.kind === "media") armNext(conversationId, placeOrigin())
         }}
         onReset={() => {
           setPick(null)

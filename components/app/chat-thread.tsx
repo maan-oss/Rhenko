@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "rea
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "@/components/app/link"
 import { SEND_RISE, SPRING_BUBBLE, SPRING_POP } from "@/components/app/motion"
+import { hasFlight, launch } from "@/components/app/send-flight"
 import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
@@ -265,7 +266,7 @@ export function ChatThread({
         )
       })}
       {waiting.map((item) => (
-        <PendingBubble key={item.key} body={item.body} />
+        <PendingBubble key={item.key} id={item.key} chatId={conversationId} body={item.body} />
       ))}
       <AnimatePresence>{typing ? <TypingBubble key="typing" name={typing} /> : null}</AnimatePresence>
       {hasNewer ? (
@@ -281,20 +282,36 @@ export function ChatThread({
   )
 }
 
-// A message being sent: it shows at once, a little faded, until the saved copy arrives in the thread.
-function PendingBubble({ body }: { body: string }) {
+// A message being sent: it shows at once, a little faded, until the saved copy arrives in the thread. The words leave the
+// message box and turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then.
+function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body: string }) {
+  const [flies] = useState(() => hasFlight(id, chatId))
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const captionRef = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const bubble = bubbleRef.current
+    if (!flies || !bubble) return
+    // The caption waits for the bubble to land, so "Sending…" does not show over the flight.
+    const caption = captionRef.current
+    if (caption) caption.style.visibility = "hidden"
+    launch(bubble, id, chatId, () => {
+      if (caption) caption.style.visibility = ""
+    })
+  }, [flies, id, chatId])
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12, scale: 0.96 }}
+      initial={flies ? false : { opacity: 0, y: 12, scale: 0.96 }}
       animate={{ opacity: 0.72, y: 0, scale: 1 }}
       transition={SEND_RISE}
       style={{ transformOrigin: "100% 100%" }}
       className="flex flex-col items-end gap-1 px-4 pt-3"
     >
-      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
-        {body}
+      <div ref={bubbleRef} className="max-w-[78%] whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
+        <span data-flight-text className="block">
+          {body}
+        </span>
       </div>
-      <span className="text-xs text-muted-foreground" aria-live="polite">
+      <span ref={captionRef} className="text-xs text-muted-foreground" aria-live="polite">
         Sending…
       </span>
     </motion.div>
@@ -532,6 +549,12 @@ function MessageRow({
   // A view-once photo or video this viewer has opened in this visit. Until they leave, it stays on screen.
   const [viewed, setViewed] = useState(false)
   const [pending, startTransition] = useTransition()
+  // Your own photo or video, sent from the composer, flies from its preview into this bubble (components/app/send-flight.ts).
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const [flies] = useState(() => message.mine && hasFlight(message.id, conversationId))
+  useLayoutEffect(() => {
+    if (flies && bubbleRef.current) launch(bubbleRef.current, message.id, conversationId)
+  }, [flies, message.id, conversationId])
 
   // A sender can change the words of a message for a short time after sending it. The menu asks the rule when it opens, so the
   // window is judged at that moment, and the server judges it again when the change is sent.
@@ -724,9 +747,11 @@ function MessageRow({
           </button>
         ) : null}
         <motion.div
+          ref={bubbleRef}
           onClick={toggleOnTouch}
-          // A new message rises from below, growing out of its own corner, with the same spring as Parley's bubbles.
-          initial={fresh ? (message.mine ? { opacity: 0, y: 12, scale: 0.96 } : { opacity: 0, y: 10, scale: 0.86 }) : false}
+          // A message of theirs rises in as it arrives, growing out of its own corner, with the spring of Parley's bubbles. Yours
+          // comes in on its flight from the composer, or not at all, so the text does not rise a second time after it lands.
+          initial={flies ? false : fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={SPRING_BUBBLE}
           style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
