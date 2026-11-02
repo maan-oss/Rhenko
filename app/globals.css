@@ -226,6 +226,14 @@
   --tw-ring-color: transparent;
 }
 
+/* A text field never gets an outline. A square box drawn round a rounded field looked wrong, so the caret and the field's own
+   fill or ring show focus instead. Checkboxes and radios keep the halo (see below). */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 /* A composer's text field sits inside its own pill, and the pill shows the focus instead of the field. */
 [data-composer-field]:focus-visible {
   outline: none;

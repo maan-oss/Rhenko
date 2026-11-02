@@ -29,6 +29,8 @@ import { cn } from "@/lib/utils"
 const FIELD =
   "h-12 w-full min-w-0 rounded-full bg-muted px-5 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
 const FIELD_ERROR = "shadow-[inset_0_0_0_1px_var(--destructive)]"
+// A field's focus is one soft ring round its pill (the same halo as the composer), never a square outline.
+const FIELD_FOCUS = "focus:shadow-[0_0_0_3px_var(--halo)] focus-within:shadow-[0_0_0_3px_var(--halo)]"
 const EMAIL_TAKEN = "That email is already used by another account. Use a different one, or leave it blank."
 
 const LINK = "font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground"
@@ -93,7 +95,7 @@ function TextField({
       <input
         id={id}
         name={name}
-        className={cn(FIELD, error && FIELD_ERROR, className)}
+        className={cn(FIELD, error ? FIELD_ERROR : FIELD_FOCUS, className)}
         aria-invalid={error ? true : undefined}
         {...input}
       />
@@ -136,7 +138,7 @@ function PasswordField({
           placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={cn(FIELD, "pr-12")}
+          className={cn(FIELD, FIELD_FOCUS, "pr-12")}
         />
         <button
           type="button"
@@ -177,7 +179,7 @@ function HandleField({
         className={cn(
           FIELD,
           "flex items-center gap-1 focus-within:bg-background",
-          problem && FIELD_ERROR
+          problem ? FIELD_ERROR : FIELD_FOCUS
         )}
       >
         <span aria-hidden="true" className="select-none text-muted-foreground">

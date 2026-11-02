@@ -221,7 +221,6 @@ export function ChatThread({
     })
   }
 
-  const lastOwn = [...shown].reverse().find((m) => m.mine && !m.call && m.timerChange === null)
   const earlierIds = new Set(earlier.map((message) => message.id))
 
   return (
@@ -250,7 +249,6 @@ export function ChatThread({
             conversationId={conversationId}
             message={message}
             onChange={(change) => setChanges((current) => ({ ...current, [message.id]: { ...current[message.id], ...change } }))}
-            showSeen={message.id === lastOwn?.id && message.seen}
             fresh={!openedWith.has(message.id) && !earlierIds.has(message.id)}
             // Messages from the same sender in quick succession stack into one run.
             joinsPrev={sameRun(previous, message)}
@@ -265,9 +263,12 @@ export function ChatThread({
           />
         )
       })}
-      {waiting.map((item) => (
-        <PendingBubble key={item.key} id={item.key} chatId={conversationId} body={item.body} />
-      ))}
+      {waiting.map((item) => {
+        // A message of yours sent straight after another joins its run, with the run's tighter spacing, the same as it will be saved.
+        const last = shown.at(-1)
+        const joins = !!last && last.mine && !last.deleted && !last.call && last.timerChange === null && item.createdAt - last.createdAt < RUN_MS
+        return <PendingBubble key={item.key} id={item.key} chatId={conversationId} body={item.body} joins={joins} />
+      })}
       <AnimatePresence>{typing ? <TypingBubble key="typing" name={typing} /> : null}</AnimatePresence>
       {hasNewer ? (
         <div className="flex justify-center px-4 pt-4">
@@ -291,18 +292,22 @@ function followLatest() {
 // A message being sent: it shows at once, until the saved copy arrives in the thread. The words leave the message box and
 // turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then. It stays at full
 // strength while it flies, so the saved bubble that replaces it looks exactly the same; with no flight, it is faded as before.
-function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body: string }) {
+// The status line at the foot of a bubble: the time and what became of the message, in small text inside the bubble. It takes
+// one short line, and a message in a run shows it only at the end of the run.
+const FOOT = "-mt-1 flex h-3 items-center gap-1 self-end whitespace-nowrap text-[11px] leading-none"
+
+function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string; body: string; joins: boolean }) {
   const [flies] = useState(() => hasFlight(id))
   const bubbleRef = useRef<HTMLDivElement>(null)
-  const captionRef = useRef<HTMLSpanElement>(null)
+  const statusRef = useRef<HTMLSpanElement>(null)
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
     if (!flies || !bubble) return
-    // The caption waits for the bubble to land, so "Sending…" does not show over the flight.
-    const caption = captionRef.current
-    if (caption) caption.style.visibility = "hidden"
+    // The status waits for the bubble to land, so "Sending…" does not fly with the words.
+    const status = statusRef.current
+    if (status) status.style.visibility = "hidden"
     launch(bubble, id, chatId, () => {
-      if (caption) caption.style.visibility = ""
+      if (status) status.style.visibility = ""
     })
   }, [flies, id, chatId])
   return (
@@ -311,18 +316,17 @@ function PendingBubble({ id, chatId, body }: { id: string; chatId: string; body:
       animate={{ opacity: flies ? 1 : 0.72, y: 0, scale: 1 }}
       transition={SEND_RISE}
       style={{ transformOrigin: "100% 100%" }}
-      className="flex flex-col items-end gap-1 px-4 pt-3"
+      className={cn("flex flex-col items-end px-4", joins ? "pt-[3px]" : "pt-3")}
     >
-      {/* Laid out as the saved bubble is (a column with its gap and an empty row under the words), so the swap does not move it. */}
+      {/* Built the same as the saved bubble (words, then the status line), so the swap does not move it. */}
       <div ref={bubbleRef} className="flex max-w-[min(78%,30rem)] flex-col gap-2 whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
         <span data-flight-text className="block">
           {body}
         </span>
-        <span aria-hidden="true" className="block" />
+        <span ref={statusRef} aria-live="polite" className={cn(FOOT, "text-background/70")}>
+          Sending…
+        </span>
       </div>
-      <span ref={captionRef} className="text-xs text-muted-foreground" aria-live="polite">
-        Sending…
-      </span>
     </motion.div>
   )
 }
@@ -518,7 +522,6 @@ function MessageRow({
   conversationId,
   message,
   onChange,
-  showSeen,
   fresh,
   showName,
   joinsPrev,
@@ -532,7 +535,6 @@ function MessageRow({
   conversationId: string
   message: MessageView
   onChange: (change: ThreadChange) => void
-  showSeen: boolean
   // A message that arrived while the thread was open: its bubble rises in once.
   fresh: boolean
   showName: boolean
@@ -724,7 +726,6 @@ function MessageRow({
       ) : null}
     </>
   )
-  const hasOwnMarks = message.viewOnce || message.starred || message.pinned || message.reminderAt !== null
 
   return (
     <div
@@ -836,7 +837,8 @@ function MessageRow({
               ) : message.body ? (
                 <>
                   <PostBody text={message.body} className="text-[15px]" />
-                  <div className="relative z-10">
+                  {/* Empty unless a translate control shows, so it adds no space (and no gap) under the words. */}
+                  <div className="relative z-10 empty:hidden">
                     <TranslateControl kind="message" id={message.id} lang={message.lang} />
                   </div>
                 </>
@@ -859,6 +861,24 @@ function MessageRow({
                 </p>
               ) : null}
               {message.editedAt !== null ? <span className="-mt-1 self-end text-xs leading-none opacity-70">Edited</span> : null}
+              {/* The status line: the time on every bubble, and on the last of your messages in a run whether it is delivered or
+                  seen. Every bubble keeps its line, so a message that joins a run does not move the rest of the thread. */}
+              <span className={cn(FOOT, message.mine ? "text-background/70" : "text-muted-foreground")}>
+                {marks}
+                {message.expiresAt !== null ? (
+                  <>
+                    <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
+                    <span className="sr-only">Disappearing message, </span>
+                  </>
+                ) : null}
+                <LocalTime at={message.createdAt} variant="clock" />
+                {message.mine && !joinsNext ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{message.seen ? "Seen" : "Delivered"}</span>
+                  </>
+                ) : null}
+              </span>
             </>
           )}
         </motion.div>
@@ -1002,22 +1022,6 @@ function MessageRow({
         </motion.div>
       ) : null}
 
-      {/* The time sits under the last message of a run; the run shares it. */}
-      {!joinsNext || showSeen ? (
-        <p className="text-xs text-muted-foreground">
-          {showSeen ? "Seen · " : null}
-          {marks}
-          {message.expiresAt !== null ? (
-            <>
-              <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-              <span className="sr-only">Disappearing message, </span>
-            </>
-          ) : null}
-          <LocalTime at={message.createdAt} variant="clock" />
-        </p>
-      ) : hasOwnMarks ? (
-        <p className="text-xs text-muted-foreground">{marks}</p>
-      ) : null}
       {forwardOpen ? <ForwardDialog messageId={message.id} onOpenChange={setForwardOpen} /> : null}
       {infoOpen ? <MessageInfoDialog messageId={message.id} onOpenChange={setInfoOpen} /> : null}
       {reminderOpenedAt !== null ? (

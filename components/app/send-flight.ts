@@ -67,14 +67,16 @@ const PICTURE_WAIT = 9000
 const ARRIVAL_TTL = 3000
 // A photo's own corner (rounded-xl), which its copy keeps while it grows.
 const CORNER = 12
-// How much of the way the copy turns to follow a bubble that has moved, each frame.
-const GLIDE = 0.2
+// How quickly (per second) the copy's aim follows a bubble that has moved. It is time-based, so the copy eases the same at any
+// frame rate, and a bubble that jumps a little (the thread settling) turns the path gently instead of making it wobble.
+const GLIDE_RATE = 14
 // The copy sets off only once its bubble has held still this many frames: a bubble that has just mounted can still be moving
 // into place (the thread scrolls to its end as it appears).
 const SETTLE_FRAMES = 3
-// The copy's spring, critically damped: it reaches the bubble without passing it or swaying back, so the path stays straight.
-const STIFFNESS = 210
-const DAMPING = 29
+// The copy's spring, critically damped (ratio about 1): it reaches the bubble without passing it or swaying back, so the path
+// stays straight, and it settles sooner than the old spring did.
+const STIFFNESS = 300
+const DAMPING = 35
 
 const armed = new Map<string, Armed>()
 const flights = new Set<Flight>()
@@ -294,7 +296,7 @@ function run(f: Flight, paint: (p: number, to: Rect) => void) {
           f.to = live
           f.moving = true
         } else if (f.moving) {
-          f.to = between(f.to, live, GLIDE)
+          f.to = between(f.to, live, 1 - Math.exp(-GLIDE_RATE * dt))
         }
       }
     } else if (f.lostAt === null) {
