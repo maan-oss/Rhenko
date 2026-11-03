@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -56,7 +57,7 @@ export function PasswordField() {
 
 export function ChangeHandleForm({ handle }: { handle: string }) {
   const router = useRouter()
-  const [state, action] = useActionState(
+  const [state, action] = useSafeActionState(
     async (prev: ProfileState, formData: FormData): Promise<ProfileState> => {
       const result = await changeHandle(prev, formData)
       if (result.ok) {
@@ -82,7 +83,7 @@ export function ChangeHandleForm({ handle }: { handle: string }) {
 
 export function BirthdayForm({ birthday }: { birthday: string | null }) {
   const router = useRouter()
-  const [state, action] = useActionState(
+  const [state, action] = useSafeActionState(
     async (prev: ProfileState, formData: FormData): Promise<ProfileState> => {
       const result = await updateBirthday(prev, formData)
       if (result.ok) {
@@ -152,7 +153,7 @@ export function DataExportButton() {
 }
 
 export function DeactivateForm({ codeNeed }: { codeNeed: CodeNeed }) {
-  const [state, action] = useActionState(deactivateAccount, {} as AccountState)
+  const [state, action] = useSafeActionState(deactivateAccount, {} as AccountState)
   return (
     <form action={action} className="flex flex-col gap-3">
       <PasswordField />
@@ -166,7 +167,7 @@ export function DeactivateForm({ codeNeed }: { codeNeed: CodeNeed }) {
 }
 
 export function DeleteAccountForm({ handle, codeNeed }: { handle: string; codeNeed: CodeNeed }) {
-  const [state, action] = useActionState(deleteAccount, {} as AccountState)
+  const [state, action] = useSafeActionState(deleteAccount, {} as AccountState)
   return (
     <form action={action} className="flex flex-col gap-3">
       <PasswordField />

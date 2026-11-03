@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { setHideCounts, setProtected, toggleBlock, toggleMute } from "@/actions/social"
@@ -119,7 +120,7 @@ export function MutedWordsPanel({ words }: { words: string[] }) {
   const router = useRouter()
   const [error, setError] = useState<string | undefined>()
   const [pending, startTransition] = useTransition()
-  const [, action] = useActionState(
+  const [, action] = useSafeActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
       const word = String(formData.get("word") ?? "").trim()
       const result = await addMutedWord(word)

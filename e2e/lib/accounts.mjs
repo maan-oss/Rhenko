@@ -170,7 +170,7 @@ export async function signIn(page, creds) {
 
 // Opens the left panel on a phone, where the navigation lives behind the avatar.
 export async function openMenu(page) {
-  await page.getByRole("button", { name: "Open menu" }).click()
+  await page.getByRole("button", { name: "Open sidebar" }).first().click()
   const menu = page.getByRole("dialog", { name: "Menu" })
   await menu.waitFor()
   return menu

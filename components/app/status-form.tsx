@@ -1,6 +1,7 @@
 "use client"
 
-import { startTransition, useActionState, useState } from "react"
+import { startTransition, useState } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { toast } from "sonner"
 import { setStatus, type StatusState } from "@/actions/account"
 import { ErrorLine, FIELD_INPUT } from "@/components/app/form-bits"
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils"
 export function StatusForm({ status }: { status: string }) {
   const [value, setValue] = useState(status)
   const [saved, setSaved] = useState(status)
-  const [state, action, pending] = useActionState(async (prev: StatusState, formData: FormData): Promise<StatusState> => {
+  const [state, action, pending] = useSafeActionState(async (prev: StatusState, formData: FormData): Promise<StatusState> => {
     const result = await setStatus(prev, formData)
     if (result.ok) {
       const next = result.status ?? ""

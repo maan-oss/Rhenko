@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useRef, useState, type ChangeEvent } from "react"
+import { useRef, useState, type ChangeEvent } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 import { updateProfile, type ProfileState } from "@/actions/social"
@@ -51,7 +52,7 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
     }
     return result
   }
-  const [state, action] = useActionState(save, {} as ProfileState)
+  const [state, action] = useSafeActionState(save, {} as ProfileState)
 
   // A picked photo opens the framing dialog first. Only the framed part is kept, and it is handed to the form's file input.
   function pickPhoto(event: ChangeEvent<HTMLInputElement>, kind: Kind) {

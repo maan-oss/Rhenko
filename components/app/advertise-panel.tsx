@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "@/components/app/link"
-import { useActionState, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 import { createAdAccount, createCampaign, setCampaignPaused, startAdCredit, type FormState } from "@/actions/ads"
@@ -72,7 +73,7 @@ export function AdvertisePanel({ data }: { data: AdvertiseData }) {
 }
 
 function AccountForm() {
-  const [state, action] = useActionState<FormState, FormData>(createAdAccount, {})
+  const [state, action] = useSafeActionState(createAdAccount, {} as FormState)
   return (
     <section className="flex flex-col gap-4 border-b border-border px-4 py-4" aria-labelledby="set-up-heading">
       <h2 id="set-up-heading" className="text-lg font-semibold">
@@ -152,7 +153,7 @@ function Balance({ data }: { data: AdvertiseData }) {
 }
 
 function CampaignForm() {
-  const [state, action] = useActionState<FormState, FormData>(createCampaign, {})
+  const [state, action] = useSafeActionState(createCampaign, {} as FormState)
   return (
     <form action={action} className="flex flex-col gap-4">
       <Field label="Headline" hint={`Up to ${AD_HEADLINE_MAX} characters.`}>

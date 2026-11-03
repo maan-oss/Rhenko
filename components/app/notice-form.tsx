@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { submitNotice, type LegalState } from "@/actions/legal"
 import { NOTICE_KINDS } from "@/lib/legal"
@@ -64,7 +65,7 @@ function Submit() {
 }
 
 export function NoticeForm() {
-  const [state, formAction] = useActionState(submitNotice, {} as LegalState)
+  const [state, formAction] = useSafeActionState(submitNotice, {} as LegalState)
   const [draft, setDraft] = useState<Draft>(EMPTY)
 
   if (state.ok) {

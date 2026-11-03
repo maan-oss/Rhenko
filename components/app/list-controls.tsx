@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -33,7 +34,7 @@ function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: st
 
 export function CreateListForm() {
   const router = useRouter()
-  const [state, action] = useActionState(
+  const [state, action] = useSafeActionState(
     async (_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> => {
       const result: ListResult = await createList(formData)
       if (!result.ok) return { error: result.error }

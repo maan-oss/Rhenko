@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
@@ -202,22 +203,12 @@ function Waveform() {
 const ATTACH = "tap-44 grid size-10 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
 const ATTACH_ITEM = "min-h-11 gap-3 text-[15px]"
 
-// A send that never gets an answer (no connection, a dropped request) comes back as an error the composer shows. Thrown, it
-// would reach the page's error screen instead, and the message waiting in the thread would never be taken back.
-async function sendOrFail(previous: ChatState, formData: FormData): Promise<ChatState> {
-  try {
-    return await sendMessage(previous, formData)
-  } catch {
-    return { error: "Your message did not send. Check your connection and try again." }
-  }
-}
-
 // Sends a message. Enter sends, Shift+Enter starts a new line. Typing is signalled every few seconds.
 // One attachment can go with a message: a photo or video, a scan, a document, an audio file, a voice message, a contact, a
 // location or a poll. In a group, "@" suggests the people to mention. `people` are the others in the conversation who can be shared.
 // The row sits low on the screen; on a phone it leaves room on the left for the folded dock.
 export function ChatComposer({ conversationId, people, group }: { conversationId: string; people: MiniUser[]; group: boolean }) {
-  const [state, action] = useActionState(sendOrFail, {} as ChatState)
+  const [state, action] = useSafeActionState(sendMessage, {} as ChatState, "Your message did not send. Check your connection and try again.")
   const formRef = useRef<HTMLFormElement>(null)
   const lastSignal = useRef(0)
   const [pick, setPick] = useState<Pick | null>(null)

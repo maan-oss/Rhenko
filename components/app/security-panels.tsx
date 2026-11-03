@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 import {
@@ -30,7 +31,7 @@ function Submit({ label, pendingLabel, danger = false }: { label: string; pendin
 }
 
 export function ChangePasswordForm() {
-  const [state, action] = useActionState(
+  const [state, action] = useSafeActionState(
     async (prev: AccountState, formData: FormData): Promise<AccountState> => {
       const result = await changePassword(prev, formData)
       if (result.ok) toast.success("Password changed. Other devices were signed out.")
@@ -106,7 +107,7 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
   const [codes, setCodes] = useState<string[] | null>(null)
   const [starting, startSetup] = useTransition()
 
-  const [enableState, enableAction] = useActionState(
+  const [enableState, enableAction] = useSafeActionState(
     async (_prev: CodesResult | null, formData: FormData): Promise<CodesResult | null> => {
       const result = await enableTotp({}, formData)
       if (result.ok) {
@@ -116,10 +117,12 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
       }
       return result
     },
-    null
+    null,
+    undefined,
+    (text) => ({ ok: false as const, error: text })
   )
 
-  const [disableState, disableAction] = useActionState(
+  const [disableState, disableAction] = useSafeActionState(
     async (prev: AccountState, formData: FormData): Promise<AccountState> => {
       const result = await disableTotp(prev, formData)
       if (result.ok) toast.success("Two-factor sign-in is off.")
@@ -128,7 +131,7 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
     {}
   )
 
-  const [regenState, regenAction] = useActionState(
+  const [regenState, regenAction] = useSafeActionState(
     async (_prev: CodesResult | null, formData: FormData): Promise<CodesResult | null> => {
       const result = await regenerateRecoveryCodes({}, formData)
       if (result.ok) {
@@ -137,7 +140,9 @@ export function TwoFactorPanel({ enabled, usable, codesLeft }: { enabled: boolea
       }
       return result
     },
-    null
+    null,
+    undefined,
+    (text) => ({ ok: false as const, error: text })
   )
 
   function begin() {

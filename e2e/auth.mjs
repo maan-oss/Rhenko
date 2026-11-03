@@ -4,6 +4,7 @@ import { BASE, PASSWORD, RUN_ID, TIMEOUT, randomHandle } from "./lib/env.mjs"
 import { closeVisitor, newTab, newVisitor } from "./lib/browser.mjs"
 import { GROWN_UP, createUser, dateBefore, fillSignup, pickBirthday, readableDate, signIn, signOut, trySignIn, trySignUp } from "./lib/accounts.mjs"
 import { Authenticator } from "./lib/totp.mjs"
+import { allowNoise } from "./lib/watch.mjs"
 import { acted, bodyText, go, ready, toastText } from "./lib/ui.mjs"
 
 const COMPOSER = "textarea[aria-label='Post text']"
@@ -21,6 +22,7 @@ export async function run() {
   await guard("sign-up rules", signUpRules)
   await guard("sign-in and sign-out on a computer", () => signInAndOut({ phone: false }))
   await guard("sign-in and sign-out on a phone", () => signInAndOut({ phone: true }))
+  await guard("a login that cannot reach the server", offlineLogin)
   await guard("private pages for signed-out visitors", privatePages)
   await guard("two-factor sign-in", twoFactor)
 }
@@ -140,9 +142,16 @@ async function signUpRules() {
   })
 
   await check("server refuses a password of 201 characters", async () => {
-    const result = await trySignUp(page, validFields({ password: "p".repeat(201) }))
-    assert.equal(result.ok, false, "a 201 character password was accepted")
-    assert.match(result.error, /200/)
+    // A visitor of its own. Every sign-up above came from one network, and a network that has asked for many check puzzles
+    // gets harder ones, which can take longer than the wait here. This check is about the password, not the puzzle.
+    const fresh = await newVisitor({ label: "long-password" })
+    try {
+      const result = await trySignUp(fresh.page, validFields({ password: "p".repeat(201) }))
+      assert.equal(result.ok, false, "a 201 character password was accepted")
+      assert.match(result.error, /200/)
+    } finally {
+      await closeVisitor(fresh)
+    }
   })
 
   const adult = validFields({ handle: randomHandle("adult"), birthday: dateBefore(18, 2) })
@@ -239,6 +248,44 @@ async function signInAndOut({ phone }) {
     await user.page.goto("/signup")
     await user.page.waitForURL((url) => url.pathname === "/")
   })
+}
+
+// A login that cannot reach the server says why and keeps the handle, and the same form works again once the connection is back.
+async function offlineLogin() {
+  const visitor = await newVisitor({ label: "offline-login" })
+  try {
+    await check("a login that cannot reach the server says why, and keeps the handle", async () => {
+      const handle = randomHandle("off")
+      await go(visitor.page, "/login", visitor.page.locator("input[name=handle]"))
+      await visitor.page.locator("input[name=handle]").fill(handle)
+      await visitor.page.locator("input[name=password]").fill(PASSWORD)
+      // While offline the browser logs the login request as not reached. Nothing shows that log; the check looks for the reason on the screen.
+      const endAllow = allowNoise({
+        id: "login-while-offline",
+        kind: "console",
+        text: /Failed to load resource: net::ERR_INTERNET_DISCONNECTED/,
+        url: /^https?:\/\/[^/]+\/login(\?|$)/,
+        reason: "The check takes the connection away on purpose, so the login request is logged as not reached.",
+      })
+      await visitor.context.setOffline(true)
+      try {
+        await visitor.page.getByRole("button", { name: "Log in", exact: true }).click()
+        await visitor.page.getByRole("alert").filter({ hasText: "didn't go through" }).waitFor()
+        assert.equal(await visitor.page.locator("input[name=handle]").inputValue(), handle, "the handle was cleared, so the person has to type it again")
+        await stillOn(visitor.page, "/login")
+      } finally {
+        await visitor.context.setOffline(false)
+        endAllow()
+      }
+      // Back online, the same form reaches the server again. The reply is the server's own, not the connection message.
+      await acted(visitor.page, () => visitor.page.getByRole("button", { name: "Log in", exact: true }).click())
+      const reply = (await visitor.page.locator('form [role="alert"]:visible').first().innerText()).trim()
+      assert.ok(reply.length > 0, "no reply came back once the connection was restored")
+      assert.ok(!/didn't go through/.test(reply), `still the connection message after reconnecting: ${reply}`)
+    })
+  } finally {
+    await closeVisitor(visitor)
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

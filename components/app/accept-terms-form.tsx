@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useActionState, type ReactNode } from "react"
+import { type ReactNode } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { acceptTerms, type LegalState } from "@/actions/legal"
 import { SignOutForm } from "@/components/app/sign-out-form"
@@ -9,7 +10,7 @@ import { SignOutForm } from "@/components/app/sign-out-form"
 // Shown when the current Terms or Privacy Policy have changed since this account last agreed. Until the box is ticked,
 // the rest of the app stays closed.
 export function AcceptTermsForm({ logoutButton }: { logoutButton?: ReactNode }) {
-  const [state, formAction] = useActionState(acceptTerms, {} as LegalState)
+  const [state, formAction] = useSafeActionState(acceptTerms, {} as LegalState)
   return (
     <div className="settle flex flex-col gap-4" style={{ animationDelay: "120ms" }}>
       <form action={formAction} className="flex flex-col gap-4">

@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 import { cancelEmailCode, confirmEmail, removeEmail, sendEmailCode, type EmailState } from "@/actions/account"
@@ -53,11 +54,11 @@ export function EmailPanel({ email, verified, pending, ready, codeNeed }: Props)
     }
     return result
   }
-  const [changeState, changeAction] = useActionState(send, {})
-  const [verifyState, verifyAction] = useActionState(send, {})
-  const [resendState, resendAction] = useActionState(send, {})
+  const [changeState, changeAction] = useSafeActionState(send, {})
+  const [verifyState, verifyAction] = useSafeActionState(send, {})
+  const [resendState, resendAction] = useSafeActionState(send, {})
 
-  const [confirmState, confirmAction] = useActionState(async (prev: EmailState, formData: FormData): Promise<EmailState> => {
+  const [confirmState, confirmAction] = useSafeActionState(async (prev: EmailState, formData: FormData): Promise<EmailState> => {
     const result = await confirmEmail(prev, formData)
     if (result.ok) {
       setSentTo(null)
@@ -67,7 +68,7 @@ export function EmailPanel({ email, verified, pending, ready, codeNeed }: Props)
     return result
   }, {})
 
-  const [removeState, removeAction] = useActionState(async (prev: EmailState, formData: FormData): Promise<EmailState> => {
+  const [removeState, removeAction] = useSafeActionState(async (prev: EmailState, formData: FormData): Promise<EmailState> => {
     const result = await removeEmail(prev, formData)
     if (result.ok) {
       setMode("view")

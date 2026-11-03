@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useActionState, useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
+import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { Eye, EyeOff } from "lucide-react"
 import { requestStamp } from "@/actions/proof"
@@ -295,7 +296,7 @@ function useCheckAnswer(reply: { error?: string; sent?: boolean; proofRequired?:
 }
 
 function LoginForm({ next }: { next: string | null }) {
-  const [state, formAction] = useActionState(login, {} as AuthState)
+  const [state, formAction] = useSafeActionState(login, {} as AuthState)
   const [handle, setHandle] = useState("")
   const [password, setPassword] = useState("")
   const check = useCheckAnswer(state)
@@ -347,7 +348,7 @@ const SIGNUP_LAST = 2
 const SIGNUP_STEPS_TOTAL = SETUP_STEPS.total
 
 function SignupForm() {
-  const [state, formAction] = useActionState(signup, {} as AuthState)
+  const [state, formAction] = useSafeActionState(signup, {} as AuthState)
   const [step, setStep] = useState(0)
   const [name, setName] = useState("")
   const [handle, setHandle] = useState("")
@@ -577,7 +578,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 // The second step of sign-in: a six-digit code from the authenticator app, or a recovery code. When the server
 // can't read the authenticator key, only recovery codes can work, and the field says so.
 export function VerifyCodeForm({ usable, hasKeys, next = null }: { usable: boolean; hasKeys: boolean; next?: string | null }) {
-  const [state, action] = useActionState(verifySecondFactor, {} as AuthState)
+  const [state, action] = useSafeActionState(verifySecondFactor, {} as AuthState)
   const [code, setCode] = useState("")
   return (
     <form action={action} className="settle flex w-full flex-col gap-5">
@@ -614,7 +615,7 @@ export function VerifyCodeForm({ usable, hasKeys, next = null }: { usable: boole
 
 // Asks for a reset code. The reply is the same whether or not an account matched.
 export function ForgotPasswordForm() {
-  const [state, action] = useActionState(requestPasswordReset, {} as ResetRequestState)
+  const [state, action] = useSafeActionState(requestPasswordReset, {} as ResetRequestState)
   const [account, setAccount] = useState("")
   const check = useCheckAnswer(state)
   const next = state.email ? `/reset-password?email=${encodeURIComponent(state.email)}` : "/reset-password"
@@ -655,7 +656,7 @@ export function ForgotPasswordForm() {
 
 // Sets a new password with the emailed code. Every device signed in to the account is signed out.
 export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
-  const [state, action] = useActionState(resetPassword, {} as AuthState)
+  const [state, action] = useSafeActionState(resetPassword, {} as AuthState)
   const [email, setEmail] = useState(initialEmail)
   const [code, setCode] = useState("")
   const [password, setPassword] = useState("")

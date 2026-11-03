@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { appealNotice, type LegalState } from "@/actions/legal"
 
@@ -22,7 +23,7 @@ function Submit() {
 
 // One appeal per hidden post, written in the author's own words. A person reads it and decides.
 export function AppealForm({ noticeId }: { noticeId: string }) {
-  const [state, formAction] = useActionState(appealNotice, {} as LegalState)
+  const [state, formAction] = useSafeActionState(appealNotice, {} as LegalState)
   const [reason, setReason] = useState("")
   const field = `appeal-${noticeId}`
 
