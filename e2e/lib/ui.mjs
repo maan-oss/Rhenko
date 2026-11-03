@@ -30,13 +30,27 @@ export async function notHere(page, path) {
   return response?.status()
 }
 
+// Waits until `fn` returns true in the page. It asks again on every try, rather than waiting inside one call: a page that
+// navigates while one wait runs leaves that wait stuck on the page that is gone, and it times out though the page is fine.
+export async function until(page, fn, arg = null, { timeout = TIMEOUT } = {}) {
+  const deadline = Date.now() + timeout
+  for (;;) {
+    const done = await page.evaluate(fn, arg).catch(() => false)
+    if (done) return
+    if (Date.now() > deadline) throw new Error(`the page did not reach the expected state within ${timeout} ms`)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 // Waits until React has taken over an element. A click or a typed value before that point is lost.
 export async function ready(locator) {
-  const handle = await locator.first().elementHandle({ timeout: TIMEOUT })
-  try {
-    await locator.page().waitForFunction((el) => Object.keys(el).some((key) => key.startsWith("__reactProps$")), handle, { timeout: TIMEOUT })
-  } finally {
-    await handle.dispose()
+  const taken = (el) => Object.keys(el).some((key) => key.startsWith("__reactProps$"))
+  const deadline = Date.now() + TIMEOUT
+  for (;;) {
+    const done = await locator.first().evaluate(taken).catch(() => false)
+    if (done) return
+    if (Date.now() > deadline) throw new Error("React never took over the element within the timeout")
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }
 
@@ -52,8 +66,10 @@ export async function go(page, path, readyLocator) {
 
 // Waits until the page's live event stream is open. From then on the server pushes banners, messages and calls to this
 // page. The stream starts a moment after the page is ready, and anything sent before it opens is never delivered.
+// It asks the page again on every look, rather than waiting inside one call: the chat page can load more than once while the
+// wait runs, and a wait started on the first load stays stuck on a page that is gone, even though the stream is open.
 export async function streamOpen(page) {
-  await page.waitForFunction(() => (window.__rhenkoStreams ?? []).some((source) => source.readyState === 1), null, { timeout: TIMEOUT })
+  await until(page, () => (window.__rhenkoStreams ?? []).some((source) => source.readyState === 1))
 }
 
 // Runs `trigger` (a click or a key press) and waits for the server action it starts to answer.

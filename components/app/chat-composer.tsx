@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { addPending, removePending } from "@/components/app/pending-messages"
-import { armText, placeOrigin, startPicture, textOrigin } from "@/components/app/send-flight"
+import { abandonFlight, armText, placeOrigin, startPicture, textOrigin } from "@/components/app/send-flight"
 import { ChatPollDialog, type PollDraft } from "@/components/app/chat-poll-dialog"
 import { PhotoCrop, shrinkPhoto } from "@/components/app/photo-crop"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -296,7 +296,11 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
     if (!key) return
     pendingKey.current = null
     if (state.sent) router.refresh()
-    else if (state.error) removePending(conversationId, key)
+    else if (state.error) {
+      // The copy in the air goes first, so it does not linger where the bubble was.
+      abandonFlight(key)
+      removePending(conversationId, key)
+    }
   }, [state, conversationId, router])
 
   // Stop listening and recording when the composer goes away. A recording that is still running is thrown away.

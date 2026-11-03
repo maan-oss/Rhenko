@@ -21,7 +21,7 @@ import { allowNoise } from "./lib/watch.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
 import { block, follow } from "./lib/people.mjs"
 import { cardMenu, cardPostId, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
-import { acted, alertText, bodyText, go, missingId, notHere, ready, toastText } from "./lib/ui.mjs"
+import { acted, alertText, bodyText, go, missingId, notHere, ready, toastText, until } from "./lib/ui.mjs"
 
 function uniq(label) {
   return `${label} ${RUN_ID}${randomWord(4)}`
@@ -136,7 +136,7 @@ async function directFlow({ phone }) {
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
     for (const person of [sender, receiver]) {
       await person.page.locator('main img[alt="Shared photo"]').first().waitFor()
-      await person.page.waitForFunction(() => {
+      await until(person.page, () => {
         const image = document.querySelector('main img[alt="Shared photo"]')
         return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0
       })
@@ -152,7 +152,8 @@ async function directFlow({ phone }) {
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
     for (const person of [sender, receiver]) {
       await person.page.locator('main audio[aria-label="Voice message"]').first().waitFor()
-      await person.page.waitForFunction(
+      await until(
+        person.page,
         () => {
           const audio = document.querySelector('main audio[aria-label="Voice message"]')
           return audio instanceof HTMLAudioElement && audio.readyState >= 1 && audio.src.includes("/media/")

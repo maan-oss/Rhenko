@@ -40,8 +40,12 @@ interface Arrival {
 // A copy in the air.
 interface Flight {
   chatId: string
+  // The pending message this copy belongs to, so a failed send can take it back (abandonFlight).
+  id: string | null
   kind: "text" | "picture"
   ghost: HTMLElement
+  // Ends the flight at once, fading the copy out where it is. Set while the flight runs.
+  abandon: (() => void) | null
   // The bubble the copy lands on, once it has one, and the photo inside it, which must have loaded before the copy moves.
   target: HTMLElement | null
   picture: HTMLElement | null
@@ -145,6 +149,13 @@ function take(id: string): FlightOrigin | null {
   return own && Date.now() - own.at < TTL ? own.origin : null
 }
 
+// A send that failed takes its copy back: any flight for this pending message fades out where it is, and nothing waits for a
+// bubble that will not come.
+export function abandonFlight(id: string) {
+  armed.delete(id)
+  for (const f of [...flights]) if (f.id === id) f.abandon?.()
+}
+
 // One spring, integrated in small steps so it is steady at any frame rate. It runs from 0 to 1 and does not overshoot.
 function spring(stiffness: number, damping: number) {
   let x = 0
@@ -195,11 +206,13 @@ function makeGhost(from: Rect): HTMLElement {
   return ghost
 }
 
-function newFlight(chatId: string, kind: "text" | "picture", ghost: HTMLElement, from: Rect, onLanded?: () => void): Flight {
+function newFlight(chatId: string, id: string | null, kind: "text" | "picture", ghost: HTMLElement, from: Rect, onLanded?: () => void): Flight {
   return {
     chatId,
+    id,
     kind,
     ghost,
+    abandon: null,
     target: null,
     picture: null,
     hidden: null,
@@ -302,6 +315,15 @@ function run(f: Flight, paint: (p: number, to: Rect) => void, unfold?: (q: numbe
     flights.delete(f)
     if (f.hidden) f.hidden.style.visibility = ""
     f.ghost.remove()
+    f.onLanded?.()
+  }
+  // A send that failed: the copy fades out where it is, and the bubble it was heading for is shown again before it is removed.
+  f.abandon = () => {
+    cancelAnimationFrame(raf)
+    flights.delete(f)
+    if (f.hidden) f.hidden.style.visibility = ""
+    const fade = f.ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: "ease-out", fill: "forwards" })
+    fade.onfinish = () => f.ghost.remove()
     f.onLanded?.()
   }
 
@@ -412,7 +434,7 @@ export function launch(bubble: HTMLElement, id: string, chatId: string, onLanded
 
   hide.style.visibility = "hidden"
   document.body.appendChild(ghost)
-  const f = newFlight(chatId, "text", ghost, from, onLanded)
+  const f = newFlight(chatId, id, "text", ghost, from, onLanded)
   f.target = bubble
   f.hidden = hide
 
@@ -465,7 +487,7 @@ export function startPicture(chatId: string, origin: FlightOrigin | null) {
   const shown = source.style.visibility
   source.style.visibility = "hidden"
 
-  const f = newFlight(chatId, "picture", ghost, from, () => {
+  const f = newFlight(chatId, null, "picture", ghost, from, () => {
     source.style.visibility = shown
   })
   run(f, (p, to) => {

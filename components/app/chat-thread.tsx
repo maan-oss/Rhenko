@@ -874,7 +874,14 @@ function MessageRow({
           {/* The status line, under the bubble: the time on every message, and on the last of your messages in a run whether it is
               delivered or seen. Every message keeps its line, so one that joins a run does not move the rest of the thread. */}
           {message.deleted ? null : (
-            <span ref={statusRef} className={FOOT}>
+            <motion.span
+              ref={statusRef}
+              // A message of theirs that rises in brings its time with it, a beat after the bubble starts.
+              initial={fresh && !message.mine ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.22, delay: 0.1, ease: "easeOut" }}
+              className={FOOT}
+            >
               {marks}
               {message.expiresAt !== null ? (
                 <>
@@ -889,7 +896,7 @@ function MessageRow({
                   <span>{message.seen ? "Seen" : "Delivered"}</span>
                 </>
               ) : null}
-            </span>
+            </motion.span>
           )}
         </div>
 
