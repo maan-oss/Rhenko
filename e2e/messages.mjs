@@ -126,6 +126,41 @@ async function directFlow({ phone }) {
     await reactionChip(sender.page, first, emoji, 1, false).waitFor({ state: "detached" })
   })
 
+  await check(`${where}: a message that does not reach the server gives a reason, keeps its text, and sends once the connection is back`, async () => {
+    const page = sender.page
+    const words = uniq("Sent while offline")
+    // How many places in the thread show the words. The composer's own box holds the same text, so it is not counted.
+    const inThread = () =>
+      page.evaluate(
+        (text) => [...document.querySelectorAll("main *")].filter((el) => el.tagName !== "TEXTAREA" && el.childElementCount === 0 && el.textContent.trim() === text).length,
+        words
+      )
+    // While offline the browser logs each request it could not make, and the send is one of them. Nothing shows that log;
+    // the check still looks for the reason on the screen. Allowed for this page during this check only.
+    const endAllow = allowNoise({
+      id: "request-while-offline",
+      kind: "console",
+      text: /Failed to load resource: net::ERR_INTERNET_DISCONNECTED/,
+      url: /^https?:\/\/[^/]+\/messages\//,
+      reason: "The check takes the connection away on purpose, so the request that the send makes is logged as not reached.",
+    })
+    await sender.context.setOffline(true)
+    try {
+      await chatBox(page).fill(words)
+      await chatBox(page).press("Enter")
+      await page.getByRole("alert").filter({ hasText: "did not send" }).waitFor()
+      await until(page, () => document.querySelectorAll("[data-flight]").length === 0)
+      assert.equal(await chatBox(page).inputValue(), words, "the text left the box although the message did not send")
+      assert.equal(await inThread(), 0, "the failed message is still in the thread")
+    } finally {
+      await sender.context.setOffline(false)
+      endAllow()
+    }
+    await chatBox(page).press("Enter")
+    await threadText(receiver.page, words).waitFor()
+    assert.equal(await inThread(), 1, "the message is not in the thread once")
+  })
+
   await check(`${where}: a photo can be sent and loads for both people`, async () => {
     await sender.page.locator("input[name=image]").setInputFiles(makePng(`chat-${where}.png`, { seed: 5 }))
     // A photo opens the framing step first, so it is kept as framed before it is previewed.

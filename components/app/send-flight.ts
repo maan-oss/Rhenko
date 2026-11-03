@@ -85,6 +85,9 @@ const GLIDE_RATE = 14
 // The copy sets off only once its bubble has held still this many frames: a bubble that has just mounted can still be moving
 // into place (the thread scrolls to its end as it appears).
 const SETTLE_FRAMES = 3
+// A words copy sets off at the latest this long after it was sent, even if its bubble has not held still. Without this a
+// bubble that keeps moving holds the copy back for good, and the saved message under it stays hidden.
+const SETTLE_LIMIT = 1000
 // The copy's spring, critically damped (ratio about 1): it reaches the bubble without passing it or swaying back, so the path
 // stays straight, and it settles sooner than the old spring did.
 const STIFFNESS = 300
@@ -355,7 +358,8 @@ function run(f: Flight, paint: (p: number, to: Rect) => void, unfold?: (q: numbe
         f.seen = live
         // The copy sets off once the bubble is in place, aiming straight at it. After that it glides after the bubble, so a
         // bubble that moves on (the saved one takes the pending one's place, or the thread scrolls) turns the path gently.
-        if (!f.moving && f.steady >= SETTLE_FRAMES) {
+        const settled = f.steady >= SETTLE_FRAMES || (f.kind === "text" && now - t0 > SETTLE_LIMIT)
+        if (!f.moving && settled) {
           f.to = live
           f.moving = true
         } else if (f.moving) {
