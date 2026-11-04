@@ -338,7 +338,7 @@ textarea:-webkit-autofill {
 }
 @media (max-width: 1023.98px) and (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: scroll()) {
-    [data-bar-row] {
+    [data-bar-row]:not([data-steady]) {
       animation: bar-tighten linear both;
       animation-timeline: scroll(root block);
       animation-range: 0px 96px;

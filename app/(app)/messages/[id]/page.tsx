@@ -83,6 +83,7 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
   return (
     <div className="-mb-24 flex min-h-dvh flex-col lg:mb-0">
       <PageHeader
+        steady
         title={title}
         subtitle={isGroup ? `${conversation.members.length} people` : undefined}
         backHref="/messages"

@@ -20,6 +20,7 @@ export function PageHeader({
   hideTitleOnDesktop = false,
   hideSubtitleOnPhone = false,
   menu = true,
+  steady = false,
   children,
 }: {
   title: string
@@ -30,6 +31,9 @@ export function PageHeader({
   backHref?: string
   // On a phone, a page with no back arrow shows the sidebar button here. A page that puts it elsewhere (Explore, under its search) turns this off.
   menu?: boolean
+  // Keeps the row's height as the page scrolls. A page that sets its own scroll (a chat that follows its newest message) needs
+  // this: the phone's bar would otherwise shrink with that scroll, and the shrink would move the page to scroll again.
+  steady?: boolean
   actions?: ReactNode
   tabs?: ReactNode
   // On a phone the title can give way to something else in the lead (the menu button, for one). It stays for screen readers.
@@ -42,7 +46,7 @@ export function PageHeader({
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background">
-      <div data-bar-row className={cn("flex h-12 items-center gap-3 px-4 sm:h-14", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
+      <div data-bar-row data-steady={steady ? "" : undefined} className={cn("flex h-12 items-center gap-3 px-4 sm:h-14", (hideTitle || hideTitleOnDesktop) && "lg:h-0")}>
         {backHref ? (
           // The button's margins put the arrow's own stroke on the page gutter (the icon's left edge sits about 4px in from its box), so the title sits next to the arrow, not in from it.
           <Link
