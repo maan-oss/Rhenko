@@ -16,6 +16,8 @@
 //                    not started in production mode.
 //   MAIL_LOG         the log of a local mail sink, when the server sends through SMTP (RHENKO_SMTP_URL). The sink writes
 //                    the same "[mail] to ..." lines. Defaults to SERVER_LOG. Without either, the email checks fail and say so.
+//                    e2e/lib/mail-sink.mjs is such a sink and needs no dependencies: `MAIL_LOG=<file> node e2e/lib/mail-sink.mjs`
+//                    listens on 127.0.0.1:2525 (MAIL_SINK_PORT changes it). Start the server with RHENKO_SMTP_URL=smtp://127.0.0.1:2525.
 //                    The legal area's decision emails are sent by the command line, which reads RHENKO_SMTP_URL from
 //                    the environment it is started in, so give the suite the same RHENKO_SMTP_URL as the server.
 //   DATABASE_URL     the Postgres database the server uses. A few checks read and change rows in it directly, for example to
