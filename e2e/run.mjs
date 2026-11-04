@@ -20,6 +20,8 @@
 //                    the environment it is started in, so give the suite the same RHENKO_SMTP_URL as the server.
 //   DATABASE_URL     the Postgres database the server uses. A few checks read and change rows in it directly, for example to
 //                    move a scheduled post to 30 seconds from now (see e2e/posts.mjs). Those checks fail without it.
+//   RHENKO_STORAGE   the same value the server got (local for the test server). The suite stores its own pictures, such as
+//                    the link preview picture, the same way: in the uploads folder when this is local, and in Supabase otherwise.
 //   RHENKO_DATA_DIR  folder the server keeps uploads in when RHENKO_STORAGE=local (same value the server got; default ./data).
 //   ONLY             run only some areas, for example ONLY=auth,posts
 //   E2E_TIMEOUT_MS   how long one wait for something on a page may take (default 20000; raise it for a server that
