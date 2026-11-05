@@ -81,7 +81,7 @@ export function LegalPage({
         <Link
           href="/"
           transitionTypes={["nav-back"]}
-          className={`glass inline-flex h-10 w-fit items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors hover:bg-foreground/5 ${FOCUS}`}
+          className={`tap-44 glass inline-flex h-10 w-fit items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors hover:bg-foreground/5 ${FOCUS}`}
         >
           <ArrowLeft className="size-4" aria-hidden />
           Back to Rhenko
@@ -110,7 +110,7 @@ export function LegalPage({
               <a
                 key={section.id}
                 href={`#${section.id}`}
-                className={`inline-flex h-8 items-center rounded-full border border-border px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground ${FOCUS}`}
+                className={`tap-44 inline-flex h-8 items-center rounded-full border border-border px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground ${FOCUS}`}
               >
                 {section.title}
               </a>

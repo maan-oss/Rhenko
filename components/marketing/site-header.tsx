@@ -168,7 +168,7 @@ export function SiteHeader() {
               aria-expanded={menuOpen}
               aria-controls="site-sheet"
               onClick={() => setMenuOpen(true)}
-              className={cn(ICON_BUTTON, "md:hidden")}
+              className={cn(ICON_BUTTON, "tap-44 md:hidden")}
             >
               <Menu className="size-[21px]" />
             </button>

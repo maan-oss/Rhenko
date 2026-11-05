@@ -312,7 +312,7 @@ function LoginForm({ next }: { next: string | null }) {
         value={password}
         onChange={setPassword}
         aside={
-          <Link href="/forgot-password" className="text-[13px] font-semibold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
+          <Link href="/forgot-password" className="tap-44 text-[13px] font-semibold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
             Forgot?
           </Link>
         }
