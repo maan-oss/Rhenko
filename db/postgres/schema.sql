@@ -559,7 +559,10 @@ CREATE TABLE chat_messages (
   -- window in lib/chat-message-rules.ts (EDIT_WINDOW_MS) after sending.
   edited_at bigint,
   -- 1 for a photo or video that each recipient may open once. Opening is recorded per person in chat_view_once_opens.
-  view_once bigint NOT NULL DEFAULT 0);
+  view_once bigint NOT NULL DEFAULT 0,
+  -- The encrypted form of the message (lib/e2ee.ts), as JSON. Set for a message in an end-to-end encrypted chat, where body and
+  -- the other content columns are empty and the text lives only in this envelope. NULL for every other message.
+  cipher text);
 
 -- A vote in a poll sent in a chat. The poll's choices are in the message's attachment; a person's vote is one row per choice
 -- they picked, so a single-answer poll has at most one row for them.
@@ -1017,3 +1020,48 @@ create trigger events_notify after insert on events for each row execute functio
 insert into users (id, handle, name, bio, password_hash, created_at, bot)
 values ('sahayak-bot', 'sahayak', 'Sahayak', 'An AI assistant. Mention @sahayak under a post to ask it a question.', '!locked', (extract(epoch from now()) * 1000)::bigint, 1)
 on conflict do nothing;
+
+-- End-to-end encryption (lib/e2ee.ts). A device is a browser or app that holds its own private keys; the server keeps only the
+-- public halves, listed here. A revoked device gets no further messages, and its old wraps stay as they are.
+create table if not exists e2ee_devices (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  agreement_key text not null,
+  signing_key text not null,
+  label text not null default '',
+  created_at bigint not null,
+  last_seen_at bigint,
+  revoked_at bigint
+);
+create index if not exists e2ee_devices_user on e2ee_devices (user_id) where revoked_at is null;
+
+-- One row per message and device that can read it: the message's content key, wrapped for that device (see lib/e2ee.ts).
+create table if not exists chat_message_wraps (
+  message_id text not null references chat_messages(id) on delete cascade,
+  device_id text not null references e2ee_devices(id) on delete cascade,
+  epk text not null,
+  iv text not null,
+  key text not null,
+  primary key (message_id, device_id)
+);
+
+-- A device waiting to be linked to an account. The new device posts its public keys with a short code, and an existing device
+-- of the account approves that code. Pending links expire after a few minutes and are removed by the background tick.
+create table if not exists e2ee_link_requests (
+  code text primary key,
+  user_id text not null references users(id) on delete cascade,
+  agreement_key text not null,
+  signing_key text not null,
+  label text not null default '',
+  expires_at bigint not null,
+  approved_device text references e2ee_devices(id) on delete set null
+);
+
+-- Message history copied from an existing device to a newly linked one. The body is encrypted to the new device's key, so the
+-- server holds it as ciphertext and removes it once the new device has taken it or after it expires.
+create table if not exists e2ee_history_transfers (
+  id text primary key,
+  device_id text not null references e2ee_devices(id) on delete cascade,
+  payload text not null,
+  created_at bigint not null
+);
