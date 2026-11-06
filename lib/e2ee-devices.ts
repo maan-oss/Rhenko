@@ -154,15 +154,16 @@ export async function revokeDevice(userId: string, deviceId: string): Promise<bo
   return changed > 0
 }
 
-// Every active device of the people who are in a conversation (accepted members only, not pending requests), and whether
-// some member has no device at all. A message cannot be sent while a member has no device, because they could not read it.
+// Every active device of the people who are in a conversation, and whether some member has no device at all. A person with a
+// pending request is included: a request's messages are readable to them on the same terms as a plain request, so they get a copy.
+// A message cannot be sent while a member has no device, because they could not read it.
 export async function memberDevicesOf(conversationId: string): Promise<MemberDevices> {
   const devices = await all<MemberDevice>(
     `SELECT d.id, d.user_id, d.agreement_key, d.signing_key
        FROM e2ee_devices d
        JOIN conversation_members m ON m.user_id = d.user_id
        JOIN users u ON u.id = d.user_id
-      WHERE m.conversation_id = ? AND m.status = 'accepted' AND u.deactivated_at IS NULL AND d.revoked_at IS NULL
+      WHERE m.conversation_id = ? AND m.status IN ('accepted', 'requested') AND u.deactivated_at IS NULL AND d.revoked_at IS NULL
       ORDER BY d.user_id ASC, d.created_at ASC, d.id ASC`,
     conversationId
   )
@@ -171,7 +172,7 @@ export async function memberDevicesOf(conversationId: string): Promise<MemberDev
             CASE WHEN EXISTS (SELECT 1 FROM e2ee_devices d WHERE d.user_id = m.user_id AND d.revoked_at IS NULL) THEN 1 ELSE 0 END AS has_device
        FROM conversation_members m
        JOIN users u ON u.id = m.user_id
-      WHERE m.conversation_id = ? AND m.status = 'accepted' AND u.deactivated_at IS NULL`,
+      WHERE m.conversation_id = ? AND m.status IN ('accepted', 'requested') AND u.deactivated_at IS NULL`,
     conversationId
   )
   const memberWithoutDevice = members.some((member) => !Number(member.has_device))
