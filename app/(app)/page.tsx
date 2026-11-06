@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import Link from "@/components/app/link"
+import dynamic from "next/dynamic"
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { connection } from "next/server"
@@ -27,7 +28,10 @@ import { FeedSkeleton } from "@/components/app/feed-skeleton"
 import { FollowButton } from "@/components/app/follow-button"
 import { SetupBanner } from "@/components/app/setup-banner"
 import { TopicChips } from "@/components/app/topic-chips"
-import { Landing } from "@/components/marketing/landing"
+
+// The signed-out landing page brings a chart library and a shader with it. Signed-in people never see it, so its client
+// parts load only when it is shown.
+const Landing = dynamic(() => import("@/components/marketing/landing").then((module) => module.Landing))
 
 type SearchParams = Promise<{ tab?: string | string[]; topic?: string | string[] }>
 
