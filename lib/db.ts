@@ -145,9 +145,15 @@ export function outsideTransaction<T>(fn: () => T): T {
   return transactions.exit(fn)
 }
 
-// Refreshes the planner's statistics. Maintenance runs it now and then.
+// Refreshes the planner's statistics for the tables this role owns. A plain ANALYZE also visits tables owned by someone else,
+// where Postgres only prints a warning and skips them, so each maintenance pass would fill the log with that warning.
 export async function optimizeDatabase(): Promise<void> {
-  await run("analyze")
+  const owned = await readAll<{ tablename: string }>(
+    "SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tableowner = current_user"
+  )
+  for (const { tablename } of owned) {
+    await run(`ANALYZE "${tablename.replaceAll('"', '""')}"`)
+  }
 }
 
 // Calls onNotify each time Postgres sends a NOTIFY on the channel. postgres.js keeps that connection open on its own and
