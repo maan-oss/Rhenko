@@ -193,9 +193,10 @@ async function postFlows({ phone }) {
 
   await check(`${where}: a picture is sent as a WebP at the width its frame needs, and the original stays available`, async () => {
     const shown = await waitForPost(reader.page, withImage)
-    // The feed's photo frames ask for 1280 pixels. Avatars ask for smaller copies and are not this picture.
-    const src = await shown.locator("img[src$='?w=1280']").first().getAttribute("src")
-    assert.match(src ?? "", /^\/media\/[a-f0-9]{32}\.(jpg|png|webp)\?w=1280$/, `the feed asks for ${src}`)
+    // The photo's frame is the button the lightbox opens. It asks for 1280 pixels, or 640 on a connection the browser reports
+    // as slow (the phone emulation measures under 1.5 Mbit/s), so both widths are accepted. Avatars are not this picture.
+    const src = await shown.locator("[data-media-open] img").first().getAttribute("src")
+    assert.match(src ?? "", /^\/media\/[a-f0-9]{32}\.(jpg|png|webp)\?w=(640|1280)$/, `the feed asks for ${src}`)
     const copy = await reader.page.request.get(`${BASE}${src}`)
     assert.equal(copy.status(), 200, `the copy answers ${copy.status()}`)
     assert.match(copy.headers()["content-type"] ?? "", /^image\/webp/, "the copy is not WebP")
