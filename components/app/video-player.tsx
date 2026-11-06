@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { Check, Maximize, Minimize, MoreHorizontal, Pause, Play, Volume2, VolumeX } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSlowConnection } from "@/lib/network"
 
 // Our own player for a video in a post and in the composer. The browser's controls are not used: the bar, its play and
 // mute buttons, the time, the seek slider, speed and full screen are all drawn here, so they look the same everywhere and
@@ -48,6 +49,8 @@ export function VideoPlayer({
   // Drawn over the picture, under the bar, such as a badge.
   children?: ReactNode
 }) {
+  // On a slow connection the video is not fetched until the person presses play, so nothing is downloaded just by scrolling past.
+  const slow = useSlowConnection()
   const ownVideo = useRef<HTMLVideoElement>(null)
   // The element is read when it is used, so the handlers below change the element and not a copy of the ref.
   function element(): HTMLVideoElement | null {
@@ -256,7 +259,7 @@ export function VideoPlayer({
         }}
         src={src}
         playsInline
-        preload="metadata"
+        preload={slow ? "none" : "metadata"}
         muted={muted}
         aria-label={label}
         onClick={toggle}

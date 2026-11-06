@@ -1,9 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
-import { GrainGradient } from "@paper-design/shaders-react"
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { useSlowConnection } from "@/lib/network"
+
+// The shader library is large, so it is downloaded only when the shader is about to run, and never on a slow connection.
+const GrainGradient = lazy(() => import("@paper-design/shaders-react").then((m) => ({ default: m.GrainGradient })))
 
 // The hero's backdrop: a slow grain gradient in greys, with a sparse field of points that drift and move away from
 // the pointer. Both are decoration only, so they sit behind the content, do not take input, and stop when they are off
@@ -40,8 +43,10 @@ export function GrainBackdrop({
   const layer = useRef<HTMLDivElement>(null)
   const onScreen = useOnScreen(layer)
   const hero = useRef<HTMLDivElement>(null)
+  const slow = useSlowConnection()
   const settled = useSettledAfterPaint(hero)
-  const webgl = useWebGL(settled)
+  // On a slow connection the shader is never asked for, so its library is never downloaded and the flat ground stays.
+  const webgl = useWebGL(settled && !slow)
   const shader = onScreen && webgl === true
 
   return (
@@ -59,22 +64,24 @@ export function GrainBackdrop({
         {/* The shader animates continuously, so it runs only while this part of the page is near the screen, and only where
             the browser can draw WebGL. Otherwise a flat grey ground stands in, which costs nothing. */}
         {shader ? (
-          <GrainGradient
-            key={paletteName}
-            width="100%"
-            height="100%"
-            colors={[...palette.colors]}
-            colorBack={palette.back}
-            shape="corners"
-            softness={0.7}
-            intensity={quiet ? 0.2 : 0.35}
-            noise={quiet ? 0.08 : 0.22}
-            speed={reduced ? 0 : 0.35}
-            minPixelRatio={1}
-            maxPixelCount={1600 * 1000}
-            fit="cover"
-            style={{ opacity: resolvedTheme === "dark" ? 0.55 : 0.8 }}
-          />
+          <Suspense fallback={<div className="absolute inset-0" style={{ background: FLAT_GROUND }} />}>
+            <GrainGradient
+              key={paletteName}
+              width="100%"
+              height="100%"
+              colors={[...palette.colors]}
+              colorBack={palette.back}
+              shape="corners"
+              softness={0.7}
+              intensity={quiet ? 0.2 : 0.35}
+              noise={quiet ? 0.08 : 0.22}
+              speed={reduced ? 0 : 0.35}
+              minPixelRatio={1}
+              maxPixelCount={1600 * 1000}
+              fit="cover"
+              style={{ opacity: resolvedTheme === "dark" ? 0.55 : 0.8 }}
+            />
+          </Suspense>
         ) : (
           <div className="absolute inset-0" style={{ background: FLAT_GROUND }} />
         )}

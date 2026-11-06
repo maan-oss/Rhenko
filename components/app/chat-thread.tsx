@@ -31,6 +31,7 @@ import { isExpired, nextExpiry, timerLine } from "@/lib/message-timers"
 import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
+import { useImageWidth } from "@/lib/network"
 
 // A call record as the thread reads it. Group records say so and how many people joined.
 type CallRecord = NonNullable<MessageView["call"]>
@@ -547,6 +548,7 @@ function MessageRow({
   onPick: () => void
   onSelectStart: () => void
 }) {
+  const photoWidth = useImageWidth(1280)
   const [pickerOpen, setPickerOpen] = useState(false)
   // Hover does not exist on a phone, so a tap on the bubble shows its actions instead.
   const [revealed, setRevealed] = useState(false)
@@ -829,7 +831,7 @@ function MessageRow({
                 ) : message.mediaFile ? (
                   <span className="relative block w-fit max-w-full">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/media/${message.mediaFile}?w=1280`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} data-flight-picture loading={message.mine && fresh ? "eager" : "lazy"} onLoad={message.mine && fresh ? followLatest : undefined} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
+                    <img src={`/media/${message.mediaFile}?w=${photoWidth}`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} data-flight-picture loading={message.mine && fresh ? "eager" : "lazy"} onLoad={message.mine && fresh ? followLatest : undefined} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
                     {message.attachment?.kind === "scan" ? (
                       <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
                     ) : null}

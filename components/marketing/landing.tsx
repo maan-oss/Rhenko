@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { GrainBackdrop } from "@/components/marketing/grain-backdrop"
-import { PoolsChart } from "@/components/marketing/pools-chart"
+import { DeferredPoolsChart } from "@/components/marketing/pools-chart-deferred"
 import { SiteHeader } from "@/components/marketing/site-header"
 import { IntroLoader } from "@/components/marketing/intro-loader"
 import { Magnetic } from "@/components/marketing/magnetic"
@@ -161,7 +161,7 @@ export function Landing() {
           </Reveal>
           <Reveal>
             <figure className="rounded-[32px] border border-border bg-card p-5 shadow-[0_30px_80px_-50px_rgba(10,10,10,0.45)] sm:p-8">
-              <PoolsChart />
+              <DeferredPoolsChart />
               <figcaption className="mt-4 text-[13px] text-muted-foreground">Posts each pool can hold. The sizes are the server&apos;s own limits.</figcaption>
             </figure>
           </Reveal>

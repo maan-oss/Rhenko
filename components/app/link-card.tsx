@@ -1,10 +1,14 @@
+"use client"
+
 import type { LinkPreview } from "@/lib/link-previews"
 import { cn } from "@/lib/utils"
+import { useImageWidth } from "@/lib/network"
 
 // The card under a post's text, or a chat message's, for its first link: the page's title, a line of what it says, and where it
 // is from. The whole card opens the page in a new tab. A post with photos or video shows those instead. The card has its own
 // surface, so it reads the same on a post and inside a coloured chat bubble.
 export function LinkCard({ preview, className }: { preview: LinkPreview; className?: string }) {
+  const width = useImageWidth(1280)
   return (
     <a
       href={preview.url}
@@ -18,7 +22,7 @@ export function LinkCard({ preview, className }: { preview: LinkPreview; classNa
     >
       {preview.image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/media/${preview.image}?w=1280`} alt="" loading="lazy" decoding="async" className="aspect-[1.91/1] w-full object-cover" />
+        <img src={`/media/${preview.image}?w=${width}`} alt="" loading="lazy" decoding="async" className="aspect-[1.91/1] w-full object-cover" />
       ) : null}
       <span className="block px-4 py-3">
         {preview.site ? <span className="block truncate text-[13px] text-muted-foreground">{preview.site}</span> : null}

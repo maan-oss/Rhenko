@@ -7,6 +7,7 @@ import type { MediaItem } from "@/lib/data"
 import { StickerLayer } from "@/components/app/sticker-layer"
 import { VideoPlayer } from "@/components/app/video-player"
 import { cn } from "@/lib/utils"
+import { useImageWidth } from "@/lib/network"
 
 function AltBadge({ alt, position = "bottom" }: { alt: string; position?: "top" | "bottom" }) {
   if (!alt) return null
@@ -32,6 +33,7 @@ function Tile({
   className?: string
   onOpen: (item: MediaItem) => void
 }) {
+  const width = useImageWidth(1280)
   if (item.kind === "video") {
     return (
       <div className={cn("relative z-10 overflow-hidden rounded-2xl border border-border bg-black", className)}>
@@ -53,7 +55,7 @@ function Tile({
         className="block size-full overflow-hidden"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/media/${item.file}?w=1280`} alt={item.alt} loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
+        <img src={`/media/${item.file}?w=${width}`} alt={item.alt} loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-300 hover:scale-[1.01]" />
       </button>
       {item.stickers ? <StickerLayer set={item.stickers} linkHashtags /> : null}
       <AltBadge alt={item.alt} />
