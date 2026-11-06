@@ -39,6 +39,7 @@ import { groupForInvite, inviteStanding, newInviteToken } from "@/lib/group-invi
 import { checkEncryptedSend } from "@/lib/e2ee"
 import { activeDevicesOf, knownDevicesOf, memberDevicesOf, thisDeviceOf } from "@/lib/e2ee-devices"
 import { ENCRYPTED_PREVIEW, SEALED_BODY, encryptedChatsEnabled, type SealedWrap } from "@/lib/e2ee-chat"
+import { reportFileKept } from "@/lib/chat-report-store"
 import { EXPORTS_PER_HOUR, EXPORT_WINDOW_MS, type ExportRow } from "@/lib/chat-export"
 
 export type ChatState = { error?: string; sent?: boolean }
@@ -702,7 +703,10 @@ export async function leaveConversation(conversationId: string): Promise<VoidRes
     await run("DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?", id, viewer.id)
     if (everyone.length === 1) await run("DELETE FROM conversations WHERE id = ?", id)
   })
-  for (const photo of photos) await removeUpload(photo.media_file)
+  // A file a chat report keeps stays in storage with the report, even when the chat it came from is gone.
+  for (const photo of photos) {
+    if (!(await reportFileKept(photo.media_file))) await removeUpload(photo.media_file)
+  }
   // A call they were in ends for them, and the conversation's call drops out of their view.
   await leaveConversationCalls(viewer.id, id)
   await publish(everyone, { type: "message", conversationId: id })
@@ -1275,8 +1279,9 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   // A deleted message is no longer pinned, and nobody is reminded of it.
   await run("DELETE FROM chat_pinned_messages WHERE message_id = ?", id)
   await run("DELETE FROM chat_message_reminders WHERE message_id = ?", id)
-  // A forwarded copy can share this file, so it is removed only once no message still points at it.
-  if (message.media_file && !(await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", message.media_file))) {
+  // A forwarded copy can share this file, so it is removed only once no message still points at it. A chat report that
+  // reported the message keeps the file for a year, so it stays too.
+  if (message.media_file && !(await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", message.media_file)) && !(await reportFileKept(message.media_file))) {
     await removeUpload(message.media_file)
   }
   await publish(await memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })

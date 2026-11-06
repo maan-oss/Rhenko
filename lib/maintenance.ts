@@ -7,6 +7,7 @@ import { holdLease } from "@/lib/leases"
 import { sweepLimits } from "@/lib/rate-limit"
 import { RETENTION } from "@/lib/legal"
 import { drainFileDeletions, purgeHidden } from "@/lib/moderation"
+import { purgeExpiredChatReports } from "@/lib/chat-report-store"
 import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
 import { prunePush } from "@/lib/push"
@@ -76,6 +77,12 @@ async function runMaintenance(now = Date.now()): Promise<void> {
   await run("DELETE FROM email_codes WHERE expires_at < ?", now)
   // Hidden posts whose appeal window has closed, or whose appeal failed, are deleted here.
   await purgeHidden(now)
+  // Chat reports whose year is up are removed. Their files are queued, and the drain below removes them. A failure is logged.
+  try {
+    await purgeExpiredChatReports(now)
+  } catch (error) {
+    console.error("[maintenance] removing expired chat reports failed", error)
+  }
   // Files the moderation command line queued are removed from storage here, where R2 or the disk is reached. A failure is
   // logged, and the rest of the pass goes on.
   try {

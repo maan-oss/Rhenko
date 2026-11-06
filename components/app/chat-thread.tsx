@@ -5,10 +5,11 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "@/components/app/link"
 import { SEND_RISE, SPRING_BUBBLE, SPRING_POP } from "@/components/app/motion"
 import { comeOut, hasFlight, launch, receive } from "@/components/app/send-flight"
-import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
+import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Flag, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
+import { ChatReportDialog } from "@/components/app/chat-report-dialog"
 import { ForwardDialog } from "@/components/app/forward-dialog"
 import { MessageInfoDialog } from "@/components/app/message-info-dialog"
 import { ReminderDialog } from "@/components/app/reminder-dialog"
@@ -90,6 +91,8 @@ export function ChatThread({
   encrypted: boolean
 }) {
   const selection = useSelection()
+  // The message being reported, while its report dialog is open.
+  const [reportingId, setReportingId] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const anchor = useRef<{ id: string; top: number } | null>(null)
@@ -269,6 +272,7 @@ export function ChatThread({
             picked={selection?.picked?.has(message.id) ?? false}
             onPick={() => selection?.toggle(message.id, message.starred)}
             onSelectStart={() => selection?.start(message.id, message.starred)}
+            onReport={() => setReportingId(message.id)}
           />
         )
       })}
@@ -279,6 +283,17 @@ export function ChatThread({
         return <PendingBubble key={item.key} id={item.key} chatId={conversationId} body={item.body} joins={joins} />
       })}
       <AnimatePresence>{typing ? <TypingBubble key="typing" name={typing} /> : null}</AnimatePresence>
+      <ChatReportDialog
+        open={reportingId !== null}
+        onOpenChange={(open) => {
+          if (!open) setReportingId(null)
+        }}
+        conversationId={conversationId}
+        encrypted={encrypted}
+        messages={shown}
+        messageId={reportingId ?? ""}
+        canBlock={!showNames}
+      />
       {hasNewer ? (
         <div className="flex justify-center px-4 pt-4">
           <Link href={`/messages/${conversationId}`} className="glass inline-flex h-9 items-center rounded-full px-4 text-[14px] font-medium text-foreground transition-colors hover:bg-foreground/5">
@@ -540,6 +555,7 @@ function MessageRow({
   picked,
   onPick,
   onSelectStart,
+  onReport,
 }: {
   conversationId: string
   message: MessageView
@@ -555,6 +571,7 @@ function MessageRow({
   picked: boolean
   onPick: () => void
   onSelectStart: () => void
+  onReport: () => void
 }) {
   const photoWidth = useImageWidth(1280)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -1016,6 +1033,12 @@ function MessageRow({
                   <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setInfoOpen(true)}>
                     <Info className="size-4" aria-hidden="true" />
                     Message info
+                  </DropdownMenuItem>
+                ) : null}
+                {!message.mine && !message.deleted && message.call === null && message.timerChange === null ? (
+                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={onReport}>
+                    <Flag className="size-4" aria-hidden="true" />
+                    Report
                   </DropdownMenuItem>
                 ) : null}
                 <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={deleteForMe}>

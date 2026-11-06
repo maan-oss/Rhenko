@@ -25,10 +25,15 @@ Metadata is visible by design: membership, timestamps (send, edit), message ids,
 plaintext), poll option ids and votes, ciphertext size, the forwarded flag, `edited_at`, and the userId of a shared contact when it resolves to a
 Rhenko account. Video is refused in encrypted chats.
 
-Reporting: a user cannot report a chat message today, encrypted or plaintext. The only report path takes a post, and the moderation tools act
-on posts. The child-safety overview (Better project, `claude/e2ee-child-safety-legal-overview-2026-11-06.md`) recommends a reporter-initiated path,
-approved by counsel, before encrypted chats are turned on. Neither this document nor the privacy page describes how reports of encrypted content
-are handled, because no such path exists yet.
+Reporting: anyone in a chat can report a message from another person, through the message's menu (Report). It works the way WhatsApp's does:
+the reported message and up to four before it go to Rhenko for review, and nobody else in the chat is told. In an encrypted chat the
+reporter's device seals the report from the messages it has opened (`lib/chat-report-client.ts`); in a chat that is not encrypted the server
+seals it from the stored messages (`actions/chat-reports.ts`). Either way the report is sealed to the report key (`lib/chat-reports.ts`,
+`RHENKO_REPORT_KEY`, the public half only), so the server stores ciphertext in `chat_reports.sealed`. Files the report includes are kept in
+`chat_report_files`, so they stay in storage with the report. A report and its files are kept for one year and then removed by the running app
+(`purgeExpiredChatReports`). The private key is a file the operator keeps outside the server. `scripts/moderation.mjs report-open` is the only way
+to read a report. This is built and tested; it is not yet reviewed by counsel (see the child-safety overview in the Better project,
+`claude/e2ee-child-safety-legal-overview-2026-11-06.md`, which is not legal advice).
 
 ## Devices
 
@@ -71,9 +76,10 @@ so signing in again on the same browser needs a link when the account has other 
 ## Tests
 
 - Unit (`npm run test:unit`): `tests/e2ee.test.mjs`, `tests/e2ee-rules.test.mjs`, `tests/e2ee-media.test.mjs`, `tests/e2ee-sealed-kinds.test.mjs`,
-  `tests/e2ee-link.test.mjs`, `tests/chat-export-device.test.mjs`.
-- End to end: `node e2e/run.mjs` with `ONLY=encrypted` against a server started with `RHENKO_E2EE=1`. It checks what the database stores,
-  on-device search and export, and linking a second browser of the same account from the first.
+  `tests/e2ee-link.test.mjs`, `tests/chat-export-device.test.mjs`, `tests/chat-reports.test.mjs`.
+- End to end: `node e2e/run.mjs` with `ONLY=encrypted` against a server started with `RHENKO_E2EE=1` and `RHENKO_REPORT_KEY`. It checks what the
+  database stores, on-device search and export, linking a second browser of the same account from the first, and reporting a message (the stored
+  report is sealed and holds none of its words). `ONLY=messages` checks reporting in a chat that is not encrypted.
 
 ## Rollout
 
@@ -81,7 +87,8 @@ Not performed. The production steps, and what each one deletes, are in `docs/e2e
 
 1. Apply `db/postgres/upgrades/2026-11-e2ee.sql` to production, after a `pg_dump` backup (runbook steps 2 and 3).
 2. Delete existing plaintext messages, only after the backup is confirmed in R2 and counsel has given its preservation advice (runbook step 5).
-3. Build and get counsel's approval for a chat reporting path. This is not built yet (see "What the server can see").
+3. Chat reporting is built (see "What the server can see"). Counsel has not yet approved how reports are kept and read, so get that approval
+   before the switch. Create the report key first (runbook step 4a).
 4. The appeals flow is decided and built. `scripts/moderation.mjs` `restore` and `decide` are the only way to put a post back or decide an appeal.
    `restorePost` and `AppealDecision` are removed from `lib/moderation.ts`.
 5. Confirm production does not run pgbouncer in front of Postgres (runbook step 1).

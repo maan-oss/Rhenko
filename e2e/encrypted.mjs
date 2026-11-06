@@ -4,12 +4,14 @@
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
 import { BASE, RUN_ID, escapeRegExp, randomWord } from "./lib/env.mjs"
 import { createUser, signInElsewhere } from "./lib/accounts.mjs"
-import { chatBox, sendChat, threadText, waitForConversation } from "./lib/chat.mjs"
+import { chatBox, messageRow, sendChat, threadText, waitForConversation } from "./lib/chat.mjs"
 import { openProfile } from "./lib/posts.mjs"
 import { query } from "./lib/db.mjs"
 import { makePng } from "./lib/files.mjs"
 import { readFile } from "node:fs/promises"
-import { acted, go, until } from "./lib/ui.mjs"
+import { acted, go, toastText, until } from "./lib/ui.mjs"
+
+const DAY = 24 * 60 * 60 * 1000
 
 export async function run() {
   area("encrypted")
@@ -83,6 +85,33 @@ async function chatFlow() {
     need(convId, "the conversation")
     await go(receiver.page, `/messages/${convId}`, threadText(receiver.page, first))
     await threadText(receiver.page, reply).waitFor()
+  })
+
+  await check("the other person's message can be reported: the report is sealed on the device, and the server keeps none of its words", async () => {
+    need(convId, "the conversation")
+    await messageRow(receiver.page, first).getByRole("button", { name: "More message options" }).click()
+    await receiver.page.getByRole("menuitem", { name: "Report", exact: true }).click()
+    const dialog = receiver.page.getByRole("dialog", { name: "Report message" })
+    await dialog.getByText("Spam", { exact: true }).click()
+    await acted(receiver.page, () => dialog.getByRole("button", { name: "Report", exact: true }).click())
+    await toastText(receiver.page, "Report sent.")
+    const rows = await query("SELECT id, kid, reason, sealed, status, created_at, retain_until FROM chat_reports WHERE conversation_id = ?", convId)
+    assert.equal(rows.length, 1, `expected one report of the chat, found ${rows.length}`)
+    const [report] = rows
+    assert.equal(report.status, "open")
+    assert.equal(report.reason, "Spam")
+    assert.ok(!report.sealed.includes(first), "the reported words are stored in the clear")
+    const sealed = JSON.parse(report.sealed)
+    assert.equal(sealed.v, 1)
+    assert.equal(sealed.kid, report.kid, "the report is not sealed to the key it names")
+    assert.ok(Number(report.retain_until) - Number(report.created_at) >= 364 * DAY, "the report is not kept for a year")
+    // The report is only made once: reporting the same message again changes nothing.
+    await messageRow(receiver.page, first).getByRole("button", { name: "More message options" }).click()
+    await receiver.page.getByRole("menuitem", { name: "Report", exact: true }).click()
+    await receiver.page.getByRole("dialog", { name: "Report message" }).getByRole("button", { name: "Report", exact: true }).click()
+    await toastText(receiver.page, "Report sent.")
+    const again = await query("SELECT COUNT(*) AS c FROM chat_reports WHERE conversation_id = ?", convId)
+    assert.equal(Number(again[0].c), 1, "a second report of the same message was stored")
   })
 
   await check("a photo sent in the chat loads for both people, and the server keeps only its ciphertext", async () => {

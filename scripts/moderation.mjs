@@ -9,6 +9,17 @@
 //   node scripts/moderation.mjs decide <appealId> reverse|uphold --note "<reason>"
 //                                                             reverse puts the post back; uphold deletes it for good
 //   node scripts/moderation.mjs remove <postId> [--yes]       delete a post for good at once; no appeal, for emergencies
+//   node scripts/moderation.mjs reports                       reports of chat messages still open, oldest first
+//   node scripts/moderation.mjs report-open <reportId> --key <file> [--out <dir>]
+//                                                             read a chat report with the private key; --out saves its text and files
+//   node scripts/moderation.mjs report-close <reportId> actioned|no-action
+//                                                             close a chat report that was opened
+//   node scripts/moderation.mjs report-keygen <file>          make the key pair for chat reports, once (docs/encrypted-chats.md)
+//
+// Chat reports are made by someone who reports a message in a chat. The report holds that message and up to four before it, and
+// nobody in the chat is told. Each report is sealed to Rhenko's report key before it is stored, so the server holds only ciphertext.
+// report-open is the only way to read one, and it needs the private key file, which the server never has. A report and its files
+// are kept for one year and then removed by the running app.
 //
 // Hiding is the normal step. It keeps the post on the server, marks it, and tells the author why. When the 30-day appeal
 // window closes with no appeal, or an appeal is upheld, the background pass deletes the post and its files.
@@ -23,6 +34,8 @@
 // the disk in development), so this command needs no access to the storage itself.
 import readline from "node:readline/promises"
 import { randomUUID } from "node:crypto"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import postgres from "postgres"
 
 // These mirror lib/legal.ts. The e2e suite checks that they still match.
@@ -43,6 +56,9 @@ const APPEAL_MS = 30 * 24 * 60 * 60 * 1000
 const EXCERPT_CHARS = 140
 
 const UPLOAD_NAME = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov)$/
+const SAFE_NAME = /^[A-Za-z0-9_-]{1,64}$/
+// The stored name the app gives a file: 32 hex digits and an extension.
+const SAFE_FILE = /^[a-f0-9]{32}\.[a-z0-9]{1,5}$/
 const USAGE = `Usage:
   node scripts/moderation.mjs list
   node scripts/moderation.mjs resolve <reportId>
@@ -51,6 +67,10 @@ const USAGE = `Usage:
   node scripts/moderation.mjs appeals
   node scripts/moderation.mjs decide <appealId> reverse|uphold --note "<reason>"
   node scripts/moderation.mjs remove <postId> [--yes]
+  node scripts/moderation.mjs reports
+  node scripts/moderation.mjs report-open <reportId> --key <file> [--out <dir>]
+  node scripts/moderation.mjs report-close <reportId> actioned|no-action
+  node scripts/moderation.mjs report-keygen <file>
 
 Categories: ${Object.keys(CATEGORIES).join(", ")}`
 
@@ -63,8 +83,12 @@ const SHAPES = {
   appeals: { args: 0, options: [] },
   decide: { args: 2, options: ["note"] },
   remove: { args: 1, options: ["yes"] },
+  reports: { args: 0, options: [] },
+  "report-open": { args: 1, options: ["key", "out"] },
+  "report-close": { args: 2, options: [] },
+  "report-keygen": { args: 1, options: [] },
 }
-const VALUE_OPTIONS = new Set(["category", "explain", "note"])
+const VALUE_OPTIONS = new Set(["category", "explain", "note", "key", "out"])
 
 function fail(message) {
   console.error(message)
@@ -132,6 +156,12 @@ const [command, ...params] = positional
 const shape = Object.hasOwn(SHAPES, command) ? SHAPES[command] : null
 if (!shape || params.length !== shape.args) fail(USAGE)
 if (Object.keys(options).some((name) => !shape.options.includes(name))) fail(USAGE)
+
+// Making the key pair needs no database, so it runs before the connection is opened.
+if (command === "report-keygen") {
+  await keygen(params[0])
+  process.exit(0)
+}
 
 const url = process.env.DATABASE_URL
 if (!url) fail("DATABASE_URL is not set. Set it to the Postgres database the app uses.")
@@ -402,6 +432,7 @@ async function stillUsed(file) {
      UNION ALL SELECT 1 FROM posts WHERE media_file = $1
      UNION ALL SELECT 1 FROM users WHERE avatar_file = $1 OR banner_file = $1
      UNION ALL SELECT 1 FROM chat_messages WHERE media_file = $1
+     UNION ALL SELECT 1 FROM chat_report_files WHERE file = $1
      UNION ALL SELECT 1 FROM link_previews WHERE image_file = $1
      UNION ALL SELECT 1 FROM ad_campaigns WHERE picture_file = $1
      LIMIT 1`,
@@ -471,9 +502,157 @@ async function remove() {
   }
 }
 
+// Chat reports. Each one is sealed to the report key (lib/chat-reports.ts). The server holds the public half only; the private key
+// is a file the operator keeps, and report-open is the only way to read a report. The library files are loaded here, not at the top,
+// so the rest of this command runs without them.
+async function keygen(file) {
+  if (!file) fail(USAGE)
+  const { reportKeyId } = await import("../lib/chat-reports.ts")
+  const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])
+  const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey)
+  const publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey)
+  const publicPart = { kty: "EC", crv: "P-256", x: publicJwk.x, y: publicJwk.y }
+  const kid = await reportKeyId(publicPart)
+  try {
+    writeFileSync(file, `${JSON.stringify(privateJwk, null, 2)}\n`, { flag: "wx", mode: 0o600 })
+  } catch (error) {
+    if (error.code === "EEXIST") fail(`${file} already exists. Choose another name; overwriting a key would lose the reports sealed to it.`)
+    throw error
+  }
+  console.log(`Wrote the private key to ${file}. Keep it outside the server and outside the repository. Whoever holds it can read every reported message.`)
+  console.log(`Key id: ${kid}`)
+  console.log("Put this line in the server's .env, then restart the app:")
+  console.log(`RHENKO_REPORT_KEY='${JSON.stringify(publicPart)}'`)
+}
+
+async function findChatReport(value) {
+  const prefix = idPrefix(value, "chat report")
+  const rows = await sql.unsafe(
+    `SELECT r.*, reporter.handle AS reporter, reported.handle AS sender
+     FROM chat_reports r
+     LEFT JOIN users reporter ON reporter.id = r.reporter_id
+     LEFT JOIN users reported ON reported.id = r.reported_user_id
+     WHERE substr(r.id, 1, $1) = $2 LIMIT 2`,
+    [prefix.length, prefix]
+  )
+  return onlyMatch(rows, "chat report", prefix)
+}
+
+async function chatReports() {
+  const rows = await sql.unsafe(
+    `SELECT r.id, r.reason, r.created_at, r.retain_until, r.opened_at, r.conversation_id, r.message_id,
+            reporter.handle AS reporter, reported.handle AS sender
+     FROM chat_reports r
+     LEFT JOIN users reporter ON reporter.id = r.reporter_id
+     LEFT JOIN users reported ON reported.id = r.reported_user_id
+     WHERE r.status = 'open'
+     ORDER BY r.created_at ASC, r.id ASC`
+  )
+  if (rows.length === 0) {
+    console.log("No chat reports open.")
+    return
+  }
+  console.log(`${count(rows.length, "chat report")} open, oldest first. The text is not shown here.`)
+  for (const row of rows) {
+    console.log("")
+    console.log(field("Report", row.id))
+    console.log(field("Filed", `${when(row.created_at)} by @${row.reporter ?? "(deleted account)"}`))
+    console.log(field("Reason", row.reason))
+    console.log(field("Sender", `@${row.sender ?? "(deleted account)"}`))
+    console.log(field("Opened", row.opened_at === null ? "not yet" : when(row.opened_at)))
+    console.log(field("Keep to", when(row.retain_until)))
+  }
+  console.log("")
+  console.log("Open one with: npm run moderation -- report-open <reportId> --key <file> [--out <dir>]")
+}
+
+// Reads a chat report with the private key. The text is printed; --out also saves it, with its files, to a directory. Opening it
+// records when it was first opened, which is the start of the review.
+async function chatReportOpen() {
+  if (!options.key) fail("Give the private key file with --key.")
+  const row = await findChatReport(params[0])
+  let privateJwk
+  try {
+    privateJwk = JSON.parse(readFileSync(options.key, "utf8"))
+  } catch {
+    fail(`${options.key} could not be read as a key file.`)
+  }
+  const { openReport, parseSealedReport, reportContext } = await import("../lib/chat-reports.ts")
+  const sealed = parseSealedReport(JSON.parse(row.sealed))
+  if (!sealed) fail("This report is damaged and cannot be opened.")
+  let payload
+  try {
+    payload = await openReport(privateJwk, reportContext(row.conversation_id, row.message_id, row.kid), sealed)
+  } catch (error) {
+    fail(`The report was not opened: ${error.message}`)
+  }
+  await sql.unsafe("UPDATE chat_reports SET opened_at = COALESCE(opened_at, $1) WHERE id = $2", [Date.now(), row.id])
+
+  console.log(field("Report", row.id))
+  console.log(field("Reason", payload.reason))
+  console.log(field("Filed", `${when(row.created_at)} by @${row.reporter ?? "(deleted account)"}`))
+  console.log(field("Sender", `@${row.sender ?? "(deleted account)"}`))
+  console.log(field("Chat", `${row.conversation_id}${payload.conversation.encrypted ? ", end-to-end encrypted" : ""}`))
+  console.log(field("Keep to", when(row.retain_until)))
+  for (const message of payload.messages) {
+    console.log("")
+    const mark = message.id === payload.reportedMessageId ? "  (reported)" : ""
+    console.log(`${when(message.sentAt)}  @${plain(message.sender.handle)}${mark}`)
+    console.log(message.deleted ? "(deleted)" : plain(message.text))
+    if (message.media) console.log(`[file: ${plain(message.media.name)}, ${plain(message.media.mime)}]`)
+    if (message.attachment) console.log(`[attachment: ${plain(JSON.stringify(message.attachment))}]`)
+  }
+
+  if (!options.out) return
+  const dir = options.out
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  writeFileSync(join(dir, "report.json"), `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
+  const { readObject } = await import("../lib/storage.ts")
+  const { openFile } = await import("../lib/e2ee-media.ts")
+  let saved = 0
+  for (const message of payload.messages) {
+    const media = message.media
+    if (!media) continue
+    if (!SAFE_NAME.test(message.id) || !SAFE_FILE.test(media.file)) {
+      console.log(`Left a file alone because its name is not one the app creates: ${plain(media.file)}`)
+      continue
+    }
+    const stored = await readObject(media.file)
+    if (!stored) {
+      console.log(`The stored file for the message at ${when(message.sentAt)} is no longer there.`)
+      continue
+    }
+    // An encrypted chat's file is ciphertext, and the report holds the key to open it. A plain chat's file is stored as it is.
+    const bytes =
+      payload.conversation.encrypted && media.key && media.iv
+        ? Buffer.from(await openFile(stored.buffer.slice(stored.byteOffset, stored.byteOffset + stored.byteLength), media.key, media.iv, payload.conversation.id, message.id))
+        : stored
+    writeFileSync(join(dir, `${message.id}-${media.file}`), bytes, { mode: 0o600 })
+    saved++
+  }
+  console.log("")
+  console.log(`Saved the report and ${count(saved, "file")} to ${plain(dir)}. Those files hold what was reported; keep them where only the review can reach them.`)
+}
+
+// Closes a chat report once it was opened. actioned means the report led to action outside this command; no-action means nothing was done.
+async function chatReportClose() {
+  const outcome = params[1]
+  if (outcome !== "actioned" && outcome !== "no-action") fail("Say actioned or no-action.")
+  const row = await findChatReport(params[0])
+  if (row.status !== "open") fail(`That report was already closed as ${row.status}.`)
+  if (row.opened_at === null) fail("Open the report with report-open first, so the review is on record.")
+  await sql.unsafe("UPDATE chat_reports SET status = $1, handled_at = $2 WHERE id = $3 AND status = 'open'", [outcome === "actioned" ? "actioned" : "no_action", Date.now(), row.id])
+  console.log(`Closed report ${row.id} as ${outcome}. Its record is kept until ${when(row.retain_until)}.`)
+}
+
 try {
   // The moderation tables and columns are part of the current schema. An older database has to be brought up to date first.
-  if (!(await hasColumn("reports", "outcome")) || !(await hasColumn("posts", "removed_at")) || !(await hasColumn("moderation_notices", "post_id"))) {
+  if (
+    !(await hasColumn("reports", "outcome")) ||
+    !(await hasColumn("posts", "removed_at")) ||
+    !(await hasColumn("moderation_notices", "post_id")) ||
+    !(await hasColumn("chat_reports", "sealed"))
+  ) {
     fail("This database has not been upgraded for the current version yet. Apply db/postgres/schema.sql, then run this again.")
   }
 
@@ -483,6 +662,9 @@ try {
   else if (command === "restore") await restore()
   else if (command === "appeals") await appeals()
   else if (command === "decide") await decide()
+  else if (command === "reports") await chatReports()
+  else if (command === "report-open") await chatReportOpen()
+  else if (command === "report-close") await chatReportClose()
   else await remove()
 } finally {
   await sql.end()

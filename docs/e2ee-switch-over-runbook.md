@@ -5,11 +5,11 @@ Nothing in this runbook has been run against production. The operator runs each 
 
 ## Before starting
 
-- [ ] Counsel has given its preservation advice (`docs/legal-operations.md`). The child-safety overview is in the Better project as
-      `claude/e2ee-child-safety-legal-overview-2026-11-06.md`. It recommends building a reporting path for chat messages before encrypted
-      chats are turned on. Rhenko has no such path yet, so proceeding means accepting that gap.
-- [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql` and the moderation changes.
-- [ ] The commands below run from the repository directory on the server.
+- [ ] Counsel has given its preservation advice (`docs/legal-operations.md`), and has seen how chat reports are kept and read (step 4a).
+      The child-safety overview is in the Better project as `claude/e2ee-child-safety-legal-overview-2026-11-06.md`. It is not legal advice.
+- [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql` and the chat reporting changes.
+- [ ] The commands below run from the repository directory on the server (the moderation commands need `lib/`, which the app's image does not
+      carry, so run them from a checkout with `npm install` done, not inside the container).
 
 ## 1. Confirm no pooler runs in front of Postgres (item 5)
 
@@ -39,6 +39,26 @@ previous code keeps working on the upgraded schema.
 
 Deploy the commit the way you deploy today: rebuild the `rhenko` image and recreate the `app` service. Then check
 `docker compose logs --tail 100 app` for errors.
+
+## 4a. Make the chat report key (once, before step 6). Reports cannot be stored without it.
+
+Chat reports are sealed to a key pair. The server needs only the public half, and the private half must stay off the server.
+
+    npm run moderation -- report-keygen <a file outside the repository>
+
+This prints a line `RHENKO_REPORT_KEY='{...}'`. Put that line in the server's `.env` and recreate the app (`docker compose up -d app`).
+Keep the private key file somewhere only the reviewers can reach, with a copy you control. If it is lost, reports sealed to it cannot be
+read again. If it is leaked, anyone holding it can read every reported message, so treat it as you would a production secret.
+Reporting is refused while `RHENKO_REPORT_KEY` is missing, so a missing key does not store reports in the clear.
+
+Reviewing a report (from the repository checkout, with `DATABASE_URL` and the app's storage settings in `.env`):
+
+    npm run moderation -- reports
+    npm run moderation -- report-open <reportId> --key <private key file> [--out <folder>]
+    npm run moderation -- report-close <reportId> actioned|no-action
+
+`report-open` records when the report was first opened. `--out` saves the report and its files, decrypted, into the folder; keep that folder
+as restricted as the report. A report and its files are removed one year after they were made, by the running app.
 
 ## 5. Delete existing plaintext messages (item 2). Irreversible.
 
@@ -97,4 +117,7 @@ Check the logs, then open Settings, Privacy, and confirm that the encrypted chat
   you take yourself.
 - Going back to plaintext means restoring the step 2 dump, which loses everything sent after it. Chats that are already encrypted stay
   encrypted (`conversations.e2ee` never goes back to 0).
-- Until the chat reporting path is built, a user cannot report a message, encrypted or plaintext.
+- A chat report and its files are kept for one year, even after the chat or the sender's account is deleted. Deleting one early is not
+  a button in the app; it needs a decision by you and counsel, and a change to `lib/chat-report-store.ts`.
+- A report of a chat that is not encrypted is sealed by the server from the stored messages. A report of an encrypted chat is sealed on the
+  reporter's device. Both open the same way.

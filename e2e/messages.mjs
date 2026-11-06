@@ -17,6 +17,7 @@ import {
   threadText,
 } from "./lib/chat.mjs"
 import { makePng } from "./lib/files.mjs"
+import { query } from "./lib/db.mjs"
 import { allowNoise } from "./lib/watch.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
 import { block, follow } from "./lib/people.mjs"
@@ -115,6 +116,23 @@ async function directFlow({ phone }) {
     await sendChat(receiver.page, second)
     await threadText(sender.page, second).waitFor()
     await sender.page.getByText(/^Seen/).first().waitFor()
+  })
+
+  await check(`${where}: a message from the other person can be reported, and the server seals the report for the report key`, async () => {
+    need(convId, "the conversation")
+    await messageRow(receiver.page, first).getByRole("button", { name: "More message options" }).click()
+    await receiver.page.getByRole("menuitem", { name: "Report", exact: true }).click()
+    const dialog = receiver.page.getByRole("dialog", { name: "Report message" })
+    await dialog.getByText("Abusive or harmful", { exact: true }).click()
+    await acted(receiver.page, () => dialog.getByRole("button", { name: "Report", exact: true }).click())
+    await toastText(receiver.page, "Report sent.")
+    const rows = await query("SELECT kid, reason, reported_user_id, sealed FROM chat_reports WHERE conversation_id = ?", convId)
+    assert.equal(rows.length, 1, `expected one report of the chat, found ${rows.length}`)
+    assert.equal(rows[0].reason, "Abusive or harmful")
+    const [who] = await query("SELECT id FROM users WHERE handle = ?", sender.handle)
+    assert.equal(rows[0].reported_user_id, who?.id, "the report names someone other than the sender")
+    assert.ok(!rows[0].sealed.includes(first), "the reported words are stored in the clear")
+    assert.equal(JSON.parse(rows[0].sealed).kid, rows[0].kid, "the report is not sealed to the key it names")
   })
 
   await check(`${where}: a reaction shows on both sides, and pressing it again takes it back`, async () => {

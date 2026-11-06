@@ -1,6 +1,7 @@
 import { all, get } from "@/lib/db"
 import { publish } from "@/lib/bus"
 import { removeUpload } from "@/lib/uploads"
+import { reportFileKept } from "@/lib/chat-report-store"
 
 // Messages deleted in one statement. A backlog is worked through a batch at a time in the same pass.
 const BATCH = 500
@@ -30,9 +31,12 @@ export async function expireMessages(now: number): Promise<number> {
     removed += rows.length
     if (rows.length < BATCH) break
   }
-  // Upload names are random and a chat file belongs to one message. A file that anything still points at is kept anyway.
+  // Upload names are random and a chat file belongs to one message. A file that anything still points at is kept anyway, and so
+  // is a file a chat report keeps.
   for (const file of files) {
-    if (!await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", file)) await removeUpload(file)
+    if (await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", file)) continue
+    if (await reportFileKept(file)) continue
+    await removeUpload(file)
   }
   for (const conversationId of conversations) {
     const members = await all<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ?", conversationId)

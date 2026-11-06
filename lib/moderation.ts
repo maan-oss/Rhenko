@@ -58,16 +58,19 @@ export async function hidePost(input: HideInput, now = Date.now()): Promise<Hide
 // Restoring a hidden post and deciding an appeal are done from the command line (scripts/moderation.mjs restore, decide).
 // That is the one path that puts a post back, so a restore cannot be done two different ways.
 
-// Whether any record still uses a stored file. scripts/moderation.mjs checks the same tables before it queues a file.
+// Whether any record still uses a stored file. scripts/moderation.mjs checks the same tables before it queues a file. A file a
+// chat report keeps counts as in use until the report is removed (lib/chat-report-store.ts).
 export async function fileInUse(name: string): Promise<boolean> {
   const row = await get<{ used: number }>(
     `SELECT 1 AS used FROM post_media WHERE file = ?
      UNION ALL SELECT 1 FROM posts WHERE media_file = ?
      UNION ALL SELECT 1 FROM users WHERE avatar_file = ? OR banner_file = ?
      UNION ALL SELECT 1 FROM chat_messages WHERE media_file = ?
+     UNION ALL SELECT 1 FROM chat_report_files WHERE file = ?
      UNION ALL SELECT 1 FROM link_previews WHERE image_file = ?
      UNION ALL SELECT 1 FROM ad_campaigns WHERE picture_file = ?
      LIMIT 1`,
+    name,
     name,
     name,
     name,

@@ -440,6 +440,38 @@ CREATE TABLE pending_file_deletions (
   created_at bigint NOT NULL
 );
 
+-- Reports of chat messages (lib/chat-reports.ts). A report holds the messages up to the reported one, sealed to the report key, so
+-- the server keeps only ciphertext. The moderation command line opens it with the private key, which the server never holds. The
+-- rows have no foreign keys on purpose: a report must outlive its chat and its accounts until retain_until, one year after it was
+-- made. Its files are kept by chat_report_files.
+CREATE TABLE chat_reports (
+  id text PRIMARY KEY,
+  reporter_id text NOT NULL,
+  reported_user_id text NOT NULL,
+  conversation_id text NOT NULL,
+  message_id text NOT NULL,
+  kid text NOT NULL,
+  reason text NOT NULL,
+  sealed text NOT NULL,
+  created_at bigint NOT NULL,
+  retain_until bigint NOT NULL,
+  status text NOT NULL DEFAULT 'open',
+  opened_at bigint,
+  handled_at bigint
+);
+CREATE INDEX chat_reports_open ON chat_reports (status, created_at);
+CREATE INDEX chat_reports_retain ON chat_reports (retain_until);
+CREATE UNIQUE INDEX chat_reports_once ON chat_reports (reporter_id, message_id);
+
+-- The stored files a report keeps: the photo, video, document or voice message among the reported messages. A file stays in storage
+-- while any report keeps it (lib/moderation.ts fileInUse).
+CREATE TABLE chat_report_files (
+  report_id text NOT NULL REFERENCES chat_reports(id) ON DELETE CASCADE,
+  file text NOT NULL,
+  PRIMARY KEY (report_id, file)
+);
+CREATE INDEX chat_report_files_file ON chat_report_files (file);
+
 CREATE TABLE community_members (
   community_id text NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -57,4 +57,33 @@ create table if not exists pending_file_deletions (
   name text primary key,
   created_at bigint not null
 );
+
+-- Reports of chat messages (see db/postgres/schema.sql, and lib/chat-reports.ts for what they hold). No foreign keys, so a report
+-- outlives its chat and its accounts until it is due to be removed.
+create table if not exists chat_reports (
+  id text primary key,
+  reporter_id text not null,
+  reported_user_id text not null,
+  conversation_id text not null,
+  message_id text not null,
+  kid text not null,
+  reason text not null,
+  sealed text not null,
+  created_at bigint not null,
+  retain_until bigint not null,
+  status text not null default 'open',
+  opened_at bigint,
+  handled_at bigint
+);
+create index if not exists chat_reports_open on chat_reports (status, created_at);
+create index if not exists chat_reports_retain on chat_reports (retain_until);
+create unique index if not exists chat_reports_once on chat_reports (reporter_id, message_id);
+
+-- The stored files a report keeps. A file stays in storage while any report keeps it.
+create table if not exists chat_report_files (
+  report_id text not null references chat_reports(id) on delete cascade,
+  file text not null,
+  primary key (report_id, file)
+);
+create index if not exists chat_report_files_file on chat_report_files (file);
 commit;
