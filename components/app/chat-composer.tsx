@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { MiniUser } from "@/lib/data"
 import { MAX_DM, MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { sizeLabel } from "@/lib/message-attachments"
+import { sendSealedText } from "@/lib/e2ee-client"
 import { cn } from "@/lib/utils"
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
@@ -54,6 +55,10 @@ function speechConstructor(): RecognitionConstructor | null {
 }
 
 const noopSubscribe = () => () => {}
+
+// The form's action in an encrypted chat. The text is sealed in the browser instead (see sealAndSend), so the plaintext action never
+// runs there.
+function noAction() {}
 
 // Voice messages are recorded with the browser's recorder, in the first format it can write.
 function recordingSupported(): boolean {
@@ -212,9 +217,21 @@ const ATTACH_ITEM = "min-h-11 gap-3 text-[15px]"
 // One attachment can go with a message: a photo or video, a scan, a document, an audio file, a voice message, a contact, a
 // location or a poll. In a group, "@" suggests the people to mention. `people` are the others in the conversation who can be shared.
 // The row sits low on the screen; on a phone it leaves room on the left for the folded dock.
-export function ChatComposer({ conversationId, people, group }: { conversationId: string; people: MiniUser[]; group: boolean }) {
+export function ChatComposer({
+  conversationId,
+  people,
+  group,
+  encrypted = false,
+}: {
+  conversationId: string
+  people: MiniUser[]
+  group: boolean
+  // Whether the chat is end-to-end encrypted: its text is sealed on this device before it is sent.
+  encrypted?: boolean
+}) {
   const [state, action] = useSafeActionState(sendMessage, {} as ChatState, "Your message did not send. Check your connection and try again.")
   const formRef = useRef<HTMLFormElement>(null)
+  const sealingRef = useRef(false)
   const lastSignal = useRef(0)
   const [pick, setPick] = useState<Pick | null>(null)
   // A photo or video the recipients may open once. It applies only to a picked photo or video that is not a scan.
@@ -279,6 +296,29 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
     armText(key, from)
     if (from && textRef.current) textRef.current.style.color = "transparent"
     addPending(conversationId, { key, body, createdAt: Date.now() })
+  }
+
+  // An encrypted chat's text is sealed on this device and sent as an envelope (see lib/e2ee-client.ts). Photos, files, voice and the
+  // other attachments are not sealed yet, so they are refused here with a reason rather than sent in the clear.
+  async function sealAndSend() {
+    if (sealingRef.current) return
+    const body = text.trim()
+    if (!body) return
+    if (pick !== null || voice !== null) {
+      toast.error("Photos, files and other attachments aren't available in encrypted chats yet.")
+      return
+    }
+    sealingRef.current = true
+    stopDictation()
+    const result = await sendSealedText({ conversationId, body, replyTo: replyTo?.id ?? null })
+    sealingRef.current = false
+    if (result.ok) {
+      setText("")
+      setReplyTo(null)
+      router.refresh()
+    } else {
+      toast.error(result.error)
+    }
   }
 
   // A confirmed send clears the composer. Adjusted during render, so the text clears on the same frame.
@@ -710,8 +750,13 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
       ) : null}
       <form
         ref={formRef}
-        action={action}
-        onSubmit={() => {
+        action={encrypted ? noAction : action}
+        onSubmit={(event) => {
+          if (encrypted) {
+            event.preventDefault()
+            void sealAndSend()
+            return
+          }
           stopDictation()
           queueOptimistic()
           // A photo or video leaves its preview at once and grows into its bubble when the saved message arrives.

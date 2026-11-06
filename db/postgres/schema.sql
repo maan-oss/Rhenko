@@ -189,7 +189,9 @@ CREATE TABLE conversations (
   -- sent after it.
   message_timer bigint NOT NULL DEFAULT 0,
   -- A group's invite link, /join/<token>. NULL when the group has none. Resetting the link replaces the token.
-  invite_token text
+  invite_token text,
+  -- 1 when the chat is end-to-end encrypted (lib/e2ee.ts). Once on, it stays on, and the server refuses plaintext messages.
+  e2ee bigint NOT NULL DEFAULT 0
 );
 
 CREATE TABLE email_codes (

@@ -28,6 +28,8 @@ import { wallpaperOf, type WallpaperKey } from "@/lib/chat-wallpapers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
 import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
 import { mutedWordFilter } from "@/lib/social-rules"
+import { ENCRYPTED_PREVIEW, type SealedView, type SealedWrap } from "@/lib/e2ee-chat"
+import { thisDeviceOf } from "@/lib/e2ee-devices"
 
 // Shared read models. Everything a page or API route renders comes from here,
 // so visibility rules (blocks, mutes, protected accounts, muted words) are
@@ -1855,6 +1857,8 @@ type LastMessage = {
   call_kind: "dm" | "group"
   call_people: number
   timer_change: number | null
+  // Set for an end-to-end encrypted message, whose text the server does not hold.
+  cipher: string | null
 }
 
 // A disappearing message whose time is up is gone for everyone, even in the moments before maintenance deletes it.
@@ -1865,7 +1869,7 @@ export function unexpired(alias: string): string {
 
 async function lastMessageOf(conversationId: string, viewerId: string): Promise<LastMessage | undefined> {
   return await get<LastMessage>(
-    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change
+    `SELECT m.body, m.sender_id, m.created_at, m.deleted_at, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.call_kind, m.call_people, m.timer_change, m.cipher
      FROM chat_messages m
      WHERE m.conversation_id = ? AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notClearedFor("m")}
      ORDER BY m.created_at DESC, m.id DESC LIMIT 1`,
@@ -1892,6 +1896,8 @@ function notClearedFor(alias: string): string {
 // What the conversation list says about the latest message, from the viewer's side.
 function previewOfLast(last: LastMessage | undefined, viewerId: string): string {
   if (!last || last.deleted_at) return ""
+  // The server cannot read an encrypted message, so the list says only that there is one.
+  if (last.cipher !== null) return ENCRYPTED_PREVIEW
   if (last.call_status) {
     return callSummary(last.call_status, last.call_seconds, last.sender_id === viewerId, last.call_kind, last.call_people)
   }
@@ -2162,6 +2168,8 @@ type ConversationView = {
   muted: boolean
   // The disappearing-messages timer in milliseconds, 0 when it is off.
   messageTimer: number
+  // Whether the chat is end-to-end encrypted: its text is sealed on the devices, and the composer seals what is sent.
+  encrypted: boolean
 }
 
 // The conversation, if the viewer is a member and it isn't a one-to-one chat across a block. Null otherwise.
@@ -2174,8 +2182,9 @@ export async function conversationFor(id: string, viewerId: string): Promise<Con
     status: "accepted" | "requested"
     muted: number
     message_timer: number
+    e2ee: number | string
   }>(
-    `SELECT c.id, c.kind, c.title, c.created_by, cm.status, cm.muted, c.message_timer
+    `SELECT c.id, c.kind, c.title, c.created_by, cm.status, cm.muted, c.message_timer, c.e2ee
      FROM conversations c JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
      WHERE c.id = ? AND NOT (${DM_BLOCKED})`,
     viewerId,
@@ -2209,6 +2218,7 @@ export async function conversationFor(id: string, viewerId: string): Promise<Con
     viewerIsCreator: base.created_by === viewerId,
     muted: base.muted === 1,
     messageTimer: base.message_timer,
+    encrypted: Number(base.e2ee) === 1,
   }
 }
 
@@ -2258,6 +2268,9 @@ export type MessageView = {
   pinned: boolean
   // When the viewer asked to be reminded of this message, or null. Only the viewer sees it.
   reminderAt: number | null
+  // An end-to-end encrypted message: the envelope, and this viewer's device's wrap of its key. The text is empty here and is
+  // opened on the viewer's device. Null for a message that is not encrypted, and for a deleted one.
+  sealed: SealedView | null
 }
 
 // A poll in a chat: its question and choices with the votes for each, how many people have voted, and the choices this
@@ -2300,6 +2313,8 @@ type MessageRow = {
   edited_at: number | null
   view_once: number
   view_opened: number
+  cipher: string | null
+  reply_cipher: string | null
 }
 
 // The messages of one conversation as this viewer may see them. The original of a reply is joined in the same chat only, so
@@ -2312,11 +2327,11 @@ function messageSelect(conversationId: string, viewerId: string): { select: stri
   const now = Date.now()
   return {
     select: `SELECT m.id, m.sender_id, m.body, m.lang, m.media_file, m.post_id, m.attachment, m.created_at, m.deleted_at, m.call_status, m.call_seconds, m.call_kind, m.call_people,
-       m.expires_at, m.timer_change, m.forwarded, m.edited_at, m.view_once,
+       m.expires_at, m.timer_change, m.forwarded, m.edited_at, m.view_once, m.cipher,
        EXISTS(SELECT 1 FROM chat_view_once_opens vo WHERE vo.message_id = m.id AND vo.user_id = ?) AS view_opened,
        u.name AS sender_name, u.handle AS sender_handle,
        m.reply_to_id, rm.id AS reply_id, rm.body AS reply_body, rm.media_file AS reply_media, rm.post_id AS reply_post,
-       rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name, rm.attachment AS reply_attachment
+       rm.deleted_at AS reply_deleted, ru.name AS reply_sender_name, rm.attachment AS reply_attachment, rm.cipher AS reply_cipher
      FROM chat_messages m
      JOIN users u ON u.id = m.sender_id
      LEFT JOIN chat_messages rm ON rm.id = m.reply_to_id AND rm.conversation_id = m.conversation_id AND ${notFromBlocked("rm.sender_id")} AND ${unexpired("rm")}
@@ -2504,6 +2519,21 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
   }
   const linkPreviews = await previewsFor([...new Set(linkOf.values())])
   await requestPreviews([...new Set(linkOf.values())])
+  // An encrypted message's key, wrapped for this viewer's device. Read only when the page has one, so a page of plain messages
+  // never looks up a device. Empty when the viewer has no linked device in this browser.
+  const sealedRows = rows.filter((r) => r.cipher !== null && !r.deleted_at)
+  const wraps = new Map<string, SealedWrap>()
+  if (sealedRows.length > 0) {
+    const device = await thisDeviceOf(viewerId)
+    if (device) {
+      const found = await all<{ message_id: string; epk: string; iv: string; key: string }>(
+        `SELECT message_id, epk, iv, key FROM chat_message_wraps WHERE device_id = ? AND message_id IN (${sealedRows.map(() => "?").join(",")})`,
+        device.id,
+        ...sealedRows.map((r) => r.id)
+      )
+      for (const w of found) wraps.set(w.message_id, { epk: w.epk, iv: w.iv, key: w.key })
+    }
+  }
   return rows.map((r) => {
     const attachment = attachments.get(r.id) ?? null
     const others = readers.filter((m) => m.user_id !== r.sender_id)
@@ -2514,7 +2544,11 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
         ? {
             id: r.reply_id,
             senderName: r.reply_sender_name ?? "Someone",
-            snippet: r.reply_deleted ? "" : replySnippet(r.reply_body ?? "", r.reply_media, r.reply_post, parseAttachment(r.reply_attachment)),
+            snippet: r.reply_deleted
+              ? ""
+              : r.reply_cipher !== null
+                ? ENCRYPTED_PREVIEW
+                : replySnippet(r.reply_body ?? "", r.reply_media, r.reply_post, parseAttachment(r.reply_attachment)),
             deleted: r.reply_deleted !== null,
           }
         : null
@@ -2553,6 +2587,7 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       viewOpened: r.view_opened === 1,
       pinned: pinnedIds.has(r.id) && !r.deleted_at,
       reminderAt: r.deleted_at ? null : reminders.get(r.id) ?? null,
+      sealed: r.cipher !== null && !r.deleted_at ? { envelope: r.cipher, wrap: wraps.get(r.id) ?? null } : null,
     }
   })
 }

@@ -32,6 +32,7 @@ import type { MessageView } from "@/lib/data"
 import { REACTIONS } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 import { useImageWidth } from "@/lib/network"
+import { useOpenedMessages } from "@/components/app/use-opened-messages"
 
 // A call record as the thread reads it. Group records say so and how many people joined.
 type CallRecord = NonNullable<MessageView["call"]>
@@ -71,6 +72,7 @@ export function ChatThread({
   focusId,
   hasNewer,
   canPin,
+  encrypted,
 }: {
   conversationId: string
   messages: MessageView[]
@@ -82,6 +84,8 @@ export function ChatThread({
   hasNewer: boolean
   // Whether the viewer may pin messages here. Not while the chat is a request they haven't accepted.
   canPin: boolean
+  // Whether the chat is end-to-end encrypted. Its messages are opened on this device.
+  encrypted: boolean
 }) {
   const selection = useSelection()
   const endRef = useRef<HTMLDivElement>(null)
@@ -114,9 +118,11 @@ export function ChatThread({
   }
 
   const pageIds = new Set(messages.map((message) => message.id))
-  const listed = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
+  const listedRaw = [...earlier.filter((message) => !pageIds.has(message.id)), ...messages]
     .filter((message) => !changes[message.id]?.hidden)
     .map((message) => withChange(message, changes[message.id]))
+  // Encrypted messages show their text once this browser's device has opened them.
+  const listed = useOpenedMessages(conversationId, listedRaw, encrypted)
   // A disappearing message leaves the thread the moment its time is up, without waiting for a refresh. The clock starts at
   // zero, so the first render is the page the server sent, which had already left out anything that was gone.
   const shown = clock === 0 ? listed : listed.filter((message) => !isExpired(message.expiresAt, clock))

@@ -52,6 +52,7 @@ import * as sahayak from "./sahayak.mjs"
 import * as stickers from "./stickers.mjs"
 import * as social from "./social.mjs"
 import * as messages from "./messages.mjs"
+import * as encrypted from "./encrypted.mjs"
 import * as isolation from "./isolation.mjs"
 import * as calls from "./calls.mjs"
 import * as billing from "./billing.mjs"
@@ -111,6 +112,7 @@ const AREAS = [
   ["stickers", stickers],
   ["social", social],
   ["messages", messages],
+  ["encrypted", encrypted],
   ["isolation", isolation],
   ["calls", calls],
   ["billing", billing],

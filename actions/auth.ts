@@ -29,6 +29,7 @@ import {
 import { cleanEmail, emailProblem, EMAIL_CODE_MINUTES, MAX_EMAIL, passwordProblem } from "@/lib/account-rules"
 import { hangUpFor } from "@/lib/call-state"
 import { get, run } from "@/lib/db"
+import { unlinkBrowserDevice } from "@/lib/e2ee-devices"
 import { sendMail } from "@/lib/mail"
 import { consume, reached, waitLabel } from "@/lib/rate-limit"
 import { HANDLE_MAX, MAX_PASSWORD, ageFrom, validateHandle, validateName } from "@/lib/rules"
@@ -217,7 +218,10 @@ export async function verifySecondFactor(_prev: AuthState, formData: FormData): 
 // router request, which the e2e suite caught answering 404.
 export async function logout(): Promise<{ to: "/" | "/login" }> {
   const viewer = await getViewer()
-  if (viewer) await hangUpFor(viewer.id, "signed-out", await currentSessionHash())
+  if (viewer) {
+    await hangUpFor(viewer.id, "signed-out", await currentSessionHash())
+    await unlinkBrowserDevice(viewer.id)
+  }
   await destroySession()
   return { to: (await adoptRemainingAccount()) ? "/" : "/login" }
 }

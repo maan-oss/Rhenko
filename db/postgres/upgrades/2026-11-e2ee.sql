@@ -2,6 +2,7 @@
 -- the app. Safe to run again. Matches the new parts of db/postgres/schema.sql.
 begin;
 alter table chat_messages add column if not exists cipher text;
+alter table conversations add column if not exists e2ee bigint not null default 0;
 -- End-to-end encryption (lib/e2ee.ts). A device is a browser or app that holds its own private keys; the server keeps only the
 -- public halves, listed here. A revoked device gets no further messages, and its old wraps stay as they are.
 create table if not exists e2ee_devices (

@@ -11,6 +11,8 @@ import { Realtime } from "@/components/app/realtime"
 import { GifSetupProvider } from "@/components/app/gif-setup"
 import { Shortcuts } from "@/components/app/shortcuts"
 import { ServiceWorkerRegister } from "@/components/app/sw-register"
+import { DeviceKeeper } from "@/components/app/e2ee-device-keeper"
+import { encryptedChatsEnabled } from "@/lib/e2ee-chat"
 import { ViewerLanguages } from "@/components/app/viewer-languages"
 // The view and dwell reports send server actions. They can still be sent after the page that counted them has gone (the batch
 // waits a moment), so every page of the app must be able to take them. Imported here, they are part of every app page.
@@ -47,6 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <LiveMounts />
             <BannerHost />
             <ServiceWorkerRegister />
+            <DeviceKeeper enabled={encryptedChatsEnabled()} />
           </div>
         </LiveCountsProvider>
       </GifSetupProvider>

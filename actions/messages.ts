@@ -36,6 +36,9 @@ import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIO
 import { removeUpload, saveUpload } from "@/lib/uploads"
 import { asMessageTimer, expiryFor, isExpired } from "@/lib/message-timers"
 import { groupForInvite, inviteStanding, newInviteToken } from "@/lib/group-invites"
+import { checkEncryptedSend } from "@/lib/e2ee"
+import { activeDevicesOf, knownDevicesOf, memberDevicesOf, thisDeviceOf } from "@/lib/e2ee-devices"
+import { ENCRYPTED_PREVIEW, SEALED_BODY, encryptedChatsEnabled, type SealedWrap } from "@/lib/e2ee-chat"
 
 export type ChatState = { error?: string; sent?: boolean }
 export type IdResult = { ok: true; id: string } | { ok: false; error: string }
@@ -142,6 +145,22 @@ async function memberIds(conversationId: string): Promise<string[]> {
   return (await all<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ?", conversationId)).map((r) => r.user_id)
 }
 
+// Whether a chat is end-to-end encrypted. Its messages are sealed on the devices that hold the keys, never sent in plaintext.
+async function isEncryptedChat(conversationId: string): Promise<boolean> {
+  return Number((await get<{ e2ee: number | string }>("SELECT e2ee FROM conversations WHERE id = ?", conversationId))?.e2ee ?? 0) === 1
+}
+
+const ENCRYPTED_REFUSAL = "This chat is end-to-end encrypted, so this can only be done from an app that holds its keys. Reload and try again."
+// Whether a message was sealed on a device, so its text is not on the server and cannot be changed or copied here.
+async function isSealed(messageId: string): Promise<boolean> {
+  return (await get("SELECT 1 AS found FROM chat_messages WHERE id = ? AND cipher IS NOT NULL", messageId)) !== undefined
+}
+// Features that still need the text on the server are refused in an encrypted chat until they are sealed too.
+const SEALED_EDIT_REFUSAL = "Editing isn't available in encrypted chats yet."
+const SEALED_FORWARD_REFUSAL = "Forwarding an encrypted message isn't available yet."
+const FORWARD_TO_ENCRYPTED_REFUSAL = "Forwarding into an encrypted chat isn't available yet."
+const SHARE_TO_ENCRYPTED_REFUSAL = "Sharing a post with a note isn't available in encrypted chats yet."
+
 async function follows(followerId: string, followeeId: string): Promise<boolean> {
   return await get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", followerId, followeeId) !== undefined
 }
@@ -165,7 +184,14 @@ async function openDirect(viewerId: string, targetId: string): Promise<IdResult>
   const id = newId()
   const now = Date.now()
   await transaction(async () => {
-    await run("INSERT INTO conversations (id, kind, title, created_by, created_at, updated_at) VALUES (?, 'dm', '', ?, ?, ?)", id, viewerId, now, now)
+    await run(
+      "INSERT INTO conversations (id, kind, title, created_by, created_at, updated_at, e2ee) VALUES (?, 'dm', '', ?, ?, ?, ?)",
+      id,
+      viewerId,
+      now,
+      now,
+      encryptedChatsEnabled() ? 1 : 0
+    )
     await run("INSERT INTO conversation_members (conversation_id, user_id, status, last_read_at, joined_at) VALUES (?, ?, 'accepted', ?, ?)", id, viewerId, now, now)
     await run(
       "INSERT INTO conversation_members (conversation_id, user_id, status, last_read_at, joined_at) VALUES (?, ?, ?, 0, ?)",
@@ -228,26 +254,32 @@ async function insertMessage(
   replyToId: string | null,
   attachment: Attachment | null,
   forwarded = false,
-  viewOnce = false
-): Promise<void> {
+  viewOnce = false,
+  sealed: Sealed | null = null
+): Promise<string> {
   const now = Date.now()
   const timer = (await get<{ message_timer: number }>("SELECT message_timer FROM conversations WHERE id = ?", conversationId))?.message_timer ?? 0
+  const id = sealed?.id ?? newId()
   await run(
-    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment, forwarded, view_once) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    newId(),
+    "INSERT INTO chat_messages (id, conversation_id, sender_id, body, media_file, post_id, created_at, lang, reply_to_id, expires_at, attachment, forwarded, view_once, cipher) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    id,
     conversationId,
     senderId,
-    body,
+    sealed ? SEALED_BODY : body,
     mediaFile,
     postId,
     now,
-    languageOf(body),
+    sealed ? null : languageOf(body),
     replyToId,
     expiryFor(now, timer),
     attachment ? attachmentText(attachment) : null,
     forwarded ? 1 : 0,
-    viewOnce ? 1 : 0
+    viewOnce ? 1 : 0,
+    sealed?.cipher ?? null
   )
+  for (const wrap of sealed?.wraps ?? []) {
+    await run("INSERT INTO chat_message_wraps (message_id, device_id, epk, iv, key) VALUES (?, ?, ?, ?, ?)", id, wrap.device, wrap.epk, wrap.iv, wrap.key)
+  }
   await run("UPDATE conversations SET updated_at = ? WHERE id = ?", now, conversationId)
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", now, conversationId, senderId)
   // A new message brings an archived chat back to the chats list for everyone else in it, as WhatsApp does. Not for someone blocked
@@ -264,12 +296,20 @@ async function insertMessage(
   const members = await memberIds(conversationId)
   const audience = audienceOf(members, senderId, await blockedWithin(senderId, members))
   await publish([senderId, ...audience], { type: "message", conversationId })
+  return id
 }
+
+// An encrypted message as it is stored: its id, its envelope (JSON), and one wrap per device that can read it.
+type Sealed = { id: string; cipher: string; wraps: Array<SealedWrap & { device: string }> }
 
 // The accepted members of a group whose @handle the message names, other than its sender. A mention reaches them even when they
 // muted the group, as WhatsApp does. Only people who have joined count, so an invite can't ping someone outside the group.
 async function mentionedMembers(conversationId: string, senderId: string, body: string): Promise<Set<string>> {
-  const handles = mentionedHandles(body)
+  return await mentionedMembersByHandle(conversationId, senderId, mentionedHandles(body))
+}
+
+// The accepted members with these handles (lowercase), other than the sender.
+async function mentionedMembersByHandle(conversationId: string, senderId: string, handles: string[]): Promise<Set<string>> {
   if (handles.length === 0) return new Set()
   const marks = handles.map(() => "?").join(",")
   const rows = await all<{ user_id: string }>(
@@ -285,7 +325,13 @@ async function mentionedMembers(conversationId: string, senderId: string, body: 
 
 // A banner for each other member, and a push to their devices. A request says so. A muted conversation gets neither, except for
 // a member who was mentioned in it.
-async function announceMessage(conversationId: string, senderId: string, preview: string, body = ""): Promise<void> {
+async function announceMessage(
+  conversationId: string,
+  senderId: string,
+  preview: string,
+  body = "",
+  mentionIds: Set<string> | null = null
+): Promise<void> {
   const sender = await get<{ id: string; name: string; handle: string; avatar_file: string | null }>(
     "SELECT id, name, handle, avatar_file FROM users WHERE id = ?",
     senderId
@@ -299,7 +345,8 @@ async function announceMessage(conversationId: string, senderId: string, preview
     conversationId,
     senderId
   )
-  const mentioned = conversation.kind === "group" ? await mentionedMembers(conversationId, senderId, body) : new Set<string>()
+  // An encrypted message names its mentions on the device, so the server is given them rather than reading the body.
+  const mentioned = mentionIds ?? (conversation.kind === "group" ? await mentionedMembers(conversationId, senderId, body) : new Set<string>())
   // Nobody blocked either way with the sender hears of the message: no banner, and no mention either.
   const blocked = await blockedWithin(senderId, members.map((member) => member.user_id))
   for (const member of members) {
@@ -361,7 +408,15 @@ export async function createGroup(_prev: ChatState, formData: FormData): Promise
   const id = newId()
   const now = Date.now()
   await transaction(async () => {
-    await run("INSERT INTO conversations (id, kind, title, created_by, created_at, updated_at) VALUES (?, 'group', ?, ?, ?, ?)", id, title, viewer.id, now, now)
+    await run(
+      "INSERT INTO conversations (id, kind, title, created_by, created_at, updated_at, e2ee) VALUES (?, 'group', ?, ?, ?, ?, ?)",
+      id,
+      title,
+      viewer.id,
+      now,
+      now,
+      encryptedChatsEnabled() ? 1 : 0
+    )
     await run("INSERT INTO conversation_members (conversation_id, user_id, status, last_read_at, joined_at) VALUES (?, ?, 'accepted', ?, ?)", id, viewer.id, now, now)
     for (const [index, user] of users.entries()) {
       await run(
@@ -687,6 +742,8 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   if (!status) return { error: "That conversation doesn't exist." }
   if (status === "requested") return { error: "Accept this request to reply." }
   if (await directConversationClosed(conversationId, viewer.id)) return { error: "They can't receive messages here anymore." }
+  // An encrypted chat only takes messages sealed on a device. A plaintext send from a stale page is refused.
+  if (await isEncryptedChat(conversationId)) return { error: ENCRYPTED_REFUSAL }
 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim()
   const postId = String(formData.get("postId") ?? "") || null
@@ -811,6 +868,119 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   return { sent: true }
 }
 
+// A message id the sending device picks: a random UUID, as crypto.randomUUID makes.
+const MESSAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+// How many handles one sealed message may name.
+const MAX_MENTIONS = 50
+
+// The handles a sealed message names, lowercase and without repeats, as the sending device found them.
+function mentionHandles(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const handles = value.filter((handle): handle is string => typeof handle === "string" && handle.length > 0 && handle.length <= MAX_HANDLE_INPUT)
+  return [...new Set(handles.map((handle) => handle.toLowerCase()))].slice(0, MAX_MENTIONS)
+}
+
+// Sends a message the sender's device has sealed (see lib/e2ee.ts). The device picks the message id first, because the id is bound
+// into the encryption, so the server only checks that it is a fresh UUID. The server stores the envelope and one wrap per device, and
+// never the text. The handles a message names are the one thing the server learns of its words, so the people named hear of it the
+// way they do for a plain message.
+export async function sendEncryptedMessage(input: unknown): Promise<ChatState> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { error: "Sign in to send messages." }
+  const data = (input && typeof input === "object" ? input : {}) as Record<string, unknown>
+  const conversationId = asId(data.conversationId)
+  const status = conversationId ? await memberStatus(conversationId, viewer.id) : null
+  if (!conversationId || !status) return { error: "That conversation doesn't exist." }
+  if (status === "requested") return { error: "Accept this request to reply." }
+  if (await directConversationClosed(conversationId, viewer.id)) return { error: "They can't receive messages here anymore." }
+  if (!(await isEncryptedChat(conversationId))) return { error: "This chat isn't end-to-end encrypted." }
+  const id = typeof data.id === "string" && MESSAGE_ID.test(data.id) ? data.id : null
+  if (!id || (await get("SELECT 1 AS found FROM chat_messages WHERE id = ?", id)) !== undefined) {
+    return { error: "That message couldn't be sent. Try again." }
+  }
+
+  const others = (await memberIds(conversationId)).filter((other) => other !== viewer.id)
+  const direct = (await get<{ kind: string }>("SELECT kind FROM conversations WHERE id = ?", conversationId))?.kind === "dm"
+  if (direct && (await Promise.all(others.map((other) => blockedEitherWay(viewer.id, other)))).some(Boolean)) {
+    return { error: "You can't message someone in this conversation." }
+  }
+  const replyToId = asId(data.replyTo)
+  if (replyToId) {
+    const target = await get<{ id: string; sender_id: string }>(
+      `SELECT id, sender_id FROM chat_messages
+       WHERE id = ? AND conversation_id = ? AND call_status IS NULL AND timer_change IS NULL AND deleted_at IS NULL
+         AND (expires_at IS NULL OR expires_at > ?)`,
+      replyToId,
+      conversationId,
+      Date.now()
+    )
+    if (!target || await blockedEitherWay(viewer.id, target.sender_id)) return { error: "That message can't be replied to anymore." }
+  }
+  const slowDown = await tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.")
+  if (slowDown) return { error: slowDown }
+
+  // The wraps must cover exactly the devices that can read the chat right now (see checkEncryptedSend).
+  const members = await memberDevicesOf(conversationId)
+  const senderDevices = (await activeDevicesOf(viewer.id)).map((device) => device.id)
+  const envelopeSender = (data.envelope as { sender?: unknown } | null | undefined)?.sender
+  const checked = checkEncryptedSend({
+    envelope: data.envelope,
+    wraps: data.wraps,
+    senderDevice: typeof envelopeSender === "string" ? envelopeSender : "",
+    senderDevices,
+    memberDevices: members.devices.map((device) => device.id),
+    memberWithoutDevice: members.memberWithoutDevice,
+  })
+  if (!checked.ok) return { error: checked.error }
+
+  const mentioned = await mentionedMembersByHandle(conversationId, viewer.id, mentionHandles(data.mentions))
+  await insertMessage(conversationId, viewer.id, SEALED_BODY, null, null, replyToId, null, false, false, {
+    id,
+    cipher: JSON.stringify(checked.envelope),
+    wraps: checked.wraps,
+  })
+  await announceMessage(conversationId, viewer.id, ENCRYPTED_PREVIEW, "", mentioned)
+  refresh()
+  return { sent: true }
+}
+
+export type EncryptionTargets =
+  | {
+      ok: true
+      // This browser's device for the viewer's account, or null when this browser has none yet.
+      viewerDevice: string | null
+      // Every active device of every accepted member, the sender's own included, with its public agreement key.
+      recipients: Array<{ device: string; agreement: string }>
+      memberWithoutDevice: boolean
+    }
+  | { ok: false; error: string }
+
+// What a sender's browser needs to seal a message for an encrypted chat: who should be able to read it.
+export async function encryptionTargets(conversationId: string): Promise<EncryptionTargets> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in to send messages." }
+  const id = asId(conversationId)
+  if (!id || (await memberStatus(id, viewer.id)) !== "accepted") return { ok: false, error: "That conversation doesn't exist." }
+  if (!(await isEncryptedChat(id))) return { ok: false, error: "This chat isn't end-to-end encrypted." }
+  const members = await memberDevicesOf(id)
+  const own = await thisDeviceOf(viewer.id)
+  return {
+    ok: true,
+    viewerDevice: own?.id ?? null,
+    recipients: members.devices.map((device) => ({ device: device.id, agreement: device.agreement_key })),
+    memberWithoutDevice: members.memberWithoutDevice,
+  }
+}
+
+// The signing key of every device that has ever been in a chat the viewer can read, so a sealed message can be checked against the
+// device that wrote it. A removed device stays in the list, because it signed what it wrote. Empty for anyone who cannot read the chat.
+export async function signingKeysOf(conversationId: string): Promise<Array<{ device: string; signing: string }>> {
+  const viewer = await getAgreedViewer()
+  const id = asId(conversationId)
+  if (!viewer || !id || !(await canReadConversation(id, viewer.id))) return []
+  return (await knownDevicesOf(id)).map((device) => ({ device: device.id, signing: device.signing_key }))
+}
+
 // Casts, changes or takes back this viewer's vote in a poll sent in a chat. `choices` is every choice they pick now; none takes
 // the vote back. Only someone who is in the chat, and can still see the message, may vote.
 export async function voteInChatPoll(messageId: string, choices: unknown): Promise<VoidResult> {
@@ -892,6 +1062,10 @@ export async function sharePostWith(postId: string, handles: string[], note: str
       failed.push({ handle: target.handle, error: "Accept their request before you send anything." })
       continue
     }
+    if (await isEncryptedChat(opened.id)) {
+      failed.push({ handle: target.handle, error: SHARE_TO_ENCRYPTED_REFUSAL })
+      continue
+    }
     await insertMessage(opened.id, viewer.id, clean, null, id, null, null)
     await announceMessage(opened.id, viewer.id, previewOf(clean, null, null, true), clean)
     sent.push({ handle: target.handle, conversationId: opened.id })
@@ -968,7 +1142,9 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
       )
     : undefined
   if (!id || !message || message.sender_id !== viewer.id) return { ok: false, error: "You can only delete your own messages." }
-  await run("UPDATE chat_messages SET deleted_at = ?, body = '', media_file = NULL, post_id = NULL WHERE id = ?", Date.now(), id)
+  // A sealed message keeps no ciphertext or wraps once it is deleted, so nothing of its text is left on the server.
+  await run("UPDATE chat_messages SET deleted_at = ?, body = '', media_file = NULL, post_id = NULL, cipher = NULL WHERE id = ?", Date.now(), id)
+  await run("DELETE FROM chat_message_wraps WHERE message_id = ?", id)
   await run("DELETE FROM message_reactions WHERE message_id = ?", id)
   await run("DELETE FROM message_translations WHERE message_id = ?", id)
   // A deleted message is no longer pinned, and nobody is reminded of it.
@@ -992,6 +1168,7 @@ export async function editMessage(messageId: string, text: unknown): Promise<Voi
   const message = id ? await visibleMessageFor(id, viewer.id) : null
   if (!id || !message) return { ok: false, error: "That message doesn't exist." }
   if ((await memberStatus(message.conversation_id, viewer.id)) !== "accepted") return { ok: false, error: "You can only edit messages in chats you're in." }
+  if (await isSealed(id)) return { ok: false, error: SEALED_EDIT_REFUSAL }
   const attachment = parseAttachment(message.attachment)
   const refused = editRefusal(
     {
@@ -1484,12 +1661,14 @@ export async function forwardMessage(messageId: string, targets: unknown): Promi
     viewOnce: message.view_once === 1,
   })
   if (refused) return { ok: false, error: refused }
+  if (await isSealed(id)) return { ok: false, error: SEALED_FORWARD_REFUSAL }
   const chosen = forwardTargetsInput(targets)
   if (!chosen.ok) return { ok: false, error: chosen.error }
   if (message.post_id && !(await sendablePost(message.post_id, viewer.id))) return { ok: false, error: POST_UNAVAILABLE }
 
   for (const conversationId of chosen.ids) {
     if ((await memberStatus(conversationId, viewer.id)) !== "accepted") return { ok: false, error: "You can only forward to chats you're in." }
+    if (await isEncryptedChat(conversationId)) return { ok: false, error: FORWARD_TO_ENCRYPTED_REFUSAL }
     if (await directConversationClosed(conversationId, viewer.id)) return { ok: false, error: "They can't receive messages here anymore." }
     const others = (await memberIds(conversationId)).filter((memberId) => memberId !== viewer.id)
     // Only a direct chat with someone blocked either way is refused. A group gets the copy, and a blocked pair don't see it.

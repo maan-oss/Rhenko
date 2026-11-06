@@ -75,7 +75,12 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
       {others[0].name} can&apos;t receive messages here anymore.
     </p>
   ) : (
-    <ChatComposer conversationId={conversation.id} group={isGroup} people={others.filter((m) => m.status === "accepted" && !m.departed)} />
+    <ChatComposer
+      conversationId={conversation.id}
+      group={isGroup}
+      people={others.filter((m) => m.status === "accepted" && !m.departed)}
+      encrypted={conversation.encrypted}
+    />
   )
 
   // The page fills the screen, so the thread takes the room above and the composer (or the request notice) sits at the bottom.
@@ -158,6 +163,7 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
             focusId={focused ? focus : null}
             hasNewer={focused?.hasNewer ?? false}
             canPin={!requested}
+            encrypted={conversation.encrypted}
           />
         </div>
       </SelectionScope>
