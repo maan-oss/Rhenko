@@ -11,6 +11,17 @@ import { query } from "./lib/db.mjs"
 const UNSENT = "Something went wrong. Refresh the page and try again."
 const CHECK_TITLE = "One quick check"
 
+// Runs in the page. Notes when a dialog with the check's title opens, so a check that passes quickly is still seen.
+function watchForCheck(title) {
+  window.__humanCheckSeen = false
+  const look = () => {
+    if (window.__humanCheckSeen) return
+    if ([...document.querySelectorAll('[role="dialog"]')].some((dialog) => dialog.textContent.includes(title))) window.__humanCheckSeen = true
+  }
+  new MutationObserver(look).observe(document.body, { childList: true, subtree: true })
+  look()
+}
+
 export async function run() {
   area("bots")
   await guard("a sign-up with the hidden field filled in is refused and makes no account", honeypotRefused)
@@ -46,9 +57,14 @@ async function followChecked() {
 
   // A profile can show the same person's follow button twice, in the header and in a suggestion list. The header comes first.
   await openProfile(page, first.handle)
+  // With the suite's short puzzle the check passes almost at once, so the dialog can open and close between two looks.
+  // The page notes when it opens, and the server's record of a passed check shows the follow was held for it.
+  await page.evaluate(watchForCheck, CHECK_TITLE)
   await page.getByRole("main").getByRole("button", { name: `Follow @${first.handle}`, exact: true }).first().click()
-  await page.getByRole("dialog", { name: CHECK_TITLE }).waitFor({ timeout: TIMEOUT })
   await page.getByRole("main").getByRole("button", { name: `Unfollow @${first.handle}`, exact: true }).first().waitFor({ timeout: TIMEOUT })
+  assert.equal(await page.evaluate(() => window.__humanCheckSeen === true), true, "the human check was never shown to the new account")
+  const passed = await query("SELECT s.id FROM account_signals s JOIN users u ON u.id = s.user_id WHERE u.handle = ? AND s.kind = 'proof'", handle)
+  assert.ok(passed.length > 0, "the follow went through without a passed human check")
 
   await openProfile(page, second.handle)
   await page.getByRole("main").getByRole("button", { name: `Follow @${second.handle}`, exact: true }).first().click()
