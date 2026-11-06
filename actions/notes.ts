@@ -7,7 +7,7 @@ import { get, run } from "@/lib/db"
 import { countChars, MAX_NOTE, POST_UNAVAILABLE } from "@/lib/rules"
 
 export type VoidResult = { ok: true } | { ok: false; error: string }
-export type NoteResult = { ok: true; id: string } | { ok: false; error: string }
+type NoteResult = { ok: true; id: string } | { ok: false; error: string }
 
 function refresh() {
   revalidatePath("/", "layout")

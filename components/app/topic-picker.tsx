@@ -6,7 +6,7 @@ import { setTopicFollow } from "@/actions/social"
 import { cn } from "@/lib/utils"
 
 // Topics a person can follow as an interest. Each is a plain hashtag, the same as one written in a post.
-export const INTEREST_TOPICS = [
+const INTEREST_TOPICS = [
   "music", "food", "travel", "books", "film", "sport", "art", "tech", "science", "nature",
   "photography", "gaming", "fitness", "business", "health", "news", "history", "languages", "parenting", "money",
 ]

@@ -7,7 +7,7 @@ import { Heart, Images, Reply, Repeat2, Rows3, Sparkles, type LucideIcon } from 
 import { cn } from "@/lib/utils"
 import { TabFill, usePressedTab } from "@/components/app/tabs"
 
-export type ProfileSection = "posts" | "highlights" | "replies" | "media" | "reposts" | "likes"
+type ProfileSection = "posts" | "highlights" | "replies" | "media" | "reposts" | "likes"
 
 const ICONS: Record<ProfileSection, LucideIcon> = {
   posts: Rows3,
@@ -18,7 +18,7 @@ const ICONS: Record<ProfileSection, LucideIcon> = {
   likes: Heart,
 }
 
-export type ProfileTabItem = { href: string; label: string; active: boolean; section: ProfileSection }
+type ProfileTabItem = { href: string; label: string; active: boolean; section: ProfileSection }
 
 // A profile's sections as one row of round icons. The chosen section is the only one with a name: its filled pill slides
 // across from the last choice when it is pressed, and the name opens beside the icon. Each section is still a link with its

@@ -13,7 +13,7 @@ export const MESSAGE_TIMERS = [
   { ms: 30 * DAY, label: "30 days", short: "30d" },
 ] as const
 
-export type MessageTimer = (typeof MESSAGE_TIMERS)[number]["ms"]
+type MessageTimer = (typeof MESSAGE_TIMERS)[number]["ms"]
 
 // One of the choices, or null for anything else. Server actions can be called with anything.
 export function asMessageTimer(value: unknown): MessageTimer | null {

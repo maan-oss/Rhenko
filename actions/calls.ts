@@ -25,9 +25,9 @@ import { CALL_CANDIDATE_MAX, CALL_SDP_MAX } from "@/lib/rules"
 // The server side of calls. Each action checks who is asking and what they may touch, then hands the step to the
 // live call state in lib/call-state.ts. Every tab sends its own device id, so a call talks to the one tab in it.
 
-export type StartedCall = StartResult
+type StartedCall = StartResult
 export type JoinedCall = JoinResult
-export type CallResult = SignalResult
+type CallResult = SignalResult
 export type BeatResult = { ok: boolean; bootId: string }
 
 const ID = /^[A-Za-z0-9-]{8,64}$/

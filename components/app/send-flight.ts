@@ -15,7 +15,7 @@
 
 type Rect = { left: number; top: number; width: number; height: number }
 
-export type FlightOrigin =
+type FlightOrigin =
   // The words in the box: where their first line starts, the line height they sit on, and their colour.
   | { kind: "text"; x: number; y: number; lineHeight: number; color: string }
   // A photo or video: the preview it leaves from, and the preview element itself, copied so the picture flies with it.

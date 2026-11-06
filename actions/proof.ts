@@ -4,7 +4,7 @@ import { clientIp } from "@/lib/auth"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { formStamp, issueProof, type ProofSpec } from "@/lib/proof"
 
-export type ProofResult = { ok: true; proof: ProofSpec } | { ok: false; error: string }
+type ProofResult = { ok: true; proof: ProofSpec } | { ok: false; error: string }
 
 const HOUR = 60 * 60 * 1000
 

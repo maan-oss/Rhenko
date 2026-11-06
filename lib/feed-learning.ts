@@ -81,7 +81,7 @@ export async function hiddenPosts(viewerId: string): Promise<Set<string>> {
   return new Set((await all<{ post_id: string }>("SELECT post_id FROM feed_hides WHERE viewer_id = ?", viewerId)).map((r) => r.post_id))
 }
 
-export type TrainingReport = { examples: number; engage: Fit; dwell: Fit }
+type TrainingReport = { examples: number; engage: Fit; dwell: Fit }
 
 // Refits both models from the history that has matured (served between TRAIN_MS and LABEL_MS ago). Every fit is stored with
 // its numbers, accepted or not, so the outcome can be seen.

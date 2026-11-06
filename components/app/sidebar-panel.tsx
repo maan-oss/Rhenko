@@ -21,7 +21,7 @@ const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
 // Labels collapse to zero width in their own grid track, so the rail never reflows text.
 const LABEL_TRACK = `grid min-w-0 flex-1 transition-[grid-template-columns] duration-[380ms] ${EASE}`
 
-export type SidebarViewer = { id: string; name: string; handle: string; avatarFile: string | null; status: string | null }
+type SidebarViewer = { id: string; name: string; handle: string; avatarFile: string | null; status: string | null }
 
 type Props = {
   viewer: SidebarViewer

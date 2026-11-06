@@ -22,10 +22,10 @@ export const HALF_LIFE_MS = 12 * HOUR
 export const PER_AUTHOR = 2
 export const SOURCE_RUN = 3
 // A followed author's post fades over a day and a half, not half a day, so it stays in contention for its whole window.
-export const FOLLOWED_HALF_LIFE_MS = 36 * HOUR
+const FOLLOWED_HALF_LIFE_MS = 36 * HOUR
 // A new voice is a post under six hours old from an account with few followers, which the viewer does not follow. From
 // NEW_VOICE_FIRST on, every NEW_VOICE_EVERY-th place goes to the best new voice there is.
-export const NEW_VOICE_MS = 6 * HOUR
+const NEW_VOICE_MS = 6 * HOUR
 export const NEW_VOICE_FIRST = 11
 export const NEW_VOICE_EVERY = 10
 // Time on screen at which a post counts as read. A post read this way is pushed well down.
@@ -35,8 +35,7 @@ export const SMALL_AUTHOR = 300
 const ENGAGE_SHARE = 0.7
 
 // Where a candidate came from. When several pools found a post, the first of these in the list is kept.
-export const SOURCES = ["follow", "repost", "social", "affinity", "topic", "popular", "explore", "fresh"] as const
-export type Source = (typeof SOURCES)[number]
+export type Source = "follow" | "repost" | "social" | "affinity" | "topic" | "popular" | "explore" | "fresh"
 
 export type Candidate = {
   // "post:<id>" for a post, "repost:<post>:<reposter>" for a repost. Unique within a feed.
@@ -128,7 +127,7 @@ export const PRIOR: Weights = {
   dwell: [-2.0, 1.0, 0.6, 0.4, 0.2, 0.2, 0.4, 0.5, -0.1, 0.0, 0.2, 0.8, 0.3],
 }
 
-export function sigmoid(z: number): number {
+function sigmoid(z: number): number {
   return 1 / (1 + Math.exp(-z))
 }
 
@@ -247,9 +246,9 @@ export function rank(candidates: Candidate[], now: number, limit: number, weight
 
 export type Example = { x: number[]; y: boolean }
 
-export const MIN_TRAIN = 500
-export const MIN_HOLDOUT = 100
-export const MIN_POSITIVES = 30
+const MIN_TRAIN = 500
+const MIN_HOLDOUT = 100
+const MIN_POSITIVES = 30
 // A held-out log loss must beat the hand-set weights by at least this much.
 export const MIN_GAIN = 0.001
 

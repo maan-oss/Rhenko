@@ -7,7 +7,7 @@ import { all, get, run } from "@/lib/db"
 import type { MiniUser } from "@/lib/data"
 import type { CircleAccess } from "@/lib/rules"
 
-export type CircleRole = "owner" | "member"
+type CircleRole = "owner" | "member"
 
 export type Circle = {
   id: string
@@ -165,7 +165,7 @@ export async function circleRequests(circleId: string): Promise<{ user: MiniUser
 
 // A web address for a new circle, made from its name. The name is ASCII-folded, so "Café Club" becomes cafe-club. A
 // name with no letters or digits gets "circle", and a taken address gets a short random ending.
-export function slugFor(name: string): string {
+function slugFor(name: string): string {
   const folded = name
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")

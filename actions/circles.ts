@@ -17,7 +17,7 @@ import {
   type CircleAccess,
 } from "@/lib/rules"
 
-export type CircleResult = { ok: true; slug: string } | { ok: false; error: string }
+type CircleResult = { ok: true; slug: string } | { ok: false; error: string }
 export type JoinResult = { ok: true; state: "joined" | "requested" } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
 

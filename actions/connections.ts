@@ -13,7 +13,7 @@ import {
   setOnboarding,
 } from "@/lib/connections"
 
-export type ConnectionResult = { ok: true } | { ok: false; error: string }
+type ConnectionResult = { ok: true } | { ok: false; error: string }
 
 const MAX_ID = 64
 

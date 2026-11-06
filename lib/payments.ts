@@ -35,7 +35,7 @@ export function tipFeePercent(): number {
 }
 
 // The country a creator's payout account is opened in. Stripe requires one when the account is made.
-export function payoutCountry(): string {
+function payoutCountry(): string {
   return (process.env.RHENKO_PAYOUT_COUNTRY ?? "AU").toUpperCase()
 }
 
@@ -53,7 +53,7 @@ function taxEnabled(): boolean {
 }
 
 // The site's own address. Stripe sends people back here, so it comes from configuration, never from a request header.
-export function publicOrigin(): string {
+function publicOrigin(): string {
   return (process.env.RHENKO_PUBLIC_URL ?? "").replace(/\/+$/, "")
 }
 
@@ -103,7 +103,7 @@ export async function priceLabel(priceId: string): Promise<string | null> {
 
 type SubscriptionRow = { id: string; kind: Kind; status: string; cancel_at_period_end: number; current_period_end: number | null; created_at: number }
 
-export async function activeSubscription(userId: string, kind: Kind): Promise<SubscriptionRow | undefined> {
+async function activeSubscription(userId: string, kind: Kind): Promise<SubscriptionRow | undefined> {
   return await get<SubscriptionRow>(
     "SELECT id, kind, status, cancel_at_period_end, current_period_end, created_at FROM subscriptions WHERE user_id = ? AND kind = ? AND status IN ('active', 'trialing') ORDER BY created_at DESC LIMIT 1",
     userId,
@@ -167,7 +167,7 @@ async function saveSubscription(subscription: Stripe.Subscription): Promise<void
 }
 
 // The paid badge is on while the person has an active paid verification subscription, and off the moment it lapses.
-export async function syncPaidVerified(userId: string): Promise<void> {
+async function syncPaidVerified(userId: string): Promise<void> {
   await run(
     `UPDATE users SET paid_verified = CASE WHEN EXISTS(
        SELECT 1 FROM subscriptions WHERE user_id = ? AND kind = 'verified' AND status IN ('active', 'trialing')

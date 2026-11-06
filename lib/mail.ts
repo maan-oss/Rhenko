@@ -5,7 +5,7 @@ import nodemailer, { type Transporter } from "nodemailer"
 // so the flow can be tried locally. In production without SMTP, email features say they are not set up. A message may also
 // carry an HTML part and extra headers (the daily digest sets both, for its List-Unsubscribe link).
 
-export type MailResult = { ok: true } | { ok: false; error: string }
+type MailResult = { ok: true } | { ok: false; error: string }
 
 type Globals = { __rhenkoMailer?: { url: string; transport: Transporter } }
 const globals = globalThis as unknown as Globals
@@ -25,7 +25,7 @@ function transportFor(url: string): Transporter {
   return globals.__rhenkoMailer.transport
 }
 
-export type MailInput = { to: string; subject: string; text: string; html?: string; headers?: Record<string, string> }
+type MailInput = { to: string; subject: string; text: string; html?: string; headers?: Record<string, string> }
 
 export async function sendMail(input: MailInput): Promise<MailResult> {
   const url = process.env.RHENKO_SMTP_URL

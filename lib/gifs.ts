@@ -15,22 +15,22 @@
 // itself. Both allow a different arrangement only with their written approval. Tenor's API was shut down on 30 June 2026.
 // An operator who turns GIF search on needs that approval first; .env.example and the README say so.
 
-export type GifProviderId = "giphy" | "klipy"
+type GifProviderId = "giphy" | "klipy"
 
 // What the picker shows for one GIF. `preview` and `still` are addresses on the provider's CDN until the route turns them into
 // links to this server.
 export type Gif = { id: string; title: string; width: number; height: number; preview: string; still: string }
 
 // A file the provider offers for one GIF, best first, with its size in bytes when the provider says.
-export type GifFileOption = { url: string; size: number | null }
+type GifFileOption = { url: string; size: number | null }
 
-export type GifRecord = Gif & { files: GifFileOption[] }
+type GifRecord = Gif & { files: GifFileOption[] }
 
 type Env = Record<string, string | undefined>
 type Fetch = typeof fetch
-export type GifDeps = { env?: Env; fetch?: Fetch }
+type GifDeps = { env?: Env; fetch?: Fetch }
 
-export type GifProvider = {
+type GifProvider = {
   id: GifProviderId
   name: string
   // The search field's placeholder. KLIPY requires "Search KLIPY" here.
@@ -51,7 +51,7 @@ export const GIF_PAGE_SIZE = 24
 const API_TIMEOUT_MS = 6_000
 const DOWNLOAD_TIMEOUT_MS = 15_000
 const PREVIEW_TIMEOUT_MS = 8_000
-export const PREVIEW_MAX_BYTES = 1_500_000
+const PREVIEW_MAX_BYTES = 1_500_000
 // A chosen GIF is fetched at most this many times, from the best size down, before the pick is refused.
 const MAX_DOWNLOADS = 3
 const MAX_REDIRECTS = 2
@@ -248,7 +248,7 @@ const PROVIDERS: ReadonlyMap<string, GifProvider> = new Map<string, GifProvider>
 
 // ── Setup ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type GifSetup = { provider: GifProvider; key: string }
+type GifSetup = { provider: GifProvider; key: string }
 
 // The provider and key, or null when GIF search is off. It is off without a key, and when the provider is missing or is not
 // one of giphy and klipy: a key is useless without knowing whose it is, and guessing could send it to the wrong company.
@@ -296,7 +296,7 @@ export function previewPath(url: string): string {
 
 // ── Talking to the provider ─────────────────────────────────────────────────────────────────────────────────────────
 
-export type GifFailure = { ok: false; status: number; error: string }
+type GifFailure = { ok: false; status: number; error: string }
 const NOT_SET_UP: GifFailure = { ok: false, status: 503, error: "GIF search isn't set up on this server." }
 const UNAVAILABLE_FAILURE: GifFailure = { ok: false, status: 502, error: UNAVAILABLE }
 
@@ -324,7 +324,7 @@ async function getJson(url: string, fetchImpl: Fetch): Promise<{ ok: true; json:
   }
 }
 
-export type GifSearch = { ok: true; gifs: Gif[]; next: string | null } | GifFailure
+type GifSearch = { ok: true; gifs: Gif[]; next: string | null } | GifFailure
 
 // Trending GIFs when the query is empty, otherwise a search. `cursor` is the `next` of the page before.
 export async function searchGifs(input: { query: string; cursor?: string | null }, deps: GifDeps = {}): Promise<GifSearch> {
@@ -416,7 +416,7 @@ function isGifBytes(bytes: Uint8Array): boolean {
   return head === "GIF87a" || head === "GIF89a"
 }
 
-export type GifFile = { ok: true; bytes: Uint8Array<ArrayBuffer>; title: string; size: number; source: string } | GifFailure
+type GifFile = { ok: true; bytes: Uint8Array<ArrayBuffer>; title: string; size: number; source: string } | GifFailure
 
 // The file for a chosen GIF. The provider is asked about the GIF again by its id, so the browser never says which address to
 // fetch. The biggest size that fits `maxBytes` is used: a size the provider lists as too big is skipped, and one that turns
@@ -455,7 +455,7 @@ export async function fetchGifFile(id: string, options: { maxBytes: number }, de
 
 const PREVIEW_TYPES = new Set(["image/gif", "image/webp", "image/jpeg", "image/png"])
 
-export type GifPreview = { ok: true; bytes: Uint8Array<ArrayBuffer>; type: string } | GifFailure
+type GifPreview = { ok: true; bytes: Uint8Array<ArrayBuffer>; type: string } | GifFailure
 
 // A picture for the grid. `url` came from the browser, so it is fetched only if it is on the provider's own domains, and what
 // comes back must be a small picture.

@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from "motion/react"
 import { exact } from "@/components/app/analytics-bits"
 import { pluralize } from "@/lib/format"
 
-export type TrendPoint = { label: string; value: number }
+type TrendPoint = { label: string; value: number }
 
 const HEIGHT = 168
 const TOP = 12

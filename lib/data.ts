@@ -176,7 +176,7 @@ const LAST_KEY = "￿"
 const MESSAGE_PAGE_SIZE = 100
 const PEOPLE_PAGE_SIZE = 50
 
-export function parseCursor(cursor: string | undefined): [number, string] {
+function parseCursor(cursor: string | undefined): [number, string] {
   if (!cursor) return [FAR_FUTURE, LAST_KEY]
   const split = cursor.indexOf("|")
   if (split < 1) return [FAR_FUTURE, LAST_KEY]
@@ -457,7 +457,7 @@ async function fetchCores(ids: string[], viewerId: string): Promise<Map<string, 
 
 // Posts by id, in the order given. Callers pass posts the viewer may see; a quoted post is checked here, and one the
 // viewer may not see comes back as unavailable rather than shown.
-export async function loadPosts(ids: string[], viewerId: string): Promise<PostView[]> {
+async function loadPosts(ids: string[], viewerId: string): Promise<PostView[]> {
   const unique = [...new Set(ids)]
   const cores = await fetchCores(unique, viewerId)
   const quoteIds = [...cores.values()].map((core) => core.quoteOfId).filter((id): id is string => id !== null)
@@ -1228,7 +1228,7 @@ export async function topicFeed(tag: string, viewerId: string, cursor?: string, 
 
 // Search operators: from:handle, since:YYYY-MM-DD, until:YYYY-MM-DD,
 // filter:images|videos|media|links|replies. Other words are matched in the text.
-export type SearchQuery = {
+type SearchQuery = {
   terms: string[]
   // Words that must not appear in the post, written as -word.
   exclude: string[]
@@ -1395,7 +1395,7 @@ export async function repliesTo(postId: string, viewerId: string): Promise<PostV
     .reverse()
 }
 
-export type Relationship = {
+type Relationship = {
   self: boolean
   following: boolean
   requested: boolean
@@ -1448,7 +1448,7 @@ export async function relationshipWith(viewerId: string, targetId: string): Prom
   }
 }
 
-export type ProfileView = {
+type ProfileView = {
   id: string
   handle: string
   name: string
@@ -1645,7 +1645,7 @@ export async function whoToFollow(viewerId: string, limit = 3): Promise<UserCard
   )).map(toCard)
 }
 
-export type PeopleOfPage = { users: UserCard[]; next: number | null }
+type PeopleOfPage = { users: UserCard[]; next: number | null }
 
 // Followers or following for one account, newest follow first, one page at a time. `beforeAt` is the `next` of the
 // previous page (a follow date); null starts at the newest. The account's own visibility applies: nothing for a
@@ -1819,7 +1819,7 @@ export async function unreadNotificationCount(viewerId: string): Promise<number>
 
 // `departed` marks someone who has left a direct conversation (a declined request, say). They are still named there,
 // because their messages stay in the thread, but they can no longer receive anything in it.
-export type ChatMemberView = MiniUser & { status: "accepted" | "requested"; lastReadAt: number; departed?: boolean }
+type ChatMemberView = MiniUser & { status: "accepted" | "requested"; lastReadAt: number; departed?: boolean }
 
 export type ConversationSummary = {
   id: string
@@ -2025,7 +2025,7 @@ export async function conversationSummaries(
   }))
 }
 
-export type StarredMessage = {
+type StarredMessage = {
   id: string
   conversationId: string
   senderName: string
@@ -2152,7 +2152,7 @@ export async function recentChatPartners(viewerId: string, limit = 6): Promise<M
   )).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1 }))
 }
 
-export type ConversationView = {
+type ConversationView = {
   id: string
   kind: "dm" | "group"
   title: string
@@ -2951,7 +2951,7 @@ export async function searchLists(query: string, viewerId: string, limit = 30): 
 // One UTC day: the views of the account's posts, the profile visits, and the new followers that day.
 export type AnalyticsDay = { label: string; visits: number; views: number; follows: number }
 
-export type AnalyticsView = {
+type AnalyticsView = {
   followers: number
   // The last 56 days, oldest first. The two most recent 28-day spans are the ones compared on the page.
   days: AnalyticsDay[]
@@ -3092,7 +3092,7 @@ export async function ownPostRows(authorId: string): Promise<OwnPostRow[]> {
   })
 }
 
-export type PostAnalyticsView = {
+type PostAnalyticsView = {
   id: string
   handle: string
   body: string

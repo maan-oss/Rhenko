@@ -1,7 +1,7 @@
 import { all, get, run } from "@/lib/db"
 import { listOwnersVisibleTo } from "@/lib/people-state"
 
-export type PinnedTimeline = { id: string; name: string }
+type PinnedTimeline = { id: string; name: string }
 
 // A list can be pinned by the people who may open it: its owner, and anyone following it while it is public.
 async function mayPin(listId: string, viewerId: string): Promise<boolean> {

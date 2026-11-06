@@ -39,7 +39,7 @@ function encode(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
 
 // Cuts the framed part out of a picture and encodes it as a JPEG. If it is still over the upload limit, it is made smaller
 // and encoded again, so any photo a phone takes can be sent.
-export async function renderCrop(file: File, crop: Crop, name: string): Promise<File> {
+async function renderCrop(file: File, crop: Crop, name: string): Promise<File> {
   const { image, url } = await loadPicture(file)
   URL.revokeObjectURL(url)
   let side = Math.min(MAX_SIDE, Math.max(crop.width, crop.height))

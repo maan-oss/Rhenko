@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { SPRING_SELECT } from "@/components/app/motion"
 
-export type TabItem = {
+type TabItem = {
   href: string
   label: string
   // The icon for a tab. TabLinks draws words only; IconTabLinks draws it, and opens to show the word when chosen.

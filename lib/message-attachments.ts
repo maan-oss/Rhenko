@@ -96,7 +96,7 @@ export function quoteLabel(attachment: Attachment | null, media: string | null, 
 }
 
 // A short name for a stored media file, for a quote: a voice message, a photo, a video, audio or a file.
-export function mediaLabel(media: string): string {
+function mediaLabel(media: string): string {
   if (isVoiceFile(media)) return "Voice message"
   if (isAudioFile(media)) return "Audio"
   if (isVideoFile(media)) return "Video"

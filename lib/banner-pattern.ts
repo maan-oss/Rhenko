@@ -2,7 +2,7 @@
 // own pattern: a few contour lines that wander across a wide box. Pure and deterministic, so the page always draws the
 // same banner for the same handle.
 
-export type BannerLine = { d: string; opacity: number }
+type BannerLine = { d: string; opacity: number }
 
 // The drawing box. Every line is a path inside it, and the banner scales it to fit.
 export const BANNER_WIDTH = 1200

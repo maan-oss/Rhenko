@@ -23,7 +23,7 @@ import { MAX_CIRCLE_CHARTER, MAX_CIRCLE_NAME, MAX_CIRCLE_QUESTION, MAX_CIRCLE_TA
 
 const INPUT = "h-11 rounded-xl border border-input bg-background px-3 text-[15px] outline-none focus-visible:border-foreground/50"
 
-export const ACCESS_OPTIONS: { value: CircleAccess; label: string; body: string }[] = [
+const ACCESS_OPTIONS: { value: CircleAccess; label: string; body: string }[] = [
   { value: "open", label: "Open", body: "Anyone can join, and anyone can read and post in it." },
   { value: "request", label: "Ask to join", body: "People answer your question, and you decide who comes in." },
   { value: "closed", label: "Invite only", body: "You add people by handle. Only members can see its posts." },

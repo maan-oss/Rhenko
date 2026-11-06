@@ -26,7 +26,7 @@ const WORKERS = 3
 
 // True for an address a server should never reach on a visitor's behalf: private, loopback, link-local, shared,
 // multicast, reserved, and the IPv6 forms of those.
-export function isPublicAddress(address: string): boolean {
+function isPublicAddress(address: string): boolean {
   if (net.isIPv4(address)) {
     const [a, b] = address.split(".").map(Number)
     if (a === 0 || a === 10 || a === 127 || a >= 224) return false
@@ -83,7 +83,7 @@ function attributesOf(tag: string): Record<string, string> {
 
 // Reads the title, description, site name and picture address from a page's head. Open Graph and Twitter tags win
 // over the plain ones.
-export function parsePreview(html: string, url: string): ParsedPreview | null {
+function parsePreview(html: string, url: string): ParsedPreview | null {
   const head = html.slice(0, 200_000)
   const meta = new Map<string, string>()
   for (const tag of head.matchAll(/<meta\b[^>]*>/gi)) {
@@ -219,13 +219,13 @@ const isHtml = (type: string) => /^text\/html|^application\/xhtml\+xml/i.test(ty
 const isImage = (type: string) => /^image\/(jpeg|png|gif|webp)\b/i.test(type)
 
 // Fetches a page's preview, following a few redirects, each one checked the same way.
-export async function fetchPreview(link: string): Promise<ParsedPreview | null> {
+async function fetchPreview(link: string): Promise<ParsedPreview | null> {
   const reply = await fetchAccepted(link, PAGE_BYTES, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1", isHtml)
   return reply ? parsePreview(reply.body.toString("utf8"), link) : null
 }
 
 // The file type of a picture by its first bytes, so a file that says it is a picture but is not one is refused.
-export function pictureExtension(body: Buffer): "jpg" | "png" | "gif" | "webp" | null {
+function pictureExtension(body: Buffer): "jpg" | "png" | "gif" | "webp" | null {
   if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return "jpg"
   if (body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png"
   if (body.length >= 6 && (body.subarray(0, 6).toString("ascii") === "GIF87a" || body.subarray(0, 6).toString("ascii") === "GIF89a")) return "gif"

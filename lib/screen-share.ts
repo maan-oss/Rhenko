@@ -8,7 +8,7 @@
 // that takes one copy from the person sharing and passes it on.
 export const SCREEN_SHARE_PEOPLE = 2
 
-export type ShareCall = { kind: "dm" | "group"; people: number }
+type ShareCall = { kind: "dm" | "group"; people: number }
 
 export function screenShareAllowed(call: ShareCall): boolean {
   return call.kind === "dm" && call.people === SCREEN_SHARE_PEOPLE
@@ -30,7 +30,7 @@ export function showsShareButton(call: ShareCall & { status: string; sharing: bo
 // How a share reaches the other person. A camera that is sending gives its place to the screen (replaceTrack) and takes
 // it back when the share stops, with no new setup. With no camera sending, the share adds a picture, which needs a new
 // offer. A picture line kept from an earlier share is used again, so the connection doesn't grow a line for each share.
-export type ShareRoute = "replace-camera" | "reuse" | "add"
+type ShareRoute = "replace-camera" | "reuse" | "add"
 
 export function shareRoute(input: { cameraSending: boolean; keptSender: boolean }): ShareRoute {
   if (input.cameraSending) return "replace-camera"
@@ -40,7 +40,7 @@ export function shareRoute(input: { cameraSending: boolean; keptSender: boolean 
 // What fills the picture of a one-to-one call. The other person's screen comes first, shown whole, since a screen is
 // wide and cropping it would cut off what they are showing. Then their camera, cropped to fill the frame. In a voice
 // call with no other picture, this person's own shared screen fills it, so they can see what is going out.
-export type PictureLead = "their-screen" | "their-camera" | "my-screen" | null
+type PictureLead = "their-screen" | "their-camera" | "my-screen" | null
 
 export function pictureLead(input: { remoteScreen: boolean; video: boolean; sharing: boolean }): PictureLead {
   if (input.remoteScreen) return "their-screen"

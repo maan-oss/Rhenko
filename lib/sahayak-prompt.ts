@@ -1,7 +1,7 @@
 // The words Sahayak is given, and the cleaning of what it answers with. Pure: no database and no network, so the unit
 // tests can run it directly. Every limit a reader can see is here.
 
-export const SAHAYAK_HANDLE = "sahayak"
+const SAHAYAK_HANDLE = "sahayak"
 export const QUESTION_CHARS = 1000
 export const CONTEXT_CHARS = 1200
 export const REPLY_CHARS = 1500

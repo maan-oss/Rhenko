@@ -63,7 +63,7 @@ export type PushPayload = {
   renotify: boolean
 }
 
-export type NotificationPushInput = {
+type NotificationPushInput = {
   kind: NotificationKind
   actor: { id: string; name: string; handle: string }
   recipientHandle: string
@@ -94,7 +94,7 @@ export function notificationUrl(input: NotificationPushInput): string {
   return `/${encodeURIComponent(input.actor.handle)}`
 }
 
-export type MessagePushInput = {
+type MessagePushInput = {
   conversationId: string
   senderName: string
   isGroup: boolean
@@ -202,7 +202,7 @@ function isP256PublicKey(value: string): boolean {
   return isBase64Url(value, 65) && value.startsWith("B")
 }
 
-export type VapidConfig = { publicKey: string; privateKey: string; subject: string }
+type VapidConfig = { publicKey: string; privateKey: string; subject: string }
 
 // The server's VAPID keys, or null when any of the three is missing or malformed. Push is then off everywhere.
 export function vapidConfig(env: Record<string, string | undefined>): VapidConfig | null {

@@ -11,7 +11,7 @@ import { MAX_LOCATION } from "@/lib/rules"
 // The second setup screen: where someone is. The location is shown on the profile's About page, in any words. The city and
 // region used for suggestions are private. Continue saves both and moves on to interests. Skip leaves setup open for later.
 
-export type LocationStart = {
+type LocationStart = {
   location: string
   website: string
   where: WhereValue

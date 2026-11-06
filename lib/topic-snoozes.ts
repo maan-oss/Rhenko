@@ -1,7 +1,7 @@
 import { all, run } from "@/lib/db"
 
 // How long a snooze keeps a topic out of For you, in milliseconds. The topic stays followed for the whole time.
-export const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000
+const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000
 
 // The topics the viewer has snoozed at this time, as tags without the #.
 export async function snoozedTopics(viewerId: string, now: number): Promise<Set<string>> {

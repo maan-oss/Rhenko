@@ -59,7 +59,7 @@ async function tick(): Promise<void> {
   }
 }
 
-export async function runMaintenance(now = Date.now()): Promise<void> {
+async function runMaintenance(now = Date.now()): Promise<void> {
   await publishDue(now)
   await announceEndedPolls(now)
   // Message reminders that have come due are sent. A failure is logged, and the rest of the pass goes on.

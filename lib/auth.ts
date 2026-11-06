@@ -18,19 +18,19 @@ import {
 } from "@/lib/totp"
 
 export const SESSION_COOKIE = "rhenko_session"
-export const CHALLENGE_COOKIE = "rhenko_challenge"
+const CHALLENGE_COOKIE = "rhenko_challenge"
 const ACCOUNTS_COOKIE = "rhenko_accounts"
 const MAX_ACCOUNTS = 5
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000
 const CHALLENGE_MS = 5 * 60 * 1000
 const LAST_SEEN_EVERY_MS = 10 * 60 * 1000
 // Wrong codes one sign-in may take before it has to start again from the password.
-export const CHALLENGE_TRIES = 5
+const CHALLENGE_TRIES = 5
 // Email codes work for 15 minutes and survive four wrong tries; the fifth wrong one deletes the code.
-export const EMAIL_CODE_MS = 15 * 60 * 1000
-export const EMAIL_CODE_TRIES = 5
+const EMAIL_CODE_MS = 15 * 60 * 1000
+const EMAIL_CODE_TRIES = 5
 
-export type UserRow = {
+type UserRow = {
   id: string
   handle: string
   name: string
@@ -88,7 +88,7 @@ export type Viewer = {
   speaks: string[]
 }
 
-export function toViewer(row: UserRow): Viewer {
+function toViewer(row: UserRow): Viewer {
   return {
     id: row.id,
     handle: row.handle,
@@ -397,7 +397,7 @@ export type SecondFactorState = {
   recoveryLeft: number
 }
 
-export async function recoveryCodesLeft(userId: string): Promise<number> {
+async function recoveryCodesLeft(userId: string): Promise<number> {
   return (await get<{ c: number }>("SELECT COUNT(*) AS c FROM recovery_codes WHERE user_id = ? AND used_at IS NULL", userId))?.c ?? 0
 }
 
@@ -436,7 +436,7 @@ async function redeemRecoveryCode(userId: string, code: string): Promise<boolean
   })
 }
 
-export type CodeCheck = { ok: true; used: "app" | "recovery" } | { ok: false; error: string }
+type CodeCheck = { ok: true; used: "app" | "recovery" } | { ok: false; error: string }
 
 // Checks a code from the authenticator app, or a recovery code, for an account with two-factor sign-in on.
 // An app code counts once: its time step is saved with a conditional update, and only a changed row is a success,
@@ -486,7 +486,7 @@ export async function checkSecondFactor(userId: string, input: string): Promise<
 
 // Email codes, for verifying an address and for resetting a password. Six digits, stored only as a keyed hash
 // bound to the account, the purpose and the address it was sent to.
-export type EmailPurpose = "verify" | "reset"
+type EmailPurpose = "verify" | "reset"
 
 function emailCodeHash(purpose: EmailPurpose, userId: string, target: string, code: string): string {
   return keyedHash(`email-${purpose}`, `${userId}:${target.toLowerCase()}:${code}`)

@@ -19,7 +19,7 @@ export async function clearSearches(): Promise<void> {
   revalidatePath("/search")
 }
 
-export type SavedSearchResult = { ok: true } | { ok: false; error: string }
+type SavedSearchResult = { ok: true } | { ok: false; error: string }
 
 // Keeps a search in the account's saved searches, until it is removed. Saving the same words twice does nothing.
 export async function saveSearch(query: string): Promise<SavedSearchResult> {

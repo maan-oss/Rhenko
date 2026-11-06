@@ -15,7 +15,7 @@ import {
   translationOn,
 } from "@/lib/translate"
 
-export type TranslateResult = { ok: true; text: string; source: string } | { ok: false; error: string }
+type TranslateResult = { ok: true; text: string; source: string } | { ok: false; error: string }
 
 const MAX_ID = 64
 const HOUR = 60 * 60 * 1000

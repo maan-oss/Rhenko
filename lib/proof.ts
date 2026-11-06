@@ -25,7 +25,7 @@ export type ProofSpec = { kind: "pow"; id: string; salt: string; bits: number } 
 const MINUTE = 60 * 1000
 const TURNSTILE_VERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-export function turnstileSiteKey(): string | null {
+function turnstileSiteKey(): string | null {
   const siteKey = process.env.RHENKO_TURNSTILE_SITE_KEY?.trim()
   const secret = process.env.RHENKO_TURNSTILE_SECRET_KEY?.trim()
   return siteKey && secret ? siteKey : null

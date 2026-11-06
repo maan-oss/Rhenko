@@ -15,7 +15,7 @@ import { MAX_DM } from "@/lib/rules"
 import { useIsDesktop } from "@/lib/use-media"
 import { cn } from "@/lib/utils"
 
-export type SharePost = {
+type SharePost = {
   id: string
   body: string
   author: { name: string; handle: string; avatarFile: string | null }

@@ -79,7 +79,7 @@ type Globals = { __rhenkoBootId?: string }
 const globals = globalThis as unknown as Globals
 const BOOT_ID: string = (globals.__rhenkoBootId ??= process.env.RHENKO_BOOT_ID || randomUUID())
 
-export type HangUpReason = "signed-out" | "deactivated" | "deleted" | "blocked"
+type HangUpReason = "signed-out" | "deactivated" | "deleted" | "blocked"
 
 export type StartResult =
   | { ok: true; mode: "ringing"; callId: string; iceServers: IceServerConfig[]; bootId: string }

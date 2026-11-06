@@ -4,7 +4,7 @@ import type { UserCard } from "@/lib/data"
 // A topic is a hashtag or a cashtag. A post's #tag holds letters, numbers and underscores, 1 to 50 characters, and a
 // $CASHTAG holds 1 to 10 letters (lib/rules.ts), so a followed topic can only be one of those. Anything else could never
 // match a post.
-export const MAX_TOPIC = 50
+const MAX_TOPIC = 50
 
 // How many topics one person can follow. It keeps the Following feed and the table small.
 export const MAX_FOLLOWED_TOPICS = 200
@@ -17,7 +17,7 @@ const TOPIC_PATTERN = /^[\p{L}\p{N}_]+$/u
 // CASHTAG_PATTERN in lib/rules.ts.
 const CASHTAG_SYMBOL = /^[A-Za-z]{1,10}$/
 
-export type TopicCheck = { ok: true; tag: string } | { ok: false; error: string }
+type TopicCheck = { ok: true; tag: string } | { ok: false; error: string }
 
 // The tag as the app stores it, or the reason it can't be a topic. A hashtag has no leading # and is lower case ("aapl").
 // A cashtag keeps its $ and is upper case ("$AAPL"), so it is never the same topic as the hashtag with the same letters.

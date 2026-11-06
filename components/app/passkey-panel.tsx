@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { MAX_PASSKEY_NAME } from "@/lib/rules"
 import { returnPathFrom } from "@/lib/invite-links"
 
-export type PasskeyItem = { id: string; name: string; createdAt: number; lastUsedAt: number | null }
+type PasskeyItem = { id: string; name: string; createdAt: number; lastUsedAt: number | null }
 
 const noSubscribe = () => () => {}
 

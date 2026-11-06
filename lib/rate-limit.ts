@@ -2,7 +2,7 @@
 // statement, so two processes checking at the same moment cannot both take the last attempt of a window.
 import { get, run } from "@/lib/db"
 
-export type LimitResult = { ok: true } | { ok: false; retryAfterSeconds: number }
+type LimitResult = { ok: true } | { ok: false; retryAfterSeconds: number }
 
 // Counts one attempt under `key`. At most `limit` attempts are allowed in each `windowMs`. The count is only raised while
 // the window has room, so a refused attempt counts for nothing.

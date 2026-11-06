@@ -194,7 +194,7 @@ export function editWindowMs(plus: boolean, reply = false): number {
   if (reply) return REPLY_EDIT_WINDOW_MS
   return plus ? PLUS_EDIT_WINDOW_MS : EDIT_WINDOW_MS
 }
-export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000
+const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000
 export const SCHEDULE_MAX_AHEAD_MS = 75 * 24 * 60 * 60 * 1000
 
 export const REPLY_SETTINGS = ["everyone", "following", "mentioned"] as const
@@ -245,7 +245,7 @@ export const MAX_CIRCLE_TAGLINE = 120
 export const MAX_CIRCLE_CHARTER = 1000
 export const MAX_CIRCLE_QUESTION = 160
 export const MAX_CIRCLE_ANSWER = 500
-export const CIRCLE_ACCESS = ["open", "request", "closed"] as const
+const CIRCLE_ACCESS = ["open", "request", "closed"] as const
 export type CircleAccess = (typeof CIRCLE_ACCESS)[number]
 
 export function asCircleAccess(value: unknown): CircleAccess | null {
@@ -277,7 +277,7 @@ export const BANNER_PREVIEW_MAX = 140
 // Notifications load this many at a time; "Show more" brings the next page.
 export const NOTIFICATION_PAGE_SIZE = 40
 // The tabs of notifications. Priority shows only the accounts the viewer picked.
-export const NOTIFICATION_TABS = ["all", "mentions", "priority"] as const
+const NOTIFICATION_TABS = ["all", "mentions", "priority"] as const
 export type NotificationTab = (typeof NOTIFICATION_TABS)[number]
 export function isNotificationTab(value: unknown): value is NotificationTab {
   return typeof value === "string" && (NOTIFICATION_TABS as readonly string[]).includes(value)

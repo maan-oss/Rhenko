@@ -10,7 +10,7 @@ import { formatDuration } from "@/lib/format"
 import { startRingtone, stopRingtone } from "@/lib/ringtone"
 import { screenShareAllowed, screenShareSupported, shareRoute } from "@/lib/screen-share"
 
-export type CallStatus = "outgoing" | "incoming" | "connecting" | "active" | "reconnecting" | "ended"
+type CallStatus = "outgoing" | "incoming" | "connecting" | "active" | "reconnecting" | "ended"
 export type TileStatus = "connecting" | "connected" | "reconnecting" | "failed"
 export type CallTile = { key: string; person: EventPerson; status: TileStatus }
 
@@ -60,7 +60,7 @@ export type CallState = {
   live: LiveGroupCall[]
 }
 
-export type Placed = { ok: true } | { ok: false; error: string }
+type Placed = { ok: true } | { ok: false; error: string }
 
 type Peer = {
   key: string

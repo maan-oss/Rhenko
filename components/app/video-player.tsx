@@ -16,7 +16,7 @@ const SKIP_SECONDS = 5
 type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void }
 
 // Whole seconds for the bar: m:ss, or h:mm:ss from an hour up. Unknown lengths show as dashes.
-export function playerClock(seconds: number): string {
+function playerClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "--:--"
   const whole = Math.floor(seconds)
   const hours = Math.floor(whole / 3600)

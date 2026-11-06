@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 
 // Each answer states a limit or behaviour the product enforces, and links to the page that explains it.
-export const FAQS: { q: string; a: string; href?: string; cta?: string }[] = [
+const FAQS: { q: string; a: string; href?: string; cta?: string }[] = [
   {
     q: "Who can use Rhenko?",
     a: "Accounts are for people 18 and older. Creating an account asks you to agree to the current Terms and the Privacy Policy.",

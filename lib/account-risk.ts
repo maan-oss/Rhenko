@@ -34,7 +34,7 @@ export type AccountFacts = {
   isBot: boolean
 }
 
-export type AccountLevel = "ok" | "challenge" | "restrict"
+type AccountLevel = "ok" | "challenge" | "restrict"
 export type AccountVerdict = { score: number; level: AccountLevel; reasons: string[] }
 
 type Item = { points: number; reason: string }

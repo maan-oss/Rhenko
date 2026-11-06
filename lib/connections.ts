@@ -146,7 +146,7 @@ export type SuggestedPerson = {
   reasons: string[]
 }
 
-export type SuggestionGroup = {
+type SuggestionGroup = {
   group: Group
   title: string
   description: string

@@ -7,7 +7,7 @@ const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 const STEP_SECONDS = 30
 const DIGITS = 6
 
-export function base32Encode(buf: Buffer): string {
+function base32Encode(buf: Buffer): string {
   let bits = 0
   let value = 0
   let out = ""

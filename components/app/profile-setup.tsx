@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 // The first setup screen: the profile as people will see it. Each part is edited where it sits. Continue saves it and
 // moves on to About you. Skip leaves setup open for later, and opens Home.
 
-export type ProfileStart = {
+type ProfileStart = {
   name: string
   handle: string
   bio: string

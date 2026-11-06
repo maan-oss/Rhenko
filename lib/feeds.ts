@@ -66,7 +66,7 @@ export function parseSpec(input: unknown): FeedSpec | null {
   }
 }
 
-export type FeedResult = Page<FeedEntry> & { locked?: boolean }
+type FeedResult = Page<FeedEntry> & { locked?: boolean }
 
 const EMPTY: Page<FeedEntry> = { items: [], next: null }
 

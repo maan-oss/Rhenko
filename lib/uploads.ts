@@ -72,7 +72,7 @@ function matchesSignature(buf: Buffer, mime: string): boolean {
   return false
 }
 
-export type SaveResult = { ok: true; name: string; kind: MediaKind } | { ok: false; error: string }
+type SaveResult = { ok: true; name: string; kind: MediaKind } | { ok: false; error: string }
 
 const VIDEO_MB = MAX_VIDEO_BYTES / (1024 * 1024)
 const MAX_DOCUMENT_MB = MAX_DOCUMENT_BYTES / (1024 * 1024)
@@ -191,10 +191,10 @@ export async function saveUpload(
 // Smaller copies of a picture. A feed photo, a profile picture or a link preview is sent at the width its place on the page
 // needs, not at the size it was uploaded. A copy is made the first time someone asks for that width and kept beside the
 // original, so the cost is paid once. A copy is always WebP. Animated GIFs, video and voice messages are sent as they are.
-export const VARIANT_WIDTHS = [160, 640, 1280] as const
-export type VariantWidth = (typeof VARIANT_WIDTHS)[number]
+const VARIANT_WIDTHS = [160, 640, 1280] as const
+type VariantWidth = (typeof VARIANT_WIDTHS)[number]
 // The width a feed, a link preview or a chat photo asks for: sharp on a phone or a 2x screen.
-export const FEED_WIDTH: VariantWidth = 1280
+const FEED_WIDTH: VariantWidth = 1280
 
 const VARIANT_EXTS = new Set(["jpg", "png", "webp"])
 

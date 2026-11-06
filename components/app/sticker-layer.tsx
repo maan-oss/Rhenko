@@ -126,7 +126,7 @@ export function StickerLayer({ set, className, linkHashtags = false }: { set: St
   )
 }
 
-export function stickerLabel(sticker: Sticker): string {
+function stickerLabel(sticker: Sticker): string {
   if (sticker.kind === "emoji") return `Sticker: ${emojiName(sticker.code)}`
   if (sticker.kind === "hashtag") return `Hashtag sticker: #${sticker.tag}`
   return `Text sticker: ${sticker.text}`

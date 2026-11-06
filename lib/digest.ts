@@ -110,7 +110,7 @@ export function checkUnsubscribeToken(token: unknown, now = Date.now()): TokenCh
   return readUnsubscribeToken(token, key, now)
 }
 
-export type UnsubscribeResult = "done" | "invalid" | "expired" | "limited"
+type UnsubscribeResult = "done" | "invalid" | "expired" | "limited"
 
 // Turns the digest off for the account the token names. It works with no sign-in: the token is the proof, and it can do
 // nothing else. Doing it twice does no harm.

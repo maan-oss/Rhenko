@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react"
 
 // True while the query matches. The server render and the first client paint read false, so the
 // phone layout is the default and the desktop version takes over once the browser has answered.
-export function useMediaQuery(query: string): boolean {
+function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (notify) => {
       const list = window.matchMedia(query)

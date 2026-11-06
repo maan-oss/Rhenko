@@ -3,11 +3,11 @@ import { get } from "@/lib/db"
 import { isInviteToken } from "@/lib/invite-links"
 
 // A group as its invite link shows it to someone who is not in it yet: its name and how many people it has, nothing else.
-export type GroupInvite = { conversationId: string; title: string; memberCount: number }
+type GroupInvite = { conversationId: string; title: string; memberCount: number }
 
 // Where the viewer stands with a group they opened a link to. `blocked` is true when they and anyone in the group have
 // blocked each other, in either direction: everyone in a group sees everyone else, so they can't join it.
-export type InviteStanding = { status: "accepted" | "requested" | null; blocked: boolean }
+type InviteStanding = { status: "accepted" | "requested" | null; blocked: boolean }
 
 // A token for a new invite link. It is the only thing the link carries, so it is long and random.
 export function newInviteToken(): string {

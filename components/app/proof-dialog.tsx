@@ -6,7 +6,7 @@ import { ProofCheck } from "@/components/app/proof-check"
 
 // A check asked for in the middle of an action: following, starting a conversation or posting, once an account has been
 // doing a lot. The action is sent again with the answer as soon as the check passes.
-export function ProofDialog({
+function ProofDialog({
   open,
   onOpenChange,
   onProof,

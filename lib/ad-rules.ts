@@ -11,8 +11,8 @@ export const AD_LINK_MAX = 300
 export const AD_TOPIC_MAX = 30
 export const AD_CAMPAIGNS_WAITING_MAX = 10
 // Budgets are in minor units (cents). A campaign's budget is at least 1.00 and at most 10,000.00.
-export const AD_BUDGET_MIN = 100
-export const AD_BUDGET_MAX = 1_000_000
+const AD_BUDGET_MIN = 100
+const AD_BUDGET_MAX = 1_000_000
 // One ad at most after every this many posts in a feed. Never inside a reply or a thread.
 export const AD_EVERY = 8
 
@@ -50,7 +50,7 @@ const BLOCKED: { pattern: RegExp; reason: string }[] = [
   { pattern: /\b(real[- ]money (?:games?|gaming)|cash prizes? games?)\b/i, reason: "Ads for real-money games are not allowed." },
 ]
 
-export function policyProblem(text: string): string | null {
+function policyProblem(text: string): string | null {
   for (const rule of BLOCKED) if (rule.pattern.test(text)) return rule.reason
   return null
 }
@@ -60,7 +60,7 @@ export function normalizeTopic(value: string): string {
   return value.replace(/^#/, "").toLowerCase()
 }
 
-export type CampaignFields = {
+type CampaignFields = {
   headline: string
   body: string
   cta: string
@@ -88,7 +88,7 @@ export function campaignProblem(fields: CampaignFields): string | null {
 }
 
 // Ads link to a secure address only. The address is shown to people, so it is checked as written.
-export function adLinkProblem(link: string): string | null {
+function adLinkProblem(link: string): string | null {
   if (link.length === 0 || link.length > AD_LINK_MAX) return `Enter a web address of up to ${AD_LINK_MAX} characters.`
   let url: URL
   try {

@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react"
 // Send is pressed, so the text appears at once; the thread drops it when the saved message arrives, and the composer drops
 // it if the send fails (the text stays in the box, with the error).
 
-export type PendingMessage = { key: string; body: string; createdAt: number }
+type PendingMessage = { key: string; body: string; createdAt: number }
 
 const EMPTY: PendingMessage[] = []
 const byConversation = new Map<string, PendingMessage[]>()

@@ -7,7 +7,7 @@ import { Avatar } from "@/components/app/avatar"
 import { VerifiedBadge } from "@/components/app/badges"
 import { cn } from "@/lib/utils"
 
-export type PriorityRow = { id: string; handle: string; name: string; avatarFile: string | null; verified: boolean; priority: boolean }
+type PriorityRow = { id: string; handle: string; name: string; avatarFile: string | null; verified: boolean; priority: boolean }
 
 // The accounts the viewer follows, each with a switch that adds it to the Priority tab. Up to `limit` can be on.
 export function PriorityAccounts({ initial, limit }: { initial: PriorityRow[]; limit: number }) {

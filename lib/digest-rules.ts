@@ -15,7 +15,7 @@ export const DEFAULT_DIGEST_HOUR = 8
 export const SETTLE_MS = 60 * 1000
 // How many digests one maintenance pass sends, unless RHENKO_DIGEST_PER_PASS says otherwise.
 export const DEFAULT_PER_PASS = 25
-export const MAX_PER_PASS = 200
+const MAX_PER_PASS = 200
 // A message's words are cut to this many characters when previews are on.
 const PREVIEW_MAX = 140
 
@@ -72,7 +72,7 @@ export function hourLabel(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00 UTC`
 }
 
-export type DigestSchedule = {
+type DigestSchedule = {
   enabled: boolean
   // The UTC hour from which the digest may go out.
   hour: number
@@ -126,7 +126,7 @@ export type DigestItem = {
   preview?: string
 }
 
-export type DigestInput = {
+type DigestInput = {
   // How many of each kind came. A kind that is off is ignored, whatever the count.
   counts: Partial<Record<DigestKind, number>>
   items: DigestItem[]
@@ -140,7 +140,7 @@ export type DigestInput = {
   unsubscribeUrl: string
 }
 
-export type Digest = { subject: string; text: string; html: string; total: number }
+type Digest = { subject: string; text: string; html: string; total: number }
 
 // The digest for what came, or null when nothing did. Counts per kind, then the newest five things with who and what.
 export function buildDigest(input: DigestInput): Digest | null {

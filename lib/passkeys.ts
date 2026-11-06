@@ -17,10 +17,10 @@ import { all, get, run } from "@/lib/db"
 import { keyedHash } from "@/lib/secrets"
 import { MAX_PASSKEY_NAME } from "@/lib/rules"
 
-export const PASSKEY_COOKIE = "rhenko_webauthn"
+const PASSKEY_COOKIE = "rhenko_webauthn"
 const CHALLENGE_MS = 5 * 60_000
 
-export type PasskeyRow = { id: string; name: string; createdAt: number; lastUsedAt: number | null }
+type PasskeyRow = { id: string; name: string; createdAt: number; lastUsedAt: number | null }
 
 export async function passkeysOf(userId: string): Promise<PasskeyRow[]> {
   return (await all<{ id: string; name: string; created_at: number; last_used_at: number | null }>(
@@ -38,7 +38,7 @@ function transportsOf(stored: string): AuthenticatorTransport[] {
 
 // The site as the browser sees it. RHENKO_PUBLIC_URL is the address people use. Without it the request's own host is used,
 // and that works for local runs. A passkey made on one address does not work on another.
-export async function relyingParty(): Promise<{ rpID: string; origin: string }> {
+async function relyingParty(): Promise<{ rpID: string; origin: string }> {
   const configured = process.env.RHENKO_PUBLIC_URL?.trim()
   let origin: string
   if (configured) {

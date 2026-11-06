@@ -43,7 +43,7 @@ export type Candidate = {
   activeAt: number | null
 }
 
-export type Facts = {
+type Facts = {
   // What they speak that you are learning.
   teaches: string[]
   // What you speak that they are learning.

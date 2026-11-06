@@ -10,7 +10,7 @@ import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME, MAX_PACK_FOLLOWS, MAX_TIMELINE_PIN
 
 export type ListResult = { ok: true; id: string } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
-export type FollowListResult = { ok: true; following: boolean } | { ok: false; error: string }
+type FollowListResult = { ok: true; following: boolean } | { ok: false; error: string }
 
 // A handle is at most 15 characters, so anything much longer than that can't name an account.
 const MAX_HANDLE_INPUT = 50
@@ -134,7 +134,7 @@ export async function setStarterPack(listId: string, on: boolean): Promise<VoidR
   return { ok: true }
 }
 
-export type FollowPackResult = { ok: true; following: number; total: number; stopped: string | null } | { ok: false; error: string }
+type FollowPackResult = { ok: true; following: number; total: number; stopped: string | null } | { ok: false; error: string }
 
 // The errors that are about one account, not about the viewer. A pack skips those people and carries on.
 const PER_ACCOUNT_ERROR = [/no longer exists/, /can't follow this account/]

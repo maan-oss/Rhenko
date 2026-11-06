@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils"
 export const FIELD =
   "h-12 w-full min-w-0 rounded-full bg-muted px-5 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
 
-export const SMALL_FIELD =
+const SMALL_FIELD =
   "h-11 w-full min-w-0 rounded-full bg-muted px-4 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
 
-export function Label({ htmlFor, children, aside }: { htmlFor?: string; children: React.ReactNode; aside?: React.ReactNode }) {
+function Label({ htmlFor, children, aside }: { htmlFor?: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
     <div className="flex min-h-5 items-baseline justify-between gap-3">
       <label htmlFor={htmlFor} className="text-sm font-semibold">
@@ -28,7 +28,7 @@ export function Label({ htmlFor, children, aside }: { htmlFor?: string; children
 }
 
 // A switch that is the whole row, so a tap anywhere on it turns it on or off.
-export function SwitchRow({
+function SwitchRow({
   id,
   checked,
   onChange,
@@ -226,7 +226,7 @@ export function WhereFields({ value, onChange }: { value: WhereValue; onChange: 
   )
 }
 
-export type SpeakItem = { code: string; level: SpeakLevel }
+type SpeakItem = { code: string; level: SpeakLevel }
 export type LanguageValue = { speak: SpeakItem[]; learn: string[]; suggestLanguage: boolean }
 
 type Tab = "speak" | "learn"

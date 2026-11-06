@@ -9,7 +9,7 @@ export function emailReady(): boolean {
 }
 
 export const NOTIFICATION_KINDS = ["like", "repost", "reply", "quote", "follow", "mention", "follow_request", "poll", "post"] as const
-export type PrefKind = (typeof NOTIFICATION_KINDS)[number]
+type PrefKind = (typeof NOTIFICATION_KINDS)[number]
 
 // What each switch controls. Each line matches where that notification is sent.
 export const NOTIFICATION_LABELS: Record<PrefKind, { title: string; hint: string }> = {
@@ -27,7 +27,7 @@ export const NOTIFICATION_LABELS: Record<PrefKind, { title: string; hint: string
   },
 }
 
-export type SessionRow = {
+type SessionRow = {
   tokenHash: string
   createdAt: number
   lastSeen: number
@@ -64,7 +64,7 @@ export async function codeNeedFor(userId: string): Promise<CodeNeed> {
   return state.usable ? "app" : "recovery"
 }
 
-export type EmailSettings = {
+type EmailSettings = {
   email: string | null
   verified: boolean
   // A verification code that is out and still valid, and the address it went to.

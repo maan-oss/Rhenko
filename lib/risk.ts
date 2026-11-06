@@ -17,7 +17,7 @@ const MONTH = 30 * DAY
 // A passed check lets the account do what it asked for this long, so one puzzle covers a short run of follows or posts.
 const PROOF_WINDOW = 2 * HOUR
 
-export type SignalKind = "signup" | "login" | "proof"
+type SignalKind = "signup" | "login" | "proof"
 
 // Notes where an account was made, signed in from, or passed a check. The network is a keyed hash. The browser's string is
 // not kept: many people share one, so it says nothing about a single account.
@@ -30,7 +30,7 @@ async function count(sql: string, ...params: (string | number | null)[]): Promis
 }
 
 // What the account has done, as the scorer reads it. Null when the account does not exist.
-export async function accountFacts(userId: string, now = Date.now()): Promise<AccountFacts | null> {
+async function accountFacts(userId: string, now = Date.now()): Promise<AccountFacts | null> {
   const user = await get<{
     handle: string
     created_at: number
@@ -86,7 +86,7 @@ export async function accountFacts(userId: string, now = Date.now()): Promise<Ac
   }
 }
 
-export async function accountVerdict(userId: string, now = Date.now()): Promise<AccountVerdict> {
+async function accountVerdict(userId: string, now = Date.now()): Promise<AccountVerdict> {
   const facts = await accountFacts(userId, now)
   return facts ? assessAccount(facts) : { score: 0, level: "ok", reasons: [] }
 }
@@ -97,10 +97,10 @@ async function provedRecently(userId: string, now: number): Promise<boolean> {
 }
 
 // proofRequired is true when the same action will pass once a human check is sent with it.
-export type GateResult = { ok: true } | { ok: false; error: string; proofRequired: boolean }
+type GateResult = { ok: true } | { ok: false; error: string; proofRequired: boolean }
 
-export const CHECK_MESSAGE = "Confirm you're a person to continue."
-export const RESTRICTED_MESSAGE =
+const CHECK_MESSAGE = "Confirm you're a person to continue."
+const RESTRICTED_MESSAGE =
   "Your account is limited for now because of unusual activity. Confirm your email address in Settings, or try again later."
 
 // The gate for following, starting a conversation and posting. Ordinary accounts pass. A challenged account must pass a

@@ -83,7 +83,7 @@ export const TEXT_COLORS = ["white", "black", "yellow"] as const
 export const TEXT_BACKGROUNDS = ["solid", "outline", "none"] as const
 export type TextFont = (typeof TEXT_FONTS)[number]
 export type TextColor = (typeof TEXT_COLORS)[number]
-export type TextBackground = (typeof TEXT_BACKGROUNDS)[number]
+type TextBackground = (typeof TEXT_BACKGROUNDS)[number]
 
 // The three looks the tray offers as presets. A sticker saved before fonts, colours and backgrounds existed carries one of
 // these names in its style field, and is read as the look it was drawn with.
@@ -99,7 +99,7 @@ const RETIRED_COLOR = "dusk"
 const RETIRED_LOOK = "dusk"
 
 export type Placement = { x: number; y: number; size: number; rotate: number }
-export type EmojiSticker = Placement & { kind: "emoji"; code: string }
+type EmojiSticker = Placement & { kind: "emoji"; code: string }
 export type TextSticker = Placement & {
   kind: "text"
   text: string
@@ -108,7 +108,7 @@ export type TextSticker = Placement & {
   background: TextBackground
 }
 // A hashtag is written the way it is in a post: letters, digits and underscores. It links to the topic.
-export type HashtagSticker = Placement & { kind: "hashtag"; tag: string }
+type HashtagSticker = Placement & { kind: "hashtag"; tag: string }
 export type Sticker = EmojiSticker | TextSticker | HashtagSticker
 export type StickerSet = { aspect: number; items: Sticker[] }
 
@@ -120,8 +120,8 @@ const HASHTAG_PATTERN = /^[\p{L}\p{N}_]{1,50}$/u
 export const SIZE_MIN = 0.05
 export const SIZE_MAX = 0.6
 export const ROTATE_LIMIT = 180
-export const ASPECT_MIN = 0.1
-export const ASPECT_MAX = 10
+const ASPECT_MIN = 0.1
+const ASPECT_MAX = 10
 
 const EMOJI_CODES: ReadonlySet<string> = new Set(EMOJI_STICKERS.map((sticker) => sticker.code))
 
@@ -165,7 +165,7 @@ function oneOf<T extends string>(options: readonly T[], value: unknown): T | nul
 
 // The shared part of a sticker: where it sits, how big, and how far it is turned. Out-of-range values are brought into
 // range rather than refused, so a drag that goes a little past the edge still posts.
-export function clampPlacement(raw: Record<string, unknown>): Placement | null {
+function clampPlacement(raw: Record<string, unknown>): Placement | null {
   const x = finite(raw.x)
   const y = finite(raw.y)
   const size = finite(raw.size)

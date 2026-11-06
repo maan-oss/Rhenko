@@ -14,7 +14,7 @@ import { removeUpload, saveUpload } from "@/lib/uploads"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
 
-export type FollowResult =
+type FollowResult =
   | { ok: true; state: "following" | "requested" | "none" }
   | { ok: false; error: string; proofRequired?: boolean }
 
@@ -22,8 +22,8 @@ const FOLLOW_HOUR = 60 * 60 * 1000
 const FOLLOW_DAY = 24 * FOLLOW_HOUR
 export type ProfileState = { ok?: boolean; error?: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
-export type TopicResult = { ok: true; following: boolean } | { ok: false; error: string }
-export type PeoplePage = { ok: true; users: PersonEntry[]; next: number | null } | { ok: false; error: string }
+type TopicResult = { ok: true; following: boolean } | { ok: false; error: string }
+type PeoplePage = { ok: true; users: PersonEntry[]; next: number | null } | { ok: false; error: string }
 
 // A handle is at most 15 characters, so anything much longer than that can't name an account.
 const MAX_HANDLE_INPUT = 50

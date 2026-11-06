@@ -3,7 +3,7 @@ import { consume } from "@/lib/rate-limit"
 
 // What someone clicked on a post. "detail" is the post opening from its card (its time or its body), "photo" is a photo
 // opened in the lightbox, and "hashtag" covers hashtags and cashtags.
-export const CLICK_KINDS = ["link", "profile", "detail", "photo", "hashtag"] as const
+const CLICK_KINDS = ["link", "profile", "detail", "photo", "hashtag"] as const
 export type ClickKind = (typeof CLICK_KINDS)[number]
 export type ClickCounts = Record<ClickKind, number>
 

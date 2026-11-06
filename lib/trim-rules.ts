@@ -8,7 +8,7 @@ export type Trim = { start: number; end: number }
 export const MIN_TRIM_SECONDS = 1
 // How far past the end the browser's reading of a video's length may be from the server's. The two read the same file but can
 // disagree by a frame or two, and a person who drags the end handle all the way right sends the browser's number.
-export const TRIM_SLACK_SECONDS = 0.5
+const TRIM_SLACK_SECONDS = 0.5
 // Handles move in tenths of a second.
 const STEP = 0.1
 // Decimal arithmetic on tenths drifts in the last digits (3.1 + 1 is 4.1000000000000005). Comparisons allow for it.
@@ -49,7 +49,7 @@ export function trimProblem(trim: { start: unknown; end: unknown }, maxSeconds: 
 
 // Reads the two form fields a trim travels in. Both empty means no trim. A number is plain digits with an optional decimal part,
 // so "NaN", "1e3", "Infinity" and a minus sign are all turned away.
-export type TrimFields = { ok: true; trim: Trim | null } | { ok: false; error: string }
+type TrimFields = { ok: true; trim: Trim | null } | { ok: false; error: string }
 
 const SECONDS_FIELD = /^\d{1,6}(\.\d{1,6})?$/
 

@@ -45,7 +45,7 @@ import { emailReady, NOTIFICATION_KINDS } from "@/lib/settings-data"
 import { generateRecoveryCodes, generateSecret, matchTotp, normalizeAppCode, otpauthUri } from "@/lib/totp"
 
 export type AccountState = { ok?: boolean; error?: string }
-export type SetupResult = { ok: true; secret: string; qr: string; uri: string } | { ok: false; error: string }
+type SetupResult = { ok: true; secret: string; qr: string; uri: string } | { ok: false; error: string }
 export type CodesResult = { ok: true; codes: string[] } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
 export type StatusState = { ok?: boolean; error?: string; status?: string }

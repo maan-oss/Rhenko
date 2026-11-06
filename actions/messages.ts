@@ -56,7 +56,7 @@ export type GroupMember = {
 export type GroupInfo =
   | { ok: true; title: string; viewerIsCreator: boolean; members: GroupMember[]; inviteToken: string | null }
   | { ok: false; error: string }
-export type InviteLinkResult = { ok: true; token: string | null } | { ok: false; error: string }
+type InviteLinkResult = { ok: true; token: string | null } | { ok: false; error: string }
 
 // A post can go to this many people at once.
 const MAX_SHARE_RECIPIENTS = 10
@@ -843,7 +843,7 @@ export async function voteInChatPoll(messageId: string, choices: unknown): Promi
   return { ok: true }
 }
 
-export type ShareResult =
+type ShareResult =
   | { ok: true; sent: { handle: string; conversationId: string }[]; failed: { handle: string; error: string }[] }
   | { ok: false; error: string }
 
@@ -1062,7 +1062,7 @@ export async function setChatWallpaper(conversationId: string, key: unknown): Pr
   return { ok: true }
 }
 
-export type ChatSearchResult = { ok: true; hits: ChatSearchHit[] } | { ok: false; error: string }
+type ChatSearchResult = { ok: true; hits: ChatSearchHit[] } | { ok: false; error: string }
 
 // Searches the words of one chat, as the viewer may see them. A search is refused when it is empty, too long or too frequent.
 export async function searchConversation(conversationId: string, text: unknown): Promise<ChatSearchResult> {
@@ -1273,7 +1273,7 @@ export async function messageOnOrAfter(conversationId: string, at: unknown): Pro
 
 // Who in the chat has seen one of the viewer's messages. Someone has seen it when they last read the chat at or after it was
 // sent. The app keeps only the last time each person read, so no time is shown for a read.
-export type MessageInfoPerson = { id: string; name: string; handle: string; avatarFile: string | null; seen: boolean }
+type MessageInfoPerson = { id: string; name: string; handle: string; avatarFile: string | null; seen: boolean }
 export type MessageInfoResult = { ok: true; sentAt: number; people: MessageInfoPerson[] } | { ok: false; error: string }
 
 export async function messageInfo(messageId: string): Promise<MessageInfoResult> {

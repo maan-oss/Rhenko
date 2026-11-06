@@ -39,7 +39,7 @@ import { saveUpload, type MediaKind } from "@/lib/uploads"
 export type CreateResult =
   | { ok: true; id: string; status: "published" | "draft" | "scheduled" }
   | { ok: false; error: string; proofRequired?: boolean }
-export type ToggleResult = { ok: true; active: boolean } | { ok: false; error: string }
+type ToggleResult = { ok: true; active: boolean } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
 export type IdResult = { ok: true; id: string } | { ok: false; error: string }
 
@@ -405,7 +405,7 @@ export async function setReplyHidden(replyId: string, hidden: boolean): Promise<
   return { ok: true }
 }
 
-export type EditHistoryResult = { ok: true; versions: EditVersion[] } | { ok: false; error: string }
+type EditHistoryResult = { ok: true; versions: EditVersion[] } | { ok: false; error: string }
 
 // Earlier versions of a post, for anyone who may see it. A draft's or scheduled post's history is its author's only.
 export async function getEditHistory(postId: string): Promise<EditHistoryResult> {

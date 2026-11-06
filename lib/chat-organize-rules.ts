@@ -8,7 +8,7 @@ export const PINNED_CHATS_MAX = 3
 export const FORWARD_TARGETS_MAX = 5
 
 // A message as the forwarding check needs it: what it is, not what it says.
-export type ForwardCandidate = {
+type ForwardCandidate = {
   deleted: boolean
   callStatus: string | null
   timerChange: number | null

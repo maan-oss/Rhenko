@@ -1,4 +1,4 @@
-export type Shortcut = { keys: string; label: string }
+type Shortcut = { keys: string; label: string }
 
 // Keys the app listens for. Shown on the keyboard shortcuts settings page.
 export const SHORTCUTS: Shortcut[] = [

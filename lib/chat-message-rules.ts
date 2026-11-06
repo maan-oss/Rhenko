@@ -9,7 +9,7 @@ export const EDIT_WINDOW_MS = 15 * 60 * 1000
 export const SEARCH_QUERY_MAX = 100
 
 // A message as the edit check needs it: whose it is, what it is, and when it was sent.
-export type EditCandidate = {
+type EditCandidate = {
   mine: boolean
   deleted: boolean
   callStatus: string | null

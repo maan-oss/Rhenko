@@ -6,7 +6,7 @@
 const DEFAULT_URL = "https://api.sarvam.ai/v1/chat/completions"
 const DEFAULT_MODEL = "sarvam-105b"
 const TIMEOUT_MS = 20_000
-export const SAHAYAK_MAX_TOKENS = 700
+const SAHAYAK_MAX_TOKENS = 700
 
 export type Message = { role: "system" | "user"; content: string }
 export type Answer = { ok: true; text: string } | { ok: false; error: string }
