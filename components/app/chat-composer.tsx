@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
 import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, AudioLines, Camera, Eye, FileText, Image as ImageIcon, ListChecks, MapPin, Mic, Music, Plus, ScanLine, UserRound, X } from "lucide-react"
 import { toast } from "sonner"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
+import { GifGlyph, useGifSetup } from "@/components/app/gif-setup"
 import { addPending, removePending } from "@/components/app/pending-messages"
 import { abandonFlight, armText, placeOrigin, startPicture, textOrigin } from "@/components/app/send-flight"
 import { ChatPollDialog, type PollDraft } from "@/components/app/chat-poll-dialog"
@@ -26,6 +28,9 @@ const DOCUMENT_ACCEPT = ".pdf,.txt,.csv,.docx,.xlsx,.pptx,.zip"
 
 // A "@" that starts a mention, with the letters typed after it. Handles are letters, digits and underscores.
 const MENTION = /(^|\s)@([A-Za-z0-9_]{0,15})$/
+
+// The GIF panel opens only when its button is pressed, so its code waits for that.
+const GifTray = dynamic(() => import("@/components/app/gif-tray").then((module) => module.GifTray), { ssr: false, loading: () => null })
 
 // Browser speech recognition, where the browser has it (Chromium and Safari). Elsewhere the mic is not offered.
 type SpokenResult = { isFinal: boolean; 0: { transcript: string } }
@@ -217,6 +222,9 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
   // A picture waiting to be framed in the crop dialog. Only the framed part is attached.
   const [framing, setFraming] = useState<{ file: File; scan: boolean } | null>(null)
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
+  // The GIF button shows only where the server has a GIF provider and key.
+  const gifSetup = useGifSetup()
+  const [gifOpen, setGifOpen] = useState(false)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -389,6 +397,13 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
       return
     }
     void attachMedia(file, false)
+  }
+
+  // A GIF from the panel is sent like a photo the person picked, but it is not framed or made smaller: it is already within the
+  // upload limit, and shrinking it would drop its animation. It goes out alone, so a recorded voice message is dropped.
+  function keepGif(gif: File) {
+    setVoice(null)
+    setPick({ kind: "media", file: gif, url: URL.createObjectURL(gif), scan: false })
   }
 
   function keepFramed(picture: File, scan: boolean) {
@@ -819,6 +834,18 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {gifSetup.enabled ? (
+          <button
+            type="button"
+            onClick={() => setGifOpen(true)}
+            aria-label="Add a GIF"
+            title="Add a GIF"
+            className="tap-44 grid size-10 shrink-0 place-items-center rounded-full text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <GifGlyph />
+          </button>
+        ) : null}
+
         <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-[background-color,box-shadow] focus-within:bg-background focus-within:shadow-[0_0_0_3px_var(--halo)]">
           <textarea
             data-composer-field
@@ -934,6 +961,7 @@ export function ChatComposer({ conversationId, people, group }: { conversationId
         </DialogContent>
       </Dialog>
 
+      {gifOpen ? <GifTray open onOpenChange={setGifOpen} onPick={keepGif} /> : null}
       {framing ? (
         <PhotoCrop
           key={`${framing.file.name}-${framing.file.size}`}

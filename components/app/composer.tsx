@@ -9,6 +9,7 @@ import { motion, useReducedMotion } from "motion/react"
 import { createPost, undoPost, type CreateResult } from "@/actions/posts"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { EmojiPicker } from "@/components/app/emoji-picker"
+import { GifGlyph, useGifSetup } from "@/components/app/gif-setup"
 import type { Ratio } from "@/components/app/photo-crop"
 import { useProofGate } from "@/components/app/proof-dialog"
 import { StickerEditLayer, StickerLayer, type StickerPatch } from "@/components/app/sticker-layer"
@@ -129,6 +130,8 @@ const BACKGROUND_OPTIONS: { value: (typeof TEXT_BACKGROUNDS)[number]; name: stri
 ]
 
 const StickerTray = dynamic(() => import("@/components/app/sticker-tray").then((module) => module.StickerTray), { ssr: false, loading: () => null })
+// The GIF panel opens only when the GIF button is pressed, so its code waits for that.
+const GifTray = dynamic(() => import("@/components/app/gif-tray").then((module) => module.GifTray), { ssr: false, loading: () => null })
 // The photo framing dialog opens only after a photo is picked, so its code waits for that.
 const PhotoCrop = dynamic(() => import("@/components/app/photo-crop").then((module) => module.PhotoCrop), { ssr: false, loading: () => null })
 
@@ -174,6 +177,12 @@ const FIELD = "h-10 rounded-full border border-border bg-background px-3 outline
 // opens from the toolbar's left edge so it stays on the screen.
 const EMOJI_PHONE =
   "max-sm:static max-sm:[&>button]:size-9 max-[429px]:[&>button]:size-8 max-[369px]:[&>button]:size-[30px] max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
+// With the GIF button the row can hold seven tools, which is one more than a phone fits at the sizes above (the compose sheet
+// leaves 312px of row at 360 wide). In that case, and only then, the tools step down again below 450px: 32, 28, then 26px.
+const EMOJI_PHONE_TIGHT =
+  "max-sm:static max-sm:[&>button]:size-9 max-[449px]:[&>button]:size-8 max-[415px]:[&>button]:size-7 max-[387px]:[&>button]:size-[26px] max-sm:[&_[role=dialog]]:w-[278px] max-sm:[&_[role=dialog]_button]:size-10 sm:[&>button]:size-8"
+const TOOL_SIZE = "max-[429px]:size-8 max-[369px]:size-[30px]"
+const TOOL_SIZE_TIGHT = "max-[449px]:size-8 max-[415px]:size-7 max-[387px]:size-[26px]"
 // The emoji list opens upward. Near the top of the page there is no room above the toolbar, so it opens downward.
 const EMOJI_BELOW = "[&_[role=dialog]]:top-11 [&_[role=dialog]]:bottom-auto"
 const EMOJI_LIST_HEIGHT = 300
@@ -220,6 +229,7 @@ function ToolButton({
   onClick,
   disabled = false,
   pressed = false,
+  tight = false,
   children,
 }: {
   label: string
@@ -227,6 +237,8 @@ function ToolButton({
   onClick: () => void
   disabled?: boolean
   pressed?: boolean
+  // The row holds seven tools, so each steps down a size on a phone.
+  tight?: boolean
   children: ReactNode
 }) {
   return (
@@ -238,7 +250,8 @@ function ToolButton({
       aria-pressed={pressed || undefined}
       title={disabled && hint ? hint : label}
       className={cn(
-        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent max-[429px]:size-8 max-[369px]:size-[30px] sm:size-8",
+        "tap-44 grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent sm:size-8",
+        tight ? TOOL_SIZE_TIGHT : TOOL_SIZE,
         pressed && "bg-foreground/5"
       )}
     >
@@ -615,6 +628,9 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const [trimming, setTrimming] = useState<Trimming | null>(null)
   // The photo whose sticker tray is open. The tray sits outside the form, so its events never reach the form's handlers.
   const [trayFor, setTrayFor] = useState<string | null>(null)
+  // The GIF panel, when it is open. The GIF button shows only where the server has a GIF provider and key.
+  const gifs = useGifSetup()
+  const [gifOpen, setGifOpen] = useState(false)
   const [poll, setPoll] = useState(false)
   // An article has a title and a longer body. It can carry photos or a video, but not a poll, a thread or a schedule.
   const [article, setArticle] = useState(false)
@@ -707,7 +723,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
 
   const open = wordKey !== "" && suggestions.length > 0
 
-  async function addFiles(list: FileList | null) {
+  async function addFiles(list: ArrayLike<File> | null) {
     if (!list || list.length === 0) return
     const picked = Array.from(list)
     const next: Attachment[] = [...media]
@@ -790,6 +806,25 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   // A framed picture joins the post once the person has chosen the part to keep.
   function addFramed(picture: File) {
     setMedia((current) => (current.length >= MAX_IMAGES ? current : [...current, makeAttachment(picture, "image")]))
+  }
+
+  // A GIF from the panel is a GIF file like one picked from the device, so it passes the same checks as a photo: one image of the
+  // four, no video beside it, no poll, and the same 4 MB limit.
+  function addGif(file: File) {
+    void addFiles([file])
+  }
+
+  // The panel opens only when a GIF could be added, so no one searches and picks one only to be turned away.
+  function openGifs() {
+    if (media.some((m) => m.kind === "video")) {
+      toast.error("A post can have one video and nothing else.")
+      return
+    }
+    if (media.length + framing.length >= MAX_IMAGES) {
+      toast.error(`Add up to ${MAX_IMAGES} images.`)
+      return
+    }
+    setGifOpen(true)
   }
 
   function removeMedia(key: string) {
@@ -1052,35 +1087,52 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
   const showReplyPicker = !isReply
 
   // The tools that come out from behind the plus. Each keeps the rule it always had for when it is shown or disabled.
+  const canArticle = !isReply && !quoteOfId && !threading && !poll && !scheduling
+  // Seven tools: every one of them, with the GIF button. The row then uses the smaller phone sizes (see TOOL_SIZE_TIGHT).
+  const crowded = gifs.enabled && canArticle
   const toolItems: { key: string; node: ReactNode }[] = [
     {
       key: "media",
       node: (
-        <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} onClick={() => fileRef.current?.click()}>
+        <ToolButton label="Add photos or video" hint="Remove the poll to add photos or video" disabled={poll} tight={crowded} onClick={() => fileRef.current?.click()}>
           <ImageIcon className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
         </ToolButton>
       ),
     },
-    {
-      key: "poll",
+  ]
+  // The GIF button follows the photo button's rule: nothing can be added to a poll. The other limits (four images, no video
+  // beside a GIF) are checked when it is pressed.
+  if (gifs.enabled) {
+    toolItems.push({
+      key: "gif",
       node: (
-        <ToolButton
-          label={poll ? "Remove poll" : "Add a poll"}
-          hint="Remove the photos or video to add a poll"
-          disabled={media.length > 0 || article}
-          pressed={poll}
-          onClick={() => setPoll((value) => !value)}
-        >
-          <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+        <ToolButton label="Add a GIF" hint="Remove the poll to add a GIF" disabled={poll} tight={crowded} onClick={openGifs}>
+          <GifGlyph />
         </ToolButton>
       ),
-    },
-  ]
-  if (!isReply && !quoteOfId && !threading && !poll && !scheduling) {
+    })
+  }
+  toolItems.push({
+    key: "poll",
+    node: (
+      <ToolButton
+        label={poll ? "Remove poll" : "Add a poll"}
+        hint="Remove the photos or video to add a poll"
+        disabled={media.length > 0 || article}
+        pressed={poll}
+        tight={crowded}
+        onClick={() => setPoll((value) => !value)}
+      >
+        <ListChecks className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
+      </ToolButton>
+    ),
+  })
+  if (canArticle) {
     toolItems.push({
       key: "article",
       node: (
         <ToolButton
+          tight={crowded}
           label={article ? "Turn off article" : "Write an article"}
           hint="Articles can't have polls, threads, replies or quotes"
           pressed={article}
@@ -1098,7 +1150,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     toolItems.push({
       key: "thread",
       node: (
-        <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} onClick={addThreadPart}>
+        <ToolButton label="Add to thread" hint="Turn off scheduling to start a thread" disabled={scheduling || article} tight={crowded} onClick={addThreadPart}>
           <MessageSquarePlus className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
         </ToolButton>
       ),
@@ -1108,7 +1160,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     key: "emoji",
     node: (
       <span className="contents" onClickCapture={placeEmojiList}>
-        <EmojiPicker onPick={insertEmoji} className={cn(EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
+        <EmojiPicker onPick={insertEmoji} className={cn(crowded ? EMOJI_PHONE_TIGHT : EMOJI_PHONE, emojiBelow && EMOJI_BELOW)} />
       </span>
     ),
   })
@@ -1116,7 +1168,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
     toolItems.push({
       key: "schedule",
       node: (
-        <ToolButton label="Schedule this post" pressed={scheduling} onClick={toggleScheduling}>
+        <ToolButton label="Schedule this post" pressed={scheduling} tight={crowded} onClick={toggleScheduling}>
           <CalendarClock className="size-[20px]" strokeWidth={1.8} aria-hidden="true" />
         </ToolButton>
       ),
@@ -1472,7 +1524,10 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                   disabled={!canDraft}
                   aria-label="Save draft"
                   title="Save draft"
-                  className="tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-50 max-[429px]:size-8 max-[369px]:size-[30px] sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold"
+                  className={cn(
+                    "tap-44 chrome-ring grid size-9 shrink-0 place-items-center rounded-full text-foreground transition-opacity duration-200 hover:opacity-75 disabled:opacity-50 max-[429px]:size-8 sm:h-9 sm:w-auto sm:px-4 sm:text-[15px] sm:font-semibold",
+                    crowded ? "max-[387px]:size-7" : "max-[369px]:size-[30px]"
+                  )}
                 >
                   <Save className="size-[17px] sm:hidden" strokeWidth={2} aria-hidden="true" />
                   <span className="hidden sm:inline">{pending && intent === "draft" ? "Saving" : "Save draft"}</span>
@@ -1483,7 +1538,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
                 disabled={!canPost}
                 className={cn(
                   "tap-44 metal inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold whitespace-nowrap transition-opacity duration-200 hover:opacity-85 disabled:opacity-50 sm:px-5",
-                  iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : "px-3.5"
+                  iconOnlyPhone ? "w-9 max-[429px]:w-8 sm:w-auto" : crowded ? "px-3.5 max-[387px]:px-2.5" : "px-3.5"
                 )}
               >
                 {iconOnlyPhone ? (
@@ -1499,6 +1554,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
         </div>
       </form>
     {proof.dialog}
+    {gifOpen ? <GifTray open onOpenChange={setGifOpen} onPick={addGif} /> : null}
     {trayFor !== null ? (
       <StickerTray
         open

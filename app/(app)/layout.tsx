@@ -8,6 +8,7 @@ import { BannerHost } from "@/components/app/banner-host"
 import { CallSurface } from "@/components/app/call-surface"
 import { LiveCountsProvider } from "@/components/app/live-counts"
 import { Realtime } from "@/components/app/realtime"
+import { GifSetupProvider } from "@/components/app/gif-setup"
 import { Shortcuts } from "@/components/app/shortcuts"
 import { ServiceWorkerRegister } from "@/components/app/sw-register"
 import { ViewerLanguages } from "@/components/app/viewer-languages"
@@ -15,6 +16,7 @@ import { ViewerLanguages } from "@/components/app/viewer-languages"
 // waits a moment), so every page of the app must be able to take them. Imported here, they are part of every app page.
 import "@/components/app/view-beacon"
 import { unreadMessageCount, unreadNotificationCount } from "@/lib/data"
+import { publicGifSetup } from "@/lib/gifs"
 import { translationOn } from "@/lib/translate"
 
 // The app shell waits for the viewer and the rail before the first byte, so a page's
@@ -35,17 +37,19 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     : { notifications: 0, messages: 0 }
   return (
     <ViewerLanguages speaks={viewer?.speaks ?? []} translate={translationOn()}>
-      <LiveCountsProvider initial={counts}>
-        <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
-          <Sidebar />
-          <main data-app-main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
-          <RightRail />
-          <MobileNav />
-          <LiveMounts />
-          <BannerHost />
-          <ServiceWorkerRegister />
-        </div>
-      </LiveCountsProvider>
+      <GifSetupProvider value={publicGifSetup()}>
+        <LiveCountsProvider initial={counts}>
+          <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
+            <Sidebar />
+            <main data-app-main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
+            <RightRail />
+            <MobileNav />
+            <LiveMounts />
+            <BannerHost />
+            <ServiceWorkerRegister />
+          </div>
+        </LiveCountsProvider>
+      </GifSetupProvider>
     </ViewerLanguages>
   )
 }
