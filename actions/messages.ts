@@ -28,7 +28,7 @@ import { blockedEitherWay, blockedWithin } from "@/lib/notify"
 import { audienceOf } from "@/lib/chat-audience"
 import { attachmentPreview, attachmentText, cleanFileName, parseAttachment, type Attachment } from "@/lib/message-attachments"
 import { firstLink, requestPreviews } from "@/lib/link-previews"
-import { pollInput, pollVoteInput } from "@/lib/poll-rules"
+import { pollInput, pollVoteInput, sealedPollAttachment } from "@/lib/poll-rules"
 import { pushGroupAdded, pushMessage } from "@/lib/push"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
@@ -157,8 +157,8 @@ async function isSealed(messageId: string): Promise<boolean> {
 }
 // Features that still need the text on the server are refused in an encrypted chat until they are sealed too.
 const SEALED_EDIT_REFUSAL = "Editing isn't available in encrypted chats yet."
-const SEALED_FORWARD_REFUSAL = "Forwarding an encrypted message isn't available yet."
-const FORWARD_TO_ENCRYPTED_REFUSAL = "Forwarding into an encrypted chat isn't available yet."
+const SEALED_FORWARD_REFUSAL = "An encrypted message can only be forwarded to another encrypted chat."
+const FORWARD_TO_ENCRYPTED_REFUSAL = "A message from a chat that isn't encrypted can't be forwarded into an encrypted chat."
 const SHARE_TO_ENCRYPTED_REFUSAL = "Sharing a post with a note isn't available in encrypted chats yet."
 
 async function follows(followerId: string, followeeId: string): Promise<boolean> {
@@ -899,6 +899,8 @@ export async function sendEncryptedMedia(formData: FormData): Promise<ChatState>
     envelope: jsonField(formData.get("envelope")),
     wraps: jsonField(formData.get("wraps")),
     mentions: jsonField(formData.get("mentions")),
+    poll: jsonField(formData.get("poll")),
+    forwardOf: formData.get("forwardOf"),
   }
   return await sendSealed(data, file instanceof File ? file : null, formData.get("viewOnce") === "on")
 }
@@ -950,19 +952,27 @@ async function sendSealed(data: Record<string, unknown>, file: File | null, view
   if (slowDown) return { error: slowDown }
   if (file && (file.size === 0 || file.size > SEALED_UPLOAD_LIMIT)) return { error: "That file is too large to send." }
   if (viewOnce && !file) return { error: "Only a photo can be opened once." }
+  // A poll names only its choices' ids here, so the server can count votes; its question and words stay in the envelope.
+  const pollRequested = data.poll !== undefined && data.poll !== null
+  const poll = pollRequested ? sealedPollAttachment(pollFields(data.poll).ids, pollFields(data.poll).multiple) : null
+  if (pollRequested && (!poll || file || viewOnce)) return { error: "That poll isn't valid. Make it again." }
+  // A forwarded copy is allowed only for a sealed message that could be forwarded in the clear: not a poll, a view-once photo, or a
+  // deleted one. The copy keeps the words the sender's device sealed; the forwarded flag is what the server adds.
+  const forwardOf = asId(data.forwardOf)
+  if (forwardOf) {
+    const source = await visibleMessageFor(forwardOf, viewer.id)
+    if (!source || !(await isSealed(forwardOf))) return { error: "That message can't be forwarded." }
+    const refused = forwardRefusal({
+      deleted: source.deleted_at !== null,
+      callStatus: source.call_status,
+      timerChange: source.timer_change,
+      attachmentKind: parseAttachment(source.attachment)?.kind ?? null,
+      viewOnce: source.view_once === 1,
+    })
+    if (refused) return { error: refused }
+  }
 
-  // The wraps must cover exactly the devices that can read the chat right now (see checkEncryptedSend).
-  const members = await memberDevicesOf(conversationId)
-  const senderDevices = (await activeDevicesOf(viewer.id)).map((device) => device.id)
-  const envelopeSender = (data.envelope as { sender?: unknown } | null | undefined)?.sender
-  const checked = checkEncryptedSend({
-    envelope: data.envelope,
-    wraps: data.wraps,
-    senderDevice: typeof envelopeSender === "string" ? envelopeSender : "",
-    senderDevices,
-    memberDevices: members.devices.map((device) => device.id),
-    memberWithoutDevice: members.memberWithoutDevice,
-  })
+  const checked = await checkSealedAgainstChat(conversationId, viewer.id, data.envelope, data.wraps)
   if (!checked.ok) return { error: checked.error }
 
   const mentioned = await mentionedMembersByHandle(conversationId, viewer.id, mentionHandles(data.mentions))
@@ -970,7 +980,7 @@ async function sendSealed(data: Record<string, unknown>, file: File | null, view
   const mediaFile = file ? await saveSealedUpload(file) : null
   if (file && !mediaFile) return { error: "That file couldn't be saved. Try again." }
   try {
-    await insertMessage(conversationId, viewer.id, SEALED_BODY, mediaFile, null, replyToId, null, false, viewOnce && mediaFile !== null, {
+    await insertMessage(conversationId, viewer.id, SEALED_BODY, mediaFile, null, replyToId, poll ? { kind: "poll", ...poll } : null, forwardOf !== null, viewOnce && mediaFile !== null, {
       id,
       cipher: JSON.stringify(checked.envelope),
       wraps: checked.wraps,
@@ -982,6 +992,80 @@ async function sendSealed(data: Record<string, unknown>, file: File | null, view
   await announceMessage(conversationId, viewer.id, ENCRYPTED_PREVIEW, "", mentioned)
   refresh()
   return { sent: true }
+}
+
+// The poll fields a sealed send may carry: the ids of its choices and whether more than one may be picked.
+function pollFields(value: unknown): { ids: unknown; multiple: unknown } {
+  const v = value && typeof value === "object" ? (value as Record<string, unknown>) : {}
+  return { ids: v.ids, multiple: v.multiple }
+}
+
+// The envelope and wraps of a sealed message, checked against the chat's devices right now (see checkEncryptedSend). Used for a new
+// message and for an edit, so both refuse the same things.
+async function checkSealedAgainstChat(conversationId: string, viewerId: string, envelope: unknown, wraps: unknown) {
+  const members = await memberDevicesOf(conversationId)
+  const senderDevices = (await activeDevicesOf(viewerId)).map((device) => device.id)
+  const envelopeSender = (envelope as { sender?: unknown } | null | undefined)?.sender
+  return checkEncryptedSend({
+    envelope,
+    wraps,
+    senderDevice: typeof envelopeSender === "string" ? envelopeSender : "",
+    senderDevices,
+    memberDevices: members.devices.map((device) => device.id),
+    memberWithoutDevice: members.memberWithoutDevice,
+  })
+}
+
+// Changes the words of an encrypted message the viewer sent, within the edit window. The device seals the new words with the same
+// message id; a file keeps its key, so the file itself is not sent again. Only the envelope and the wraps change. A poll, a view-once
+// photo and a call or a timer change are refused as they are for a plain message.
+export async function editEncryptedMessage(messageId: unknown, data: unknown): Promise<VoidResult> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(messageId)
+  const message = id ? await visibleMessageFor(id, viewer.id) : null
+  if (!id || !message) return { ok: false, error: "That message doesn't exist." }
+  if (!(await isSealed(id))) return { ok: false, error: "That message isn't encrypted." }
+  if ((await memberStatus(message.conversation_id, viewer.id)) !== "accepted") return { ok: false, error: "You can only edit messages in chats you're in." }
+  const refused = editRefusal(
+    {
+      mine: message.sender_id === viewer.id,
+      deleted: message.deleted_at !== null,
+      callStatus: message.call_status,
+      timerChange: message.timer_change,
+      attachmentKind: parseAttachment(message.attachment)?.kind ?? null,
+      viewOnce: message.view_once === 1,
+      createdAt: message.created_at,
+    },
+    Date.now()
+  )
+  if (refused) return { ok: false, error: refused }
+  const fields = data && typeof data === "object" ? (data as Record<string, unknown>) : {}
+  const checked = await checkSealedAgainstChat(message.conversation_id, viewer.id, fields.envelope, fields.wraps)
+  if (!checked.ok) return { ok: false, error: checked.error }
+
+  await transaction(async () => {
+    await run("UPDATE chat_messages SET cipher = ?, edited_at = ? WHERE id = ?", JSON.stringify(checked.envelope), Date.now(), id)
+    await run("DELETE FROM chat_message_wraps WHERE message_id = ?", id)
+    for (const wrap of checked.wraps) {
+      await run("INSERT INTO chat_message_wraps (message_id, device_id, epk, iv, key) VALUES (?, ?, ?, ?, ?)", id, wrap.device, wrap.epk, wrap.iv, wrap.key)
+    }
+  })
+  await publish(await memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })
+  refresh()
+  return { ok: true }
+}
+
+// The account a contact card in an encrypted chat names, once the viewer's device has opened it. The server learns it only when it is
+// shown, and gives it only to someone in the chat, for a member of the chat.
+export async function sealedContact(conversationId: unknown, userId: unknown): Promise<MiniUser | null> {
+  const viewer = await getAgreedViewer()
+  const id = asId(conversationId)
+  const target = asId(userId)
+  if (!viewer || !id || !target) return null
+  if ((await memberStatus(id, viewer.id)) !== "accepted" || !(await isEncryptedChat(id))) return null
+  if ((await memberStatus(id, target)) !== "accepted") return null
+  return (await loadMiniUsers([target])).get(target) ?? null
 }
 
 export type EncryptionTargets =
@@ -1670,7 +1754,8 @@ export async function hideMessageForMe(messageId: string): Promise<VoidResult> {
   return { ok: true }
 }
 
-export type ForwardTarget = { id: string; title: string; kind: "dm" | "group" }
+// A chat a message can be forwarded to. An encrypted message goes only to an encrypted chat, and a plain one only to a plain chat.
+export type ForwardTarget = { id: string; title: string; kind: "dm" | "group"; encrypted: boolean }
 
 // The chats a viewer can forward to: every chat they are in, archived ones included, in the order the chats list uses.
 export async function listForwardTargets(): Promise<ForwardTarget[]> {
@@ -1680,7 +1765,7 @@ export async function listForwardTargets(): Promise<ForwardTarget[]> {
   return chats.map((chat) => {
     const names = chat.others.map((person) => person.name).join(", ")
     const title = chat.kind === "group" ? chat.title || names || "Group" : (chat.others[0]?.name ?? "Conversation")
-    return { id: chat.id, title, kind: chat.kind }
+    return { id: chat.id, title, kind: chat.kind, encrypted: chat.encrypted }
   })
 }
 

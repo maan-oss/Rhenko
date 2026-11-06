@@ -20,7 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { MiniUser } from "@/lib/data"
 import { MAX_DM, MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { sizeLabel } from "@/lib/message-attachments"
-import { sendSealedMedia, sendSealedText } from "@/lib/e2ee-client"
+import { sendSealedContact, sendSealedLocation, sendSealedMedia, sendSealedPoll, sendSealedText, type SealedSend } from "@/lib/e2ee-client"
 import type { SealedMediaKind } from "@/lib/e2ee-chat"
 import { cn } from "@/lib/utils"
 
@@ -321,16 +321,37 @@ export function ChatComposer({
     if (pick.kind === "audio" || pick.kind === "document") {
       return { file: pick.file, kind: pick.kind, mime: baseType(pick.file.type), name: pick.file.name, scan: false, viewOnce: false }
     }
-    toast.error("Contacts, places and polls aren't available in encrypted chats yet.")
-    return "refused"
+    // A contact, a place and a poll are sent by sealAndSend, which takes them before this is asked.
+    return null
   }
 
-  // An encrypted chat's words and files are sealed on this device and sent as envelopes (see lib/e2ee-client.ts). A photo, voice note,
-  // audio file or document goes with its words as a caption. Videos, contacts, places and polls are not sealed yet, so they are refused
-  // here with a reason rather than sent in the clear.
+  // An encrypted chat's words, files, contacts, places and polls are sealed on this device and sent as envelopes (see
+  // lib/e2ee-client.ts). A photo, voice note, audio file or document goes with its words as a caption. Videos are not sealed yet, so
+  // they are refused here with a reason rather than sent in the clear.
   async function sealAndSend() {
     if (sealingRef.current) return
     const body = text.trim()
+    const replyToId = replyTo?.id ?? null
+    if (pick?.kind === "contact" || pick?.kind === "location" || pick?.kind === "poll") {
+      sealingRef.current = true
+      stopDictation()
+      const result =
+        pick.kind === "contact"
+          ? await sendSealedContact({ conversationId, userId: pick.user.id, body, replyTo: replyToId })
+          : pick.kind === "location"
+            ? await sendSealedLocation({ conversationId, lat: pick.lat, lng: pick.lng, body, replyTo: replyToId })
+            : await sendSealedPoll({
+                conversationId,
+                question: pick.question,
+                choices: pick.choices,
+                multiple: pick.multiple,
+                body,
+                replyTo: replyToId,
+              })
+      sealingRef.current = false
+      afterSealedSend(result)
+      return
+    }
     const file = sealablePick()
     if (file === "refused") return
     if (!body && file === null) return
@@ -344,12 +365,17 @@ export function ChatComposer({
           mime: file.mime,
           name: file.name,
           body,
-          replyTo: replyTo?.id ?? null,
+          replyTo: replyToId,
           scan: file.scan,
           viewOnce: file.viewOnce,
         })
-      : await sendSealedText({ conversationId, body, replyTo: replyTo?.id ?? null })
+      : await sendSealedText({ conversationId, body, replyTo: replyToId })
     sealingRef.current = false
+    afterSealedSend(result)
+  }
+
+  // A sealed send that went through clears the composer; one that did not says why.
+  function afterSealedSend(result: SealedSend) {
     if (result.ok) {
       setText("")
       setPick(null)

@@ -19,6 +19,7 @@ import { removePending, usePending } from "@/components/app/pending-messages"
 import { PostBody } from "@/components/app/post-body"
 import { ContactCard, DocumentCard, LocationCard } from "@/components/app/attachment-view"
 import { SealedAttachment } from "@/components/app/sealed-media"
+import { editSealedMessage } from "@/lib/e2ee-client"
 import { ChatPollView } from "@/components/app/chat-poll"
 import { LinkCard } from "@/components/app/link-card"
 import { VideoPlayer } from "@/components/app/video-player"
@@ -609,7 +610,7 @@ function MessageRow({
     )
   }
   // A view-once file, sealed or plain, is hidden until the viewer opens it.
-  const viewOnceHidden = (message.mediaFile !== null || message.sealedMedia != null) && message.viewOnce && !message.mine && !viewed
+  const viewOnceHidden = (message.mediaFile !== null || message.sealedAttachment?.kind === "media") && message.viewOnce && !message.mine && !viewed
 
   function toggleOnTouch() {
     if (selecting || message.deleted || editing) return
@@ -681,7 +682,11 @@ function MessageRow({
       return
     }
     startTransition(async () => {
-      const result = await editMessage(message.id, draft)
+      // An encrypted message is sealed again on this device; a plain one is changed on the server.
+      const sealed = message.sealed
+      const result = sealed
+        ? await editSealedMessage({ conversationId, id: message.id, envelope: sealed.envelope, wrap: sealed.wrap, file: sealed.file }, body)
+        : await editMessage(message.id, draft)
       if (result.ok) {
         onChange({ body, editedAt: Date.now() })
         setEditing(false)
@@ -821,11 +826,11 @@ function MessageRow({
                 ) : null}
                 {viewOnceHidden ? (
                   <ViewOnceTile video={isVideoFile(message.mediaFile ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
-                ) : message.sealedMedia ? (
+                ) : message.sealedAttachment?.kind === "media" ? (
                   <SealedAttachment
                     conversationId={conversationId}
                     messageId={message.id}
-                    media={message.sealedMedia}
+                    media={message.sealedAttachment.media}
                     mine={message.mine}
                     onLoad={message.mine && fresh ? followLatest : undefined}
                   />
@@ -854,6 +859,10 @@ function MessageRow({
                   </span>
                 ) : null}
                 {message.attachment?.kind === "contact" ? <ContactCard user={message.contact} mine={message.mine} /> : null}
+                {message.sealedAttachment?.kind === "contact" ? <ContactCard user={message.sealedAttachment.user} mine={message.mine} /> : null}
+                {message.sealedAttachment?.kind === "location" ? (
+                  <LocationCard lat={message.sealedAttachment.lat} lng={message.sealedAttachment.lng} mine={message.mine} />
+                ) : null}
                 {message.attachment?.kind === "location" ? (
                   <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} mine={message.mine} />
                 ) : null}
@@ -1057,7 +1066,13 @@ function MessageRow({
         </motion.div>
       ) : null}
 
-      {forwardOpen ? <ForwardDialog messageId={message.id} onOpenChange={setForwardOpen} /> : null}
+      {forwardOpen ? (
+        <ForwardDialog
+          messageId={message.id}
+          sealed={message.sealed ? { conversationId, id: message.id, envelope: message.sealed.envelope, wrap: message.sealed.wrap, file: message.sealed.file } : null}
+          onOpenChange={setForwardOpen}
+        />
+      ) : null}
       {infoOpen ? <MessageInfoDialog messageId={message.id} onOpenChange={setInfoOpen} /> : null}
       {reminderOpenedAt !== null ? (
         <ReminderDialog

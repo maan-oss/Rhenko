@@ -67,6 +67,26 @@ export function parsePollAttachment(value: Record<string, unknown>): { question:
   return { question, options, multiple: value.multiple }
 }
 
+// The question a poll in an encrypted chat is stored under. Its real question and choices are sealed in the message, so the server holds
+// this placeholder and the choices' ids, which the votes name.
+export const SEALED_POLL_QUESTION = "Encrypted poll"
+
+// The stored poll of an encrypted poll, built from the choices' ids alone: the server never sees a question or a choice's words. The
+// labels are numbered placeholders, which parsePollAttachment accepts. Null when the ids are not a poll's choices.
+export function sealedPollAttachment(ids: unknown, multiple: unknown): { question: string; options: PollOptionSpec[]; multiple: boolean } | null {
+  if (typeof multiple !== "boolean" || !Array.isArray(ids)) return null
+  if (ids.length < POLL_CHOICES_MIN || ids.length > POLL_CHOICES_MAX) return null
+  const seen = new Set<string>()
+  const options: PollOptionSpec[] = []
+  ids.forEach((id, index) => {
+    if (typeof id !== "string" || id.length === 0 || id.length > CHOICE_ID_MAX || seen.has(id)) return
+    seen.add(id)
+    options.push({ id, label: `Choice ${index + 1}` })
+  })
+  if (options.length !== ids.length) return null
+  return { question: SEALED_POLL_QUESTION, options, multiple }
+}
+
 // The choices a vote names: each one an option of this poll, no repeats, and one at most for a single-answer poll. An empty
 // list takes the vote back.
 export function pollVoteInput(

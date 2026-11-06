@@ -28,7 +28,7 @@ import { wallpaperOf, type WallpaperKey } from "@/lib/chat-wallpapers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
 import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
 import { mutedWordFilter } from "@/lib/social-rules"
-import { ENCRYPTED_PREVIEW, type SealedMediaView, type SealedView, type SealedWrap } from "@/lib/e2ee-chat"
+import { ENCRYPTED_PREVIEW, type SealedAttachmentView, type SealedView, type SealedWrap } from "@/lib/e2ee-chat"
 import { thisDeviceOf } from "@/lib/e2ee-devices"
 
 // Shared read models. Everything a page or API route renders comes from here,
@@ -1842,6 +1842,8 @@ export type ConversationSummary = {
   archived: boolean
   // Favourite chats can be listed together under Favourites. Only this viewer sees the flag.
   favourite: boolean
+  // Whether the chat is end-to-end encrypted. A message from an encrypted chat can only be forwarded to another one.
+  encrypted: boolean
 }
 
 type LastMessage = {
@@ -1975,8 +1977,9 @@ export async function conversationSummaries(
     pinned: number
     archived: number
     favourite: number
+    e2ee: number | string
   }>(
-    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer, cm.pinned, cm.archived, cm.favourite
+    `SELECT c.id, c.kind, c.title, c.updated_at, cm.last_read_at, c.message_timer, cm.pinned, cm.archived, cm.favourite, c.e2ee
      FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
      WHERE cm.user_id = ? AND cm.status = ? AND cm.archived = ? AND (? = 0 OR cm.favourite = 1) AND NOT (${DM_BLOCKED})
      ORDER BY cm.pinned DESC, c.updated_at DESC LIMIT ?`,
@@ -2027,6 +2030,7 @@ export async function conversationSummaries(
       pinned: row.pinned === 1,
       archived: row.archived === 1,
       favourite: row.favourite === 1,
+      encrypted: Number(row.e2ee) === 1,
     }
   }))
 }
@@ -2273,8 +2277,8 @@ export type MessageView = {
   // An end-to-end encrypted message: the envelope, and this viewer's device's wrap of its key. The text is empty here and is
   // opened on the viewer's device. Null for a message that is not encrypted, and for a deleted one.
   sealed: SealedView | null
-  // The file of an encrypted message, once this viewer's device has opened its payload. Set on the device, never by the server.
-  sealedMedia?: SealedMediaView | null
+  // What an encrypted message carries beyond its words, once this viewer's device has opened it. Set on the device, never by the server.
+  sealedAttachment?: SealedAttachmentView | null
 }
 
 // A poll in a chat: its question and choices with the votes for each, how many people have voted, and the choices this

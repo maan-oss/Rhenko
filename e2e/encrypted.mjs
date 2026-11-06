@@ -15,6 +15,15 @@ export async function run() {
   await guard("an encrypted direct chat", chatFlow)
 }
 
+// Waits for a condition the page reaches on its own, such as a vote shown after the server answers. Fails with what it was waiting for.
+async function eventually(holds, what, timeout = 15_000) {
+  const deadline = Date.now() + timeout
+  while (!(await holds())) {
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+}
+
 async function chatFlow() {
   const sender = await createUser({ tag: "ens" })
   const receiver = await createUser({ tag: "enr" })
@@ -140,5 +149,110 @@ async function chatFlow() {
     assert.equal(download.suggestedFilename(), name, "the saved file has another name")
     const saved = await (await import("node:fs/promises")).readFile(await download.path(), "utf8")
     assert.equal(saved, text, "the saved file does not hold what was sent")
+  })
+
+  await check("a sent message's words can be changed, the other person reads the change, and the server keeps neither version", async () => {
+    need(convId, "the conversation")
+    const before = `Sealed before edit ${RUN_ID}${randomWord(4)}`
+    const after = `Sealed after edit ${RUN_ID}${randomWord(4)}`
+    await sendChat(sender.page, before)
+    await threadText(receiver.page, before).waitFor()
+    await sender.page.getByRole("button", { name: "More message options" }).last().click()
+    await sender.page.getByRole("menuitem", { name: "Edit", exact: true }).click()
+    await sender.page.getByLabel("Edit message").fill(after)
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Save", exact: true }).click())
+    await threadText(receiver.page, after).waitFor()
+    const [row] = await query(
+      "SELECT body, cipher, edited_at FROM chat_messages WHERE conversation_id = ? AND cipher IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+      convId
+    )
+    assert.ok(row, "the edited message is not stored")
+    assert.equal(row.body, "", "the edited text is stored in the clear")
+    assert.ok(row.edited_at, "the edit was not recorded")
+    assert.equal(String(row.cipher).includes(after), false, "the edited words are visible in the envelope")
+    assert.equal(String(row.cipher).includes(before), false, "the words from before the edit are visible in the envelope")
+  })
+
+  await check("a contact is shared in the chat and shows its person to the other one, while the server keeps no account for it", async () => {
+    need(convId, "the conversation")
+    await sender.page.getByRole("button", { name: "Attach", exact: true }).click()
+    await sender.page.getByRole("menuitem", { name: "Contact", exact: true }).click()
+    const picker = sender.page.getByRole("dialog", { name: "Share a contact" })
+    await picker.getByRole("button", { name: new RegExp(escapeRegExp(receiver.name)) }).click()
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    const card = receiver.page.locator(`main a[data-embed][href="/${receiver.handle}"]`).first()
+    await card.waitFor()
+    const [row] = await query(
+      "SELECT body, attachment, cipher FROM chat_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+      convId
+    )
+    assert.ok(row?.cipher, "the contact card is not sealed")
+    assert.equal(row.attachment, null, "the server stores which account the contact card names")
+    assert.equal(String(row.cipher).includes(receiver.handle), false, "the contact's handle is visible in the envelope")
+  })
+
+  await check("a place is shared in the chat, and the other person sees it", async () => {
+    need(convId, "the conversation")
+    await sender.context.grantPermissions(["geolocation"], { origin: BASE })
+    await sender.context.setGeolocation({ latitude: 12.9716, longitude: 77.5946 })
+    await sender.page.getByRole("button", { name: "Attach", exact: true }).click()
+    await sender.page.getByRole("menuitem", { name: "Location", exact: true }).click()
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    await receiver.page.getByText("12.97160, 77.59460").first().waitFor()
+    const [row] = await query(
+      "SELECT attachment, cipher FROM chat_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+      convId
+    )
+    assert.ok(row?.cipher, "the place is not sealed")
+    assert.equal(row.attachment, null, "the server stores the place")
+    assert.equal(String(row.cipher).includes("12.9716"), false, "the coordinates are visible in the envelope")
+  })
+
+  await check("a poll is sent in the chat, the other person's vote is kept, and the server holds no question or choice words", async () => {
+    need(convId, "the conversation")
+    const question = `Sealed poll ${RUN_ID}${randomWord(4)}`
+    const first = `Pizza ${RUN_ID}${randomWord(3)}`
+    const second = `Soup ${RUN_ID}${randomWord(3)}`
+    await sender.page.getByRole("button", { name: "Attach", exact: true }).click()
+    await sender.page.getByRole("menuitem", { name: "Poll", exact: true }).click()
+    const creator = sender.page.getByRole("dialog", { name: "Create a poll" })
+    await creator.getByLabel("Question").fill(question)
+    await creator.getByLabel("Choice 1").fill(first)
+    await creator.getByLabel("Choice 2").fill(second)
+    await creator.getByRole("button", { name: "Create poll", exact: true }).click()
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    const group = receiver.page.getByRole("radiogroup", { name: question })
+    await group.waitFor()
+    const choice = group.getByRole("radio", { name: first })
+    await acted(receiver.page, () => choice.click())
+    await eventually(async () => (await choice.getAttribute("aria-checked")) === "true", "the vote shows as chosen")
+    const [row] = await query(
+      "SELECT attachment, cipher FROM chat_messages WHERE conversation_id = ? AND attachment IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+      convId
+    )
+    assert.ok(row, "the poll is not stored")
+    for (const words of [question, first, second]) {
+      assert.equal(String(row.attachment).includes(words), false, "a poll's question or choice is stored on the server")
+      assert.equal(String(row.cipher).includes(words), false, "a poll's question or choice is visible in the envelope")
+    }
+  })
+
+  await check("a message is forwarded within the encrypted chat, is marked as forwarded, and the other person reads the copy", async () => {
+    need(convId, "the conversation")
+    const text = `Sealed to forward ${RUN_ID}${randomWord(4)}`
+    await sendChat(sender.page, text)
+    await threadText(receiver.page, text).waitFor()
+    await sender.page.getByRole("button", { name: "More message options" }).last().click()
+    await sender.page.getByRole("menuitem", { name: "Forward", exact: true }).click()
+    const forwarding = sender.page.getByRole("dialog", { name: "Forward message" })
+    await forwarding.getByRole("checkbox", { name: new RegExp(escapeRegExp(receiver.name)) }).click()
+    await acted(sender.page, () => forwarding.getByRole("button", { name: "Forward", exact: true }).click())
+    await receiver.page.getByText("Forwarded", { exact: true }).last().waitFor()
+    await receiver.page.getByText(text).nth(1).waitFor()
+    const copies = await query(
+      "SELECT COUNT(*) AS c FROM chat_messages WHERE conversation_id = ? AND forwarded = 1 AND cipher IS NOT NULL AND body = ''",
+      convId
+    )
+    assert.ok(Number(copies[0].c) >= 1, "the forwarded copy is not stored as a sealed, forwarded message")
   })
 }

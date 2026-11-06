@@ -3,6 +3,7 @@
 // file crypto in lib/e2ee-media.ts; the keys stay on the devices that hold them.
 
 import type { SealedMediaKind } from "@/lib/e2ee-payload"
+import type { MiniUser } from "@/lib/data"
 
 export * from "@/lib/e2ee-payload"
 
@@ -35,6 +36,14 @@ export type SealedMediaView = {
   scan: boolean
   viewOnce: boolean
 }
+
+// What an encrypted message shows beyond its words, as this device reads it: the file, the place, the account or the poll it carries.
+// Only the devices in the chat know these details. The server knows a poll's choice ids, so votes can be counted, and nothing else.
+export type SealedAttachmentView =
+  | { kind: "media"; media: SealedMediaView }
+  | { kind: "location"; lat: number; lng: number }
+  | { kind: "contact"; user: MiniUser | null }
+  | { kind: "poll"; question: string; options: Array<{ id: string; label: string }>; multiple: boolean }
 
 // The message's body as the server holds it for an encrypted message: empty. Everything else the thread shows is decided on the
 // device after it opens the payload.
