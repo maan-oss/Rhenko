@@ -6,7 +6,7 @@ import { sweepBus } from "@/lib/bus"
 import { holdLease } from "@/lib/leases"
 import { sweepLimits } from "@/lib/rate-limit"
 import { RETENTION } from "@/lib/legal"
-import { purgeHidden } from "@/lib/moderation"
+import { drainFileDeletions, purgeHidden } from "@/lib/moderation"
 import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
 import { prunePush } from "@/lib/push"
@@ -76,6 +76,13 @@ async function runMaintenance(now = Date.now()): Promise<void> {
   await run("DELETE FROM email_codes WHERE expires_at < ?", now)
   // Hidden posts whose appeal window has closed, or whose appeal failed, are deleted here.
   await purgeHidden(now)
+  // Files the moderation command line queued are removed from storage here, where R2 or the disk is reached. A failure is
+  // logged, and the rest of the pass goes on.
+  try {
+    await drainFileDeletions()
+  } catch (error) {
+    console.error("[maintenance] removing queued files failed", error)
+  }
   // Disappearing messages whose time is up are deleted for everyone. Reads already skip them, so a failure here is logged
   // and the rest of the pass goes on.
   try {

@@ -18,10 +18,9 @@
 // It shows what will go and asks first; --yes skips the question. It cannot be undone, so take a backup first.
 // An id can be shortened to its first 8 characters when that picks out one record.
 //
-// Reads and writes the database the app uses (DATABASE_URL). The app can keep running. The photo and video files
-// that remove deletes are looked for in the uploads folder under RHENKO_DATA_DIR (default ./data), where local storage keeps them.
-import fs from "node:fs"
-import path from "node:path"
+// Reads and writes the database the app uses (DATABASE_URL). The app can keep running. The photo and video files that
+// remove deletes are queued in pending_file_deletions, and the running app deletes them from its storage (R2 in production,
+// the disk in development), so this command needs no access to the storage itself.
 import readline from "node:readline/promises"
 import { randomUUID } from "node:crypto"
 import postgres from "postgres"
@@ -133,10 +132,6 @@ const [command, ...params] = positional
 const shape = Object.hasOwn(SHAPES, command) ? SHAPES[command] : null
 if (!shape || params.length !== shape.args) fail(USAGE)
 if (Object.keys(options).some((name) => !shape.options.includes(name))) fail(USAGE)
-
-// Uploads are kept in Supabase Storage in production. This folder is where local storage keeps them.
-const dataDir = path.resolve(process.env.RHENKO_DATA_DIR || path.join(process.cwd(), "data"))
-const uploadDir = path.join(dataDir, "uploads")
 
 const url = process.env.DATABASE_URL
 if (!url) fail("DATABASE_URL is not set. Set it to the Postgres database the app uses.")
@@ -289,11 +284,18 @@ async function hide() {
   console.log(`Notice ${noticeId}. The author can appeal within 30 days; after that, or if the appeal fails, the post is deleted.`)
 }
 
+// Puts back the hidden posts of a thread and returns how many. A person has looked at a post and put it back, so the
+// automatic hold or limit from screening no longer applies to it: the feeds leave out every post whose risk action is not
+// 'allow' (NOT_RESTRICTED in lib/data.ts), so without this a restored post would stay out of the feeds.
 async function restoreThread(conn, postId, removedAt, now) {
   const ids = await threadIds(conn, postId)
-  await conn.unsafe("UPDATE posts SET removed_at = NULL WHERE removed_at = $1 AND id = ANY($2::text[])", [removedAt, ids])
-  await conn.unsafe("UPDATE moderation_notices SET restored_at = $1 WHERE post_id = $2 AND restored_at IS NULL", [now, postId])
-  return ids.length
+  const restored = await conn.unsafe("UPDATE posts SET removed_at = NULL WHERE removed_at = $1 AND id = ANY($2::text[]) RETURNING id", [removedAt, ids])
+  const restoredIds = restored.map((row) => row.id)
+  if (restoredIds.length > 0) {
+    await conn.unsafe("UPDATE moderation_notices SET restored_at = $1 WHERE post_id = $2 AND restored_at IS NULL", [now, postId])
+    await conn.unsafe("UPDATE post_risk SET action = 'allow' WHERE post_id = ANY($1::text[])", [restoredIds])
+  }
+  return restoredIds.length
 }
 
 async function restore() {
@@ -360,6 +362,8 @@ async function decide() {
       if (decision === "reversed" && notice) {
         const post = await one(tx, "SELECT removed_at FROM posts WHERE id = $1", notice.post_id)
         if (post && post.removed_at !== null) restored = await restoreThread(tx, notice.post_id, post.removed_at, now)
+        // The post may already be back, put there by hand. The reversal still lifts the screening hold on it.
+        else if (post) await tx.unsafe("UPDATE post_risk SET action = 'allow' WHERE post_id = ANY($1::text[])", [await threadIds(tx, notice.post_id)])
       }
     })
   } catch (error) {
@@ -398,6 +402,8 @@ async function stillUsed(file) {
      UNION ALL SELECT 1 FROM posts WHERE media_file = $1
      UNION ALL SELECT 1 FROM users WHERE avatar_file = $1 OR banner_file = $1
      UNION ALL SELECT 1 FROM chat_messages WHERE media_file = $1
+     UNION ALL SELECT 1 FROM link_previews WHERE image_file = $1
+     UNION ALL SELECT 1 FROM ad_campaigns WHERE picture_file = $1
      LIMIT 1`,
     [file]
   )
@@ -443,9 +449,9 @@ async function remove() {
   }
   console.log(`Removed ${andList(rows)} from the database.`)
 
-  // The rows are gone, so only a file that nothing else points at is deleted.
-  let deleted = 0
-  let missing = 0
+  // The rows are gone. A file that nothing else points at is queued, and the running app deletes it from storage, with its
+  // size variants, within about 15 seconds. The app checks again before it deletes, so a file that is used later is kept.
+  let queued = 0
   let shared = 0
   for (const file of found.files) {
     if (!UPLOAD_NAME.test(file)) {
@@ -456,20 +462,12 @@ async function remove() {
       shared++
       continue
     }
-    try {
-      fs.unlinkSync(path.join(uploadDir, file))
-      deleted++
-    } catch (error) {
-      if (error.code === "ENOENT") missing++
-      else console.log(`Could not delete ${file}: ${error.message}. Delete it by hand.`)
-    }
+    await sql.unsafe("INSERT INTO pending_file_deletions (name, created_at) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING", [file, Date.now()])
+    queued++
   }
   if (found.files.length > 0) {
-    const notes = [
-      missing > 0 ? `${missing.toLocaleString("en-US")} ${missing === 1 ? "was" : "were"} already gone` : null,
-      shared > 0 ? `${shared.toLocaleString("en-US")} kept because another record still uses ${shared === 1 ? "it" : "them"}` : null,
-    ].filter(Boolean)
-    console.log(`Deleted ${count(deleted, "file")}${notes.length > 0 ? ` (${notes.join("; ")})` : ""}.`)
+    const notes = shared > 0 ? [`${shared.toLocaleString("en-US")} kept because another record still uses ${shared === 1 ? "it" : "them"}`] : []
+    console.log(`Queued ${count(queued, "file")} for deletion. The server removes them within about 15 seconds${notes.length > 0 ? ` (${notes.join("; ")})` : ""}.`)
   }
 }
 

@@ -2,6 +2,7 @@ import { all, get, run, transaction } from "@/lib/db"
 import { newId } from "@/lib/auth"
 import { APPEAL_MS } from "@/lib/legal"
 import { mediaFilesFor, removeFiles, thread } from "@/lib/post-writes"
+import { removeUpload } from "@/lib/uploads"
 
 // Hiding is how content leaves the feeds: the post and its replies stay on the server, marked, so the author can read
 // the reason and appeal, and a moderator can put them back. A hidden post is gone for everyone else at once. When its
@@ -54,24 +55,40 @@ export async function hidePost(input: HideInput, now = Date.now()): Promise<Hide
   return { ok: true, noticeId, authorId: post.author_id }
 }
 
-// Puts a hidden post and its replies back, the ones hidden at the same moment as the post. Used when an appeal succeeds
-// or a notice is rejected.
-export async function restorePost(postId: string, now = Date.now()): Promise<boolean> {
-  const root = await get<{ removed_at: number | null }>("SELECT removed_at FROM posts WHERE id = ?", postId)
-  if (!root || root.removed_at === null) return false
-  const ids = await thread(postId)
-  await run(
-    `UPDATE posts SET removed_at = NULL WHERE removed_at = ? AND id IN (${ids.map(() => "?").join(",")})`,
-    root.removed_at,
-    ...ids
+// Restoring a hidden post and deciding an appeal are done from the command line (scripts/moderation.mjs restore, decide).
+// That is the one path that puts a post back, so a restore cannot be done two different ways.
+
+// Whether any record still uses a stored file. scripts/moderation.mjs checks the same tables before it queues a file.
+export async function fileInUse(name: string): Promise<boolean> {
+  const row = await get<{ used: number }>(
+    `SELECT 1 AS used FROM post_media WHERE file = ?
+     UNION ALL SELECT 1 FROM posts WHERE media_file = ?
+     UNION ALL SELECT 1 FROM users WHERE avatar_file = ? OR banner_file = ?
+     UNION ALL SELECT 1 FROM chat_messages WHERE media_file = ?
+     UNION ALL SELECT 1 FROM link_previews WHERE image_file = ?
+     UNION ALL SELECT 1 FROM ad_campaigns WHERE picture_file = ?
+     LIMIT 1`,
+    name,
+    name,
+    name,
+    name,
+    name,
+    name,
+    name
   )
-  await run("UPDATE moderation_notices SET restored_at = ? WHERE post_id = ? AND restored_at IS NULL", now, postId)
-  // A person has looked at the post and put it back, so the automatic limit or hold no longer applies to it.
-  await run(`UPDATE post_risk SET action = 'allow' WHERE post_id IN (${ids.map(() => "?").join(",")})`, ...ids)
-  return true
+  return row !== undefined
 }
 
-export type AppealDecision = "reversed" | "upheld"
+// Deletes the files the moderation command line queued (pending_file_deletions), with their size variants, unless a record uses
+// one now. Each queued name is taken off the queue once it has been handled.
+export async function drainFileDeletions(limit = 100): Promise<number> {
+  const queued = await all<{ name: string }>("SELECT name FROM pending_file_deletions ORDER BY created_at, name LIMIT ?", limit)
+  for (const { name } of queued) {
+    if (!(await fileInUse(name))) await removeUpload(name)
+    await run("DELETE FROM pending_file_deletions WHERE name = ?", name)
+  }
+  return queued.length
+}
 
 // Deletes hidden posts whose appeal window has closed with no appeal, or whose appeal was decided against the author.
 // Their files go too, and the notice keeps its reason but loses the excerpt of the content.

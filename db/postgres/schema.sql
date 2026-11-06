@@ -433,6 +433,13 @@ CREATE TABLE appeals (
   decision_note text NOT NULL DEFAULT ''
 );
 
+-- Files to remove from storage, by name. A removal writes the name here and the server's background pass deletes the file
+-- and its size variants, whether storage is the disk or R2. A file another record still uses is never queued.
+CREATE TABLE pending_file_deletions (
+  name text PRIMARY KEY,
+  created_at bigint NOT NULL
+);
+
 CREATE TABLE community_members (
   community_id text NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,

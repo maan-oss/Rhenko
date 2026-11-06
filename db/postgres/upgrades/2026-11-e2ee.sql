@@ -50,4 +50,11 @@ create table if not exists e2ee_history_transfers (
   payload text not null,
   created_at bigint not null
 );
+
+-- Files waiting to be removed from storage (see db/postgres/schema.sql). The moderation command line queues them here, because
+-- it cannot reach R2 itself.
+create table if not exists pending_file_deletions (
+  name text primary key,
+  created_at bigint not null
+);
 commit;

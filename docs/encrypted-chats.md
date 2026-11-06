@@ -1,8 +1,8 @@
 # End-to-end encrypted chats
 
-Status: built and tested in the working tree; not yet enabled in production. Encrypted chats are turned on by `RHENKO_E2EE=1`. While the flag is off,
-new chats are plaintext, as before. The production schema change and the handling of existing plaintext messages are separate steps that need
-explicit approval (see "Rollout").
+Status: built, tested and committed; not yet enabled in production. Encrypted chats are turned on by `RHENKO_E2EE=1`. While the flag is off,
+new chats are plaintext, as before. The production schema change, the deletion of existing plaintext messages and the flag itself are separate
+steps that need explicit approval. They are listed under "Rollout", and the production steps are in `docs/e2ee-switch-over-runbook.md`.
 
 ## What is encrypted
 
@@ -25,8 +25,10 @@ Metadata is visible by design: membership, timestamps (send, edit), message ids,
 plaintext), poll option ids and votes, ciphertext size, the forwarded flag, `edited_at`, and the userId of a shared contact when it resolves to a
 Rhenko account. Video is refused in encrypted chats.
 
-Legal review of child-safety reporting under end-to-end encryption is not complete. Nothing in this document or in the privacy page describes how
-reports of encrypted content are handled.
+Reporting: a user cannot report a chat message today, encrypted or plaintext. The only report path takes a post, and the moderation tools act
+on posts. The child-safety overview (Better project, `claude/e2ee-child-safety-legal-overview-2026-11-06.md`) recommends a reporter-initiated path,
+approved by counsel, before encrypted chats are turned on. Neither this document nor the privacy page describes how reports of encrypted content
+are handled, because no such path exists yet.
 
 ## Devices
 
@@ -75,11 +77,12 @@ so signing in again on the same browser needs a link when the account has other 
 
 ## Rollout
 
-Not performed. Each step needs explicit approval:
+Not performed. The production steps, and what each one deletes, are in `docs/e2ee-switch-over-runbook.md`. Each step needs explicit approval:
 
-1. Apply `db/postgres/upgrades/2026-11-e2ee.sql` to production, after a `pg_dump` backup.
-2. Decide what happens to existing plaintext messages, and delete them only after the backup is confirmed.
-3. Complete the legal review of child-safety reporting under end-to-end encryption.
-4. Decide the appeals flow in `lib/moderation.ts` (`restorePost` and `AppealDecision`).
-5. Confirm production does not run pgbouncer in front of Postgres.
-6. Turn on `RHENKO_E2EE=1`.
+1. Apply `db/postgres/upgrades/2026-11-e2ee.sql` to production, after a `pg_dump` backup (runbook steps 2 and 3).
+2. Delete existing plaintext messages, only after the backup is confirmed in R2 and counsel has given its preservation advice (runbook step 5).
+3. Build and get counsel's approval for a chat reporting path. This is not built yet (see "What the server can see").
+4. The appeals flow is decided and built. `scripts/moderation.mjs` `restore` and `decide` are the only way to put a post back or decide an appeal.
+   `restorePost` and `AppealDecision` are removed from `lib/moderation.ts`.
+5. Confirm production does not run pgbouncer in front of Postgres (runbook step 1).
+6. Turn on `RHENKO_E2EE=1` (runbook step 6).
