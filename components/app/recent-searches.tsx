@@ -28,7 +28,7 @@ export function RecentSearches({ queries }: { queries: string[] }) {
               await clearSearches()
             })
           }
-          className="text-sm text-foreground hover:underline"
+          className="tap-44 text-sm text-foreground hover:underline"
         >
           Clear all
         </button>
@@ -49,7 +49,7 @@ export function RecentSearches({ queries }: { queries: string[] }) {
                   await forgetSearch(query)
                 })
               }
-              className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:size-8"
+              className="tap-44 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:size-8"
             >
               <X className="size-4" />
             </button>

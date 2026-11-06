@@ -76,7 +76,7 @@ function header(key: SortKey, label: string, current: SortKey, direction: Direct
       <Link
         href={`/analytics/posts?sort=${key}&dir=${next}`}
         title={COLUMN_TEXT[key]}
-        className={`inline-flex items-center gap-1 rounded-md outline-none transition-colors duration-200 hover:text-foreground ${active ? "text-foreground" : ""}`}
+        className={`tap-44 inline-flex items-center gap-1 rounded-md outline-none transition-colors duration-200 hover:text-foreground ${active ? "text-foreground" : ""}`}
       >
         {label}
         {active ? <Arrow className="size-3" aria-hidden="true" /> : null}

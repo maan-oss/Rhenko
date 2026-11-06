@@ -245,7 +245,7 @@ export function PostCard({
               {isOwn ? (
                 <Link
                   href={`${statusHref}/analytics`}
-                  className="relative z-10 inline-flex w-fit items-center font-semibold text-foreground underline underline-offset-4 hover:text-foreground max-sm:min-h-10"
+                  className="relative z-10 inline-flex w-fit items-center font-semibold text-foreground underline underline-offset-4 hover:text-foreground max-sm:min-h-11"
                 >
                   Post analytics
                 </Link>
