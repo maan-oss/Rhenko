@@ -3,6 +3,7 @@ import { blockedUsers, mutedUsers, mutedWords } from "@/lib/data"
 import { Avatar } from "@/components/app/avatar"
 import { HideCountsSwitch, MutedWordsPanel, ProtectedSwitch, ReleaseButton } from "@/components/app/privacy-controls"
 import { get } from "@/lib/db"
+import { encryptedChatsEnabled } from "@/lib/e2ee-chat"
 import { PageHeader } from "@/components/app/page-header"
 import Link from "@/components/app/link"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
@@ -43,6 +44,7 @@ async function PrivacyBody() {
         </div>
         <HideCountsSwitch initial={(await get<{ hide: number }>("SELECT hide_counts AS hide FROM users WHERE id = ?", viewer.id))?.hide === 1} />
       </section>
+      {encryptedChatsEnabled() ? <EncryptedChats /> : null}
       <Section title="Blocked accounts" empty="Blocked people can't follow you, see your posts, or message you.">
         {blocked.map((user) => (
           <PersonRow key={user.id} user={user} action={<ReleaseButton handle={user.handle} mode="block" />} />
@@ -58,6 +60,40 @@ async function PrivacyBody() {
         <MutedWordsPanel words={words} />
       </section>
     </>
+  )
+}
+
+// What the server can and cannot read in encrypted chats. Shown only while encrypted chats are turned on.
+function EncryptedChats() {
+  return (
+    <section className="flex flex-col gap-3 border-b border-border px-4 py-4">
+      <h2 className="text-lg font-semibold">Encrypted chats</h2>
+      <p className="text-[15px] text-muted-foreground">
+        New direct and group chats are end-to-end encrypted. The text and attachments of each message are encrypted on your device before they are
+        sent, and only the devices of people in the chat can open them. Rhenko stores the encrypted messages and cannot read them.
+      </p>
+      <p className="text-[15px] text-muted-foreground">
+        Rhenko can still see who is in a chat, when messages were sent and edited, which messages are replies, pins, stars or reactions (and the emoji
+        used), poll votes, whether a message was forwarded, the size of each message, and the account a shared contact refers to.
+      </p>
+      <p className="text-[15px] text-muted-foreground">
+        Rhenko cannot see message text, attachments, locations, poll questions or options, or the contents of files. Video can&apos;t be sent in encrypted
+        chats yet.
+      </p>
+      <p className="text-[15px] text-muted-foreground">
+        A new browser can read an encrypted chat only after you link it from a device you are already signed in on. Check that the code matches the one
+        the new browser shows, then approve it. Your device copies the chat keys so the new browser can read the history. Keep the approving device open
+        until the copy finishes.
+      </p>
+      <p className="text-[15px] text-muted-foreground">
+        Search and export of an encrypted chat happen on your device. Your account data download leaves out the text and attachments of encrypted
+        messages, because Rhenko does not have them. If a device in a chat gets a new key, its messages are not shown and this browser says so. Signing
+        out clears the chat keys from this browser.
+      </p>
+      <Link href="/settings/devices" className="text-[15px] font-semibold underline underline-offset-4">
+        Devices and encryption
+      </Link>
+    </section>
   )
 }
 

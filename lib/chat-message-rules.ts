@@ -79,6 +79,30 @@ export function snippetAround(body: string, query: string, context = 48): { befo
   return { before, match: flat.slice(at, at + needle.length), after }
 }
 
+// A message a device can search: its words once it has them, and who sent it. Encrypted messages are searched this way, on the device.
+export type SearchableMessage = { id: string; senderName: string; mine: boolean; createdAt: number; text: string }
+
+// The hits a device's search finds among its messages: the newest first, up to the limit, in the same shape the server's search gives.
+export function searchHitsOf(
+  messages: SearchableMessage[],
+  query: string,
+  limit: number
+): Array<{ id: string; senderName: string; mine: boolean; createdAt: number; before: string; match: string; after: string }> {
+  const needle = query.toLowerCase()
+  if (needle.length === 0) return []
+  return messages
+    .filter((message) => message.text.toLowerCase().includes(needle))
+    .sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    .slice(0, limit)
+    .map((message) => ({
+      id: message.id,
+      senderName: message.senderName,
+      mine: message.mine,
+      createdAt: message.createdAt,
+      ...snippetAround(message.text, query),
+    }))
+}
+
 // The handles a message mentions with "@", lowercased and each once. A mention is a handle that starts a word, so an address or a
 // link's path (x@y, /@handle) doesn't count. The same rule decides how the text is shown (components/app/post-body.tsx).
 const MENTION_WORD = /(?<![\p{L}\p{N}_@#./])@([A-Za-z0-9_]{3,15})(?![A-Za-z0-9_])/gu

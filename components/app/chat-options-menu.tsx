@@ -12,12 +12,27 @@ import { MuteMenuItem, useMuteToggle } from "@/components/app/mute-conversation-
 import { TimerMenuItem, TimerNote, useTimerChoice } from "@/components/app/message-timer-button"
 import { WallpaperDialog } from "@/components/app/wallpaper-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { exportRowsForDevice } from "@/actions/messages"
+import { chatExportText, exportedMessage, exportFileName } from "@/lib/chat-export"
+import { openRows } from "@/lib/e2ee-client"
 import type { WallpaperKey } from "@/lib/chat-wallpapers"
 import { MESSAGE_TIMERS, timerLabel } from "@/lib/message-timers"
 import { cn } from "@/lib/utils"
 
 // The file name the server gives an export, when the response doesn't say.
 const FALLBACK_NAME = "rhenko-chat.txt"
+
+// Saves a file the way a download is saved, under the name given.
+function saveFile(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = name
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
 // Phones get the options as a drawer that rises from the bottom and can be dragged. Anything wider keeps the menu.
 const PHONE_QUERY = "(max-width: 639px)"
@@ -131,12 +146,14 @@ function TimerDrawer({ conversationId, timer, disabled }: { conversationId: stri
 // header keeps to the call, the video call and this menu, on every screen size.
 export function ChatOptionsMenu({
   conversationId,
+  encrypted,
   wallpaper,
   muted,
   timer,
   timerDisabled,
 }: {
   conversationId: string
+  encrypted: boolean
   wallpaper: WallpaperKey
   muted: boolean
   timer: number
@@ -150,23 +167,36 @@ export function ChatOptionsMenu({
   const [wallpaperOpen, setWallpaperOpen] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
 
-  // Downloads the chat as a text file. A refusal from the server is shown as it is written there.
+  // Downloads the chat as a text file. A refusal from the server is shown as it is written there. An encrypted chat is exported on this
+  // device, the only place its messages can be read.
   async function exportChat() {
+    if (encrypted) return exportOnDevice()
     try {
       const response = await fetch(`/api/conversations/${encodeURIComponent(conversationId)}/export`)
+      if (response.status === 409) return exportOnDevice()
       if (!response.ok) {
         toast.error((await response.text()) || "Couldn't export this chat. Try again.")
         return
       }
       const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? FALLBACK_NAME
-      const url = URL.createObjectURL(await response.blob())
-      const link = document.createElement("a")
-      link.href = url
-      link.download = name
-      document.body.append(link)
-      link.click()
-      link.remove()
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      saveFile(name, await response.blob())
+    } catch {
+      toast.error("Couldn't export this chat. Check your connection and try again.")
+    }
+  }
+
+  // Exports an encrypted chat: the messages are opened on this device, then written as the server's export would write them.
+  async function exportOnDevice() {
+    try {
+      const result = await exportRowsForDevice(conversationId)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      const opened = await openRows(conversationId, result.rows)
+      const now = Date.now()
+      const messages = result.rows.map((row) => exportedMessage(row, opened[row.id]))
+      saveFile(exportFileName(now), new Blob([chatExportText(result.title, messages, result.truncated, now)], { type: "text/plain;charset=utf-8" }))
     } catch {
       toast.error("Couldn't export this chat. Check your connection and try again.")
     }
@@ -242,7 +272,7 @@ export function ChatOptionsMenu({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {searchOpen ? <ChatSearchDialog conversationId={conversationId} onOpenChange={setSearchOpen} /> : null}
+      {searchOpen ? <ChatSearchDialog conversationId={conversationId} encrypted={encrypted} onOpenChange={setSearchOpen} /> : null}
       {dateOpen ? <JumpToDateDialog conversationId={conversationId} onOpenChange={setDateOpen} /> : null}
       {contactOpen ? <ContactInfoDialog conversationId={conversationId} onOpenChange={setContactOpen} /> : null}
       {wallpaperOpen ? <WallpaperDialog conversationId={conversationId} current={wallpaper} onOpenChange={setWallpaperOpen} /> : null}

@@ -40,7 +40,7 @@ async function findMedia(userId: string): Promise<Map<string, Media>> {
   const messageFiles = (await all<{ media_file: string }>(
     `SELECT m.media_file FROM chat_messages m
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
-     WHERE m.media_file IS NOT NULL AND m.deleted_at IS NULL AND (m.expires_at IS NULL OR m.expires_at > ?)`,
+     WHERE m.media_file IS NOT NULL AND m.cipher IS NULL AND m.deleted_at IS NULL AND (m.expires_at IS NULL OR m.expires_at > ?)`,
     userId,
     Date.now()
   )).map((row) => row.media_file)
@@ -189,8 +189,9 @@ async function collect(userId: string, media: Map<string, Media>) {
     call_seconds: number
     created_at: number
     lang: string | null
+    cipher: string | null
   }>(
-    `SELECT m.id, m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.created_at, m.lang
+    `SELECT m.id, m.conversation_id, u.handle AS sender, m.body, m.media_file, m.post_id, m.attachment, m.call_status, m.call_seconds, m.created_at, m.lang, m.cipher
      FROM chat_messages m JOIN users u ON u.id = m.sender_id
      WHERE m.conversation_id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?) AND m.deleted_at IS NULL
        AND (m.expires_at IS NULL OR m.expires_at > ?)
@@ -212,6 +213,17 @@ async function collect(userId: string, media: Map<string, Media>) {
   const messagesByConversation = new Map<string, object[]>()
   for (const row of messageRows) {
     const list = messagesByConversation.get(row.conversation_id) ?? []
+    // An encrypted message's text, photos and files are readable only on the devices in its chat, so the server can't put them here.
+    if (row.cipher !== null) {
+      list.push({
+        from: row.sender,
+        sentAt: iso(row.created_at),
+        encrypted: true,
+        note: "Encrypted. Its text and files are not in this export, because only the devices in the chat can read them.",
+      })
+      messagesByConversation.set(row.conversation_id, list)
+      continue
+    }
     const attachment = parseAttachment(row.attachment)
     list.push({
       from: row.sender,

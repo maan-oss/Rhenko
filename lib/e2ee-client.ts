@@ -3,9 +3,9 @@
 // lib/e2ee-keystore.ts. The server only sees envelopes, wraps, public keys, the encrypted bytes of a file, and the ids of a poll's
 // choices. Browser only.
 
-import { decryptMessage, E2eeError, encryptMessage, generateDeviceKeys, type DeviceKeys, type Recipient, type Wrap } from "@/lib/e2ee"
+import { decryptMessage, E2eeError, encryptMessage, generateDeviceKeys, rewrapFor, type DeviceKeys, type Recipient, type Wrap } from "@/lib/e2ee"
 import { openFile, sealFile } from "@/lib/e2ee-media"
-import { loadDeviceKeys, saveDeviceKeys } from "@/lib/e2ee-keystore"
+import { loadDeviceKeys, pinnedSigningKey, pinSigningKey, saveDeviceKeys } from "@/lib/e2ee-keystore"
 import {
   isSealableMime,
   parsePayload,
@@ -17,7 +17,16 @@ import {
 import { mentionedHandles } from "@/lib/chat-message-rules"
 import { pollInput } from "@/lib/poll-rules"
 import { MAX_DM, MAX_IMAGE_BYTES } from "@/lib/rules"
-import { setUpThisDevice, thisDevice } from "@/actions/e2ee"
+import {
+  copyTargetForLink,
+  deviceLinkStatus,
+  historyBatchForLink,
+  setUpThisDevice,
+  startDeviceLink,
+  storeCopiedKeys,
+  thisDevice,
+} from "@/actions/e2ee"
+import { HISTORY_BATCH_MAX, LINK_REQUIRED } from "@/lib/e2ee-link-rules"
 import {
   editEncryptedMessage,
   encryptionTargets,
@@ -92,9 +101,85 @@ async function provisionDevice(): Promise<OwnDevice> {
   }
   const keys = await generateDeviceKeys()
   const setup = await setUpThisDevice({ agreement: keys.public.agreement, signing: keys.public.signing, label: browserLabel() })
-  if (!setup.ok) throw new E2eeError(setup.error)
+  if (!setup.ok) throw setup.error === LINK_REQUIRED ? new DeviceLinkRequired(LINK_NEEDED) : new E2eeError(setup.error)
   await saveDeviceKeys(setup.deviceId, keys)
   return { id: setup.deviceId, keys }
+}
+
+// The account already has devices, so this browser has to be linked from one of them before it can read or send encrypted messages.
+export class DeviceLinkRequired extends E2eeError {}
+const LINK_NEEDED = "Link this browser from a device you're signed in on, to read and send encrypted messages."
+const LINK_POLL_MS = 2000
+// Linking keeps asking for a little after the code runs out, so a late approval at the edge is still seen.
+const LINK_POLL_GRACE_MS = 5000
+
+// Links this browser to the account from a device the account already has. `onCode` is given the code to show as soon as there is one.
+// Resolves once a device approves it: this browser has then kept its keys, and can read the account's history as the approving device
+// copies it across. Resolves with a failure when the code runs out, or when `stillWaiting` says to stop.
+export async function linkThisBrowser(
+  onCode: (code: string) => void,
+  stillWaiting: () => boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!globalThis.crypto?.subtle) return { ok: false, error: UNSUPPORTED }
+  const keys = await generateDeviceKeys()
+  const started = await startDeviceLink({ agreement: keys.public.agreement, signing: keys.public.signing, label: browserLabel() })
+  if (!started.ok) return started
+  onCode(started.code)
+  while (stillWaiting() && Date.now() < started.expiresAt + LINK_POLL_GRACE_MS) {
+    await new Promise((resolve) => setTimeout(resolve, LINK_POLL_MS))
+    const status = await deviceLinkStatus(started.code)
+    if (!status.ok) return status
+    if (status.state.status === "approved") {
+      await saveDeviceKeys(status.state.deviceId, keys)
+      provisioning = Promise.resolve({ id: status.state.deviceId, keys })
+      return { ok: true }
+    }
+    if (status.state.status === "expired") return { ok: false, error: "That code ran out. Start again to get a new one." }
+  }
+  return { ok: false, error: "Linking stopped before a device approved it." }
+}
+
+// Copies the account's message keys to the device an approved link made, from this device. Each key is read here only to be wrapped
+// for the new device; nothing leaves this device in the clear. Reports the running count. A message this device can't open is left out.
+export async function shareHistoryWithLink(
+  code: string,
+  onProgress: (copied: number) => void
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const own = await readyDevice()
+  const target = await copyTargetForLink(code)
+  if (!target.ok) return target
+  let after = ""
+  let count = 0
+  for (;;) {
+    const page = await historyBatchForLink(code, after)
+    if (!page.ok) return page
+    const wraps: Array<{ messageId: string; epk: string; iv: string; key: string }> = []
+    for (const row of page.rows) {
+      try {
+        const copy = await rewrapFor({
+          conversationId: row.conversationId,
+          messageId: row.messageId,
+          raw: row.cipher,
+          device: own.id,
+          wrap: { epk: row.epk, iv: row.iv, key: row.key },
+          agreementPrivate: own.keys.agreementPrivate,
+          recipient: { device: target.deviceId, agreement: target.agreement },
+        })
+        wraps.push({ messageId: row.messageId, ...copy })
+      } catch {
+        // Left out: the message stays unreadable on the new device, as it is here.
+      }
+    }
+    if (wraps.length > 0) {
+      const stored = await storeCopiedKeys(code, wraps)
+      if (!stored.ok) return stored
+      count += stored.count
+      onProgress(count)
+    }
+    if (page.rows.length < HISTORY_BATCH_MAX) break
+    after = page.rows[page.rows.length - 1].messageId
+  }
+  return { ok: true, count }
 }
 
 function browserLabel(): string {
@@ -333,9 +418,44 @@ async function stripPhoto(file: File): Promise<{ blob: Blob; mime: string }> {
   }
 }
 
-// The signing key of every device that has written in the chat, by device id, for checking an envelope against its writer.
+// The devices that have changed their signing key since this browser first saw them. A device's key is fixed when it is linked, so a
+// change means the server has been given a different key for it, and its messages are not opened.
+const changedSigners = new Set<string>()
+const KEY_CHANGED = "A device in this chat has a different key from the one this browser saw before. Its messages aren't shown."
+
+// The signing key of every device that has written in the chat, by device id, for checking an envelope against its writer, as this
+// browser trusts it. A device seen for the first time is remembered with its key, so later changes are caught.
 async function signingMap(conversationId: string): Promise<Map<string, string>> {
-  return new Map((await signingKeysOf(conversationId)).map((device) => [device.device, device.signing]))
+  const map = new Map<string, string>()
+  for (const device of await signingKeysOf(conversationId)) {
+    const pinned = await pinnedSigningKey(device.device)
+    if (pinned === null) {
+      await pinSigningKey(device.device, device.signing)
+      map.set(device.device, device.signing)
+    } else if (pinned === device.signing) {
+      map.set(device.device, device.signing)
+    } else {
+      changedSigners.add(device.device)
+      map.set(device.device, pinned)
+    }
+  }
+  return map
+}
+
+// Why a message did not open: its device's key changed, or the reason the device gave.
+function failureOf(message: SealedInput, error: unknown): string {
+  const sender = senderOf(message.envelope)
+  if (sender !== null && changedSigners.has(sender)) return KEY_CHANGED
+  return error instanceof E2eeError ? error.message : OPEN_FAILED
+}
+
+function senderOf(envelope: string): string | null {
+  try {
+    const parsed = JSON.parse(envelope) as { sender?: unknown }
+    return typeof parsed.sender === "string" ? parsed.sender : null
+  } catch {
+    return null
+  }
 }
 
 // The payload of a sealed message, opened with this device. Each envelope is checked against the device that signed it.
@@ -374,7 +494,7 @@ export async function openSealed(conversationId: string, sealed: SealedInput[]):
       const payload = await decryptPayload(conversationId, message, own, signing)
       opened[message.id] = await openedFrom(conversationId, payload, message)
     } catch (error) {
-      opened[message.id] = { ok: false, error: error instanceof E2eeError ? error.message : OPEN_FAILED }
+      opened[message.id] = { ok: false, error: failureOf(message, error) }
     }
   }
   return opened
@@ -409,6 +529,16 @@ async function openedFrom(conversationId: string, payload: MessagePayload, messa
     text: payload.body,
     attachment: { kind: "poll", question: payload.question, options: payload.options, multiple: payload.multiple },
   }
+}
+
+// Opens the encrypted messages among some rows, with this browser's device, for an export or a search made here. A row that is not
+// encrypted has no entry in the answer.
+export async function openRows(
+  conversationId: string,
+  rows: Array<{ id: string; sealed: { envelope: string; wrap: Wrap | null; file: string | null } | null }>
+): Promise<Record<string, OpenedMessage>> {
+  const sealed = rows.flatMap((row) => (row.sealed ? [{ id: row.id, envelope: row.sealed.envelope, wrap: row.sealed.wrap, file: row.sealed.file }] : []))
+  return openSealed(conversationId, sealed)
 }
 
 // The decrypted bytes of a sealed file, as a blob of the given type. The file is fetched under the same rules as any media (a

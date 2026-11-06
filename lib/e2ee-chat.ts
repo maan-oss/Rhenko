@@ -12,9 +12,6 @@ export function encryptedChatsEnabled(): boolean {
   return process.env.RHENKO_E2EE === "1"
 }
 
-// What a banner, the chats list or a push says about an encrypted message. The server never knows what it says.
-export const ENCRYPTED_PREVIEW = "Encrypted message"
-
 // A device's copy of the message key, as the server returns it to the device it belongs to.
 export type SealedWrap = { epk: string; iv: string; key: string }
 

@@ -1056,7 +1056,9 @@ create table if not exists e2ee_link_requests (
   signing_key text not null,
   label text not null default '',
   expires_at bigint not null,
-  approved_device text references e2ee_devices(id) on delete set null
+  -- The device that approved the link, and the device it made once approved. The approver copies the account's message keys to it.
+  approved_device text references e2ee_devices(id) on delete set null,
+  device_id text references e2ee_devices(id) on delete cascade
 );
 
 -- Message history copied from an existing device to a newly linked one. The body is encrypted to the new device's key, so the

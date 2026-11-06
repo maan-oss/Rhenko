@@ -11,6 +11,7 @@ import { purgeFeedSignals, trainFeedModel } from "@/lib/feed-learning"
 import { purgeDismissals } from "@/lib/connections"
 import { prunePush } from "@/lib/push"
 import { deliverDueReminders } from "@/lib/reminders"
+import { removeExpiredLinks } from "@/lib/e2ee-link"
 import { recordMissingLanguages } from "@/lib/translate"
 import { answerQuestions } from "@/lib/sahayak"
 import { expireMessages } from "@/lib/message-expiry"
@@ -68,6 +69,8 @@ async function runMaintenance(now = Date.now()): Promise<void> {
   } catch (error) {
     console.error("[maintenance] sending reminders failed", error)
   }
+  // Device links that have run out are dropped: a waiting code, or an approved one whose history has had its time.
+  await removeExpiredLinks(now)
   await run("DELETE FROM sessions WHERE expires_at < ?", now)
   await run("DELETE FROM login_challenges WHERE expires_at < ?", now)
   await run("DELETE FROM email_codes WHERE expires_at < ?", now)

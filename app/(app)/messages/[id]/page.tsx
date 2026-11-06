@@ -131,6 +131,7 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
             ) : null}
             <ChatOptionsMenu
               conversationId={conversation.id}
+              encrypted={conversation.encrypted}
               wallpaper={wallpaper}
               muted={conversation.muted}
               timer={conversation.messageTimer}

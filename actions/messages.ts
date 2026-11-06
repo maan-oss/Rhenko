@@ -6,7 +6,7 @@ import { getAgreedViewer, newId } from "@/lib/auth"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, change, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
-import { canReadConversation, canSeePost, chatCounts, conversationSummaries, firstMessageFrom, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
+import { canReadConversation, canSeePost, chatCounts, conversationSummaries, firstMessageFrom, loadMiniUsers, messagesBefore, recentChatPartners, searchChatMessages, searchUsers, exportChatOf, type ChatSearchHit, type MessageView, type MiniUser } from "@/lib/data"
 import { PINNED_CHATS_MAX, forwardRefusal, forwardTargetsInput } from "@/lib/chat-organize-rules"
 import {
   PINNED_MESSAGES_MAX,
@@ -39,6 +39,7 @@ import { groupForInvite, inviteStanding, newInviteToken } from "@/lib/group-invi
 import { checkEncryptedSend } from "@/lib/e2ee"
 import { activeDevicesOf, knownDevicesOf, memberDevicesOf, thisDeviceOf } from "@/lib/e2ee-devices"
 import { ENCRYPTED_PREVIEW, SEALED_BODY, encryptedChatsEnabled, type SealedWrap } from "@/lib/e2ee-chat"
+import { EXPORTS_PER_HOUR, EXPORT_WINDOW_MS, type ExportRow } from "@/lib/chat-export"
 
 export type ChatState = { error?: string; sent?: boolean }
 export type IdResult = { ok: true; id: string } | { ok: false; error: string }
@@ -1376,6 +1377,39 @@ export async function searchConversation(conversationId: string, text: unknown):
   const slowDown = await tooFast(`search:${viewer.id}`, SEARCH_LIMIT, SEARCH_WINDOW_MS, "You're searching too fast. Wait a moment.")
   if (slowDown) return { ok: false, error: slowDown }
   return { ok: true, hits: await searchChatMessages(id, viewer.id, input.query) }
+}
+
+// The chat's messages for a search made on this device, as the viewer may see them. An encrypted message comes with what the device
+// needs to open it; its words stay out of the answer. A search is refused when it is too frequent.
+export type DeviceChatRows = { ok: true; title: string; truncated: boolean; rows: ExportRow[] } | { ok: false; error: string }
+
+export async function searchRowsForDevice(conversationId: string): Promise<DeviceChatRows> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id) return { ok: false, error: "That conversation doesn't exist." }
+  const slowDown = await tooFast(`search:${viewer.id}`, SEARCH_LIMIT, SEARCH_WINDOW_MS, "You're searching too fast. Wait a moment.")
+  if (slowDown) return { ok: false, error: slowDown }
+  return chatRowsOf(id, viewer.id)
+}
+
+// The chat's messages for an export made on this device. It shares the server export's limit: five chats an hour.
+export async function exportRowsForDevice(conversationId: string): Promise<DeviceChatRows> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: "Sign in first." }
+  const id = asId(conversationId)
+  if (!id) return { ok: false, error: "That conversation doesn't exist." }
+  const limit = await consume(`chat-export:${viewer.id}`, EXPORTS_PER_HOUR, EXPORT_WINDOW_MS)
+  if (!limit.ok) {
+    return { ok: false, error: `You've exported chats ${EXPORTS_PER_HOUR} times this hour. Try again in ${waitLabel(limit.retryAfterSeconds)}.` }
+  }
+  return chatRowsOf(id, viewer.id)
+}
+
+async function chatRowsOf(conversationId: string, viewerId: string): Promise<DeviceChatRows> {
+  const exported = await exportChatOf(conversationId, viewerId)
+  if (!exported) return { ok: false, error: "That conversation doesn't exist." }
+  return { ok: true, title: exported.title, truncated: exported.truncated, rows: exported.messages }
 }
 
 // Clear chat empties this viewer's copy of a chat: the messages sent so far are hidden for them only, and the rest of the people in

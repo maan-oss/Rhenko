@@ -13,6 +13,7 @@ const GROUPS = [
       { href: "/settings/about", title: "About you" },
       { href: "/settings/connections", title: "Connections and languages" },
       { href: "/settings/security", title: "Security" },
+      { href: "/settings/devices", title: "Devices and encryption" },
       { href: "/settings/privacy", title: "Privacy and safety" },
     ],
   },

@@ -22,7 +22,7 @@ import { firstLink, previewsFor, requestPreviews, type LinkPreview } from "@/lib
 import { callSummary, type CallOutcome } from "@/lib/format"
 import { timerLine } from "@/lib/message-timers"
 import { snippetAround } from "@/lib/chat-message-rules"
-import type { ExportMessage } from "@/lib/chat-export"
+import type { ExportMessage, ExportRow } from "@/lib/chat-export"
 import { isAudioFile, isDocumentFile, isVoiceFile } from "@/lib/media-names"
 import { wallpaperOf, type WallpaperKey } from "@/lib/chat-wallpapers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
@@ -2661,8 +2661,32 @@ export async function chatCounts(conversationId: string, viewerId: string): Prom
 const EXPORT_PAGE = 200
 const EXPORT_PAGES = 100
 
+// A chat as its export needs it: the name it goes by for this viewer, and every message they can see, oldest first. An encrypted
+// message comes with what the viewer's device needs to open it. Null for anyone who may not read the chat.
+export async function exportChatOf(
+  conversationId: string,
+  viewerId: string
+): Promise<{ title: string; messages: ExportRow[]; truncated: boolean } | null> {
+  const exported = await exportableMessages(conversationId, viewerId)
+  if (!exported) return null
+  return { title: await chatTitleFor(conversationId, viewerId), messages: exported.messages, truncated: exported.truncated }
+}
+
+// The name a chat goes by for this viewer: the group's name, or the other people's names for a one-to-one chat.
+async function chatTitleFor(conversationId: string, viewerId: string): Promise<string> {
+  const conversation = await get<{ kind: "dm" | "group"; title: string }>("SELECT kind, title FROM conversations WHERE id = ?", conversationId)
+  if (conversation?.kind === "group" && conversation.title) return conversation.title
+  const others = await all<{ name: string }>(
+    `SELECT u.name FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+     WHERE cm.conversation_id = ? AND cm.user_id <> ? AND cm.status = 'accepted' ORDER BY u.name`,
+    conversationId,
+    viewerId
+  )
+  return others.map((other) => other.name).join(", ")
+}
+
 // Every message the viewer can see in a chat, oldest first, for the export file. Null for anyone who may not read the chat.
-export async function exportableMessages(conversationId: string, viewerId: string): Promise<{ messages: ExportMessage[]; truncated: boolean } | null> {
+async function exportableMessages(conversationId: string, viewerId: string): Promise<{ messages: ExportRow[]; truncated: boolean } | null> {
   if (!(await canReadConversation(conversationId, viewerId))) return null
   const query = messageSelect(conversationId, viewerId)
   const pages: MessageView[][] = []
@@ -2689,8 +2713,12 @@ export async function exportableMessages(conversationId: string, viewerId: strin
   return { messages: pages.flat().map(exportMessageOf), truncated }
 }
 
-function exportMessageOf(message: MessageView): ExportMessage {
+// An encrypted message's text and attachment stay out of this row: the server holds neither, so its body is empty and the device
+// reads them (lib/chat-export.ts exportedMessage). Its sealed reference is what the device needs for that.
+function exportMessageOf(message: MessageView): ExportRow {
   return {
+    id: message.id,
+    mine: message.mine,
     createdAt: message.createdAt,
     senderName: message.senderName,
     body: message.body,
@@ -2701,6 +2729,7 @@ function exportMessageOf(message: MessageView): ExportMessage {
     attachment: exportAttachmentOf(message),
     callOutcome: message.call ? message.call.outcome : null,
     timerChange: message.timerChange,
+    sealed: message.sealed,
   }
 }
 

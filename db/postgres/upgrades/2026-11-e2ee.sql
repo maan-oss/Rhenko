@@ -39,6 +39,9 @@ create table if not exists e2ee_link_requests (
   approved_device text references e2ee_devices(id) on delete set null
 );
 
+-- The device a link made on approval, so the approving device can copy the account's message keys to it.
+alter table e2ee_link_requests add column if not exists device_id text references e2ee_devices(id) on delete cascade;
+
 -- Message history copied from an existing device to a newly linked one. The body is encrypted to the new device's key, so the
 -- server holds it as ciphertext and removes it once the new device has taken it or after it expires.
 create table if not exists e2ee_history_transfers (

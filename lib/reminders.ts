@@ -8,6 +8,7 @@ import { publish, type EventPerson } from "@/lib/bus"
 import { canReadConversation } from "@/lib/data"
 import { blockedEitherWay } from "@/lib/notify"
 import { attachmentPreview, parseAttachment } from "@/lib/message-attachments"
+import { ENCRYPTED_PREVIEW } from "@/lib/e2ee-chat"
 import { pushReminder } from "@/lib/push"
 
 // Reminders one pass sends at most. The rest come due on the next pass.
@@ -40,6 +41,7 @@ async function sendReminder(now: number, userId: string, messageId: string): Pro
     body: string
     media_file: string | null
     attachment: string | null
+    cipher: string | null
     created_at: number
     deleted_at: number | null
     expires_at: number | null
@@ -47,7 +49,7 @@ async function sendReminder(now: number, userId: string, messageId: string): Pro
     sender_handle: string
     sender_avatar: string | null
   }>(
-    `SELECT m.conversation_id, m.sender_id, m.body, m.media_file, m.attachment, m.created_at, m.deleted_at, m.expires_at,
+    `SELECT m.conversation_id, m.sender_id, m.body, m.media_file, m.attachment, m.cipher, m.created_at, m.deleted_at, m.expires_at,
        u.name AS sender_name, u.handle AS sender_handle, u.avatar_file AS sender_avatar
      FROM chat_messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?`,
     messageId
@@ -70,7 +72,9 @@ async function sendReminder(now: number, userId: string, messageId: string): Pro
     handle: message.sender_handle,
     avatarFile: message.sender_avatar,
   }
-  const preview = message.body.trim() || attachmentPreview(parseAttachment(message.attachment), message.media_file) || ""
+  // An encrypted message's words and file are the device's to show, so the banner and the push say only that there is one.
+  const preview =
+    message.cipher !== null ? ENCRYPTED_PREVIEW : message.body.trim() || attachmentPreview(parseAttachment(message.attachment), message.media_file) || ""
   await publish([userId], {
     type: "banner",
     kind: "message",

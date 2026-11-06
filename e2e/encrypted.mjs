@@ -3,11 +3,12 @@
 // words, and the database keeps no words of them.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
 import { BASE, RUN_ID, escapeRegExp, randomWord } from "./lib/env.mjs"
-import { createUser } from "./lib/accounts.mjs"
+import { createUser, signInElsewhere } from "./lib/accounts.mjs"
 import { chatBox, sendChat, threadText, waitForConversation } from "./lib/chat.mjs"
 import { openProfile } from "./lib/posts.mjs"
 import { query } from "./lib/db.mjs"
 import { makePng } from "./lib/files.mjs"
+import { readFile } from "node:fs/promises"
 import { acted, go, until } from "./lib/ui.mjs"
 
 export async function run() {
@@ -254,5 +255,57 @@ async function chatFlow() {
       convId
     )
     assert.ok(Number(copies[0].c) >= 1, "the forwarded copy is not stored as a sealed, forwarded message")
+  })
+
+  await check("search in the chat finds a word in an encrypted message, on the device", async () => {
+    need(convId, "the conversation")
+    const needle = randomWord(8)
+    const text = `Sealed search ${RUN_ID}${needle}`
+    await sendChat(sender.page, text)
+    await threadText(receiver.page, text).waitFor()
+    await sender.page.getByRole("button", { name: "Chat options", exact: true }).click()
+    await sender.page.getByRole("menuitem", { name: "Search in chat", exact: true }).click()
+    const searching = sender.page.getByRole("dialog", { name: "Search this chat" })
+    await searching.getByRole("searchbox").fill(needle)
+    await searching.locator("mark", { hasText: needle }).first().waitFor()
+    await sender.page.keyboard.press("Escape")
+  })
+
+  await check("export downloads the words of an encrypted chat in plain text, and the server refuses to export it", async () => {
+    need(convId, "the conversation")
+    await sender.page.getByRole("button", { name: "Chat options", exact: true }).click()
+    const [download] = await Promise.all([
+      sender.page.waitForEvent("download"),
+      sender.page.getByRole("menuitem", { name: "Export chat", exact: true }).click(),
+    ])
+    const content = await readFile(await download.path(), "utf8")
+    assert.ok(content.includes(`Sealed search ${RUN_ID}`), "the export does not hold the words of the chat")
+    assert.ok(content.includes("Chat with"), "the export has no header")
+    // The page's own request API, which shares the sender's sign-in: the browser does not log a refused export as a console error.
+    const refused = await sender.page.request.get(`${BASE}/api/conversations/${convId}/export`)
+    assert.equal(refused.status(), 409, "the server exported an encrypted chat")
+  })
+
+  await check("a second browser of the same person is linked from the first, and reads the chat's history on it", async () => {
+    need(convId, "the conversation")
+    const second = await signInElsewhere(receiver)
+    // The account already has a device, so this browser can't make its own: it has to be linked from one of them.
+    await go(second.page, "/settings/devices", second.page.getByRole("button", { name: "Link this browser", exact: true }))
+    await acted(second.page, () => second.page.getByRole("button", { name: "Link this browser", exact: true }).click())
+    const shown = second.page.locator('p[aria-live="polite"]')
+    await eventually(async () => /^\d{3} \d{3}$/.test((await shown.innerText()).trim()), "the new browser's link code")
+    const code = (await shown.innerText()).trim()
+    // The person's first browser lists the request, and approves it once the code matches.
+    await go(receiver.page, "/settings/devices", receiver.page.getByRole("heading", { name: "Waiting for approval" }))
+    await receiver.page.getByText(code, { exact: true }).waitFor()
+    await acted(receiver.page, () => receiver.page.getByRole("button", { name: "Approve", exact: true }).click())
+    await second.page.getByText("This browser is linked, so it can read and send encrypted messages.").waitFor()
+    await go(second.page, `/messages/${convId}`, threadText(second.page, first))
+    await threadText(second.page, reply).waitFor()
+    const [count] = await query(
+      "SELECT COUNT(*) AS c FROM e2ee_devices d JOIN users u ON u.id = d.user_id WHERE u.handle = ? AND d.revoked_at IS NULL",
+      receiver.handle
+    )
+    assert.equal(Number(count?.c), 2, "the account does not have two active devices after the link")
   })
 }

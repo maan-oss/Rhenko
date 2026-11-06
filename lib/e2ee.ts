@@ -147,6 +147,23 @@ export async function decryptMessage(input: {
   return { payload: JSON.parse(decoder.decode(plain)), sender: envelope.sender }
 }
 
+// Copies a message's content key to another device, so a device linked after the message was sent can read it. Only a device that can
+// already read the message can do this. The copy is bound to the same message, conversation and sender as the original wrap.
+export async function rewrapFor(input: {
+  conversationId: string
+  messageId: string
+  raw: string
+  device: string
+  wrap: Wrap
+  agreementPrivate: CryptoKey
+  recipient: Recipient
+}): Promise<Wrap> {
+  const envelope = parseEnvelope(input.raw)
+  const context = contextOf(input.conversationId, input.messageId, envelope.sender)
+  const contentRaw = await unwrapFor(input.agreementPrivate, input.wrap, input.device, context)
+  return await wrapFor(input.recipient, contentRaw, context)
+}
+
 // Safety number: a 60-digit code both people can compare to confirm they hold each other's keys. It depends on every key of
 // both people, and is the same whichever of them computes it.
 export async function safetyNumber(first: string[], second: string[]): Promise<string> {
