@@ -44,7 +44,26 @@ export const DOCUMENT_EXTS: ReadonlySet<string> = new Set(["pdf", "txt", "csv", 
 
 const BY_EXT: Record<string, Format> = Object.fromEntries(Object.values(FORMATS).map((f) => [f.ext, f]))
 
-export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga|mp3|wav|pdf|txt|csv|docx|xlsx|pptx|zip)$/
+export const UPLOAD_NAME_PATTERN = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga|mp3|wav|pdf|txt|csv|docx|xlsx|pptx|zip|sealed)$/
+
+// The most a sealed file may be: the largest document, plus room for the encryption tag.
+export const SEALED_UPLOAD_LIMIT = MAX_DOCUMENT_BYTES + 4096
+
+// Stores the encrypted bytes of a photo, voice note, audio file or document from an encrypted chat (see lib/e2ee-media.ts). The server
+// cannot read them, so it checks only their size and keeps them as they are, under a random name that ends in .sealed. Returns the name,
+// or null when the bytes are missing, too large, or could not be stored.
+export async function saveSealedUpload(file: File): Promise<string | null> {
+  if (file.size === 0 || file.size > SEALED_UPLOAD_LIMIT) return null
+  const name = `${randomUUID().replace(/-/g, "")}.sealed`
+  try {
+    await storeObject(name, new Uint8Array(await file.arrayBuffer()), "application/octet-stream")
+  } catch (error) {
+    await removeUpload(name)
+    console.error("[uploads] saving a sealed file failed", error)
+    return null
+  }
+  return name
+}
 
 function matchesSignature(buf: Buffer, mime: string): boolean {
   if (mime === "image/jpeg") return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff

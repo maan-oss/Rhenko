@@ -19,17 +19,13 @@ function Tile({ children }: { children: React.ReactNode }) {
 }
 
 // A document: its name, its kind and size, and a download. It is never shown inside the page.
-export function DocumentCard({ file, name, size, mine }: { file: string; name: string; size: number; mine: boolean }) {
+// A sealed document in an encrypted chat is saved by its own button (onSave) rather than a link: its bytes are opened on the device
+// first. `file` is the name the document was sent with, which carries its kind.
+export function DocumentCard({ file, name, size, mine, onSave }: { file: string; name: string; size: number; mine: boolean; onSave?: () => void }) {
   const ext = extensionOf(file)
   const Icon = ext === "xlsx" || ext === "csv" ? FileSpreadsheet : ext === "pptx" ? Presentation : ext === "zip" ? FileArchive : FileText
-  return (
-    <a
-      href={`/media/${file}?name=${encodeURIComponent(name)}`}
-      download={name}
-      data-embed=""
-      aria-label={`Download ${name}, ${ext.toUpperCase()}, ${sizeLabel(size)}`}
-      className={cn(CARD, cardTone(mine))}
-    >
+  const body = (
+    <>
       <Tile>
         <Icon className="size-5" aria-hidden />
       </Tile>
@@ -40,6 +36,24 @@ export function DocumentCard({ file, name, size, mine }: { file: string; name: s
         </span>
       </span>
       <Download className="size-4 shrink-0 opacity-70" aria-hidden />
+    </>
+  )
+  if (onSave) {
+    return (
+      <button type="button" onClick={onSave} aria-label={`Download ${name}, ${ext.toUpperCase()}, ${sizeLabel(size)}`} className={cn(CARD, cardTone(mine))}>
+        {body}
+      </button>
+    )
+  }
+  return (
+    <a
+      href={`/media/${file}?name=${encodeURIComponent(name)}`}
+      download={name}
+      data-embed=""
+      aria-label={`Download ${name}, ${ext.toUpperCase()}, ${sizeLabel(size)}`}
+      className={cn(CARD, cardTone(mine))}
+    >
+      {body}
     </a>
   )
 }

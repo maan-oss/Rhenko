@@ -20,7 +20,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { MiniUser } from "@/lib/data"
 import { MAX_DM, MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VOICE_SECONDS } from "@/lib/rules"
 import { sizeLabel } from "@/lib/message-attachments"
-import { sendSealedText } from "@/lib/e2ee-client"
+import { sendSealedMedia, sendSealedText } from "@/lib/e2ee-client"
+import type { SealedMediaKind } from "@/lib/e2ee-chat"
 import { cn } from "@/lib/utils"
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
@@ -90,6 +91,14 @@ type Pick =
   | { kind: "contact"; user: MiniUser }
   | { kind: "location"; lat: number; lng: number }
   | { kind: "poll"; question: string; choices: string[]; multiple: boolean }
+
+// A file an encrypted chat sends with its message: the file, what kind it is, and the details its payload carries.
+type SealablePick = { file: File; kind: SealedMediaKind; mime: string; name: string; scan: boolean; viewOnce: boolean }
+
+// A file's type without the codecs a recorder adds ("audio/webm;codecs=opus" is "audio/webm").
+function baseType(type: string): string {
+  return type.split(";")[0].trim()
+}
 
 // Puts one file into a hidden file input, or empties it. The form submits whatever the input holds.
 function fillInput(input: HTMLInputElement | null, file: File | null) {
@@ -298,22 +307,54 @@ export function ChatComposer({
     addPending(conversationId, { key, body, createdAt: Date.now() })
   }
 
-  // An encrypted chat's text is sealed on this device and sent as an envelope (see lib/e2ee-client.ts). Photos, files, voice and the
-  // other attachments are not sealed yet, so they are refused here with a reason rather than sent in the clear.
+  // The file to seal with this message, if one is picked. "refused" when the pick is one an encrypted chat cannot carry yet.
+  function sealablePick(): SealablePick | null | "refused" {
+    if (voice) return { file: voice.file, kind: "voice", mime: baseType(voice.file.type), name: "Voice message", scan: false, viewOnce: false }
+    if (pick === null) return null
+    if (pick.kind === "media") {
+      if (pick.file.type.startsWith("video/")) {
+        toast.error("Videos aren't available in encrypted chats yet.")
+        return "refused"
+      }
+      return { file: pick.file, kind: "image", mime: baseType(pick.file.type), name: pick.file.name, scan: pick.scan, viewOnce: viewOnce && !pick.scan }
+    }
+    if (pick.kind === "audio" || pick.kind === "document") {
+      return { file: pick.file, kind: pick.kind, mime: baseType(pick.file.type), name: pick.file.name, scan: false, viewOnce: false }
+    }
+    toast.error("Contacts, places and polls aren't available in encrypted chats yet.")
+    return "refused"
+  }
+
+  // An encrypted chat's words and files are sealed on this device and sent as envelopes (see lib/e2ee-client.ts). A photo, voice note,
+  // audio file or document goes with its words as a caption. Videos, contacts, places and polls are not sealed yet, so they are refused
+  // here with a reason rather than sent in the clear.
   async function sealAndSend() {
     if (sealingRef.current) return
     const body = text.trim()
-    if (!body) return
-    if (pick !== null || voice !== null) {
-      toast.error("Photos, files and other attachments aren't available in encrypted chats yet.")
-      return
-    }
+    const file = sealablePick()
+    if (file === "refused") return
+    if (!body && file === null) return
     sealingRef.current = true
     stopDictation()
-    const result = await sendSealedText({ conversationId, body, replyTo: replyTo?.id ?? null })
+    const result = file
+      ? await sendSealedMedia({
+          conversationId,
+          file: file.file,
+          kind: file.kind,
+          mime: file.mime,
+          name: file.name,
+          body,
+          replyTo: replyTo?.id ?? null,
+          scan: file.scan,
+          viewOnce: file.viewOnce,
+        })
+      : await sendSealedText({ conversationId, body, replyTo: replyTo?.id ?? null })
     sealingRef.current = false
     if (result.ok) {
       setText("")
+      setPick(null)
+      setVoice(null)
+      setViewOnce(false)
       setReplyTo(null)
       router.refresh()
     } else {

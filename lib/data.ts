@@ -28,7 +28,7 @@ import { wallpaperOf, type WallpaperKey } from "@/lib/chat-wallpapers"
 import { featuresOf, rank, RANK_WINDOW_MS, SMALL_AUTHOR, type Candidate, type Source } from "@/lib/ranking"
 import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpressions } from "@/lib/feed-learning"
 import { mutedWordFilter } from "@/lib/social-rules"
-import { ENCRYPTED_PREVIEW, type SealedView, type SealedWrap } from "@/lib/e2ee-chat"
+import { ENCRYPTED_PREVIEW, type SealedMediaView, type SealedView, type SealedWrap } from "@/lib/e2ee-chat"
 import { thisDeviceOf } from "@/lib/e2ee-devices"
 
 // Shared read models. Everything a page or API route renders comes from here,
@@ -2056,8 +2056,9 @@ export async function starredMessages(viewerId: string, limit = 200): Promise<St
     attachment: string | null
     created_at: number
     starred_at: number
+    cipher: string | null
   }>(
-    `SELECT m.id, m.conversation_id, m.sender_id, u.name AS sender_name, m.body, m.media_file, m.attachment, m.created_at, s.created_at AS starred_at
+    `SELECT m.id, m.conversation_id, m.sender_id, u.name AS sender_name, m.body, m.media_file, m.attachment, m.created_at, s.created_at AS starred_at, m.cipher
      FROM chat_stars s
      JOIN chat_messages m ON m.id = s.message_id
      JOIN users u ON u.id = m.sender_id
@@ -2082,8 +2083,9 @@ export async function starredMessages(viewerId: string, limit = 200): Promise<St
     conversationId: r.conversation_id,
     senderName: r.sender_name,
     mine: r.sender_id === viewerId,
-    body: r.body,
-    mediaFile: r.media_file,
+    // An encrypted message is starred by its label: its text is opened on the device, not here.
+    body: r.cipher !== null ? ENCRYPTED_PREVIEW : r.body,
+    mediaFile: r.cipher !== null ? null : r.media_file,
     attachment: parseAttachment(r.attachment),
     createdAt: r.created_at,
     starredAt: r.starred_at,
@@ -2271,6 +2273,8 @@ export type MessageView = {
   // An end-to-end encrypted message: the envelope, and this viewer's device's wrap of its key. The text is empty here and is
   // opened on the viewer's device. Null for a message that is not encrypted, and for a deleted one.
   sealed: SealedView | null
+  // The file of an encrypted message, once this viewer's device has opened its payload. Set on the device, never by the server.
+  sealedMedia?: SealedMediaView | null
 }
 
 // A poll in a chat: its question and choices with the votes for each, how many people have voted, and the choices this
@@ -2561,7 +2565,8 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       body: r.deleted_at ? "" : r.body,
       lang: r.deleted_at ? "" : (r.lang ?? ""),
       deleted: r.deleted_at !== null,
-      mediaFile: r.deleted_at ? null : r.media_file,
+      // An encrypted message's file is opened on the device (see sealed), so the server's name for it is not shown as a picture.
+      mediaFile: r.deleted_at || r.cipher !== null ? null : r.media_file,
       post,
       postUnavailable: r.post_id !== null && !r.deleted_at && post === null,
       call: r.call_status
@@ -2587,7 +2592,7 @@ async function toMessageViews(rows: MessageRow[], conversationId: string, viewer
       viewOpened: r.view_opened === 1,
       pinned: pinnedIds.has(r.id) && !r.deleted_at,
       reminderAt: r.deleted_at ? null : reminders.get(r.id) ?? null,
-      sealed: r.cipher !== null && !r.deleted_at ? { envelope: r.cipher, wrap: wraps.get(r.id) ?? null } : null,
+      sealed: r.cipher !== null && !r.deleted_at ? { envelope: r.cipher, wrap: wraps.get(r.id) ?? null, file: r.media_file } : null,
     }
   })
 }
@@ -2612,7 +2617,7 @@ export async function chatCounts(conversationId: string, viewerId: string): Prom
   const now = Date.now()
   const shared = await all<{ media_file: string | null; attachment: string | null; body: string; view_once: number }>(
     `SELECT m.media_file, m.attachment, m.body, m.view_once FROM chat_messages m
-     WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND (m.media_file IS NOT NULL OR m.body ~* 'https{0,1}://')
+     WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND m.cipher IS NULL AND (m.media_file IS NOT NULL OR m.body ~* 'https{0,1}://')
        AND ${notFromBlocked("m.sender_id")} AND ${unexpired("m")} AND ${notHiddenFrom("m")} AND ${notClearedFor("m")}`,
     conversationId,
     viewerId,

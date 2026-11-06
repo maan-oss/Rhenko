@@ -69,7 +69,13 @@ async function privatePagesFlow() {
   await check("another signed-in person's /messages does not carry the owner's name or private handles", async () => {
     const response = await stranger.page.context().request.get(`${BASE}/messages`, { maxRedirects: 0 })
     assert.equal(response.status(), 200, "the other person could not open their own Messages")
-    assert.equal((await response.text()).includes(owner.handle), false, "another person's Messages page names the owner's handle")
+    const html = await response.text()
+    // The page's right-hand column suggests public accounts to everyone ("People to meet"), so a new account can show there
+    // legitimately. The check reads the Messages column itself, where the conversations are listed.
+    const start = html.indexOf("<main data-app-main")
+    const end = html.indexOf("</main>", start)
+    assert.ok(start >= 0 && end > start, "the Messages column is missing from the page")
+    assert.equal(html.slice(start, end).includes(owner.handle), false, "another person's Messages list names the owner's handle")
     assertPrivate(response, "/messages for another person")
   })
 }

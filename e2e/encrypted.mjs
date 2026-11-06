@@ -2,12 +2,13 @@
 // server stored. Each person's browser makes its own device, a message is sealed for both devices, each side reads the other's
 // words, and the database keeps no words of them.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, randomWord } from "./lib/env.mjs"
+import { BASE, RUN_ID, escapeRegExp, randomWord } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { chatBox, sendChat, threadText, waitForConversation } from "./lib/chat.mjs"
 import { openProfile } from "./lib/posts.mjs"
 import { query } from "./lib/db.mjs"
-import { acted, go } from "./lib/ui.mjs"
+import { makePng } from "./lib/files.mjs"
+import { acted, go, until } from "./lib/ui.mjs"
 
 export async function run() {
   area("encrypted")
@@ -72,5 +73,72 @@ async function chatFlow() {
     need(convId, "the conversation")
     await go(receiver.page, `/messages/${convId}`, threadText(receiver.page, first))
     await threadText(receiver.page, reply).waitFor()
+  })
+
+  await check("a photo sent in the chat loads for both people, and the server keeps only its ciphertext", async () => {
+    need(convId, "the conversation")
+    await sender.page.locator("input[name=image]").setInputFiles(makePng(`sealed-${RUN_ID}.png`, { seed: 9 }))
+    const framing = sender.page.getByRole("dialog", { name: "Frame your photo" })
+    await framing.getByRole("button", { name: "Use this", exact: true }).click()
+    await framing.waitFor({ state: "detached" })
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    for (const person of [sender, receiver]) {
+      await person.page.locator('main img[alt="Shared photo"]').first().waitFor()
+      await until(person.page, () => {
+        const image = document.querySelector('main img[alt="Shared photo"]')
+        return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0
+      })
+    }
+    const [row] = await query(
+      "SELECT media_file FROM chat_messages WHERE conversation_id = ? AND media_file LIKE '%.sealed' ORDER BY created_at DESC LIMIT 1",
+      convId
+    )
+    assert.ok(row, "the photo is not stored as a sealed file")
+    const response = await sender.page.request.get(`${BASE}/media/${row.media_file}`)
+    assert.equal(response.status(), 200, "a member could not load the sealed file")
+    const bytes = await response.body()
+    assert.equal(bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])), false, "the stored file is a plain PNG")
+  })
+
+  await check("a view-once photo is hidden until the other person opens it, and the server gives it out only after", async () => {
+    need(convId, "the conversation")
+    await sender.page.locator("input[name=image]").setInputFiles(makePng(`once-${RUN_ID}.png`, { seed: 11 }))
+    const framing = sender.page.getByRole("dialog", { name: "Frame your photo" })
+    await framing.getByRole("button", { name: "Use this", exact: true }).click()
+    await framing.waitFor({ state: "detached" })
+    await sender.page.getByRole("button", { name: "View once", exact: true }).click()
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    const [row] = await query(
+      "SELECT media_file FROM chat_messages WHERE conversation_id = ? AND media_file LIKE '%.sealed' AND view_once = 1 ORDER BY created_at DESC LIMIT 1",
+      convId
+    )
+    assert.ok(row, "the view-once photo is not stored")
+    const tile = receiver.page.getByRole("button", { name: /View once photo/ }).first()
+    await tile.waitFor()
+    const before = await receiver.page.request.get(`${BASE}/media/${row.media_file}`)
+    assert.equal(before.status(), 404, "the file was given out before the photo was opened")
+    await acted(receiver.page, () => tile.click())
+    await receiver.page.locator('main img[alt="Shared photo"]').last().waitFor()
+    await until(receiver.page, () => {
+      const images = document.querySelectorAll('main img[alt="Shared photo"]')
+      const image = images[images.length - 1]
+      return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0
+    })
+    const after = await receiver.page.request.get(`${BASE}/media/${row.media_file}`)
+    assert.equal(after.status(), 200, "the photo was not given out after it was opened")
+  })
+
+  await check("a document sent in the chat is listed for the other person, and saves with its own contents", async () => {
+    need(convId, "the conversation")
+    const name = `sealed-${RUN_ID}.txt`
+    const text = `Sealed document ${RUN_ID}`
+    await sender.page.locator("input[name=document]").setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(text) })
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    const card = receiver.page.getByRole("button", { name: new RegExp(`^Download ${escapeRegExp(name)}`) }).first()
+    await card.waitFor()
+    const [download] = await Promise.all([receiver.page.waitForEvent("download"), card.click()])
+    assert.equal(download.suggestedFilename(), name, "the saved file has another name")
+    const saved = await (await import("node:fs/promises")).readFile(await download.path(), "utf8")
+    assert.equal(saved, text, "the saved file does not hold what was sent")
   })
 }

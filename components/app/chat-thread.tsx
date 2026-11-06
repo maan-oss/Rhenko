@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { removePending, usePending } from "@/components/app/pending-messages"
 import { PostBody } from "@/components/app/post-body"
 import { ContactCard, DocumentCard, LocationCard } from "@/components/app/attachment-view"
+import { SealedAttachment } from "@/components/app/sealed-media"
 import { ChatPollView } from "@/components/app/chat-poll"
 import { LinkCard } from "@/components/app/link-card"
 import { VideoPlayer } from "@/components/app/video-player"
@@ -607,7 +608,8 @@ function MessageRow({
       ) === null
     )
   }
-  const viewOnceHidden = message.mediaFile !== null && message.viewOnce && !message.mine && !viewed
+  // A view-once file, sealed or plain, is hidden until the viewer opens it.
+  const viewOnceHidden = (message.mediaFile !== null || message.sealedMedia != null) && message.viewOnce && !message.mine && !viewed
 
   function toggleOnTouch() {
     if (selecting || message.deleted || editing) return
@@ -819,6 +821,14 @@ function MessageRow({
                 ) : null}
                 {viewOnceHidden ? (
                   <ViewOnceTile video={isVideoFile(message.mediaFile ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
+                ) : message.sealedMedia ? (
+                  <SealedAttachment
+                    conversationId={conversationId}
+                    messageId={message.id}
+                    media={message.sealedMedia}
+                    mine={message.mine}
+                    onLoad={message.mine && fresh ? followLatest : undefined}
+                  />
                 ) : message.mediaFile && isVoiceFile(message.mediaFile) ? (
                   <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
                 ) : message.mediaFile && isVideoFile(message.mediaFile) ? (

@@ -33,7 +33,7 @@ import { pushGroupAdded, pushMessage } from "@/lib/push"
 import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
-import { removeUpload, saveUpload } from "@/lib/uploads"
+import { removeUpload, saveSealedUpload, saveUpload, SEALED_UPLOAD_LIMIT } from "@/lib/uploads"
 import { asMessageTimer, expiryFor, isExpired } from "@/lib/message-timers"
 import { groupForInvite, inviteStanding, newInviteToken } from "@/lib/group-invites"
 import { checkEncryptedSend } from "@/lib/e2ee"
@@ -885,9 +885,37 @@ function mentionHandles(value: unknown): string[] {
 // never the text. The handles a message names are the one thing the server learns of its words, so the people named hear of it the
 // way they do for a plain message.
 export async function sendEncryptedMessage(input: unknown): Promise<ChatState> {
+  return await sendSealed(input && typeof input === "object" ? (input as Record<string, unknown>) : {}, null, false)
+}
+
+// A photo, voice note, audio file or document the sender's device sealed (see lib/e2ee-media.ts), sent with its message. The file's
+// name, type and size are inside the envelope, so the server keeps only the encrypted bytes, under a name it picks.
+export async function sendEncryptedMedia(formData: FormData): Promise<ChatState> {
+  const file = formData.get("media")
+  const data: Record<string, unknown> = {
+    conversationId: formData.get("conversationId"),
+    id: formData.get("id"),
+    replyTo: formData.get("replyTo"),
+    envelope: jsonField(formData.get("envelope")),
+    wraps: jsonField(formData.get("wraps")),
+    mentions: jsonField(formData.get("mentions")),
+  }
+  return await sendSealed(data, file instanceof File ? file : null, formData.get("viewOnce") === "on")
+}
+
+function jsonField(value: FormDataEntryValue | null): unknown {
+  if (typeof value !== "string") return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+// The one place a sealed message is checked and stored, for a text and for a file. Nothing is stored until every check has passed.
+async function sendSealed(data: Record<string, unknown>, file: File | null, viewOnce: boolean): Promise<ChatState> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to send messages." }
-  const data = (input && typeof input === "object" ? input : {}) as Record<string, unknown>
   const conversationId = asId(data.conversationId)
   const status = conversationId ? await memberStatus(conversationId, viewer.id) : null
   if (!conversationId || !status) return { error: "That conversation doesn't exist." }
@@ -916,8 +944,12 @@ export async function sendEncryptedMessage(input: unknown): Promise<ChatState> {
     )
     if (!target || await blockedEitherWay(viewer.id, target.sender_id)) return { error: "That message can't be replied to anymore." }
   }
-  const slowDown = await tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.")
+  const slowDown =
+    (await tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.")) ??
+    (file ? await tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of files.") : null)
   if (slowDown) return { error: slowDown }
+  if (file && (file.size === 0 || file.size > SEALED_UPLOAD_LIMIT)) return { error: "That file is too large to send." }
+  if (viewOnce && !file) return { error: "Only a photo can be opened once." }
 
   // The wraps must cover exactly the devices that can read the chat right now (see checkEncryptedSend).
   const members = await memberDevicesOf(conversationId)
@@ -934,11 +966,19 @@ export async function sendEncryptedMessage(input: unknown): Promise<ChatState> {
   if (!checked.ok) return { error: checked.error }
 
   const mentioned = await mentionedMembersByHandle(conversationId, viewer.id, mentionHandles(data.mentions))
-  await insertMessage(conversationId, viewer.id, SEALED_BODY, null, null, replyToId, null, false, false, {
-    id,
-    cipher: JSON.stringify(checked.envelope),
-    wraps: checked.wraps,
-  })
+  // The file is stored last, once the message has passed every check, so a refused message leaves nothing behind.
+  const mediaFile = file ? await saveSealedUpload(file) : null
+  if (file && !mediaFile) return { error: "That file couldn't be saved. Try again." }
+  try {
+    await insertMessage(conversationId, viewer.id, SEALED_BODY, mediaFile, null, replyToId, null, false, viewOnce && mediaFile !== null, {
+      id,
+      cipher: JSON.stringify(checked.envelope),
+      wraps: checked.wraps,
+    })
+  } catch (error) {
+    await removeUpload(mediaFile)
+    throw error
+  }
   await announceMessage(conversationId, viewer.id, ENCRYPTED_PREVIEW, "", mentioned)
   refresh()
   return { sent: true }
