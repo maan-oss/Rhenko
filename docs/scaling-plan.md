@@ -41,6 +41,9 @@ should be measured before it is started, and the end-to-end suite should pass be
 - Add PgBouncer in transaction mode in front of the primary once there are more than two app servers. The app already runs
   without prepared statements (`prepare: false`), which transaction pooling needs. `LISTEN` must keep a direct connection, so
   the event bus connects to Postgres itself, not through PgBouncer.
+- The PgBouncer compose overlay (`docker-compose.pooler.yml`) was removed from the repository and is not part of production,
+  which starts from `docker-compose.yml` alone. To bring the step back, restore the file from git history
+  (`git log --diff-filter=D -- docker-compose.pooler.yml` finds the deleting commit; restore from its parent).
 
 ## Step 4: calls without one global lock
 
