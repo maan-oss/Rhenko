@@ -143,6 +143,8 @@ async function keepWithinRetention(now: number): Promise<void> {
   await run("DELETE FROM counter_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
   await run("DELETE FROM sahayak_jobs WHERE finished_at IS NOT NULL AND finished_at < ?", now - RETENTION.sahayakDays * DAY)
   await run("DELETE FROM account_signals WHERE created_at < ?", now - RETENTION.signalsDays * DAY)
+  // Payment records kept from a deleted account: removed once their keep date has passed (set when they were copied).
+  await run("DELETE FROM financial_records WHERE keep_until < ?", now)
   // A human-check puzzle is only useful until it expires; a day later it is removed.
   await run("DELETE FROM proof_challenges WHERE expires_at < ?", now - DAY)
   // Pushed events are remembered for 30 days so none is pushed twice, and a device signed out for 90 days is removed.

@@ -114,7 +114,8 @@ const SECTIONS: LegalSection[] = [
     title: "Repeat infringers",
     body: (
       <P>
-        Accounts that repeatedly post material that is found to infringe copyright are closed. The operator keeps a record of
+        Each upheld copyright notice against an account counts for 12 months. When an account has three upheld notices in that time,
+        the operator reviews it and closes the account if the review finds repeated infringement. The operator keeps a record of
         these decisions in the notices that are kept for three years.
       </P>
     ),

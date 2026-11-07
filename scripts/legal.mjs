@@ -9,7 +9,8 @@
 //   node scripts/legal.mjs counter-list                         counter-notices still waiting, due, or overdue
 //   node scripts/legal.mjs court-action <noticeId>              the owner has started a court action: keep the post hidden
 //   node scripts/legal.mjs counter-restore <noticeId>           put a post back after its counter-notice window
-//   node scripts/legal.mjs overdue                              intimate-image notices past their 48-hour deadline, still open
+//   node scripts/legal.mjs overdue                              intimate-image notices past their 24-hour deadline, still open
+//   node scripts/legal.mjs repeats                              accounts with 3 or more upheld copyright notices in the last 12 months
 //
 // actioned: the post is hidden (if it is not already) and its author sees the reason and can appeal.
 // rejected: a post hidden because of this notice is put back.
@@ -34,6 +35,11 @@ const APPEAL_MS = 30 * 24 * 60 * 60 * 1000
 const EXCERPT_CHARS = 140
 const REQUEST_KIND = "authority_request"
 
+// Copyright notices that are actioned count against the account whose post they hid. These mirror lib/legal.ts. The app counts them over
+// 12 months; what happens to an account after that is a decision for the operator, so the app does not close one.
+const REPEAT_STRIKES = 3
+const REPEAT_WINDOW_MS = 365 * 24 * 60 * 60 * 1000
+
 const USAGE = `Usage:
   node scripts/legal.mjs list
   node scripts/legal.mjs show <noticeId>
@@ -42,7 +48,8 @@ const USAGE = `Usage:
   node scripts/legal.mjs counter-list
   node scripts/legal.mjs court-action <noticeId>
   node scripts/legal.mjs counter-restore <noticeId>
-  node scripts/legal.mjs overdue`
+  node scripts/legal.mjs overdue
+  node scripts/legal.mjs repeats`
 
 const SHAPES = {
   list: { args: 0, options: [] },
@@ -53,6 +60,7 @@ const SHAPES = {
   "court-action": { args: 1, options: [] },
   "counter-restore": { args: 1, options: [] },
   overdue: { args: 0, options: [] },
+  repeats: { args: 0, options: [] },
 }
 const VALUE_OPTIONS = new Set(["note", "summary"])
 
@@ -174,7 +182,7 @@ async function list() {
     console.log(field("Notice", row.id))
     console.log(field("About", `${KINDS[row.kind] ?? row.kind}${URGENT.has(row.kind) ? " (urgent)" : ""}`))
     console.log(field("From", `${row.name} <${row.email}>, sent ${when(row.created_at)}`))
-    if (row.due_by) console.log(field("Decide by", `${when(row.due_by)} (48 hours after it was sent)`))
+    if (row.due_by) console.log(field("Decide by", `${when(row.due_by)} (24 hours after it was sent)`))
     if (row.post_id) console.log(field("Post", row.post_id))
     else if (row.url) console.log(field("Link", row.url))
   }
@@ -189,7 +197,7 @@ async function show() {
   console.log(field("About", `${KINDS[notice.kind] ?? notice.kind}${URGENT.has(notice.kind) ? " (urgent)" : ""}`))
   console.log(field("Status", notice.status === "open" ? "open" : `${notice.status}${notice.decided_at ? `, decided ${when(notice.decided_at)}` : ""}`))
   console.log(field("Sent", when(notice.created_at)))
-  if (notice.due_by) console.log(field("Decide by", `${when(notice.due_by)} (48 hours after it was sent)`))
+  if (notice.due_by) console.log(field("Decide by", `${when(notice.due_by)} (24 hours after it was sent)`))
   console.log(field("From", `${notice.name} <${notice.email}>`))
   if (notice.address) console.log(field("Address", notice.address))
   if (notice.url) console.log(field("Link", notice.url))
@@ -226,6 +234,43 @@ async function emailSender(to, subject, text) {
     console.error(`The email to ${to} was not sent: ${error.message}. Send the decision by hand.`)
     return false
   }
+}
+
+// Upheld copyright notices against one account in the last 12 months.
+async function repeatCount(conn, userId, now) {
+  const row = await one(
+    conn,
+    `SELECT COUNT(*) AS n FROM legal_notices n JOIN posts p ON p.id = n.post_id
+     WHERE p.author_id = $1 AND n.kind = 'copyright' AND n.status = 'actioned' AND n.decided_at >= $2`,
+    userId,
+    now - REPEAT_WINDOW_MS
+  )
+  return Number(row.n)
+}
+
+// Accounts with several upheld copyright notices in the last 12 months, most first.
+async function repeats() {
+  const rows = await sql.unsafe(
+    `SELECT u.handle, COUNT(*) AS strikes, MAX(n.decided_at) AS latest, array_agg(n.id ORDER BY n.decided_at) AS notices
+     FROM legal_notices n JOIN posts p ON p.id = n.post_id JOIN users u ON u.id = p.author_id
+     WHERE n.kind = 'copyright' AND n.status = 'actioned' AND n.decided_at >= $1
+     GROUP BY u.id, u.handle
+     HAVING COUNT(*) >= $2
+     ORDER BY COUNT(*) DESC, MAX(n.decided_at) DESC`,
+    [Date.now() - REPEAT_WINDOW_MS, REPEAT_STRIKES]
+  )
+  if (rows.length === 0) {
+    console.log(`No account has ${REPEAT_STRIKES} or more upheld copyright notices in the last 12 months.`)
+    return
+  }
+  console.log(`${rows.length} ${rows.length === 1 ? "account has" : "accounts have"} ${REPEAT_STRIKES} or more upheld copyright notices in the last 12 months.`)
+  for (const row of rows) {
+    console.log("")
+    console.log(field("Account", `@${plain(row.handle)}, ${row.strikes} upheld, latest ${when(row.latest)}`))
+    console.log(field("Notices", row.notices.join(", ")))
+  }
+  console.log("")
+  console.log("The app counts these and does not close accounts. Closing one is your decision.")
 }
 
 async function decide() {
@@ -292,6 +337,12 @@ async function decide() {
   if (post && verdict === "actioned") console.log(post.removed_at === null ? "The post is hidden now." : "The post was already hidden, and its author now sees this reason.")
   if (post && verdict === "rejected") console.log("A post hidden for this notice is back.")
   if (sent) console.log("The sender has been emailed.")
+  if (post && verdict === "actioned" && notice.kind === "copyright") {
+    const strikes = await repeatCount(sql, post.author_id, now)
+    if (strikes >= REPEAT_STRIKES) {
+      console.log(`That makes ${strikes} upheld copyright notices against this account in the last 12 months. See them with: node scripts/legal.mjs repeats`)
+    }
+  }
 }
 
 async function recordRequest() {
@@ -405,10 +456,10 @@ async function overdue() {
     [now]
   )
   if (rows.length === 0) {
-    console.log("No intimate-image notice is past its 48-hour deadline.")
+    console.log("No intimate-image notice is past its 24-hour deadline.")
     return
   }
-  console.log(`${rows.length} intimate-image ${rows.length === 1 ? "notice is" : "notices are"} past the 48-hour deadline and still open.`)
+  console.log(`${rows.length} intimate-image ${rows.length === 1 ? "notice is" : "notices are"} past the 24-hour deadline and still open.`)
   for (const row of rows) {
     const hours = Math.floor((now - row.due_by) / (60 * 60 * 1000))
     console.log("")
@@ -441,6 +492,7 @@ try {
     "court-action": courtAction,
     "counter-restore": counterRestore,
     overdue,
+    repeats,
   }
   await commands[command]()
 } finally {

@@ -176,6 +176,37 @@ async function paymentFlows(mock) {
     assert.equal(status, 200, `a webhook for a deleted account answered ${status}, and Stripe would send it again`)
   })
 
+  await check("deleting an account keeps its subscription record for five years, without the account's id or handle", async () => {
+    const deleter = await createUser({ tag: "bkeep" })
+    await execute("UPDATE users SET email_verified_at = ? WHERE handle = ?", Date.now(), deleter.handle)
+    await subscribePlus(deleter.page)
+    const id = await userId(deleter.handle)
+    const subs = await query("SELECT created_at FROM subscriptions WHERE user_id = ?", id)
+    assert.equal(subs.length, 1, "the account has no subscription record to keep")
+
+    await deleter.page.goto(`${BASE}/settings/account`, { waitUntil: "domcontentloaded" })
+    const remove = formWithButton(deleter.page, "Delete account forever")
+    await fillField(remove, "password", deleter.password)
+    await fillField(remove, "confirm", `@${deleter.handle}`)
+    await remove.getByRole("button", { name: "Delete account forever", exact: true }).click()
+    await deleter.page.waitForURL((url) => url.pathname !== "/settings/account", { timeout: TIMEOUT })
+    assert.equal((await query("SELECT id FROM users WHERE id = ?", id)).length, 0, "the account was not deleted")
+
+    const kept = await query(
+      "SELECT source, detail, occurred_at, keep_until, to_jsonb(f)::text AS doc FROM financial_records f WHERE source = 'subscription' AND occurred_at = ?",
+      subs[0].created_at
+    )
+    assert.equal(kept.length, 1, "the subscription record of the deleted account was not kept")
+    assert.equal(kept[0].detail, "plus", "the kept record does not say which subscription it was")
+    assert.equal(
+      Number(kept[0].keep_until) - Number(kept[0].occurred_at),
+      5 * 365 * 24 * 60 * 60 * 1000,
+      "the kept record is not set to be removed five years after its payment"
+    )
+    assert.equal(kept[0].doc.includes(id), false, "the kept record still holds the account's id")
+    assert.equal(kept[0].doc.includes(deleter.handle), false, "the kept record still holds the account's handle")
+  })
+
   await check("a webhook without a valid signature is refused", async () => {
     const response = await fetch(`${BASE}/api/stripe/webhook`, { method: "POST", headers: { "Content-Type": "application/json", "Stripe-Signature": "t=1,v1=bad" }, body: "{}" })
     assert.equal(response.status, 400, `answered ${response.status}`)

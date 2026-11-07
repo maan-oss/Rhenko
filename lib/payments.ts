@@ -4,6 +4,7 @@ import { all, get, run, transaction } from "@/lib/db"
 import { visiblePostIds } from "@/lib/data"
 import { formatMoney } from "@/lib/money"
 import { ADD_CREDIT_OPTIONS, MICRO_PER_CENT } from "@/lib/ad-rules"
+import { RETENTION } from "@/lib/legal"
 
 // Payments through Stripe: subscriptions (Plus and paid verification), tips to creators, creators' payout accounts,
 // advertising credit, and the refund for a subscription cancelled in its first fourteen days.
@@ -186,6 +187,36 @@ export async function endSubscriptionsAtPeriodEnd(userId: string): Promise<void>
     const updated = await stripe().subscriptions.update(row.id, { cancel_at_period_end: true })
     await saveSubscription(updated)
   }
+}
+
+// Keeps the payment records of an account that is being deleted, without the account. The rows are copied before the account's
+// rows go. They carry no name, handle, email, payment-provider customer number, or the other party to a tip, so none of them
+// points back to the person. Each is removed RETENTION.financialRecordsYears after its payment (lib/maintenance.ts). Callers run
+// this inside their own transaction, before the account's rows are deleted.
+export async function keepPaymentRecords(userId: string): Promise<void> {
+  const keepFor = RETENTION.financialRecordsYears * 365 * 24 * 60 * 60 * 1000
+  await run(
+    `INSERT INTO financial_records (id, source, detail, amount, fee, currency, unit, reference, occurred_at, keep_until)
+     SELECT gen_random_uuid()::text, 'tip', status, amount, fee, currency, 'minor', NULL, created_at, created_at + ?
+     FROM tips WHERE from_user_id = ? OR to_user_id = ?`,
+    keepFor,
+    userId,
+    userId
+  )
+  await run(
+    `INSERT INTO financial_records (id, source, detail, amount, fee, currency, unit, reference, occurred_at, keep_until)
+     SELECT gen_random_uuid()::text, 'subscription', kind, NULL, NULL, NULL, NULL, NULL, created_at, created_at + ?
+     FROM subscriptions WHERE user_id = ?`,
+    keepFor,
+    userId
+  )
+  await run(
+    `INSERT INTO financial_records (id, source, detail, amount, fee, currency, unit, reference, occurred_at, keep_until)
+     SELECT gen_random_uuid()::text, 'advertising', l.kind, l.amount_micro, NULL, a.currency, 'micro', l.reference, l.created_at, l.created_at + ?
+     FROM ad_ledger l JOIN ad_accounts a ON a.id = l.account_id WHERE a.user_id = ?`,
+    keepFor,
+    userId
+  )
 }
 
 // The subscription checkout. The person pays Stripe's page, and the webhook records the result.

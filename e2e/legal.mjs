@@ -1,6 +1,6 @@
 // Legal: the public pages, the age and terms box on sign-up, the agreement screen when the terms change, notices about
 // content (the form, the reference, hiding at once for the most serious kinds, the honeypot, the copyright requirements,
-// the 48-hour deadline on intimate-image notices), appeals, copyright counter-notices (sent, waiting, restored, and kept
+// the 24-hour deadline on intimate-image notices), appeals, copyright counter-notices (sent, waiting, restored, and kept
 // hidden by a court action), the moderation and legal command lines, saved searches with the Lists tab, the transparency
 // figures, and the agreement between the code and the command lines about categories and notice kinds.
 import fs from "node:fs"
@@ -287,10 +287,10 @@ async function notices() {
       await eventually(() => mailCount(address, mark) >= 1, "the reference email")
     })
 
-    await check("an intimate-image notice has a 48-hour removal deadline, and the command line lists it once that has passed", async () => {
+    await check("an intimate-image notice has a 24-hour removal deadline, and the command line lists it once that has passed", async () => {
       const rows = await query("SELECT id, created_at, due_by FROM legal_notices WHERE kind = ? ORDER BY created_at DESC LIMIT 1", "intimate_image")
       const notice = need(rows[0], "the intimate-image notice")
-      assert.equal(Number(notice.due_by) - Number(notice.created_at), 48 * HOUR, "the deadline is not 48 hours after the notice")
+      assert.equal(Number(notice.due_by) - Number(notice.created_at), 24 * HOUR, "the deadline is not 24 hours after the notice")
       // Moves the deadline into the past, so the overdue list has something to show.
       await execute("UPDATE legal_notices SET due_by = ? WHERE id = ?", Date.now() - HOUR, notice.id)
       const late = await cli("scripts/legal.mjs", ["overdue"])

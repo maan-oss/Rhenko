@@ -82,7 +82,8 @@ const SECTIONS: LegalSection[] = [
         <P>
           Clicks are counted but not charged. The app does not record who clicked. Payments are taken by Stripe; Rhenko never sees a card
           number. Unspent balance can be requested back through the contact address on the{" "}
-          <TextLink href="/legal">legal page</TextLink>, and the request is handled under the advertiser terms.
+          <TextLink href="/legal">legal page</TextLink>. The operator pays a confirmed request back to the card it was paid with within
+          14 days, under the advertiser terms.
         </P>
       </>
     ),

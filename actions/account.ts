@@ -35,7 +35,7 @@ import {
 } from "@/lib/account-rules"
 import { hangUpFor } from "@/lib/call-state"
 import { releaseCirclesOf } from "@/lib/circles"
-import { endSubscriptionsAtPeriodEnd } from "@/lib/payments"
+import { endSubscriptionsAtPeriodEnd, keepPaymentRecords } from "@/lib/payments"
 import { all, get, run, transaction } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
 import { mediaFilesFor, removeFiles, treeOfAuthor } from "@/lib/post-writes"
@@ -405,6 +405,8 @@ async function eraseAccount(userId: string): Promise<void> {
       "SELECT avatar_file, banner_file FROM users WHERE id = ?",
       userId
     )
+    // Payment records are kept without the account (lib/payments.ts keepPaymentRecords) before the cascade removes the rows.
+    await keepPaymentRecords(userId)
     // Circles the account owns pass on or close before its row goes, so none is left without an owner.
     const circleFiles = await releaseCirclesOf(userId)
     await run("DELETE FROM sessions WHERE user_id = ?", userId)

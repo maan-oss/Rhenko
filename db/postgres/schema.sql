@@ -61,7 +61,7 @@ CREATE TABLE legal_notices (
   -- act for the owner (17 U.S.C. 512(c)(3)(A)(iv) and (vi)). Blank and 0 for other kinds.
   phone text NOT NULL DEFAULT '',
   authorized bigint NOT NULL DEFAULT 0,
-  -- For an intimate image notice: when the content must be off the service (48 hours after the notice, the TAKE IT DOWN Act).
+  -- For an intimate image notice: when the content must be off the service (24 hours after the notice; the TAKE IT DOWN Act allows 48, and eSafety requires 24).
   -- NULL for other kinds.
   due_by bigint,
   status text NOT NULL DEFAULT 'open',
@@ -428,6 +428,24 @@ CREATE TABLE ad_ledger (
   reference text NOT NULL,
   created_at bigint NOT NULL
 );
+
+-- Payment records kept when an account is deleted (lib/payments.ts keepPaymentRecords). There is no user, name, handle, email
+-- or payment-provider customer column on purpose: the row is kept without the person. keep_until is set from the payment's date
+-- and the rows are removed when it passes (lib/maintenance.ts). amount is in minor units (cents) for a tip and micro-units for
+-- an advertising entry (unit says which); reference is the advertising ledger's one-way code, if any.
+CREATE TABLE financial_records (
+  id text PRIMARY KEY,
+  source text NOT NULL check (source IN ('subscription', 'tip', 'advertising')),
+  detail text NOT NULL,
+  amount bigint,
+  fee bigint,
+  currency text,
+  unit text check (unit IN ('minor', 'micro')),
+  reference text,
+  occurred_at bigint NOT NULL,
+  keep_until bigint NOT NULL
+);
+CREATE INDEX financial_records_keep_until ON financial_records (keep_until);
 
 CREATE TABLE appeals (
   id text PRIMARY KEY,

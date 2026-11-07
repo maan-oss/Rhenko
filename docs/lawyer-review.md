@@ -1,37 +1,51 @@
 # Lawyer review packet
 
-This is what a lawyer needs to review the legal text of Rhenko, what the operator must supply first, and the payment
-decisions that stay with the operator. The step-by-step launch checklist is in [legal-operations.md](legal-operations.md).
+This is what a lawyer needs to review the legal text of Rhenko: what the operator must supply first, the decisions the operator has
+made (with the reasons), the payment decisions, and what is still open. The step-by-step launch checklist is in
+[legal-operations.md](legal-operations.md).
 
-## Status
+## Status (7 November 2026)
 
-- The legal pages are drafts. They carry the draft banner, and the banner stays until a lawyer has reviewed them.
-- `RHENKO_LEGAL_REVIEWED` is not set and must not be set until the review is done.
-- Nothing in the legal text was filled from a guess. Where a value is missing, the page says it has not been published.
+- The legal pages are drafts. Each carries a draft notice, shown until `RHENKO_LEGAL_REVIEWED=1` is set (`app/_legal/shell.tsx`).
+- `RHENKO_LEGAL_REVIEWED` is not set and must not be set until a lawyer's review is on record. The operator has said the text was
+  reviewed; no review record or list of changes has reached the repository, so this packet still treats it as unreviewed.
+- The operator has made the decisions below, so counsel can confirm or change them. Each is marked **Decided** and says what the app
+  and the pages do now.
+- Where a value is missing, the page says it has not been published. Nothing was filled from a guess.
 
 ## Pages in scope
 
 | Page | Path | What it covers |
 | --- | --- | --- |
-| Terms of Service | `app/terms/page.tsx` | Accounts, content, subscriptions and tips, cancellation and withdrawal, termination |
-| Privacy Policy | `app/privacy/page.tsx` | What is collected, why, who receives it, retention periods, rights, the India grievance route |
-| Rules | `app/rules/page.tsx` | What people may post, and what happens when a rule is broken |
-| Safety | `app/safety/page.tsx` | Reporting, the notice route for intimate images and other harms, and emergency wording |
-| Notice and counter-notice | `app/notice/page.tsx`, `app/copyright/page.tsx` | How to report unlawful content, the copyright notice route, and the counter-notice |
-| Transparency | `app/transparency/page.tsx` | How ranking, connection suggestions, moderation and appeals work, in plain words |
-| Advertising transparency | `app/transparency/ads/page.tsx` | How ads are labelled, how spend is charged, and balance handling |
-| Legal index | `app/legal/page.tsx` | Links to every page above |
+| Terms of Service | `app/(marketing)/terms/page.tsx` | Accounts, content, subscriptions and tips, cancellation and withdrawal, ending use |
+| Privacy Policy | `app/(marketing)/privacy/page.tsx` | What is collected, why, who receives it, how long it is kept, rights, the India grievance route |
+| Rules | `app/(marketing)/rules/page.tsx` | What people may post, and what happens when a rule is broken |
+| Safety | `app/(marketing)/safety/page.tsx` | Reporting, the route for intimate images and other harms, emergency wording |
+| Notice | `app/(marketing)/notice/page.tsx` | How to report unlawful content |
+| Copyright | `app/(marketing)/copyright/page.tsx` | The copyright notice, the counter-notice, repeat infringers |
+| Transparency | `app/(marketing)/transparency/page.tsx` | Moderation and appeals figures for this server |
+| Advertising transparency | `app/(marketing)/transparency/ads/page.tsx` | Advertising policy, how ads are paid for, and the ad library |
+| Legal index | `app/(marketing)/legal/page.tsx` | Links to every page above |
 
-The shared operator block that the pages read is `app/_legal/operator.tsx`. Its values come from the `RHENKO_*`
-variables in `.env.example`.
+The operator details the pages read come from `app/_legal/operator.tsx`, which reads the `RHENKO_*` variables listed in `.env.example`.
 
-## Changes to the legal text since the last review
+## Changes to the legal text on 7 November 2026
 
-- **Privacy Policy, Cookies:** one new line for `rhenko-feed`, a one-year cookie that remembers whether Home opens on For
-  you or Following. It sits next to `rhenko-sidebar`, which is already listed. The policy says Rhenko sets only the
-  cookies it needs, so the lawyer should confirm that a preference cookie fits that sentence.
-- **Transparency:** two new figures, the average time to decide an appeal and the oldest appeal still waiting. They are
-  computed from the server's own records, and the page says they are not an audited report.
+- **Terms version** is now `2026-11-07-1`. Every account must accept it again before it can use the app.
+- **Terms, Geographic:** a post removed because of an order from one country is removed for everyone. Rhenko does not restrict content
+  by country.
+- **Terms, Price changes:** at least 30 days' notice before a new subscription price applies, and the right to cancel before it does.
+- **Terms, Ending use:** deleting an account keeps payment records without the account's name (see payment decision 1).
+- **Copyright, Repeat infringers:** three upheld copyright notices against an account within 12 months lead to a review. The account is
+  closed if the review finds repeated infringement.
+- **Privacy, Messages:** what the encrypted chat does not do yet: no video, no link previews, no translation, and a notification says
+  "Encrypted message" rather than the text.
+- **Privacy, Cookies:** one line for `rhenko-feed`, a one-year cookie that remembers whether Home opens on For you or Following. Counsel
+  should confirm that a preference cookie fits the sentence saying Rhenko sets only the cookies it needs.
+- **Transparency:** two new figures, the average time to decide an appeal and the oldest appeal still waiting, computed from the
+  server's own records. The page says they are not an audited report.
+- **Advertising transparency:** a confirmed request for unspent balance is paid back to the card within 14 days.
+- **Intimate-image deadline** is 24 hours (decision 5 below).
 
 ## Values the operator must supply
 
@@ -39,132 +53,129 @@ These are read from the environment. A missing value shows "not yet published" o
 
 | Variable | Used on | Status |
 | --- | --- | --- |
-| `RHENKO_OPERATOR_NAME` | Terms, Privacy, Copyright | **Operator must supply.** The legal name of the entity that runs the server. |
-| `RHENKO_OPERATOR_ADDRESS` | Terms, Privacy, Copyright | **Operator must supply.** A postal address. |
-| `RHENKO_CONTACT_EMAIL` | Terms | **Operator must supply.** A business address, not a personal one. |
-| `RHENKO_PRIVACY_EMAIL` | Privacy | **Operator must supply.** Used for data requests. |
-| `RHENKO_GRIEVANCE_OFFICER` | Privacy (India) | **Operator must supply.** Required under the IT Rules and the DPDP Act. |
-| `RHENKO_GRIEVANCE_EMAIL` | Privacy (India) | **Operator must supply.** |
-| `RHENKO_COPYRIGHT_AGENT_NAME` | Copyright | **Operator must supply.** The agent registered with the US Copyright Office. |
-| `RHENKO_COPYRIGHT_AGENT_EMAIL` | Copyright | **Operator must supply.** |
-| `RHENKO_COPYRIGHT_AGENT_ADDRESS` | Copyright | **Operator must supply.** |
-| `RHENKO_EU_REPRESENTATIVE` | Privacy, Terms | Needed only if the operator is not established in the EU and offers the service there. Lawyer to confirm. |
-| `RHENKO_UK_REPRESENTATIVE` | Privacy, Terms | Needed only if the operator is not established in the UK and offers the service there. Lawyer to confirm. |
-| `RHENKO_HOSTING_LOCATION` | Terms, Privacy | **Proposed: India.** The operator has said the server should be hosted in India. The exact city is not recorded and must be confirmed. |
-| `RHENKO_GOVERNING_LAW` | Terms | **Lawyer and operator decide.** Not recorded anywhere. |
+| `RHENKO_OPERATOR_NAME` | Terms, Privacy, Copyright | **Set to `Maan Ghori`** in the local `.env`. The operator is an individual; there is no company. Confirm the spelling. |
+| `RHENKO_OPERATOR_ADDRESS` | Terms, Privacy, Copyright | **Set to `47 Prominence Street, Pallara, Brisbane QLD 4110, Australia`.** Confirm the street spelling and the postcode. |
+| `RHENKO_CONTACT_EMAIL` | Terms | **Still needed.** Currently `info.rhenko@gmail.com`, a personal mail account. Replace it with a business address on a domain the operator controls. |
+| `RHENKO_PRIVACY_EMAIL` | Privacy | **Still needed.** Same as above. Used for data requests. |
+| `RHENKO_GRIEVANCE_OFFICER` | Privacy (India) | **Set to `Mahesh Ghori`.** India's IT Rules 2021 require a grievance officer. |
+| `RHENKO_GRIEVANCE_EMAIL` | Privacy (India) | **Still needed.** Must be read by the grievance officer. Currently `info.rhenko@gmail.com`. |
+| `RHENKO_COPYRIGHT_AGENT_NAME` | Copyright | **Not set. The agent is not registered with the US Copyright Office.** The copyright page says the operator has to register one for the US safe harbour (17 U.S.C. 512(c)) to apply, and shows the agent details only once they are set. Counsel to advise whether the safe harbour matters for an Australian-run service. |
+| `RHENKO_COPYRIGHT_AGENT_EMAIL` | Copyright | Not set. Needed with the agent. Court-action notices go here. |
+| `RHENKO_COPYRIGHT_AGENT_ADDRESS` | Copyright | Not set. Needed with the agent. |
+| `RHENKO_EU_REPRESENTATIVE` | Privacy, Terms | Not set. Rhenko is open to EU users and is not established in the EU, so counsel must decide whether a representative is needed (GDPR Article 27). |
+| `RHENKO_UK_REPRESENTATIVE` | Privacy, Terms | Not set. Same question for the UK. |
+| `RHENKO_HOSTING_LOCATION` | Terms, Privacy | **Set to `Brisbane, Queensland, Australia`, as the operator says.** Check it before launch: `docs/hosting-costs.md` plans a DigitalOcean droplet, and DigitalOcean has no Brisbane data centre. The nearest is Sydney, and Bangalore is also listed. The page must name the real location. |
+| `RHENKO_GOVERNING_LAW` | Terms | **Set to `Queensland, Australia`**, with the courts of Brisbane. The operator confirmed it. |
 
-Do not use a personal or outreach email address as any of these contacts. The policy pages publish them.
+Do not use a personal or outreach email address for any of these contacts. The policy pages publish them.
 
-## Open legal questions for the lawyer
+## Decisions made by the operator, for counsel to confirm
 
-The app now handles each of these one way. The lawyer must confirm the approach or change it. `docs/legal-operations.md`
-section 6 lists what the app still does not do.
+Counsel may change any of these. The app and the pages follow each decision as written here until counsel does.
 
-1. **Copyright notice requirements.** The form requires the owner's name, postal address, telephone number, the work, the
-   link, the good-faith statement, the accuracy confirmation, a statement under penalty of perjury, and a signature
-   (`lib/notice-rules.ts`). Confirm these against 17 U.S.C. 512(c)(3) and any other market the server serves.
-2. **Counter-notice requirements and wording.** The author gives a name, postal address, telephone number, a statement
-   under penalty of perjury, consent to the federal district court's jurisdiction, agreement to accept service, and a
-   signature. The owner receives the counter-notice in full (17 U.S.C. 512(g)). Confirm the wording on `/copyright`.
-3. **Restore window.** The post goes back no sooner than 10 and no later than 14 business days after the owner receives the
-   counter-notice, unless the owner says it has started a court action. Business days leave out weekends and US federal
-   holidays, using the list in `lib/business-days.ts`. Confirm the period and the holiday list.
-4. **One window for appeal and counter-notice.** Both are open for 30 days after the post is hidden, and a post can have
-   one or the other, not both. Confirm the 30 days, or set a separate period for counter-notices.
-5. **Intimate-image removal deadline.** Each intimate-image notice has a deadline 48 hours after it arrives (`due_by`), and
-   `npm run legal -- overdue` lists any still open after it. Confirm the deadline, and whether the TAKE IT DOWN Act applies
-   to this service. The sources we found give 19 May 2026 as the covered-platform compliance date. Counsel must confirm it.
-6. **Repeat infringers.** The `/copyright` page says accounts that repeatedly infringe are closed. The app does not count
-   repeats or act on them. Decide the policy, and either have the app track it or change the page to match what is done.
-7. **Geographic restriction.** A post removed under one country's order is removed everywhere on this server. Decide
-   whether that is acceptable or whether restriction by country is needed.
-8. **Request log.** The app keeps no request log, only the proxy in front of it does. Confirm that the Privacy Policy
-   describes this correctly.
-9. **Age.** Age assurance is the date of birth only. Confirm this is what the Terms should say.
+### Copyright and notices
 
-## Decisions for counsel and product: encrypted chats
+1. **Copyright notice requirements. Decided: keep.** The form asks for the owner's name, postal address, telephone number, the work,
+   the link, the good-faith statement, the accuracy statement, the statement under penalty of perjury, and a signature
+   (`lib/notice-rules.ts`). This follows 17 U.S.C. 512(c)(3). Counsel confirms.
+2. **Counter-notice requirements. Decided: keep.** The author gives a name, postal address, telephone number, a statement under
+   penalty of perjury, consent to the federal district court's jurisdiction, agreement to accept service, and a signature. The owner
+   receives the counter-notice in full (17 U.S.C. 512(g)). Counsel confirms the wording on `/copyright`.
+3. **Restore window. Decided: 10 to 14 business days.** The post goes back no sooner than 10 and no later than 14 business days after
+   the owner receives the counter-notice, unless the owner says it has started a court action. Business days leave out weekends and US
+   federal holidays (`lib/business-days.ts`). X's copyright policy also uses a 10-business-day window, so this matches a large platform.
+4. **One window for appeal and counter-notice. Decided: 30 days.** Both are open for 30 days after the post is hidden.
+5. **Intimate-image removal deadline. Decided: 24 hours.** The app's deadline is `INTIMATE_REMOVAL_HOURS = 24`, set on each notice as
+   `due_by`. The TAKE IT DOWN Act gives a covered platform 48 hours from a valid request, and eSafety's removal notices give 24 hours
+   (reduced from 48, per eSafety's media release). The app uses the shorter figure for every notice, so both are met. The post is hidden
+   as soon as the notice arrives. `npm run legal -- overdue` lists any notice still open after 24 hours.
+6. **Repeat infringers. Decided: three upheld copyright notices against an account within 12 months lead to review and closure.** The
+   app counts them: `npm run legal -- repeats` lists the accounts, and `decide` reports the count once an upheld notice reaches it. The
+   app does not close accounts; the operator reviews and closes. The count is checked against `scripts/legal.mjs` by a unit test
+   (`tests/legal-mirror.test.mjs`).
+7. **Geographic restriction. Decided: none.** A post removed under one country's order is removed everywhere on this server. The Terms
+   say so.
+8. **Request log. Decided: the app keeps none.** The Privacy Policy says so, and says a proxy or host in front of the app may keep its
+   own records. The reverse proxy (`deploy/Caddyfile`) has no log directive, so Caddy writes no access log by default. Counsel confirms.
+9. **Age. Decided: 18, by date of birth, and a launch blocker until a stronger age check exists.** The minimum-age law requires
+   platforms to take "reasonable steps" to keep under-16s from holding accounts. Australia's government fact sheet (January 2026) names
+   TikTok, Instagram, Snapchat, X, Facebook and YouTube, and covers platforms that enable algorithms recommending content. It excludes
+   messaging, online gaming, professional networking, and education and health services. Rhenko's For you feed is a recommendation feed,
+   so it is probably covered. The fact sheet's age checks are inference, estimation and verification, and it describes date-of-birth
+   verification as "typically from official documents". A date of birth typed at sign-up is not one of its methods. Date of birth alone is
+   therefore unlikely to be enough. The app has no other check. Counsel must decide the position, and an age-assurance provider is likely
+   needed before launch.
 
-These are built as described, and each needs a decision before launch.
+### Encrypted chats
 
-1. **Reaction metadata.** A reaction in an encrypted chat is sent as a plaintext emoji from a fixed list. The server sees
-   which reaction was made to which message, but no words. Decide whether this metadata is acceptable, and say so in the
-   Privacy Policy.
-2. **Video is refused in encrypted chats.** Text, photos, voice messages and files can be sent. Decide whether this is
-   acceptable at launch.
-3. **No link previews in encrypted chats.** A server fetch would show the server the URL. Decide whether that is acceptable.
-4. **Translation is refused for encrypted messages.** Decide whether that is acceptable.
-5. **Push notification text.** A notification for an encrypted message shows "Encrypted message" (`ENCRYPTED_PREVIEW`),
-   not the text. Decide whether this is the wording to keep.
-6. **Chat reports and the report key.** A report is sealed to Rhenko's report public key before it is stored. Only the
-   private key, kept outside the server and the repository, can open it. The operator makes the key pair once, with
-   `npm run moderation -- report-keygen <file outside the repository>` (runbook 4a). Decide who holds the private key and how
-   it is backed up.
-7. **Reports made to NCMEC.** Each is kept for one year from the date it was made to NCMEC (18 U.S.C. 2258A(h)). Counsel
-   advises on preservation before any deletion. Nothing is deleted until that advice is in.
-8. **Court-action contact.** An owner's court-action notice goes to the designated agent at `RHENKO_COPYRIGHT_AGENT_EMAIL`.
-   Set that address before launch.
+1. **Reaction metadata. Decided: accept, and say so.** The server sees which reaction was made to which message, not the words. The
+   Privacy Policy says so.
+2. **Video refused in encrypted chats. Decided: accept at launch, and say so.** Text, photos, voice messages and files can be sent.
+3. **No link previews in encrypted chats. Decided: accept, and say so.** A server fetch would show the server the URL.
+4. **Translation refused for encrypted messages. Decided: accept, and say so.**
+5. **Push notification text. Decided: "Encrypted message".** A notification for an encrypted message does not show the text.
+6. **Chat report key. Decided: Maan Ghori holds the private key.** One copy is kept offline in a place he controls, and a second copy in
+   another place he controls. Neither goes on the server or into the repository. The public half goes in the server's `.env`. Runbook
+   step 4a has the steps. If the private key is lost, sealed reports cannot be read.
+7. **Chat reports kept for one year. Decided: one year from the date a report is made (18 U.S.C. 2258A(h) for reports to NCMEC).** The app
+   removes a report and its files one year after it was made. Nothing is deleted by hand until counsel's preservation advice is in hand.
+8. **Court-action contact. Decided: `RHENKO_COPYRIGHT_AGENT_EMAIL`, once the agent exists.** Until then the copyright page shows no agent.
 
 ## Payment decisions for the operator
 
-These are not changed by the app. The operator decides each one, and the lawyer checks the wording. Each item names the
-text it affects and a recommendation.
+1. **Payment records when an account is deleted. Decided: keep them for five years from each payment, without the account, then
+   delete them.** Built in this round.
+   - Deleting an account copies its subscription, tip and advertising ledger rows into `financial_records` before the account's rows
+     are removed (`keepPaymentRecords` in `lib/payments.ts`, called from `eraseAccount` in `actions/account.ts`). A kept row has no name,
+     handle, email, payment-provider customer number, or the other person in a tip.
+   - `lib/maintenance.ts` deletes each kept row once its `keep_until` date has passed. The period is `RETENTION.financialRecordsYears` in
+     `lib/legal.ts`.
+   - Stripe keeps its own records under its own policy. The Privacy Policy and Terms say so.
+   - The table must exist before the new code runs: apply `db/postgres/upgrades/2026-11-financial-records.sql` (runbook step 3).
+   - Counsel checks the five-year period against the tax and accounting law.
+2. **Withdrawal right for subscriptions. Decided: 14 days, as the Terms say,** and any longer right the law gives still applies. Counsel
+   confirms the wording for each market.
+3. **Price changes. Decided: at least 30 days' notice,** and the right to cancel before the new price applies. The Terms say so.
+4. **Advertising balance refunds. Decided: a confirmed request is paid back to the card within 14 days,** under the advertiser terms.
+   The contact address for requests must be a real business address before this can be acted on.
 
-1. **Payment records on account deletion.** Deleting an account removes its rows in the app's payment tables by cascade:
-   subscriptions, the Stripe customer link, tips it sent or received, the advertising account, its campaigns and its
-   advertising ledger (`db/postgres/schema.sql`). Stripe keeps its own records under its own policy. The Privacy Policy
-   does not say which financial records are kept, for tax or legal reasons, after deletion, or for how long.
-   - Option A: keep the minimum financial records the law requires (for example a ledger of payments and refunds, with
-     the personal fields removed) for the period the lawyer sets, and delete the rest.
-   - Option B: delete everything the app holds on deletion, and rely on Stripe's own retention.
-   - **Recommendation: Option A**, with the period set by the lawyer. Option B leaves the operator with no record of its
-     own payments if a dispute or tax audit comes up later.
-   - This interacts with item 4: if the advertising ledger is deleted with the account, an unspent balance cannot be
-     refunded afterwards.
+## Launch blockers
 
-2. **Withdrawal right for subscriptions.** The Terms let people withdraw from a subscription, and say that cancelling
-   does not refund the period already paid except under the withdrawal right. Consumers in the EU and UK usually have a
-   cooling-off right, and it can be lost once digital content is delivered straight away.
-   - **Recommendation:** keep the right, and have the lawyer confirm the wording for each market the operator serves.
+These cannot be finished in the repository. Each needs an operator action or a decision from counsel.
 
-3. **Price changes.** The Terms say a subscription renews at the price shown until cancelled. They do not yet set how
-   much notice a price change needs.
-   - **Recommendation:** give notice before a new price applies, for the period the lawyer sets, and let people cancel
-     before it takes effect.
-
-4. **Advertising balance refunds.** The advertising transparency page says unspent balance can be requested back through
-   the contact address. That address is not published until the operator supplies it, so the sentence cannot be acted on
-   yet.
-   - **Recommendation:** name a refund process and an owner, publish the address, and have the lawyer confirm the
-     refund period.
+- The business contact addresses (contact, privacy, grievance, copyright agent) and the registered copyright agent.
+- Confirmation of the hosting location against the actual server (Brisbane, Sydney or Bangalore).
+- Counsel's review of the pages and of the decisions above, and a record of it before `RHENKO_LEGAL_REVIEWED` is set.
+- Age assurance beyond a typed date of birth (decision 9). The app does not yet do it, and it needs a provider.
+- Image scanning for known abuse material. The app does not do this. It needs a provider and an account with it. Counsel and operator
+  decide whether it is required before launch.
+- Production steps in the runbook, including applying the three upgrade files before the new code. They need access to the server, which
+  this session does not have.
 
 ## Verification
 
-Checked on 2026-11-07. The changes listed below are committed in 8f37578 on rhenko-app-features. The plaintext full run was made
-before the final moderation, runbook and test-only edits, and has not been rerun since.
+Run on 7 November 2026, after the changes above. Each result is from the last run of that check, after the final code change.
 
-- `npx tsc --noEmit`, eslint on the changed TypeScript files, and `npm run build`: clean. `npm run test:unit`: 419 passing.
-- End-to-end, encryption off (`RHENKO_E2EE=0`): the full run, every area except `encrypted`, passed 545 of 545.
-- End-to-end, encryption on (`RHENKO_E2EE=1`): the full run, every area, passed 565 of 565. The encrypted area has 20 checks and
-  all pass. The messages area passes 48 of 48 in each mode.
-- The email checks in the account and legal areas ran with the local mail sink (`e2e/lib/mail-sink.mjs`) up, with the server
-  sending to it.
-- Runbook step 5 was rehearsed on the test database inside one transaction, ended with `rollback`, so nothing was deleted. The
-  dry run and the rehearsal both counted 186 plaintext messages, and the rehearsal queued 17 files. The first version of the file
-  name pattern left out the voice notes and documents the app accepts, and it did not keep files a chat report still holds. Both
-  are fixed in the runbook and in `scripts/moderation.mjs`, and `tests/upload-names.test.mjs` keeps the three lists the same.
-- App change: a send that fails in an encrypted chat now says "Your message did not send. Check your connection and try again.",
-  the same as a plaintext chat.
-- Command line: `report-keygen` refuses a key file inside the repository.
-- Test-side changes; none changes the app's behaviour:
-  - The messages checks find an encrypted chat's rows by the label an encrypted row shows ("Encrypted message"), read the banner
-    and the voice player the way an encrypted chat shows them, and wait for the save in the database, because the request holds
-    sealed text.
-  - The encrypted area has a check that a device whose signing key changed is refused with a notice, and that its messages read
-    again once the key is back.
-  - The deletion check waits for the deleted message's own text to leave the thread. A child-safety report earlier in the same
-    chat also leaves a deleted notice, so waiting for any notice had let the check read the thread too early.
-  - The report toast is moved away from the pointer and cleared before the next step, so it does not cover a sheet's button.
-  - A 409 console error from the view beacon of a tab left open on a deactivated account is listed in `IGNORED_NOISE` in
-    `e2e/run.mjs`, with its reason. The deactivate check still asserts the sign-out and the hidden-account message.
-- Earlier, a phone-sized browser check confirmed the bottom bar is hidden on a chat and on the new-message page, returns on home,
-  and that a sent message appears at once. Calls were not checked visually.
+- `npx tsc --noEmit`: clean.
+- `npm run test:unit`: 420 pass, 0 fail. This includes `tests/legal-mirror.test.mjs`, which keeps the repeat-infringer numbers the same in
+  the app and in `scripts/legal.mjs`.
+- `eslint` on the changed TypeScript files, `e2e/billing.mjs` and `scripts/legal.mjs`: clean.
+- `npm run build`: passes.
+- End-to-end, against a scratch database loaded from `db/postgres/schema.sql` and then the `2026-11-financial-records.sql` upgrade, with
+  encryption on (`RHENKO_E2EE=1`), the Stripe stand-in from `e2e/stripe.env` (`E2E_STRIPE=1`), and the `legal`, `billing` and `account`
+  areas: 89 passed, 0 failed. The checks include the 24-hour intimate-image deadline, and the new check that a deleted account's
+  subscription record is kept for five years without its id or handle.
+- Last run before the 24-hour and payment-records changes, so not rerun since: the `encrypted` and `messages` areas (110 of 110 at that
+  point). The `calls` area and the full plaintext suite were not run in this round.
+- Not covered by any test: the five-year purge of kept payment records (a single `DELETE` on `keep_until` in `lib/maintenance.ts`).
+
+## What was not done
+
+- **The benchmark against other large platforms is partial.** X's copyright policy was read. Bluesky, Reddit, Meta, Discord, WhatsApp and
+  Signal were not. Two research agents stalled and were stopped without reports.
+- **The eSafety figure was read from eSafety's media release**, fetched on 7 November 2026. The minimum-age facts come from the
+  government fact sheet of January 2026, which does not state the date the obligation started. The TAKE IT DOWN Act's 48 hours and the
+  minimum-age commencement date should be checked by counsel against the statute and the regulator's own notice.
+- **The five-year purge of kept payment records** is not covered by an end-to-end test. The maintenance pass runs hourly and was not
+  waited for. The SQL is a single `DELETE` on `keep_until`.
+- **Image scanning and age assurance** are not implemented (see launch blockers).

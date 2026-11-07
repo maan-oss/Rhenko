@@ -7,8 +7,8 @@ Nothing in this runbook has been run against production. The operator runs each 
 
 - [ ] Counsel has given its preservation advice (`docs/legal-operations.md`), and has seen how chat reports are kept and read (step 4a).
       The child-safety overview is in the Better project as `claude/e2ee-child-safety-legal-overview-2026-11-06.md`. It is not legal advice.
-- [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql`, `db/postgres/upgrades/2026-11-dmca.sql` and the
-      chat reporting changes.
+- [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql`, `db/postgres/upgrades/2026-11-dmca.sql`,
+      `db/postgres/upgrades/2026-11-financial-records.sql` and the chat reporting changes.
 - [ ] The commands below run from the repository directory on the server (the moderation commands need `lib/`, which the app's image does not
       carry, so run them from a checkout with `npm install` done, not inside the container).
 
@@ -33,10 +33,12 @@ dumps for 30 days (`BACKUP_KEEP_DAYS`).
 
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-e2ee.sql
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-dmca.sql
+    docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-financial-records.sql
 
-Expect NOTICE lines and no ERROR. Both files only add tables and columns, and both are safe to run again. Run them before the new code:
+Expect NOTICE lines and no ERROR. All three files only add tables and columns, and all are safe to run again. Run them before the new code:
 the previous code keeps working on the upgraded schema. The second file adds the copyright notice fields (telephone, sworn statement,
-the 48-hour deadline on intimate-image notices) and the counter-notice table.
+the 24-hour deadline on intimate-image notices) and the counter-notice table. The third adds the payment records kept when an account is
+deleted. Account deletion in the new code writes to that table, so it must exist before the new code runs.
 
 ## 4. Deploy the new code and restart the app
 
@@ -53,6 +55,10 @@ This prints a line `RHENKO_REPORT_KEY='{...}'`. Put that line in the server's `.
 Keep the private key file somewhere only the reviewers can reach, with a copy you control. If it is lost, reports sealed to it cannot be
 read again. If it is leaked, anyone holding it can read every reported message, so treat it as you would a production secret.
 Reporting is refused while `RHENKO_REPORT_KEY` is missing, so a missing key does not store reports in the clear.
+
+Decided by the operator: Maan Ghori holds the private key. Keep one copy offline in a place he controls, and a second copy in another
+place he controls. Neither copy goes on the server or into the repository. Before the first real report arrives, check that the key
+opens a test report sealed with a throwaway key pair, so a lost or damaged file is found before it matters.
 
 Reviewing a report (from the repository checkout, with `DATABASE_URL` and the app's storage settings in `.env`):
 

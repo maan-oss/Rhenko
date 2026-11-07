@@ -141,7 +141,7 @@ const SECTIONS: LegalSection[] = [
             applies.
           </li>
           <li>
-            <B>Price changes.</B> If the price of a subscription changes, we tell you before the new price applies, and you can cancel before it does.
+            <B>Price changes.</B> If the price of a subscription changes, we tell you at least 30 days before the new price applies, and you can cancel before it does.
           </li>
           <li>
             <B>Reach.</B> Paying changes what you can do, not who sees your posts. No paid feature changes how a post is ranked or how many
@@ -249,7 +249,8 @@ const SECTIONS: LegalSection[] = [
         </List>
         <P>
           Where a law requires a faster step, for example a removal order from an authority, the operator follows it. The notice
-          you receive says so.
+          you receive says so. A post removed because of an order from one country is removed for everyone, because Rhenko does not
+          restrict content by country.
         </P>
       </>
     ),
@@ -347,8 +348,8 @@ const SECTIONS: LegalSection[] = [
       <>
         <P>
           You can deactivate or delete your account in Settings, under Account. Deleting an account deletes your posts, messages,
-          photos and videos. Some records are kept as the Privacy Policy describes, for example notices about content and the
-          payment records the law requires us to keep.
+          photos and videos. Some records are kept as the Privacy Policy describes, for example notices about content, and payment
+          records kept without your name for the period the Privacy Policy states.
         </P>
         <P>
           Deactivating or deleting an account ends any paid subscription at the end of the period already paid for. If that cannot be

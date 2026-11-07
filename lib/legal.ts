@@ -3,8 +3,8 @@
 
 // Bump this whenever the Terms or the Privacy Policy change in a way that matters. Every account must accept the current
 // version before it can use the app.
-export const TERMS_VERSION = "2026-10-12-2"
-export const LEGAL_UPDATED = "12 October 2026"
+export const TERMS_VERSION = "2026-11-07-1"
+export const LEGAL_UPDATED = "7 November 2026"
 
 // Rhenko is for adults. 18 is the age at which India's DPDP Act stops treating someone as a child (so no parental
 // consent flow is needed), and it is above Australia's under-16 rule for age-restricted social media, the UK and EU
@@ -16,6 +16,11 @@ export const MINIMUM_AGE = 18
 export const APPEAL_DAYS = 30
 const DAY = 24 * 60 * 60 * 1000
 export const APPEAL_MS = APPEAL_DAYS * DAY
+
+// An account with this many upheld copyright notices within REPEAT_INFRINGER_DAYS is reviewed for closure. scripts/legal.mjs
+// counts them with the same numbers (`repeats`).
+export const REPEAT_INFRINGER_NOTICES = 3
+export const REPEAT_INFRINGER_DAYS = 365
 
 // How long each kind of record is kept. The Privacy Policy states these, and the background tick enforces them.
 export const RETENTION = {
@@ -32,6 +37,10 @@ export const RETENTION = {
   // When an account was made from, signed in from or passed a check: the network as a keyed hash that cannot be read back to an
   // address. The browser is not kept. Used to see many accounts coming from one place (lib/risk.ts).
   signalsDays: 30,
+  // The payment records of a deleted account (subscriptions, tips, advertising payments and the advertising ledger) are kept
+  // without the name, handle, email or payment-provider customer number. Each is removed this many years after its payment
+  // (lib/payments.ts keepPaymentRecords, purged by lib/maintenance.ts). Not a day count.
+  financialRecordsYears: 5,
 }
 
 // Why a post was hidden or removed. A moderator picks one of these, and the notice the author sees names it.
@@ -70,10 +79,11 @@ export function noticeKindLabel(id: string): string {
 // Notices that must be acted on at once. Their post is hidden as soon as the notice arrives, and a person reviews it after.
 export const URGENT_KINDS: ReadonlySet<string> = new Set(["intimate_image", "child_abuse"])
 
-// A notice about an intimate image must be acted on within this many hours of its arrival: the TAKE IT DOWN Act requires a covered
-// platform to remove the content within 48 hours of a valid request made through its posted process. The deadline is kept on the
-// notice (legal_notices.due_by), and the command line lists the ones past it.
-export const INTIMATE_REMOVAL_HOURS = 48
+// A notice about an intimate image must be acted on within this many hours of its arrival. The TAKE IT DOWN Act allows a covered
+// platform 48 hours from a valid request made through its posted process; eSafety asks for 24 hours for its own notices, so the
+// shorter figure is used for every notice. The deadline is kept on the notice (legal_notices.due_by), and the command line lists
+// the ones past it.
+export const INTIMATE_REMOVAL_HOURS = 24
 
 // After a counter-notice, a post removed for copyright goes back no sooner than 10 and no later than 14 business days after the
 // counter-notice was received, unless the copyright owner has told us it has started a court action (17 U.S.C. 512(g)(2)(C)).

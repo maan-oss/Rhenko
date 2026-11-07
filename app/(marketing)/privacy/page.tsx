@@ -261,6 +261,11 @@ const SECTIONS: LegalSection[] = [
           Messages are kept until they are deleted.
         </P>
         <P>
+          In an end-to-end encrypted chat, videos cannot be sent yet. Link previews are not made and messages cannot be translated, so
+          the server never fetches a link or reads a message for those. A notification for an encrypted message says Encrypted message,
+          not its text.
+        </P>
+        <P>
           In an end-to-end encrypted chat, Contact info shows a safety number for each other person. You can compare it with them
           to check that you are talking to the right devices. A new browser or device changes the number. Rhenko does not check the
           numbers for you.
@@ -628,9 +633,11 @@ const SECTIONS: LegalSection[] = [
           answer is a post, kept like any other.
         </li>
         <li>
-          Payment and accounting records (subscriptions, tips, advertising payments and the advertising ledger) are kept for as long as
-          the accounting and tax law where the operator is based requires. The operator deletes them when that period ends. The one-way
-          codes in the advertising ledger are kept with those entries. Stripe keeps its own records under its own policy.
+          Payment and accounting records (subscriptions, tips, advertising payments and the advertising ledger) are kept with your
+          account. When you delete your account, the records that accounting and tax record-keeping need are kept for{" "}
+          {RETENTION.financialRecordsYears} years from each payment, without your name, handle, email address, payment-provider customer
+          number, or the other person in a tip. Then they are deleted. The one-way codes in the advertising ledger are kept with those
+          entries. Stripe keeps its own records under its own policy.
         </li>
         <li>
           Notices about content, their decisions and the appeals are kept for {RETENTION.legalNoticesDays / 365} years, then

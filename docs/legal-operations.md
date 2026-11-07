@@ -18,7 +18,7 @@ written from the laws as they stood in October 2026. Check them before you rely 
 | Notice and action, with acknowledgement and decision to the sender (DSA Article 16) | `/notice` form, `scripts/legal.mjs` |
 | Immediate hiding for intimate images and child sexual abuse | `URGENT_KINDS` in `lib/legal.ts`; applied when a notice or report arrives |
 | Copyright notices and counter-notices (DMCA section 512) | `/copyright`, `/notice`, `/notices`; the rules in `lib/notice-rules.ts`; the restore window in `lib/business-days.ts` and `COUNTER_RESTORE_BUSINESS_DAYS` |
-| Intimate-image removal within 48 hours of a valid notice | `INTIMATE_REMOVAL_HOURS` in `lib/legal.ts`; `due_by` on each notice; `npm run legal -- overdue` |
+| Intimate-image removal within 24 hours of a valid notice | `INTIMATE_REMOVAL_HOURS` in `lib/legal.ts`; `due_by` on each notice; `npm run legal -- overdue` |
 | Retention limits enforced by the background tick | `RETENTION` in `lib/legal.ts`, `keepWithinRetention` in `lib/maintenance.ts` |
 | Hidden posts deleted after the appeal window | `purgeHidden` in `lib/moderation.ts` |
 | Transparency figures | `/transparency`, read from the server's records each time |
@@ -84,7 +84,7 @@ Work through this list in order. Each item names who is responsible.
 npm run moderation -- list          # open reports, oldest first
 npm run moderation -- appeals       # appeals waiting for a decision
 npm run legal -- list               # open notices; urgent ones first
-npm run legal -- overdue            # intimate-image notices past their 48-hour deadline
+npm run legal -- overdue            # intimate-image notices past their 24-hour deadline
 npm run legal -- counter-list       # counter-notices waiting, due or overdue
 ```
 
@@ -110,7 +110,8 @@ preservation of evidence before you delete anything.
 
 **Intimate images without consent.** Hide at once. In India, act within two hours of a valid complaint. Tell the person
 who complained when it is done. Do not leave the content visible while you check the complaint. Each notice also has a
-removal deadline 48 hours after it arrived (`due_by`, under the TAKE IT DOWN Act). `npm run legal -- overdue` lists any notice
+removal deadline 24 hours after it arrived (`due_by`). The TAKE IT DOWN Act allows 48 hours, so 24 is the stricter figure the app
+uses for every notice. `npm run legal -- overdue` lists any notice
 still open after that. Decide it straight away and record why.
 
 **Copyright.** The notice form requires everything `/copyright` lists: the owner's name, postal address and telephone number,
