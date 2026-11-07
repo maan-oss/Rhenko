@@ -29,10 +29,9 @@ async function BillingBody({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
   const state = await billingState(viewer)
   const plusId = priceIdFor("plus")
-  const verifiedId = priceIdFor("verified")
-  const [plusPrice, verifiedPrice] = await Promise.all([plusId ? await priceLabel(plusId) : null, verifiedId ? await priceLabel(verifiedId) : null])
+  const plusPrice = plusId ? await priceLabel(plusId) : null
   const checkout = typeof params.checkout === "string" ? params.checkout : ""
   const payouts = typeof params.payouts === "string" ? params.payouts : ""
   const notice = NOTICES[`checkout:${checkout}`] ?? NOTICES[`payouts:${payouts}`] ?? null
-  return <BillingPanel state={state} plusPrice={plusPrice} verifiedPrice={verifiedPrice} notice={notice} />
+  return <BillingPanel state={state} plusPrice={plusPrice} notice={notice} />
 }

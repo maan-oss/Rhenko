@@ -20,8 +20,11 @@
 //                    listens on 127.0.0.1:2525 (MAIL_SINK_PORT changes it). Start the server with RHENKO_SMTP_URL=smtp://127.0.0.1:2525.
 //                    The legal area's decision emails are sent by the command line, which reads RHENKO_SMTP_URL from
 //                    the environment it is started in, so give the suite the same RHENKO_SMTP_URL as the server.
-//   DATABASE_URL     the Postgres database the server uses. A few checks read and change rows in it directly, for example to
-//                    move a scheduled post to 30 seconds from now (see e2e/posts.mjs). Those checks fail without it.
+//   DATABASE_URL     the Postgres database the server uses. Every account the suite makes is marked an adult in it (see
+//                    e2e/lib/accounts.mjs), so the whole suite needs it. A few checks also read and change rows directly, for
+//                    example to move a scheduled post to 30 seconds from now (see e2e/posts.mjs).
+//   RHENKO_IMAGE_SCAN=test  set on the server. Photos and videos are refused without a scanner (lib/image-scan.ts), and the test
+//                    scanner is refused in production mode, so the server runs in development mode (next dev) for the suite.
 //   RHENKO_STORAGE   the same value the server got (local for the test server). The suite stores its own pictures, such as
 //                    the link preview picture, the same way: in the uploads folder when this is local, and in Supabase otherwise.
 //   RHENKO_DATA_DIR  folder the server keeps uploads in when RHENKO_STORAGE=local (same value the server got; default ./data).
@@ -56,6 +59,7 @@ import * as encrypted from "./encrypted.mjs"
 import * as isolation from "./isolation.mjs"
 import * as calls from "./calls.mjs"
 import * as billing from "./billing.mjs"
+import * as age from "./age.mjs"
 import * as ads from "./ads.mjs"
 import * as rules from "./rules.mjs"
 import * as settings from "./settings.mjs"
@@ -125,6 +129,7 @@ const AREAS = [
   ["isolation", isolation],
   ["calls", calls],
   ["billing", billing],
+  ["age", age],
   ["ads", ads],
   ["rules", rules],
   ["settings", settings],

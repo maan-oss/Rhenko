@@ -4,10 +4,10 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { setPriorityAccount } from "@/actions/notifications"
 import { Avatar } from "@/components/app/avatar"
-import { VerifiedBadge } from "@/components/app/badges"
+import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { cn } from "@/lib/utils"
 
-type PriorityRow = { id: string; handle: string; name: string; avatarFile: string | null; verified: boolean; priority: boolean }
+type PriorityRow = { id: string; handle: string; name: string; avatarFile: string | null; verified: boolean; paidVerified: boolean; priority: boolean }
 
 // The accounts the viewer follows, each with a switch that adds it to the Priority tab. Up to `limit` can be on.
 export function PriorityAccounts({ initial, limit }: { initial: PriorityRow[]; limit: number }) {
@@ -57,6 +57,7 @@ export function PriorityAccounts({ initial, limit }: { initial: PriorityRow[]; l
                 <span className="flex min-w-0 items-center gap-1 text-[15px] font-semibold">
                   <span className="truncate">{row.name}</span>
                   {row.verified ? <VerifiedBadge className="shrink-0" /> : null}
+                  {row.paidVerified ? <SubscriberBadge className="shrink-0" /> : null}
                 </span>
                 <span className="truncate text-sm text-muted-foreground">@{row.handle}</span>
               </span>

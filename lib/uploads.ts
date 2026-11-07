@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
-import { MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS } from "@/lib/rules"
+import { MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, maxVideoSeconds } from "@/lib/rules"
 import { stripImageMetadata } from "@/lib/image-metadata"
+import { scanMedia } from "@/lib/image-scan"
 import { objectSize, readObject, removeObjects, storeObject } from "@/lib/storage"
 import { trimProblem, type Trim } from "@/lib/trim-rules"
 import { VideoRefused, withCleanVideo, type VideoCut } from "@/lib/video-metadata"
@@ -117,13 +118,17 @@ export async function removeUpload(name: string | null | undefined): Promise<voi
 // Returns null when no file was chosen. Names are random, so a name never points at two different files. `accept`
 // restricts what a field may hold: "any" is a post's photos and video, "audio" is a voice message, and "image" is an
 // avatar or a chat photo. A `trim` keeps only that part of a video. It is stored as an MP4, whatever the upload was, and
-// the post carries nothing of the rest. The window is checked here against the length of the real file.
+// the post carries nothing of the rest. The window is checked here against the length of the real file. `plus` is the
+// uploader's own Plus status: it sets how long a video may run (lib/rules.ts maxVideoSeconds). The callers pass it from the
+// server's viewer, never from the form.
 export async function saveUpload(
   value: FormDataEntryValue | null,
   accept: "image" | "audio" | "document" | "any" = "any",
-  trim: Trim | null = null
+  trim: Trim | null = null,
+  plus = false
 ): Promise<SaveResult | null> {
   if (!(value instanceof File) || value.size === 0) return null
+  const videoSeconds = maxVideoSeconds(plus)
   // A recorder can label its type with codecs ("audio/webm;codecs=opus"). The codecs are not part of the format.
   const type = value.type.split(";")[0].trim()
   const format = FORMATS[type]
@@ -135,6 +140,11 @@ export async function saveUpload(
     return { ok: false, error: "Use a JPEG, PNG, WebP or GIF image, or an MP4, WebM or MOV video." }
   }
   if (trim && format.kind !== "video") return { ok: false, error: "Only a video can be trimmed." }
+  // Every photo and video is checked before anything is stored (lib/image-scan.ts). Without a scanner they are refused.
+  if (format.kind === "image" || format.kind === "video") {
+    const scan = await scanMedia(value)
+    if (!scan.ok) return { ok: false, error: scan.error }
+  }
   const limit = format.kind === "video" ? MAX_VIDEO_BYTES : format.kind === "image" ? MAX_IMAGE_BYTES : MAX_DOCUMENT_BYTES
   if (value.size > limit) {
     return {
@@ -181,9 +191,9 @@ export async function saveUpload(
   const cut: VideoCut | null = trim
     ? {
         ...trim,
-        maxSeconds: MAX_VIDEO_SECONDS,
+        maxSeconds: videoSeconds,
         maxBytes: MAX_VIDEO_BYTES,
-        check: (duration) => trimProblem(trim, MAX_VIDEO_SECONDS, duration),
+        check: (duration) => trimProblem(trim, videoSeconds, duration),
       }
     : null
   const name = `${randomUUID().replace(/-/g, "")}.${stored.ext}`
@@ -191,7 +201,7 @@ export async function saveUpload(
     if (body !== null) await storeObject(name, body, type)
     // A video keeps its picture and sound only. Location, device and time details are removed before anything is stored,
     // and a video that cannot be cleaned is refused. The original is never kept.
-    else await withCleanVideo(value, type, (clean) => storeObject(name, clean, stored.mime), cut, MAX_VIDEO_SECONDS)
+    else await withCleanVideo(value, type, (clean) => storeObject(name, clean, stored.mime), cut, videoSeconds)
   } catch (error) {
     // A video that could not be cleaned was refused before anything reached storage.
     if (error instanceof VideoRefused) return { ok: false, error: error.message }

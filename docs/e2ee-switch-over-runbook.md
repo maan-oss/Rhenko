@@ -8,7 +8,11 @@ Nothing in this runbook has been run against production. The operator runs each 
 - [ ] Counsel has given its preservation advice (`docs/legal-operations.md`), and has seen how chat reports are kept and read (step 4a).
       The child-safety overview is in the Better project as `claude/e2ee-child-safety-legal-overview-2026-11-06.md`. It is not legal advice.
 - [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql`, `db/postgres/upgrades/2026-11-dmca.sql`,
-      `db/postgres/upgrades/2026-11-financial-records.sql` and the chat reporting changes.
+      `db/postgres/upgrades/2026-11-financial-records.sql`, `db/postgres/upgrades/2026-11-age-check.sql`,
+      `db/postgres/upgrades/2026-11-plus-badge.sql` and the chat reporting changes.
+- [ ] The Stripe dashboard webhook for this server includes the `identity.verification_session.processing`, `.verified`,
+      `.requires_input` and `.canceled` events, and Stripe Identity is enabled for the account. Without them, age checks never finish
+      and every account stays unable to post (see step 3).
 - [ ] The commands below run from the repository directory on the server (the moderation commands need `lib/`, which the app's image does not
       carry, so run them from a checkout with `npm install` done, not inside the container).
 
@@ -34,11 +38,19 @@ dumps for 30 days (`BACKUP_KEEP_DAYS`).
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-e2ee.sql
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-dmca.sql
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-financial-records.sql
+    docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-age-check.sql
+    docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-plus-badge.sql
 
-Expect NOTICE lines and no ERROR. All three files only add tables and columns, and all are safe to run again. Run them before the new code:
-the previous code keeps working on the upgraded schema. The second file adds the copyright notice fields (telephone, sworn statement,
-the 24-hour deadline on intimate-image notices) and the counter-notice table. The third adds the payment records kept when an account is
-deleted. Account deletion in the new code writes to that table, so it must exist before the new code runs.
+Expect NOTICE lines and no ERROR. All five files are safe to run again. Run them before the new code: the previous code keeps working
+on the upgraded schema. The second file adds the copyright notice fields (telephone, sworn statement, the 24-hour deadline on
+intimate-image notices) and the counter-notice table. The third adds the payment records kept when an account is deleted. Account
+deletion in the new code writes to that table, so it must exist before the new code runs. The fourth adds the age-check columns
+(`age_check`, `age_check_session`, `age_checked_at`) to `users`; every existing account starts at `none`. The fifth sets the Plus badge
+(`paid_verified`) on accounts with an active or trialing Plus subscription, and changes nothing else.
+
+Existing accounts are not grandfathered. Until an account completes the Stripe identity check on the settings page, it can read and
+follow but cannot post, reply, message or upload media. Tell users before the switch, because the first thing many of them will see is
+that refusal.
 
 ## 4. Deploy the new code and restart the app
 

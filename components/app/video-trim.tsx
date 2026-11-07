@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { usePreview } from "@/components/app/use-preview"
-import { MAX_VIDEO_SECONDS } from "@/lib/rules"
 import { coversWhole, firstWindow, formatClock, moveEnd, moveStart, rangeLabel, spokenLength, type Trim } from "@/lib/trim-rules"
 import { useTrimPlayback } from "@/lib/use-trim-playback"
 import { cn } from "@/lib/utils"
@@ -109,22 +108,25 @@ export function VideoTrim({
   file,
   duration,
   initial,
+  maxSeconds,
   onCancel,
   onApply,
 }: {
   file: File
   duration: number
   initial: Trim | null
+  // The longest part a post can carry for this account: 140 seconds, or 600 with Rhenko Plus (lib/rules.ts maxVideoSeconds).
+  maxSeconds: number
   onCancel: () => void
   onApply: (trim: Trim | null) => void
 }) {
   const url = usePreview(file)
-  const [win, setWin] = useState<Trim>(() => initial ?? firstWindow(duration, MAX_VIDEO_SECONDS))
+  const [win, setWin] = useState<Trim>(() => initial ?? firstWindow(duration, maxSeconds))
   const video = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
   const [failed, setFailed] = useState(false)
   const track = useRef<HTMLDivElement>(null)
-  const tooLong = duration > MAX_VIDEO_SECONDS
+  const tooLong = duration > maxSeconds
 
   useTrimPlayback(video, url, win, false)
 
@@ -137,13 +139,13 @@ export function VideoTrim({
   }
 
   function moveFirst(seconds: number) {
-    const next = moveStart(win, seconds, MAX_VIDEO_SECONDS)
+    const next = moveStart(win, seconds, maxSeconds)
     setWin(next)
     show(next.start)
   }
 
   function moveLast(seconds: number) {
-    const next = moveEnd(win, seconds, duration, MAX_VIDEO_SECONDS)
+    const next = moveEnd(win, seconds, duration, maxSeconds)
     setWin(next)
     show(next.end)
   }
@@ -163,7 +165,7 @@ export function VideoTrim({
         <DialogTitle className="pr-8 text-base font-semibold">Trim your video</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
           {tooLong
-            ? `This video is ${formatClock(duration)} long. A post can carry up to ${formatClock(MAX_VIDEO_SECONDS)}, so choose the part to keep.`
+            ? `This video is ${formatClock(duration)} long. A post can carry up to ${formatClock(maxSeconds)}, so choose the part to keep.`
             : "Drag the handles to choose the part to post."}
         </DialogDescription>
 
@@ -216,8 +218,8 @@ export function VideoTrim({
                 side="start"
                 label="Start of the part to keep"
                 time={win.start}
-                low={moveStart(win, 0, MAX_VIDEO_SECONDS).start}
-                high={moveStart(win, Infinity, MAX_VIDEO_SECONDS).start}
+                low={moveStart(win, 0, maxSeconds).start}
+                high={moveStart(win, Infinity, maxSeconds).start}
                 duration={duration}
                 track={track}
                 onMove={moveFirst}
@@ -226,8 +228,8 @@ export function VideoTrim({
                 side="end"
                 label="End of the part to keep"
                 time={win.end}
-                low={moveEnd(win, 0, duration, MAX_VIDEO_SECONDS).end}
-                high={moveEnd(win, Infinity, duration, MAX_VIDEO_SECONDS).end}
+                low={moveEnd(win, 0, duration, maxSeconds).end}
+                high={moveEnd(win, Infinity, duration, maxSeconds).end}
                 duration={duration}
                 track={track}
                 onMove={moveLast}

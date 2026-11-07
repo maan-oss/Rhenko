@@ -13,13 +13,21 @@ import { formatMoney } from "@/lib/money"
 type Props = {
   state: BillingState
   plusPrice: string | null
-  verifiedPrice: string | null
   notice: string | null
 }
 
+// What Rhenko Plus includes, in the order the page lists it. Each line is true of the code: see the rules and upload checks.
+const PLUS_INCLUDES = [
+  "No ads in your home feed.",
+  "Edit a post for a day, instead of an hour.",
+  "The paid subscriber ring beside your name. It shows that you pay. It does not check who you are.",
+  "An animated profile picture, which can be a GIF.",
+  "Videos up to 10 minutes long, instead of 2 minutes 20 seconds. The 100 MB size limit is the same for everyone.",
+]
+
 // The billing page's controls. Each one asks the server for a Stripe page and then sends the person there, so no card
 // number is typed into this app. Money shown here comes from Stripe's own price.
-export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props) {
+export function BillingPanel({ state, plusPrice, notice }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -47,10 +55,6 @@ export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props)
         <h2 id="plus-heading" className="text-lg font-semibold">
           Rhenko Plus
         </h2>
-        <p className="text-[15px] text-muted-foreground">
-          No ads in your feeds. You can edit a post for a day instead of an hour. Plus does not change who sees your posts, how replies
-          are ordered, or what search finds.
-        </p>
         {state.plus.active ? (
           <p className="text-[15px]">
             {state.plus.cancelAtPeriodEnd ? "Plus ends " : "Plus renews "}
@@ -59,13 +63,28 @@ export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props)
         ) : (
           <p className="text-[15px]">{plusPrice ? `${plusPrice}, billed by Stripe. Cancel any time.` : "The price is not set up yet."}</p>
         )}
+        <div className="flex flex-col gap-2">
+          <p className="text-[15px] font-semibold">Plus includes</p>
+          <ul className="list-disc space-y-2 pl-5 text-[15px]">
+            {PLUS_INCLUDES.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className="text-[15px] text-muted-foreground">Plus does not change who sees your posts, how replies are ordered, or what search finds.</p>
+        </div>
+        {!state.plus.active && !state.emailVerified ? <p className="text-[15px]">Confirm your email address first. Rhenko Plus needs one.</p> : null}
         <div className="flex flex-wrap gap-2">
           {state.plus.active ? (
             <Button type="button" variant="outline" disabled={disabled} onClick={() => go(openBilling)} className="h-10 rounded-full px-4 font-semibold">
               Manage billing
             </Button>
           ) : (
-            <Button type="button" disabled={disabled || !plusPrice} onClick={() => go(() => startSubscription("plus"))} className="h-10 rounded-full px-4 font-semibold">
+            <Button
+              type="button"
+              disabled={disabled || !plusPrice || !state.emailVerified}
+              onClick={() => go(() => startSubscription("plus"))}
+              className="h-10 rounded-full px-4 font-semibold"
+            >
               Subscribe to Plus
             </Button>
           )}
@@ -84,42 +103,45 @@ export function BillingPanel({ state, plusPrice, verifiedPrice, notice }: Props)
             />
           ) : null}
         </div>
+        {state.plus.withdrawable ? (
+          <p className="text-sm text-muted-foreground">Withdraw within 14 days of starting, and the first payment is refunded. To cancel after that, use Manage billing.</p>
+        ) : null}
       </section>
 
-      <section className="flex flex-col gap-3 border-b border-border px-4 py-4" aria-labelledby="verified-heading">
-        <h2 id="verified-heading" className="text-lg font-semibold">
-          Paid subscriber badge
-        </h2>
-        <p className="text-[15px] text-muted-foreground">
-          A ring beside your name that shows you pay for a subscription. It does not check who you are. Rhenko&apos;s verified badge is separate,
-          and it is not sold.
-        </p>
-        {!state.emailVerified ? <p className="text-[15px]">Confirm your email address first. This badge needs one.</p> : null}
-        {state.verified.active ? (
+      {state.verified.active ? (
+        <section className="flex flex-col gap-3 border-b border-border px-4 py-4" aria-labelledby="badge-heading">
+          <h2 id="badge-heading" className="text-lg font-semibold">
+            Your older subscriber badge
+          </h2>
+          <p className="text-[15px] text-muted-foreground">
+            You subscribed to the paid subscriber ring before Rhenko Plus included it. Plus includes the ring now, so you can cancel this one
+            here. It does not check who you are.
+          </p>
           <p className="text-[15px]">
             {state.verified.cancelAtPeriodEnd ? "The badge ends " : "The badge renews "}
             {state.verified.periodEnd ? <LocalTime at={state.verified.periodEnd} variant="full" /> : "at the end of this period"}.
           </p>
-        ) : (
-          <p className="text-[15px]">{verifiedPrice ? `${verifiedPrice}, billed by Stripe. Cancel any time.` : "The price is not set up yet."}</p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {state.verified.active ? (
+          <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={disabled} onClick={() => go(openBilling)} className="h-10 rounded-full px-4 font-semibold">
               Manage billing
             </Button>
-          ) : (
-            <Button
-              type="button"
-              disabled={disabled || !verifiedPrice || !state.emailVerified}
-              onClick={() => go(() => startSubscription("verified"))}
-              className="h-10 rounded-full px-4 font-semibold"
-            >
-              Get the subscriber badge
-            </Button>
-          )}
-        </div>
-      </section>
+            {state.verified.withdrawable ? (
+              <ConfirmDialog
+                trigger={
+                  <Button type="button" variant="outline" disabled={disabled} className="h-10 rounded-full px-4 font-semibold">
+                    Withdraw
+                  </Button>
+                }
+                title="Withdraw from the subscriber badge?"
+                description="The badge ends now, and the first payment is refunded to the card it was paid with. You can withdraw within 14 days of starting."
+                confirmLabel="Withdraw and refund"
+                action={() => withdraw("verified")}
+                onDone={() => router.refresh()}
+              />
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3 px-4 py-4" aria-labelledby="tips-heading">
         <h2 id="tips-heading" className="text-lg font-semibold">

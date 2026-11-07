@@ -3,8 +3,8 @@
 
 // Bump this whenever the Terms or the Privacy Policy change in a way that matters. Every account must accept the current
 // version before it can use the app.
-export const TERMS_VERSION = "2026-11-07-1"
-export const LEGAL_UPDATED = "7 November 2026"
+export const TERMS_VERSION = "2026-11-08-1"
+export const LEGAL_UPDATED = "8 November 2026"
 
 // Rhenko is for adults. 18 is the age at which India's DPDP Act stops treating someone as a child (so no parental
 // consent flow is needed), and it is above Australia's under-16 rule for age-restricted social media, the UK and EU

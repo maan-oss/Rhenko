@@ -78,9 +78,11 @@ export type Viewer = {
   // The address on the account, and whether it has been confirmed. Paid verification needs a confirmed address.
   email: string | null
   emailVerified: boolean
-  // Plus: an active paid subscription. It removes ads and extends the edit window. Nothing else about reach changes.
+  // Plus: an active paid subscription. It removes ads, extends the edit window, allows an animated profile picture and longer
+  // videos. Nothing else about reach changes.
   plus: boolean
-  // A paid subscriber badge. It is shown to others, and says nothing about who the person is.
+  // The paid subscriber ring: on for Plus and for the older badge subscription. It is shown to others, and says nothing about who
+  // the person is.
   paidVerified: boolean
   // Setting up connections: pending until the person finishes or skips the steps after sign-up.
   onboarding: "pending" | "done" | "skipped"

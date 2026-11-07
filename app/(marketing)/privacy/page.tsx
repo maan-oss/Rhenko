@@ -55,7 +55,8 @@ const SUMMARY = (
       </li>
       <li>
         Your email address, if you add one, is used only to send you codes, and the daily digest if you turn it on. Date of birth is used
-        only to check you are {MINIMUM_AGE} or older.
+        only to check you are {MINIMUM_AGE} or older. Before you post, you also confirm your age with an identity check, described under
+        What is stored.
       </li>
       <li>You can download, correct or delete your data yourself, in Settings, under Account.</li>
     </List>
@@ -100,6 +101,13 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             <B>Date of birth.</B> Asked at sign-up, because you must be at least {MINIMUM_AGE}. Only you can see it. It also decides whether you may see ads.
+          </li>
+          <li>
+            <B>Age check.</B> To post, reply, quote, repost, send a message or upload a photo or video, you confirm your age with Stripe
+            Identity. You photograph a government ID, and take a live selfie, and Stripe checks them against each other. Stripe receives
+            those, and Rhenko does not. Rhenko keeps only the result (18 or over, or not), the day it was made, and Stripe&apos;s identifier
+            for the check. It does not keep your date of birth, your ID or your photo. Once the result is in, Rhenko asks Stripe to delete
+            the ID and selfie, and it asks again if you delete your account before then.
           </li>
           <li>
             <B>Agreement.</B> The version of the Terms and Privacy Policy you agreed to, and when you agreed.
@@ -545,8 +553,9 @@ const SECTIONS: LegalSection[] = [
         </P>
         <List>
           <li>
-            Stripe receives what it needs to take a payment, to manage a subscription, to refund a payment and to pay out tips. It keeps
-            that under its own privacy policy. Rhenko does not receive card numbers or bank details.
+            Stripe receives what it needs to take a payment, to manage a subscription, to refund a payment, to pay out tips and to check
+            an identity document and selfie for an age check. It keeps that under its own privacy policy. Rhenko does not receive card
+            numbers, bank details, or the identity document and selfie used for an age check.
           </li>
           <li>The operator&apos;s mail service receives the address and the text of each verification, reset, notice or digest email.</li>
           <li>

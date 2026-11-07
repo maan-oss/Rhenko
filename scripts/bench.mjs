@@ -168,7 +168,7 @@ async function seedDatabase(sql) {
         bio: `Bio for user ${i}`,
         password_hash: "x",
         created_at: now - 400 * DAY,
-        terms_version: "2026-11-07-1",
+        terms_version: "2026-11-08-1",
       })
     }
     await users.add({
@@ -178,7 +178,7 @@ async function seedDatabase(sql) {
       bio: "The account the benchmark signs in as",
       password_hash: "x",
       created_at: now - 400 * DAY,
-      terms_version: "2026-11-07-1",
+      terms_version: "2026-11-08-1",
     })
     await users.flush()
   })

@@ -52,6 +52,8 @@ export async function startStripeMock({ port, webhookUrl, webhookSecret, origin 
     accounts: new Map(),
     refunds: [],
     events: [],
+    identity: new Map(),
+    redacted: [],
   }
 
   // Sends one signed event to the app, the way Stripe does, and reports the answer.
@@ -220,6 +222,77 @@ export async function startStripeMock({ port, webhookUrl, webhookSecret, origin 
         const refund = { id: id("re"), object: "refund", status: "succeeded", payment_intent: body.payment_intent }
         state.refunds.push(refund)
         return send(response, 200, refund)
+      }
+
+      // Stripe Identity: a document check. The hosted page below stands in for Stripe's own. Its result is sent to the app as
+      // the same signed event Stripe sends, and the person is returned to the app's return address.
+      if (method === "POST" && path === "/v1/identity/verification_sessions") {
+        const body = parseForm(await readBody(request))
+        const sessionId = id("vs")
+        const session = {
+          id: sessionId,
+          object: "identity.verification_session",
+          type: body.type ?? "document",
+          status: "requires_input",
+          url: `${origin}/verify/${sessionId}`,
+          return_url: body.return_url,
+          metadata: body.metadata ?? {},
+          options: body.options ?? {},
+          verified_outputs: null,
+        }
+        state.identity.set(sessionId, session)
+        return send(response, 200, session)
+      }
+
+      const verifyMatch = path.match(/^\/v1\/identity\/verification_sessions\/([^/]+)(\/redact)?$/)
+      if (verifyMatch && method === "GET" && !verifyMatch[2]) {
+        const session = state.identity.get(verifyMatch[1])
+        if (!session) return send(response, 404, { error: { message: "No such verification session." } })
+        // Stripe returns the date of birth only when the request asks to expand it.
+        const expanded = [...url.searchParams.entries()].some(([key, value]) => key.startsWith("expand") && value === "verified_outputs")
+        return send(response, 200, { ...session, verified_outputs: expanded ? session.verified_outputs : null })
+      }
+      if (verifyMatch && method === "POST" && verifyMatch[2]) {
+        const session = state.identity.get(verifyMatch[1])
+        if (!session) return send(response, 404, { error: { message: "No such verification session." } })
+        // Stripe refuses to redact a session it is still checking, and the app only asks once a result is in.
+        if (session.status !== "verified" && session.status !== "requires_input" && session.status !== "canceled") {
+          return send(response, 400, { error: { message: "This verification session is still being processed." } })
+        }
+        session.verified_outputs = null
+        session.redacted = true
+        state.redacted.push(session.id)
+        return send(response, 200, session)
+      }
+
+      if (method === "GET" && /^\/verify\/[^/]+$/.test(path)) {
+        const session = state.identity.get(path.slice("/verify/".length))
+        if (!session) return send(response, 404, "No such check.", "text/plain")
+        return send(
+          response,
+          200,
+          `<!doctype html><meta charset="utf-8"><title>Stripe test identity check</title><h1>Stripe test identity check</h1><p>Choose the result this check returns.</p><form method="post" action="/verify/${session.id}/complete?result=adult"><button type="submit">Verify as an adult</button></form><form method="post" action="/verify/${session.id}/complete?result=minor"><button type="submit">Verify as under 18</button></form>`,
+          "text/html"
+        )
+      }
+
+      const completeMatch = path.match(/^\/verify\/([^/]+)\/complete$/)
+      if (method === "POST" && completeMatch) {
+        const session = state.identity.get(completeMatch[1])
+        if (!session) return send(response, 404, "No such check.", "text/plain")
+        const minor = url.searchParams.get("result") === "minor"
+        const today = new Date()
+        // A minor is 15 today, and an adult was born in 1990. The date of birth is what the app reads, never stored by it.
+        // Stripe returns the date under verified_outputs.dob (see the SDK's VerificationSession types).
+        session.verified_outputs = {
+          dob: minor
+            ? { year: today.getUTCFullYear() - 15, month: today.getUTCMonth() + 1, day: today.getUTCDate() }
+            : { year: 1990, month: 4, day: 9 },
+        }
+        session.status = "verified"
+        await deliver("identity.verification_session.verified", session)
+        response.writeHead(302, { Location: session.return_url })
+        return response.end()
       }
 
       return send(response, 404, { error: { message: `The test Stripe does not implement ${method} ${path}.` } })

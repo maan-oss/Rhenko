@@ -17,7 +17,8 @@ const SUMMARY = (
   <Note title="The short version">
     <List>
       <li>
-        You must be {MINIMUM_AGE} or older. Rhenko is not for anyone younger, and sign-up refuses them.
+        You must be {MINIMUM_AGE} or older. Rhenko is not for anyone younger, and sign-up refuses them. To post, you must confirm
+        your age with an identity check.
       </li>
       <li>Rhenko is not offered in Australia, and the app does not open to anyone connecting from there.</li>
       <li>You own what you post. You give the operator permission to host and show it, and nothing more.</li>
@@ -30,8 +31,8 @@ const SUMMARY = (
       </li>
       <li>You can delete your account whenever you like.</li>
       <li>
-        Rhenko Plus, the paid subscriber ring and tips are optional. You can cancel a subscription at any time, and withdraw from one
-        within 14 days of starting it. Paying does not change who sees your posts.
+        Rhenko Plus and tips are optional. You can cancel a subscription at any time, and withdraw from one within 14 days of
+        starting it. Paying does not change who sees your posts.
       </li>
       <li>Some home feeds show labelled ads. Rhenko Plus removes them.</li>
     </List>
@@ -63,8 +64,11 @@ const SECTIONS: LegalSection[] = [
     body: (
       <List>
         <li>
-          You must be at least {MINIMUM_AGE}. Sign-up asks for your date of birth and refuses anyone younger. If we learn that an
-          account belongs to someone under {MINIMUM_AGE}, we will close it.
+          You must be at least {MINIMUM_AGE}. Sign-up asks for your date of birth and refuses anyone younger, but that date is what you
+          tell us. To post, reply, quote, repost, send a message or upload a photo or video, you must also confirm your age with an
+          identity check run by Stripe, as the Privacy Policy describes. Until you do, you can read and follow people. If the check
+          shows you are under {MINIMUM_AGE}, you can keep reading but cannot post or send messages. If we learn that an account belongs
+          to someone under {MINIMUM_AGE}, we will close it.
         </li>
         <li>Give accurate details when you sign up, and keep them up to date.</li>
         <li>Use the service only if the law where you live allows you to.</li>
@@ -123,12 +127,15 @@ const SECTIONS: LegalSection[] = [
         </P>
         <List>
           <li>
-            <B>Rhenko Plus</B> removes ads from your feeds and gives you 24 hours to edit a post, instead of one hour. It renews
-            automatically at the price shown until you cancel.
+            <B>Rhenko Plus</B> removes ads from your home feed, gives you 24 hours to edit a post instead of one hour, shows the paid
+            subscriber ring beside your name, lets you use an animated GIF as your profile picture, and lets you post videos up to 10
+            minutes long instead of 2 minutes 20 seconds, within the same size limit for everyone. It renews automatically at the price
+            shown until you cancel.
           </li>
           <li>
-            <B>The paid subscriber ring</B> is a separate subscription. It shows that you pay. It is not an identity check, and it does
-            not mean Rhenko has verified you. A confirmed email address is needed to take it.
+            <B>The paid subscriber ring</B> is part of Rhenko Plus. It shows that you pay. It is not an identity check, and it does not
+            mean Rhenko has verified you. A confirmed email address is needed to take Rhenko Plus. Anyone who bought the ring on its own
+            before Plus included it keeps it until that subscription ends, and can cancel it in Settings.
           </li>
           <li>
             <B>Cancelling</B> is done in Settings, under Subscriptions and tips. The subscription then ends at the end of the period you

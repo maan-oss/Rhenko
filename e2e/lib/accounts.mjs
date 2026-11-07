@@ -1,6 +1,7 @@
 // Making people: sign-up with the date picker, sign-in, sign-out, and a new account in a browser of its own.
 import { PASSWORD, RUN_ID, TIMEOUT, randomHandle, sleep } from "./env.mjs"
 import { newVisitor } from "./browser.mjs"
+import { execute } from "./db.mjs"
 import { acted, go, ready } from "./ui.mjs"
 
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -141,9 +142,16 @@ export async function trySignUp(page, fields) {
 
 // A new account lands on the setup steps first. Most checks only need the home page, so they go straight there; a check
 // about the setup steps passes { stay: true } and gets the page it was sent to.
-export async function signUp(page, fields, { stay = false } = {}) {
+// Test accounts are adults, so the suite can post, message and upload. The age check itself is run through the pages in
+// e2e/age.mjs, which passes { adult: false } to keep the account unchecked. Needs DATABASE_URL, like the other row checks.
+export async function markAdult(handle) {
+  await execute("UPDATE users SET age_check = 'adult', age_checked_at = ? WHERE handle = ?", Date.now(), handle)
+}
+
+export async function signUp(page, fields, { stay = false, adult = true } = {}) {
   const result = await trySignUp(page, fields)
   if (!result.ok) throw new Error(`sign-up of @${fields.handle} failed: ${result.error}`)
+  if (adult) await markAdult(fields.handle)
   if (result.step === "welcome") {
     if (stay) return result
     await go(page, "/", page.locator("textarea[aria-label='Post text']"))
@@ -190,12 +198,12 @@ export async function signOut(user) {
 }
 
 // A new account in a browser of its own. `tag` is a short role name that ends up in the handle and display name.
-export async function createUser({ tag, phone = false, mic = false, birthday = GROWN_UP, password = PASSWORD, name } = {}) {
+export async function createUser({ tag, phone = false, mic = false, birthday = GROWN_UP, password = PASSWORD, name, adult = true } = {}) {
   const handle = randomHandle(tag)
   const display = name ?? `${tag[0].toUpperCase()}${tag.slice(1)} ${RUN_ID}`
   const visitor = await newVisitor({ phone, mic, label: tag })
   const user = { ...visitor, tag, handle, name: display, password, birthday }
-  await signUp(user.page, { name: display, handle, birthday, password })
+  await signUp(user.page, { name: display, handle, birthday, password }, { adult })
   return user
 }
 

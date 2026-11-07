@@ -1,14 +1,20 @@
-// Payments end to end: Plus through Stripe's checkout, withdrawal with a refund, the paid subscriber badge, payout setup, a
-// tip, and the rule that a repeated webhook changes nothing. Stripe is replaced by e2e/lib/stripe-mock.mjs, which answers
-// the same requests and sends the same signed webhook events. The area runs only when E2E_STRIPE=1 and the server was
-// started with the Stripe test settings (e2e/stripe.env). Without them it says so and skips.
+// Payments end to end: Rhenko Plus through Stripe's checkout and what it includes (no ads in the home feed, the paid subscriber
+// ring, an animated profile picture, longer videos), withdrawal with a refund, the older badge subscription, payout setup, a tip,
+// and the rule that a repeated webhook changes nothing. Stripe is replaced by e2e/lib/stripe-mock.mjs, which answers the same
+// requests and sends the same signed webhook events. The area runs only when E2E_STRIPE=1 and the server was started with the
+// Stripe test settings (e2e/stripe.env). Without them it says so and skips.
+import fs from "node:fs"
+import path from "node:path"
+import { randomUUID } from "node:crypto"
 import { area, assert, check, guard, note } from "./lib/harness.mjs"
 import { BASE, TIMEOUT, randomWord, RUN_ID } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { execute, query } from "./lib/db.mjs"
 import { startStripeMock } from "./lib/stripe-mock.mjs"
-import { card, cardMenu, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
-import { fillField, formWithButton, go } from "./lib/ui.mjs"
+import { attach, card, cardMenu, homeComposer, openHome, openProfile, typeIn, waitForPost, writePost } from "./lib/posts.mjs"
+import { follow } from "./lib/people.mjs"
+import { fillField, formWithButton, go, acted, toastText } from "./lib/ui.mjs"
+import { makeGif, makePng, makeVideo } from "./lib/files.mjs"
 
 const PORT = Number(process.env.STRIPE_MOCK_PORT || 4555)
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_e2e"
@@ -42,18 +48,63 @@ async function userId(handle) {
   return rows[0]?.id
 }
 
+// Puts a file in a file input without the page's change handler running. The form then sends it as it is, so this checks what the
+// server does with a file the picker would have turned away.
+async function sendFileQuietly(input, file) {
+  const base64 = fs.readFileSync(file).toString("base64")
+  await input.evaluate((element, { base64: data, name, type }) => {
+    const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0))
+    const transfer = new DataTransfer()
+    transfer.items.add(new File([bytes], name, { type }))
+    element.files = transfer.files
+  }, { base64, name: path.basename(file), type: "image/gif" })
+}
+
+// One approved campaign with no topic and a funded balance, written the way scripts/ads.mjs approves one. Anyone whose home feed
+// has enough posts (eight) sees it, so it is the ad the feed checks look for.
+async function seedAd(advertiser) {
+  const now = Date.now()
+  const accountId = randomUUID()
+  const micro = 100 * 100 * 10_000 // $100, in micro-units: a cent is 10,000 (lib/ad-rules.ts)
+  await execute(
+    "INSERT INTO ad_accounts (id, user_id, business_name, country, contact_email, currency, balance_micro, status, policy_accepted_at, created_at) VALUES (?, (SELECT id FROM users WHERE handle = ?), ?, 'AU', ?, 'usd', ?, 'active', ?, ?)",
+    accountId,
+    advertiser.handle,
+    `Knife Works ${RUN_ID}`,
+    `ads-${RUN_ID}@example.com`,
+    micro,
+    now,
+    now
+  )
+  await execute(
+    "INSERT INTO ad_campaigns (id, account_id, headline, body, cta, link_url, budget_micro, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)",
+    randomUUID(),
+    accountId,
+    `Sharp knives ${RUN_ID}`,
+    "A sharpening kit for home cooks.",
+    "See the kit",
+    "https://example.com/knives",
+    micro,
+    now
+  )
+}
+
 async function paymentFlows(mock) {
   const payer = await createUser({ tag: "bpay" })
   const creator = await createUser({ tag: "bcre" })
   const tipper = await createUser({ tag: "btip" })
   const unconfirmed = await createUser({ tag: "bnot" })
-  // Confirmed email for everyone except the account that tests the rule that paid verification needs one.
+  const advertiser = await createUser({ tag: "badv" })
+  // Confirmed email for everyone except the account that tests the rule that Plus needs one.
   await execute("UPDATE users SET email_verified_at = ? WHERE handle IN (?, ?, ?)", Date.now(), payer.handle, creator.handle, tipper.handle)
 
-  await check("the billing page shows Plus at the price Stripe reports", async () => {
+  await check("the billing page shows Plus at the price Stripe reports, with what it includes", async () => {
     await go(payer.page, "/settings/billing", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
     await payer.page.getByText("$4.99 a month").first().waitFor({ timeout: TIMEOUT })
+    await payer.page.getByText("The paid subscriber ring beside your name").waitFor()
+    await payer.page.getByText("Videos up to 10 minutes long").waitFor()
     await payer.page.getByRole("button", { name: "Subscribe to Plus", exact: true }).waitFor()
+    assert.equal(await payer.page.getByRole("heading", { name: "Paid subscriber badge", exact: true }).count(), 0, "the badge-only product is still offered")
   })
 
   await check("Plus starts through Stripe's checkout, and the page then shows when it renews", async () => {
@@ -69,20 +120,14 @@ async function paymentFlows(mock) {
     assert.equal(rows[0].status, "active")
   })
 
-  await check("paid subscriber badge needs a confirmed email address", async () => {
-    await go(unconfirmed.page, "/settings/billing", unconfirmed.page.getByRole("heading", { name: "Paid subscriber badge" }))
-    await unconfirmed.page.getByText("Confirm your email address first").waitFor()
-    assert.equal(await unconfirmed.page.getByRole("button", { name: "Get the subscriber badge" }).isDisabled(), true, "the badge button is enabled without a confirmed email")
+  await check("Rhenko Plus needs a confirmed email address before it can be bought", async () => {
+    await go(unconfirmed.page, "/settings/billing", unconfirmed.page.getByRole("heading", { name: "Rhenko Plus" }))
+    await unconfirmed.page.getByText("Confirm your email address first. Rhenko Plus needs one.").waitFor({ timeout: TIMEOUT })
+    assert.equal(await unconfirmed.page.getByRole("button", { name: "Subscribe to Plus", exact: true }).isDisabled(), true, "Subscribe is enabled without a confirmed email")
   })
 
-  await check("the paid subscriber badge is subscribed through checkout and shows on the person's posts", async () => {
-    await go(payer.page, "/settings/billing", payer.page.getByRole("heading", { name: "Paid subscriber badge" }))
-    await payer.page.getByRole("button", { name: "Get the subscriber badge", exact: true }).click()
-    await payer.page.waitForURL((url) => url.origin === ORIGIN && url.pathname.startsWith("/pay/"), { timeout: TIMEOUT })
-    await payer.page.getByRole("button", { name: "Subscribe", exact: true }).click()
-    await payer.page.waitForURL((url) => url.pathname === "/settings/billing" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
-    await payer.page.getByText(/The badge renews/).waitFor({ timeout: TIMEOUT })
-    const text = `Badge post ${RUN_ID}${randomWord(4)}`
+  await check("Plus shows the paid subscriber ring on the person's posts, and never the verified check", async () => {
+    const text = `Ring post ${RUN_ID}${randomWord(4)}`
     await writePost(payer.page, text)
     await openProfile(payer.page, payer.handle)
     await waitForPost(payer.page, text)
@@ -90,7 +135,107 @@ async function paymentFlows(mock) {
     await waitForPost(creator.page, text)
     const shown = card(creator.page, text)
     await shown.getByRole("img", { name: /Paid subscriber\. Rhenko has not checked this person's identity\./ }).first().waitFor({ timeout: TIMEOUT })
-    assert.equal(await shown.getByRole("img", { name: "Verified account" }).count(), 0, "the paid badge was shown as the verified badge")
+    assert.equal(await shown.getByRole("img", { name: "Verified account" }).count(), 0, "the paid ring was shown as the verified check")
+  })
+
+  await check("a Plus subscriber's home feed has no ads, and a free adult's home feed has one", async () => {
+    await follow(tipper.page, creator.handle)
+    await follow(payer.page, creator.handle)
+    let last = ""
+    for (let i = 1; i <= 8; i++) {
+      last = `Feed post ${i} ${RUN_ID}${randomWord(4)}`
+      await writePost(creator.page, last)
+    }
+    await seedAd(advertiser)
+    // The Following tab, not For you: For you reuses a ranking made up to a minute earlier (RANKED_REUSE_MS in lib/data.ts),
+    // and that ranking can predate these posts. The ads are chosen the same way on both tabs (lib/feeds.ts).
+    await openHome(tipper.page, "following")
+    await tipper.page.locator('article[aria-label^="Ad from"]').first().waitFor({ timeout: TIMEOUT })
+    await openHome(payer.page, "following")
+    // The Plus viewer must actually see the posts, so an empty feed cannot pass the no-ad check.
+    await waitForPost(payer.page, last, { reload: true })
+    assert.equal(await payer.page.locator('article[aria-label^="Ad from"]').count(), 0, "a Plus subscriber saw an ad in the home feed")
+  })
+
+  await check("a person who follows a Plus subscriber sees the paid ring on them in Priority settings", async () => {
+    await follow(creator.page, payer.handle)
+    await go(creator.page, "/settings/notifications", creator.page.getByRole("heading", { name: "Priority", exact: true }))
+    const row = creator.page.getByRole("switch", { name: `Priority notifications from ${payer.name}` })
+    await row.waitFor({ timeout: TIMEOUT })
+    await row.getByRole("img", { name: /Paid subscriber\. Rhenko has not checked this person's identity\./ }).waitFor()
+  })
+
+  await check("a free account is asked to trim a video longer than 2 minutes 20 seconds", async () => {
+    await openHome(creator.page)
+    const form = homeComposer(creator.page)
+    await typeIn(form, `Long clip ${RUN_ID}${randomWord(4)}`)
+    await attach(form, makeVideo(`free-150-${RUN_ID}.webm`, 150))
+    await creator.page.getByText(/A post can carry up to 2:20/).waitFor({ timeout: TIMEOUT })
+    await creator.page.keyboard.press("Escape")
+  })
+
+  await check("Plus posts a 5 minute video whole, without a trim", async () => {
+    await openHome(payer.page)
+    const text = `Five minute clip ${RUN_ID}${randomWord(4)}`
+    const form = homeComposer(payer.page)
+    await typeIn(form, text)
+    await attach(form, makeVideo(`plus-300-${RUN_ID}.webm`, 300))
+    await acted(payer.page, () => form.getByRole("button", { name: "Post", exact: true }).click())
+    await toastText(payer.page, /^Posted\./)
+    assert.equal(await payer.page.getByText(/A post can carry up to/).count(), 0, "Plus was asked to trim a 5 minute video")
+  })
+
+  await check("an animated profile picture is refused for a free account and kept for Plus, and a still picture still works", async () => {
+    const gif = makeGif(`avatar-${RUN_ID}.gif`)
+    await openProfile(creator.page, creator.handle)
+    await creator.page.getByRole("button", { name: "Edit profile", exact: true }).click()
+    const dialog = creator.page.getByRole("dialog", { name: "Edit profile" })
+    // The picker refuses it before anything is sent.
+    await dialog.locator("input[name=avatar]").setInputFiles(gif)
+    await toastText(creator.page, /Animated profile pictures are part of Rhenko Plus/)
+    // The server refuses it too, for a form that sends the file anyway.
+    await sendFileQuietly(dialog.locator("input[name=avatar]"), gif)
+    await dialog.getByRole("button", { name: "Save profile", exact: true }).click()
+    await dialog.getByRole("alert").getByText(/Animated profile pictures are part of Rhenko Plus/).waitFor({ timeout: TIMEOUT })
+    const refused = await query("SELECT avatar_file FROM users WHERE handle = ?", creator.handle)
+    assert.ok(!String(refused[0]?.avatar_file ?? "").endsWith(".gif"), "a free account's GIF was kept")
+    // A still picture is framed and kept as before.
+    await dialog.locator("input[name=avatar]").setInputFiles(makePng(`still-${RUN_ID}.png`, { seed: 21 }))
+    await creator.page.getByRole("dialog", { name: "Position your photo" }).getByRole("button", { name: "Use this", exact: true }).click()
+    await dialog.getByRole("button", { name: "Save profile", exact: true }).click()
+    await toastText(creator.page, /^Profile saved\./)
+    const still = await query("SELECT avatar_file FROM users WHERE handle = ?", creator.handle)
+    assert.ok(still[0]?.avatar_file && !still[0].avatar_file.endsWith(".gif"), "a still picture was not kept")
+
+    await openProfile(payer.page, payer.handle)
+    await payer.page.getByRole("button", { name: "Edit profile", exact: true }).click()
+    const payerDialog = payer.page.getByRole("dialog", { name: "Edit profile" })
+    await payerDialog.locator("input[name=avatar]").setInputFiles(gif)
+    await payerDialog.getByRole("button", { name: "Save profile", exact: true }).click()
+    await toastText(payer.page, /^Profile saved\./)
+    const animated = await query("SELECT avatar_file FROM users WHERE handle = ?", payer.handle)
+    assert.ok(animated[0]?.avatar_file?.endsWith(".gif"), "the Plus subscriber's animated picture was not kept as a GIF")
+  })
+
+  await check("Plus can edit a post a day after it was posted, and a free account is not offered the edit after an hour", async () => {
+    const older = `Older post ${RUN_ID}${randomWord(4)}`
+    const freeOlder = `Free older post ${RUN_ID}${randomWord(4)}`
+    await writePost(payer.page, older)
+    await writePost(creator.page, freeOlder)
+    // Two hours back: past the hour a free account may edit for, inside the day Plus allows.
+    await execute("UPDATE posts SET created_at = ? WHERE body IN (?, ?)", Date.now() - 2 * 60 * 60 * 1000, older, freeOlder)
+    await openProfile(payer.page, payer.handle)
+    await cardMenu(payer.page, await waitForPost(payer.page, older), "Edit post")
+    const dialog = payer.page.getByRole("dialog", { name: "Edit post" })
+    await dialog.waitFor()
+    await dialog.getByLabel("Post text").fill(`${older} edited`)
+    await acted(payer.page, () => dialog.getByRole("button", { name: "Save", exact: true }).click())
+    await toastText(payer.page, /Post updated/)
+    await openProfile(creator.page, creator.handle)
+    const freeTarget = await waitForPost(creator.page, freeOlder)
+    await freeTarget.getByRole("button", { name: "More options" }).click()
+    assert.equal(await creator.page.getByRole("menuitem", { name: "Edit post", exact: true }).count(), 0, "a free account was offered an edit after an hour")
+    await creator.page.keyboard.press("Escape")
   })
 
   await check("Plus can be withdrawn within 14 days, and the first payment is refunded", async () => {
@@ -102,6 +247,30 @@ async function paymentFlows(mock) {
     assert.equal(mock.state.refunds.length, before + 1, "no refund was made")
     const rows = await query("SELECT status FROM subscriptions WHERE user_id = ? AND kind = 'plus'", await userId(payer.handle))
     assert.equal(rows.every((row) => row.status === "canceled"), true, "a Plus row is still active")
+    const ring = await query("SELECT paid_verified FROM users WHERE handle = ?", payer.handle)
+    assert.equal(Number(ring[0].paid_verified), 0, "the paid ring stayed on after Plus was withdrawn")
+  })
+
+  await check("a subscriber to the older badge, from before Plus included the ring, keeps the ring and can still manage it", async () => {
+    const older = await createUser({ tag: "bold" })
+    const olderId = await userId(older.handle)
+    const now = Math.floor(Date.now() / 1000)
+    // The older badge subscription, as Stripe reports it. Its kind is 'verified', which still counts for the ring.
+    const { status } = await mock.deliver("customer.subscription.created", {
+      id: `sub_older_${RUN_ID}${randomWord(3)}`,
+      object: "subscription",
+      customer: `cus_older_${RUN_ID}${randomWord(3)}`,
+      status: "active",
+      cancel_at_period_end: false,
+      created: now,
+      metadata: { user_id: olderId, kind: "verified" },
+      items: { object: "list", data: [{ price: { id: "price_verified_e2e" }, current_period_end: now + 30 * 24 * 60 * 60 }] },
+    })
+    assert.equal(status, 200, `the older badge webhook answered ${status}`)
+    const ring = await query("SELECT paid_verified FROM users WHERE id = ?", olderId)
+    assert.equal(Number(ring[0].paid_verified), 1, "the older badge did not turn the ring on")
+    await go(older.page, "/settings/billing", older.page.getByRole("heading", { name: "Your older subscriber badge" }))
+    await older.page.getByRole("button", { name: "Manage billing", exact: true }).first().waitFor()
   })
 
   await check("payout setup returns from Stripe with payouts ready", async () => {

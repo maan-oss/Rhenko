@@ -3,6 +3,7 @@
 import { languageOf } from "@/lib/languages"
 import { revalidatePath } from "next/cache"
 import { getAgreedViewer, newId } from "@/lib/auth"
+import { ageGate } from "@/lib/age-assurance"
 import { leaveConversationCalls } from "@/lib/call-state"
 import { all, change, get, run, transaction } from "@/lib/db"
 import { publish, type EventPerson } from "@/lib/bus"
@@ -34,6 +35,7 @@ import { consume, waitLabel } from "@/lib/rate-limit"
 import { gate, isNewAccount } from "@/lib/risk"
 import { BANNER_PREVIEW_MAX, MAX_DM, MAX_GROUP_MEMBERS, MAX_GROUP_TITLE, REACTIONS } from "@/lib/rules"
 import { removeUpload, saveSealedUpload, saveUpload, SEALED_UPLOAD_LIMIT } from "@/lib/uploads"
+import { scanSealed } from "@/lib/image-scan"
 import { asMessageTimer, expiryFor, isExpired } from "@/lib/message-timers"
 import { groupForInvite, inviteStanding, newInviteToken } from "@/lib/group-invites"
 import { checkEncryptedSend } from "@/lib/e2ee"
@@ -214,6 +216,8 @@ export async function startConversation(
 ): Promise<{ ok: true; id: string } | { ok: false; error: string; proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to send messages." }
+  const startLine = await ageGate(viewer.id)
+  if (startLine) return { ok: false, error: startLine }
   const target = await get<{ id: string; bot: number }>(
     "SELECT id, bot FROM users WHERE handle = ? AND deactivated_at IS NULL",
     asHandle(handle)
@@ -384,6 +388,8 @@ const POST_UNAVAILABLE = "That post isn't available to share."
 export async function createGroup(_prev: ChatState, formData: FormData): Promise<ChatState & { id?: string; proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to start a group." }
+  const groupLine = await ageGate(viewer.id)
+  if (groupLine) return { error: groupLine }
   const title = String(formData.get("title") ?? "").trim()
   if ([...title].length > MAX_GROUP_TITLE) return { error: `Group names can have up to ${MAX_GROUP_TITLE} characters.` }
   const handles = [...new Set(formData.getAll("handles").flatMap((v) => String(v).split(/[\s,]+/)).map((h) => h.replace(/^@/, "").trim()).filter(Boolean))]
@@ -743,6 +749,8 @@ export async function markConversationRead(conversationId: string): Promise<void
 export async function sendMessage(_prev: ChatState, formData: FormData): Promise<ChatState> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to send messages." }
+  const sendLine = await ageGate(viewer.id)
+  if (sendLine) return { error: sendLine }
   const conversationId = String(formData.get("conversationId") ?? "")
   const status = await memberStatus(conversationId, viewer.id)
   if (!status) return { error: "That conversation doesn't exist." }
@@ -837,7 +845,7 @@ export async function sendMessage(_prev: ChatState, formData: FormData): Promise
   if (slowDown) return { error: slowDown }
 
   const upload = hasImage
-    ? await saveUpload(image, "any")
+    ? await saveUpload(image, "any", null, viewer.plus)
     : hasVoice
       ? await saveUpload(voice, "audio")
       : hasAudio
@@ -924,6 +932,8 @@ function jsonField(value: FormDataEntryValue | null): unknown {
 async function sendSealed(data: Record<string, unknown>, file: File | null, viewOnce: boolean): Promise<ChatState> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { error: "Sign in to send messages." }
+  const sealedLine = await ageGate(viewer.id)
+  if (sealedLine) return { error: sealedLine }
   const conversationId = asId(data.conversationId)
   const status = conversationId ? await memberStatus(conversationId, viewer.id) : null
   if (!conversationId || !status) return { error: "That conversation doesn't exist." }
@@ -992,6 +1002,11 @@ async function sendSealed(data: Record<string, unknown>, file: File | null, view
 
   const mentioned = await mentionedMembersByHandle(conversationId, viewer.id, mentionHandles(data.mentions))
   // The file is stored last, once the message has passed every check, so a refused message leaves nothing behind.
+  if (file) {
+    // The server cannot read a sealed file, so it is refused unless a scanner for sealed files exists (lib/image-scan.ts).
+    const sealedScan = await scanSealed()
+    if (!sealedScan.ok) return { error: sealedScan.error }
+  }
   const mediaFile = file ? await saveSealedUpload(file) : null
   if (file && !mediaFile) return { error: "That file couldn't be saved. Try again." }
   try {
@@ -1167,6 +1182,8 @@ type ShareResult =
 export async function sharePostWith(postId: string, handles: string[], note: string): Promise<ShareResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to send messages." }
+  const shareLine = await ageGate(viewer.id)
+  if (shareLine) return { ok: false, error: shareLine }
   const id = asId(postId)
   if (!id || !await sendablePost(id, viewer.id)) return { ok: false, error: POST_UNAVAILABLE }
   if (typeof note !== "string") return { ok: false, error: "Write the note as text." }
@@ -1818,6 +1835,8 @@ export async function listForwardTargets(): Promise<ForwardTarget[]> {
 export async function forwardMessage(messageId: string, targets: unknown): Promise<VoidResult & { count?: number }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
+  const forwardLine = await ageGate(viewer.id)
+  if (forwardLine) return { ok: false, error: forwardLine }
   const id = asId(messageId)
   const message = await visibleMessageFor(id, viewer.id)
   if (!id || !message) return { ok: false, error: "That message doesn't exist." }

@@ -1573,7 +1573,7 @@ export async function mutualFollowers(profileId: string, viewerId: string, limit
 export type UserCard = MiniUser & { bio: string; following: boolean; followsMe: boolean }
 
 // A person card that is safe to show a viewer: blocked and deactivated accounts are left out.
-const CARD_SQL = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.bio,
+const CARD_SQL = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, u.bio,
   EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = u.id) AS following,
   EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = u.id AND f.followee_id = ?) AS follows_me
   FROM users u`
@@ -1584,6 +1584,7 @@ type CardRow = {
   name: string
   avatar_file: string | null
   verified: number
+  paid_verified: number
   bio: string
   following: number
   follows_me: number
@@ -1596,6 +1597,7 @@ function toCard(r: CardRow): UserCard {
     name: r.name,
     avatarFile: r.avatar_file,
     verified: r.verified === 1,
+    paidVerified: r.paid_verified === 1,
     bio: r.bio,
     following: r.following === 1,
     followsMe: r.follows_me === 1,
@@ -1669,7 +1671,7 @@ export async function peopleOfPage(
     if (owner.protected === 1 && !await get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewerId, userId)) return empty
   }
   const join = kind === "followers" ? "f.follower_id = u.id AND f.followee_id = ?" : "f.followee_id = u.id AND f.follower_id = ?"
-  const select = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.bio,
+  const select = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, u.bio,
        EXISTS(SELECT 1 FROM follows x WHERE x.follower_id = ? AND x.followee_id = u.id) AS following,
        EXISTS(SELECT 1 FROM follows x WHERE x.follower_id = u.id AND x.followee_id = ?) AS follows_me,
        f.created_at AS followed_at

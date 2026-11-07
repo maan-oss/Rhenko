@@ -8,7 +8,7 @@ import { updateProfile, type ProfileState } from "@/actions/social"
 import { PhotoCrop } from "@/components/app/photo-crop"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { MAX_BIO, MAX_NAME } from "@/lib/rules"
+import { ANIMATED_AVATAR_MESSAGE, MAX_BIO, MAX_NAME } from "@/lib/rules"
 
 // The profile itself: name, bio, photo and banner. Where someone is, their languages, interests and website are edited on
 // About you (Settings), so they stay off the profile. A photo is framed in the crop dialog before it is kept.
@@ -37,7 +37,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
+export function ProfileEditDialog({ defaults, plus }: { defaults: Defaults; plus: boolean }) {
   const [open, setOpen] = useState(false)
   const avatarInput = useRef<HTMLInputElement>(null)
   const bannerInput = useRef<HTMLInputElement>(null)
@@ -58,7 +58,15 @@ export function ProfileEditDialog({ defaults }: { defaults: Defaults }) {
   function pickPhoto(event: ChangeEvent<HTMLInputElement>, kind: Kind) {
     const file = event.target.files?.[0]
     event.target.value = ""
-    if (file) setCropping({ kind, file })
+    if (!file) return
+    // A GIF moves, and framing it would keep one still frame, so an animated profile picture is kept as it is. That is part of
+    // Rhenko Plus, and the server refuses it for anyone else.
+    if (kind === "avatar" && file.type === "image/gif") {
+      if (!plus) toast.error(ANIMATED_AVATAR_MESSAGE)
+      else keepCrop("avatar", file)
+      return
+    }
+    setCropping({ kind, file })
   }
 
   function keepCrop(kind: Kind, picture: File) {

@@ -4,6 +4,7 @@ import { languageOf } from "@/lib/languages"
 import { parseStickerSet, stickerSetJson } from "@/lib/stickers"
 import { revalidatePath } from "next/cache"
 import { getAgreedViewer, newId } from "@/lib/auth"
+import { ageGate } from "@/lib/age-assurance"
 import { all, change, get, run, transaction } from "@/lib/db"
 import { canSeeLivePost, canSeePost, editHistoryFor, visiblePostIds, type EditVersion } from "@/lib/data"
 import { memberRole } from "@/lib/circles"
@@ -21,7 +22,7 @@ import {
   MAX_IMAGES,
   MAX_MUTED_WORD,
   MAX_FOLDER_NAME,
-  MAX_VIDEO_SECONDS,
+  maxVideoSeconds,
   MAX_VIDEOS,
   POST_UNAVAILABLE,
   REPORT_REASONS,
@@ -70,6 +71,9 @@ function isId(value: unknown): value is string {
 export async function createPost(formData: FormData): Promise<CreateResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to post." }
+  // Posting, replies, quotes and photo or video uploads need a confirmed adult. Drafts with media count as uploads too.
+  const ageLine = await ageGate(viewer.id)
+  if (ageLine) return { ok: false, error: ageLine }
   const allowed = await consume(`post:${viewer.id}`, POST_LIMIT, POST_WINDOW_MS)
   if (!allowed.ok) return { ok: false, error: `You've posted a lot in the last minute. Try again in ${waitLabel(allowed.retryAfterSeconds)}.` }
   // A post that goes out, or a reply, passes the account check. A draft is seen only by its author, so it does not.
@@ -125,7 +129,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   // The trim comes from the browser, so its numbers are checked here. The server checks it again against the file's own length.
   const trims: (Trim | null)[] = []
   for (const item of picked) {
-    const parsed = parseTrimFields(item.trimFields[0], item.trimFields[1], MAX_VIDEO_SECONDS)
+    const parsed = parseTrimFields(item.trimFields[0], item.trimFields[1], maxVideoSeconds(viewer.plus))
     if (!parsed.ok) return { ok: false, error: parsed.error }
     if (parsed.trim && !item.file.type.startsWith("video/")) return { ok: false, error: "Only a video can be trimmed." }
     trims.push(parsed.trim)
@@ -211,7 +215,7 @@ export async function createPost(formData: FormData): Promise<CreateResult> {
   const discard = async () => await removeFiles(saved.map((s) => s.file))
   try {
     for (const [index, item] of picked.entries()) {
-      const upload = await saveUpload(item.file, "any", trims[index])
+      const upload = await saveUpload(item.file, "any", trims[index], viewer.plus)
       if (!upload) continue
       if (!upload.ok) {
         await discard()
@@ -421,6 +425,8 @@ export async function getEditHistory(postId: string): Promise<EditHistoryResult>
 export async function publishNow(postId: string, proof?: string): Promise<VoidResult & { proofRequired?: boolean }> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to publish." }
+  const ageLine = await ageGate(viewer.id)
+  if (ageLine) return { ok: false, error: ageLine }
   const post = isId(postId)
     ? await get<{ author_id: string; body: string; reply_to_id: string | null; quote_of_id: string | null; is_draft: number; publish_at: number | null }>(
         "SELECT author_id, body, reply_to_id, quote_of_id, is_draft, publish_at FROM posts WHERE id = ?",
@@ -490,6 +496,9 @@ export async function toggleRepost(postId: string): Promise<ToggleResult> {
     await run("DELETE FROM notifications WHERE actor_id = ? AND post_id = ? AND kind = 'repost'", viewer.id, postId)
     return { ok: true, active: false }
   }
+  // Adding a repost is posting; taking one back is not, so it stays open.
+  const ageLine = await ageGate(viewer.id)
+  if (ageLine) return { ok: false, error: ageLine }
   const reposts = await consume(`repost:${viewer.id}`, await isNewAccount(viewer.id) ? 30 : 120, HOUR_MS)
   if (!reposts.ok) return { ok: false, error: `You're reposting too fast. Try again in ${waitLabel(reposts.retryAfterSeconds)}.` }
   const added = await change("INSERT INTO reposts (user_id, post_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", viewer.id, postId, Date.now())

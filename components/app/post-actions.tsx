@@ -93,6 +93,8 @@ function Count({ value }: { value: number }) {
 // The row's icons move when they are pressed. A spring with a little overshoot makes a tap read as a press, and reduced
 // motion makes every change instant.
 const POP = { type: "spring", stiffness: 520, damping: 15, mass: 0.6 } as const
+// A spring can animate only two keyframes, so a three-step pop uses an eased tween of about the same length.
+const POP_STEPS = { type: "tween", ease: "easeOut", duration: 0.32 } as const
 const SPIN = { type: "spring", stiffness: 170, damping: 19 } as const
 const SPREAD = 20
 const DOTS = [0, 45, 90, 135, 180, 225, 270, 315]
@@ -135,7 +137,7 @@ function HeartIcon({ active, likes, reduce }: { active: boolean; likes: number; 
         className="text-foreground [grid-area:1/1]"
         initial={false}
         animate={active ? { scale: [0.2, 1.3, 1], opacity: 1 } : { scale: 0.2, opacity: 0 }}
-        transition={reduce ? instant : POP}
+        transition={reduce ? instant : active ? POP_STEPS : POP}
       >
         <Heart size={18} strokeWidth={2} fill="currentColor" aria-hidden="true" />
       </motion.span>
@@ -151,7 +153,7 @@ function BookmarkIcon({ saved, reduce }: { saved: boolean; reduce: boolean }) {
       className="relative inline-grid size-[18px] place-items-center"
       initial={false}
       animate={{ scale: saved ? [0.78, 1.14, 1] : [0.9, 1] }}
-      transition={reduce ? { duration: 0 } : POP}
+      transition={reduce ? { duration: 0 } : saved ? POP_STEPS : POP}
     >
       <Bookmark size={18} strokeWidth={2} className="[grid-area:1/1]" aria-hidden="true" />
       <motion.span

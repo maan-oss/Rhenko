@@ -3,6 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import zlib from "node:zlib"
 import { createRequire } from "node:module"
+import { execFileSync } from "node:child_process"
 import { OUT, REPO_ROOT } from "./env.mjs"
 
 function crcOf(buffer) {
@@ -74,6 +75,30 @@ export function makeFakePng(name) {
   fs.mkdirSync(folder, { recursive: true })
   const file = path.join(folder, name)
   fs.writeFileSync(file, "this is plain text, not an image")
+  return file
+}
+
+// A short animated GIF, made with ffmpeg (which the server needs for video too), so it really moves.
+export function makeGif(name) {
+  const folder = path.join(OUT, "fixtures")
+  fs.mkdirSync(folder, { recursive: true })
+  const file = path.join(folder, name)
+  execFileSync("ffmpeg", ["-v", "error", "-nostdin", "-y", "-f", "lavfi", "-i", "testsrc=size=48x48:rate=4:duration=1", "-f", "gif", file])
+  return file
+}
+
+// A video of `seconds` length, made with ffmpeg at a tiny picture size, so it stays small. It is WebM (VP8), which every Chromium
+// build plays. A post can carry it whole only when it is within the account's limit (lib/rules.ts).
+export function makeVideo(name, seconds) {
+  const folder = path.join(OUT, "fixtures")
+  fs.mkdirSync(folder, { recursive: true })
+  const file = path.join(folder, name)
+  execFileSync("ffmpeg", [
+    "-v", "error", "-nostdin", "-y",
+    "-f", "lavfi", "-i", `testsrc=size=64x48:rate=1:duration=${seconds}`,
+    "-c:v", "libvpx", "-b:v", "60k", "-deadline", "realtime", "-cpu-used", "8", "-pix_fmt", "yuv420p",
+    "-f", "webm", file,
+  ])
   return file
 }
 

@@ -172,9 +172,16 @@ export const MAX_IMAGES = 4
 export const MAX_VIDEOS = 1
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 // A video can run for up to 140 seconds, the length X allows, and up to 100 MB. The composer checks the length when a
-// video is picked, because the server does not decode video.
+// video is picked, because the server does not decode video. Rhenko Plus allows a longer video, up to 600 seconds, under the
+// same 100 MB limit. The server checks the length of every upload against the limit of the account that sends it.
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
 export const MAX_VIDEO_SECONDS = 140
+export const PLUS_MAX_VIDEO_SECONDS = 600
+export function maxVideoSeconds(plus: boolean): number {
+  return plus ? PLUS_MAX_VIDEO_SECONDS : MAX_VIDEO_SECONDS
+}
+// An animated profile picture (a GIF) is part of Rhenko Plus. Any other picture works for everyone.
+export const ANIMATED_AVATAR_MESSAGE = "Animated profile pictures are part of Rhenko Plus. Choose a JPEG, PNG or WebP picture, or subscribe to Plus."
 export const MAX_ALT = 1000
 // A voice message is recorded for up to two minutes. Opus at a voice bitrate keeps that far under the size limit.
 export const MAX_VOICE_SECONDS = 120

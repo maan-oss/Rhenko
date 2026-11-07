@@ -35,6 +35,7 @@ import {
 } from "@/lib/account-rules"
 import { hangUpFor } from "@/lib/call-state"
 import { releaseCirclesOf } from "@/lib/circles"
+import { redactSession } from "@/lib/age-assurance"
 import { endSubscriptionsAtPeriodEnd, keepPaymentRecords } from "@/lib/payments"
 import { all, get, run, transaction } from "@/lib/db"
 import { sendMail } from "@/lib/mail"
@@ -395,6 +396,9 @@ export async function deleteAccount(_prev: AccountState, formData: FormData): Pr
 // ended here, in one place, before its rows go.
 async function eraseAccount(userId: string): Promise<void> {
   await hangUpFor(userId, "deleted")
+  // An age check still open at Stripe is asked to delete its data first. Outside the transaction, so a slow Stripe call holds no lock.
+  const ageSession = await get<{ age_check_session: string | null }>("SELECT age_check_session FROM users WHERE id = ?", userId)
+  if (ageSession?.age_check_session) await redactSession(ageSession.age_check_session)
   const files = await transaction(async () => {
     const postFiles = await mediaFilesFor(await treeOfAuthor(userId))
     const messageFiles = (await all<{ media_file: string }>(

@@ -2,13 +2,14 @@
 
 import { revalidatePath } from "next/cache"
 import { getAgreedViewer } from "@/lib/auth"
+import { ageGate } from "@/lib/age-assurance"
 import { hangUpFor } from "@/lib/call-state"
 import { change, get, run, transaction } from "@/lib/db"
 import { getProfileByHandle, peopleOfPage, visiblePostIds } from "@/lib/data"
 import { notify } from "@/lib/notify"
 import { withRequested } from "@/lib/people-state"
 import { MINIMUM_AGE } from "@/lib/legal"
-import { ageFrom, MAX_BIO, MAX_LOCATION, validateHandle, validateName, validateWebsite } from "@/lib/rules"
+import { ageFrom, ANIMATED_AVATAR_MESSAGE, MAX_BIO, MAX_LOCATION, validateHandle, validateName, validateWebsite } from "@/lib/rules"
 import { checkTopic, MAX_FOLLOWED_TOPICS, PEOPLE_PAGE, type PersonEntry } from "@/lib/social-rules"
 import { removeUpload, saveUpload } from "@/lib/uploads"
 import { consume, waitLabel } from "@/lib/rate-limit"
@@ -375,6 +376,16 @@ export async function updateProfile(_prev: ProfileState, formData: FormData): Pr
 
   const avatar = formData.get("avatar")
   const banner = formData.get("banner")
+  // Changing the profile picture or banner is an upload, so it needs a confirmed adult. Editing text alone stays open.
+  if ((avatar instanceof File && avatar.size > 0) || (banner instanceof File && banner.size > 0)) {
+    const mediaLine = await ageGate(viewer.id)
+    if (mediaLine) return { error: mediaLine }
+  }
+  // An animated profile picture is part of Rhenko Plus. The label is checked here, and saveUpload then checks that the bytes are
+  // a GIF, so a file cannot get past this by its name or label.
+  if (avatar instanceof File && avatar.size > 0 && avatar.type.split(";")[0].trim() === "image/gif" && !viewer.plus) {
+    return { error: ANIMATED_AVATAR_MESSAGE }
+  }
   const avatarUpload = avatar instanceof File && avatar.size > 0 ? await saveUpload(avatar, "image") : null
   if (avatarUpload && !avatarUpload.ok) return { error: avatarUpload.error }
   const bannerUpload = banner instanceof File && banner.size > 0 ? await saveUpload(banner, "image") : null

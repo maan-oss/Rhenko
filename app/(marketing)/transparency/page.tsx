@@ -380,7 +380,8 @@ const SECTIONS: LegalSection[] = [
     body: (
       <List>
         <li>
-          <B>Rhenko Plus</B> removes ads from the home feeds, and gives 24 hours to edit a post instead of one hour.
+          <B>Rhenko Plus</B> removes ads from the home feeds, gives 24 hours to edit a post instead of one hour, lets a profile picture be
+          an animated GIF, and allows videos up to 10 minutes long instead of 2 minutes 20 seconds, within the same size limit for everyone.
         </li>
         <li>
           <B>The paid subscriber ring</B> shows beside a name that the person pays. It changes nothing else.

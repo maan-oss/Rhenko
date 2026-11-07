@@ -29,7 +29,7 @@ import {
   MAX_POST,
   MAX_TITLE,
   MAX_VIDEO_BYTES,
-  MAX_VIDEO_SECONDS,
+  maxVideoSeconds,
   POLL_DURATIONS,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
@@ -52,7 +52,8 @@ import { cn } from "@/lib/utils"
 export type CircleOption = { id: string; name: string }
 
 type ComposerProps = {
-  viewer: AvatarUser
+  // `plus` is set on the viewer the server passes, and sets how long a video may run here. The server checks it again.
+  viewer: AvatarUser & { plus?: boolean }
   replyToId?: string
   quoteOfId?: string
   // A circle page passes its own circle, so the post goes there. The home composer passes the circles the viewer is in,
@@ -754,7 +755,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
         // Browsers that can't read a file's length let it through, and it can't be trimmed. The server still checks its type and size.
         const seconds = await videoSeconds(file)
         // Too long to post whole: the person chooses the part to keep. A video within the limit goes in as it is, with a Trim button.
-        if (seconds !== null && seconds > MAX_VIDEO_SECONDS) {
+        if (seconds !== null && seconds > maxVideoSeconds(viewer.plus === true)) {
           longVideo = { key: null, file, duration: seconds, trim: null }
           continue
         }
@@ -1289,6 +1290,7 @@ export function Composer({ viewer, replyToId, quoteOfId, circle, circles, placeh
               file={trimming.file}
               duration={trimming.duration}
               initial={trimming.trim}
+              maxSeconds={maxVideoSeconds(viewer.plus === true)}
               onCancel={() => setTrimming(null)}
               onApply={(trim) => applyTrim(trimming, trim)}
             />

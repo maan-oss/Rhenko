@@ -5,9 +5,10 @@ import { visiblePostIds } from "@/lib/data"
 import { formatMoney } from "@/lib/money"
 import { ADD_CREDIT_OPTIONS, MICRO_PER_CENT } from "@/lib/ad-rules"
 import { RETENTION } from "@/lib/legal"
+import { applyAgeCheckEvent } from "@/lib/age-assurance"
 
-// Payments through Stripe: subscriptions (Plus and paid verification), tips to creators, creators' payout accounts,
-// advertising credit, and the refund for a subscription cancelled in its first fourteen days.
+// Payments through Stripe: subscriptions (Rhenko Plus, and the paid subscriber badge sold before Plus included it), tips to
+// creators, creators' payout accounts, advertising credit, and the refund for a subscription cancelled in its first fourteen days.
 // Nothing here stores a card number. Stripe holds the card, and this file keeps only Stripe's identifiers and the
 // amounts it reports.
 
@@ -167,11 +168,12 @@ async function saveSubscription(subscription: Stripe.Subscription): Promise<void
   await syncPaidVerified(userId)
 }
 
-// The paid badge is on while the person has an active paid verification subscription, and off the moment it lapses.
+// The paid subscriber ring is on while the person has an active Rhenko Plus subscription, or an active subscription to the older
+// paid badge (kind 'verified'), and off the moment both lapse.
 async function syncPaidVerified(userId: string): Promise<void> {
   await run(
     `UPDATE users SET paid_verified = CASE WHEN EXISTS(
-       SELECT 1 FROM subscriptions WHERE user_id = ? AND kind = 'verified' AND status IN ('active', 'trialing')
+       SELECT 1 FROM subscriptions WHERE user_id = ? AND kind IN ('plus', 'verified') AND status IN ('active', 'trialing')
      ) THEN 1 ELSE 0 END WHERE id = ?`,
     userId,
     userId
@@ -221,11 +223,12 @@ export async function keepPaymentRecords(userId: string): Promise<void> {
 
 // The subscription checkout. The person pays Stripe's page, and the webhook records the result.
 export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promise<string> {
+  // The paid badge on its own is no longer sold. Rhenko Plus includes it. Existing badge subscriptions keep working.
+  if (kind === "verified") throw new Error("The paid subscriber ring is part of Rhenko Plus. Subscribe to Plus instead.")
   const price = priceIdFor(kind)
   if (!price) throw new Error("This subscription is not set up yet.")
-  if (kind === "verified" && !viewer.emailVerified) {
-    throw new Error("Confirm your email address first. Paid verification needs one.")
-  }
+  // Plus includes the paid subscriber ring, and the ring needs a confirmed address.
+  if (!viewer.emailVerified) throw new Error("Confirm your email address first. Rhenko Plus needs one.")
   if (await activeSubscription(viewer.id, kind)) throw new Error("You already have this subscription.")
   const customer = await get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
   const origin = publicOrigin()
@@ -445,6 +448,12 @@ async function apply(event: Stripe.Event): Promise<void> {
       if (intent) await run("UPDATE tips SET status = 'refunded' WHERE payment_intent = ?", intent)
       return
     }
+    case "identity.verification_session.processing":
+    case "identity.verification_session.verified":
+    case "identity.verification_session.requires_input":
+    case "identity.verification_session.canceled":
+      await applyAgeCheckEvent(event.data.object as Stripe.Identity.VerificationSession)
+      return
     default:
       return
   }
@@ -456,7 +465,8 @@ export type BillingState = {
   configured: boolean
   emailVerified: boolean
   plus: { active: boolean; cancelAtPeriodEnd: boolean; periodEnd: number | null; withdrawable: boolean }
-  verified: { active: boolean; cancelAtPeriodEnd: boolean; periodEnd: number | null }
+  // The badge subscription sold before Rhenko Plus. Only shown to people who already have one.
+  verified: { active: boolean; cancelAtPeriodEnd: boolean; periodEnd: number | null; withdrawable: boolean }
   tips: { count: number; total: number; currency: string }
   payouts: { started: boolean; ready: boolean }
 }
@@ -478,7 +488,12 @@ export async function billingState(viewer: Viewer): Promise<BillingState> {
       periodEnd: plus?.current_period_end ?? null,
       withdrawable: Boolean(plus && Date.now() - plus.created_at <= WITHDRAW_DAYS * 24 * 60 * 60 * 1000),
     },
-    verified: { active: Boolean(verified), cancelAtPeriodEnd: verified?.cancel_at_period_end === 1, periodEnd: verified?.current_period_end ?? null },
+    verified: {
+      active: Boolean(verified),
+      cancelAtPeriodEnd: verified?.cancel_at_period_end === 1,
+      periodEnd: verified?.current_period_end ?? null,
+      withdrawable: Boolean(verified && Date.now() - verified.created_at <= WITHDRAW_DAYS * 24 * 60 * 60 * 1000),
+    },
     tips: { count: tips?.count ?? 0, total: tips?.total ?? 0, currency: CURRENCY },
     payouts: { started: Boolean(account), ready: account?.charges_enabled === 1 },
   }

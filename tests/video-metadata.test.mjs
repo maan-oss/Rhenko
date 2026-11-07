@@ -232,3 +232,24 @@ test("an error from the callback goes on unchanged, and the working folder is st
   )
   assert.deepEqual(workFolders(), before)
 })
+
+// A video posted whole must fit its account's limit: 140 seconds for everyone, 600 with Rhenko Plus (lib/rules.ts). The length is
+// the one ffprobe reads from the file, so a video that is too long is refused before anything is stored.
+test("a video posted whole is refused over 140 seconds and accepted within 600, the Plus limit", { skip }, async () => {
+  const long = path.join(dir, "two-and-a-half-minutes.mp4")
+  ff("-f", "lavfi", "-i", "testsrc=size=16x16:rate=1:duration=150", "-c:v", "libx264", "-pix_fmt", "yuv420p", long)
+  await assert.rejects(
+    withCleanVideo(await fs.openAsBlob(long, { type: "video/mp4" }), "video/mp4", async () => "stored", null, 140),
+    (error) => error instanceof VideoRefused && /140 seconds/.test(error.message)
+  )
+  assert.equal(await withCleanVideo(await fs.openAsBlob(long, { type: "video/mp4" }), "video/mp4", async () => "stored", null, 600), "stored")
+})
+
+test("a video past the Plus limit of 600 seconds is refused even with Plus", { skip }, async () => {
+  const longer = path.join(dir, "ten-minutes-twenty.mp4")
+  ff("-f", "lavfi", "-i", "testsrc=size=16x16:rate=1:duration=620", "-c:v", "libx264", "-pix_fmt", "yuv420p", longer)
+  await assert.rejects(
+    withCleanVideo(await fs.openAsBlob(longer, { type: "video/mp4" }), "video/mp4", async () => "stored", null, 600),
+    (error) => error instanceof VideoRefused && /600 seconds/.test(error.message)
+  )
+})

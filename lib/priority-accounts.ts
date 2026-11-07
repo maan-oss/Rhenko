@@ -23,9 +23,9 @@ export async function isPriorityAccount(viewerId: string, accountId: string): Pr
 export async function followedAccountsForPriority(
   viewerId: string,
   limit = 300
-): Promise<{ id: string; handle: string; name: string; avatarFile: string | null; verified: boolean; priority: boolean }[]> {
-  return (await all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number; priority: number }>(
-    `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, (pa.account_id IS NOT NULL) AS priority
+): Promise<{ id: string; handle: string; name: string; avatarFile: string | null; verified: boolean; paidVerified: boolean; priority: boolean }[]> {
+  return (await all<{ id: string; handle: string; name: string; avatar_file: string | null; verified: number; paid_verified: number; priority: number }>(
+    `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, (pa.account_id IS NOT NULL) AS priority
      FROM follows f
      JOIN users u ON u.id = f.followee_id AND u.deactivated_at IS NULL
      LEFT JOIN priority_accounts pa ON pa.user_id = f.follower_id AND pa.account_id = f.followee_id
@@ -34,7 +34,15 @@ export async function followedAccountsForPriority(
      LIMIT ?`,
     viewerId,
     limit
-  )).map((r) => ({ id: r.id, handle: r.handle, name: r.name, avatarFile: r.avatar_file, verified: r.verified === 1, priority: r.priority === 1 }))
+  )).map((r) => ({
+    id: r.id,
+    handle: r.handle,
+    name: r.name,
+    avatarFile: r.avatar_file,
+    verified: r.verified === 1,
+    paidVerified: r.paid_verified === 1,
+    priority: r.priority === 1,
+  }))
 }
 
 export async function setPriorityAccount(viewerId: string, accountId: string, on: boolean, now: number): Promise<void> {
