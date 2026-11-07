@@ -139,7 +139,7 @@ text it affects and a recommendation.
 
 ## Verification
 
-Checked on 2026-11-07 against the working tree, which is uncommitted on top of 4846274.
+Checked on 2026-11-07 against the working tree, committed as d3b084b on rhenko-app-features and pushed.
 
 - `npx tsc --noEmit` and eslint on the changed TypeScript files: clean. `npm run test:unit`: 417 passing. `npm run build`: passes.
 - End-to-end, encryption off (`RHENKO_E2EE=0`): settings and visibility passed in the full run. The messages area passed with no
