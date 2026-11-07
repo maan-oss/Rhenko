@@ -4,6 +4,7 @@ import Link from "@/components/app/link"
 import { useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { chatInfo, setConversationAlerts, type ChatInfoResult } from "@/actions/messages"
+import { safetyNumbersFor, type SafetyNumbers, type SafetyStatus } from "@/actions/e2ee"
 import { Avatar } from "@/components/app/avatar"
 import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -22,6 +23,7 @@ const LEVELS: { level: AlertLevel; label: string; hint: string }[] = [
 export function ContactInfoDialog({ conversationId, onOpenChange }: { conversationId: string; onOpenChange: (open: boolean) => void }) {
   const [info, setInfo] = useState<ChatInfoResult | null>(null)
   const [pending, startTransition] = useTransition()
+  const [safety, setSafety] = useState<SafetyNumbers | null>(null)
 
   useEffect(() => {
     let current = true
@@ -31,6 +33,20 @@ export function ContactInfoDialog({ conversationId, onOpenChange }: { conversati
       })
       .catch(() => {
         if (current) setInfo({ ok: false, error: "Couldn't load this right now. Try again." })
+      })
+    return () => {
+      current = false
+    }
+  }, [conversationId])
+
+  useEffect(() => {
+    let current = true
+    safetyNumbersFor(conversationId)
+      .then((result) => {
+        if (current) setSafety(result)
+      })
+      .catch(() => {
+        if (current) setSafety({ ok: false, error: "Couldn't load the safety numbers. Try again." })
       })
     return () => {
       current = false
@@ -94,6 +110,34 @@ export function ContactInfoDialog({ conversationId, onOpenChange }: { conversati
               </Link>
             ) : null}
 
+            {safety === null ? null : !safety.ok ? (
+              <p role="alert" className="text-[14px] text-destructive">
+                {safety.error}
+              </p>
+            ) : safety.encrypted ? (
+              <section aria-labelledby="chat-safety">
+                <h3 id="chat-safety" className="text-sm font-semibold text-muted-foreground">
+                  Safety numbers
+                </h3>
+                <p className="mt-2 text-[14px] text-muted-foreground">
+                  Compare each number with that person in person or on a call you trust. When they match, only the two of you can read this chat.
+                  A number changes when someone links or removes a browser, so compare again after that.
+                </p>
+                <ul className="mt-3 flex flex-col gap-4">
+                  {safety.entries.map((entry) => (
+                    <li key={entry.id}>
+                      <p className="text-[15px] font-semibold">{entry.name}</p>
+                      {entry.number ? (
+                        <SafetyDigits number={entry.number} />
+                      ) : (
+                        <p className="mt-1 text-[14px] text-muted-foreground">{SAFETY_NOTE[entry.status]}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             <section aria-labelledby="chat-shared">
               <h3 id="chat-shared" className="text-sm font-semibold text-muted-foreground">
                 Shared in this chat
@@ -145,6 +189,23 @@ export function ContactInfoDialog({ conversationId, onOpenChange }: { conversati
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+const SAFETY_NOTE: Record<SafetyStatus, string> = {
+  ready: "Compare this number with them.",
+  "they-no-device": "They haven't linked a browser yet, so there is no number to compare.",
+  "you-no-device": "Link this browser to your account to see the number.",
+}
+
+// Sixty digits in twelve groups of five, four groups to a row, so the code reads the same on both phones.
+function SafetyDigits({ number }: { number: string }) {
+  return (
+    <p className="mt-1 grid grid-cols-4 gap-x-4 gap-y-1 font-mono text-[16px] tabular-nums">
+      {number.split(" ").map((group, index) => (
+        <span key={index}>{group}</span>
+      ))}
+    </p>
   )
 }
 

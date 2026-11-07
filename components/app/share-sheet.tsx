@@ -10,6 +10,7 @@ import { Avatar } from "@/components/app/avatar"
 import { BottomSheet } from "@/components/app/bottom-sheet"
 import { DIALOG_FIT } from "@/components/app/overlay-sizes"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { sendEncryptedPostShare } from "@/lib/e2ee-client"
 import type { MiniUser } from "@/lib/data"
 import { MAX_DM } from "@/lib/rules"
 import { useIsDesktop } from "@/lib/use-media"
@@ -153,14 +154,23 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
         setError(result.error)
         return
       }
-      if (result.sent.length === 0) {
-        setError(result.failed[0]?.error ?? "Couldn't send this post.")
+      // A chat that is encrypted gets the note sealed on this device, so the post and its note are sent one chat at a time.
+      const sealedSent: { handle: string; conversationId: string }[] = []
+      const sealedFailed: { handle: string; error: string }[] = []
+      for (const target of result.encrypted) {
+        const outcome = await sendEncryptedPostShare({ conversationId: target.conversationId, postId: post.id, note })
+        if (outcome.ok) sealedSent.push(target)
+        else sealedFailed.push({ handle: target.handle, error: outcome.error })
+      }
+      const delivered = [...result.sent, ...sealedSent]
+      if (delivered.length === 0) {
+        setError(result.failed[0]?.error ?? sealedFailed[0]?.error ?? "Couldn't send this post.")
         return
       }
       setSent({
-        handles: result.sent.map((s) => s.handle),
-        conversationId: result.sent.length === 1 ? result.sent[0].conversationId : null,
-        failed: result.failed,
+        handles: delivered.map((s) => s.handle),
+        conversationId: delivered.length === 1 ? delivered[0].conversationId : null,
+        failed: [...result.failed, ...sealedFailed],
       })
     })
   }

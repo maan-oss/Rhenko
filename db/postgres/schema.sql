@@ -57,6 +57,13 @@ CREATE TABLE legal_notices (
   good_faith bigint NOT NULL DEFAULT 0,
   accurate bigint NOT NULL DEFAULT 0,
   signature text NOT NULL,
+  -- For a copyright notice: a telephone number, and the sender's statement, under penalty of perjury, that they are authorised to
+  -- act for the owner (17 U.S.C. 512(c)(3)(A)(iv) and (vi)). Blank and 0 for other kinds.
+  phone text NOT NULL DEFAULT '',
+  authorized bigint NOT NULL DEFAULT 0,
+  -- For an intimate image notice: when the content must be off the service (48 hours after the notice, the TAKE IT DOWN Act).
+  -- NULL for other kinds.
+  due_by bigint,
   status text NOT NULL DEFAULT 'open',
   decision_note text NOT NULL DEFAULT '',
   created_at bigint NOT NULL,
@@ -433,6 +440,28 @@ CREATE TABLE appeals (
   decision_note text NOT NULL DEFAULT ''
 );
 
+-- A counter-notice from the author of a post removed for copyright (17 U.S.C. 512(g)(3)). The post goes back no sooner than
+-- restore_from and no later than restore_by, which are 10 and 14 business days after the counter-notice was received (lib/business-days.ts),
+-- unless the copyright owner has told us it has started a court action (court_action_at). The contact details are kept for the
+-- retention period in lib/legal.ts, then removed by the background pass.
+CREATE TABLE counter_notices (
+  id text PRIMARY KEY,
+  notice_id text NOT NULL UNIQUE REFERENCES moderation_notices(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  address text NOT NULL,
+  phone text NOT NULL,
+  signature text NOT NULL,
+  removed_location text NOT NULL,
+  created_at bigint NOT NULL,
+  restore_from bigint NOT NULL,
+  restore_by bigint NOT NULL,
+  forwarded_at bigint,
+  court_action_at bigint,
+  restored_at bigint
+);
+CREATE INDEX counter_notices_open ON counter_notices (restore_by) WHERE restored_at IS NULL;
+
 -- Files to remove from storage, by name. A removal writes the name here and the server's background pass deletes the file
 -- and its size variants, whether storage is the disk or R2. A file another record still uses is never queued.
 CREATE TABLE pending_file_deletions (
@@ -457,7 +486,11 @@ CREATE TABLE chat_reports (
   retain_until bigint NOT NULL,
   status text NOT NULL DEFAULT 'open',
   opened_at bigint,
-  handled_at bigint
+  handled_at bigint,
+  -- The report number the CyberTipline gave when the report was made to NCMEC (18 U.S.C. 2258A), and when it was made. The report is
+  -- kept for one year after that date (retain_until is moved to it). NULL for a report not made to NCMEC.
+  ncmec_reference text,
+  ncmec_reported_at bigint
 );
 CREATE INDEX chat_reports_open ON chat_reports (status, created_at);
 CREATE INDEX chat_reports_retain ON chat_reports (retain_until);
@@ -471,6 +504,21 @@ CREATE TABLE chat_report_files (
   PRIMARY KEY (report_id, file)
 );
 CREATE INDEX chat_report_files_file ON chat_report_files (file);
+
+-- A chat message taken off the server for everyone by a moderator, or by an urgent report (lib/chat-moderation.ts). The row of the
+-- message stays, empty, so the thread can say it was removed. No foreign keys, so the record outlives the chat and the account.
+CREATE TABLE chat_message_removals (
+  id text PRIMARY KEY,
+  message_id text NOT NULL,
+  conversation_id text NOT NULL,
+  sender_id text NOT NULL,
+  category text NOT NULL,
+  explanation text NOT NULL,
+  source text NOT NULL,
+  created_at bigint NOT NULL
+);
+CREATE INDEX chat_message_removals_message ON chat_message_removals (message_id);
+CREATE INDEX chat_message_removals_created ON chat_message_removals (created_at);
 
 CREATE TABLE community_members (
   community_id text NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
@@ -1100,11 +1148,3 @@ create table if not exists e2ee_link_requests (
   device_id text references e2ee_devices(id) on delete cascade
 );
 
--- Message history copied from an existing device to a newly linked one. The body is encrypted to the new device's key, so the
--- server holds it as ciphertext and removes it once the new device has taken it or after it expires.
-create table if not exists e2ee_history_transfers (
-  id text primary key,
-  device_id text not null references e2ee_devices(id) on delete cascade,
-  payload text not null,
-  created_at bigint not null
-);

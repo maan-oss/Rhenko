@@ -4,7 +4,7 @@
 
 import { randomInt } from "node:crypto"
 import { newId } from "@/lib/auth"
-import { all, get, run, transaction } from "@/lib/db"
+import { all, change, get, run, transaction } from "@/lib/db"
 import { MAX_DEVICES_PER_USER } from "@/lib/e2ee-rules"
 import {
   HISTORY_BATCH_MAX,
@@ -202,7 +202,8 @@ export async function storeHistoryWraps(
         wrap.messageId
       )
       if (!message) continue
-      await run(
+      // A key copied before (a copy run again after a failure) is already there, and is not counted twice.
+      count += await change(
         "INSERT INTO chat_message_wraps (message_id, device_id, epk, iv, key) VALUES (?, ?, ?, ?, ?) ON CONFLICT (message_id, device_id) DO NOTHING",
         wrap.messageId,
         link.deviceId,
@@ -210,10 +211,23 @@ export async function storeHistoryWraps(
         wrap.iv,
         wrap.key
       )
-      count++
     }
   })
   return { ok: true, count }
+}
+
+// Approved links this device can still copy the history to. A copy that failed part way is run again from here, until the copy
+// window closes.
+export type CopyableLink = { code: string; label: string; expiresAt: number }
+
+export async function copyableLinksOf(userId: string, approverId: string): Promise<CopyableLink[]> {
+  const rows = await all<{ code: string; label: string; expires_at: number | string }>(
+    "SELECT code, label, expires_at FROM e2ee_link_requests WHERE user_id = ? AND approved_device = ? AND device_id IS NOT NULL AND expires_at > ? ORDER BY expires_at DESC",
+    userId,
+    approverId,
+    Date.now()
+  )
+  return rows.map((row) => ({ code: row.code, label: row.label, expiresAt: Number(row.expires_at) }))
 }
 
 // Drops the links that have run out. The maintenance pass calls it.

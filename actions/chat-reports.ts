@@ -1,6 +1,8 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
 import { getAgreedViewer, newId } from "@/lib/auth"
+import { publish } from "@/lib/bus"
 import { all, change, get, run, transaction } from "@/lib/db"
 import {
   CHAT_REPORT_MESSAGES,
@@ -14,10 +16,11 @@ import {
   type ReportPayload,
   type SealedReport,
 } from "@/lib/chat-reports"
+import { clearChatMessage } from "@/lib/chat-removal"
 import { configuredReportKey } from "@/lib/chat-report-store"
 import { parseAttachment } from "@/lib/message-attachments"
 import { consume, waitLabel } from "@/lib/rate-limit"
-import { REPORT_REASONS } from "@/lib/rules"
+import { REPORT_REASONS, URGENT_REPORT } from "@/lib/rules"
 import { contentTypeFor, uploadSize } from "@/lib/uploads"
 
 // Reports of chat messages, as WhatsApp does them. The reporter picks a message and the messages up to it (the reported one and
@@ -108,8 +111,8 @@ export async function reportChatMessage(input: {
   // The files of the window are kept with the report, whichever side sealed it. A file is taken from the server's own rows, so a
   // report cannot keep a file that is not in this chat.
   const files = [...new Set(near.map((row) => row.media_file).filter((file): file is string => file !== null))]
-  await transaction(async () => {
-    const reportId = newId()
+  const reportId = newId()
+  const created = await transaction(async () => {
     const added = await change(
       `INSERT INTO chat_reports (id, reporter_id, reported_user_id, conversation_id, message_id, kid, reason, sealed, created_at, retain_until, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
@@ -125,9 +128,27 @@ export async function reportChatMessage(input: {
       now,
       now + CHAT_REPORT_RETENTION_MS
     )
-    if (added === 0) return
+    if (added === 0) return false
     for (const file of files) await run("INSERT INTO chat_report_files (report_id, file) VALUES (?, ?) ON CONFLICT DO NOTHING", reportId, file)
+    return true
   })
+  // A picture of someone shared without consent, or child sexual abuse material, comes out of the chat at once, as a post does
+  // (URGENT_REPORT in lib/rules.ts). The report has already kept the sealed copy, so nothing is lost for review. The other messages
+  // in the report stay in the chat until a moderator decides about them (scripts/moderation.mjs chat-hide).
+  const urgent = URGENT_REPORT[reason]
+  if (created && urgent) {
+    const cleared = await clearChatMessage(messageId, now, {
+      id: newId(),
+      category: urgent.category,
+      explanation: urgent.explanation,
+      source: `chat-report:${reportId}`,
+    })
+    if (cleared) {
+      const members = (await all<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ?", conversationId)).map((row) => row.user_id)
+      await publish(members, { type: "message", conversationId })
+      revalidatePath("/", "layout")
+    }
+  }
   return { ok: true }
 }
 

@@ -22,8 +22,10 @@ type Draft = {
   work: string
   description: string
   signature: string
+  phone: string
   good_faith: boolean
   accurate: boolean
+  authorized: boolean
 }
 
 const EMPTY: Draft = {
@@ -35,8 +37,10 @@ const EMPTY: Draft = {
   work: "",
   description: "",
   signature: "",
+  phone: "",
   good_faith: false,
   accurate: false,
+  authorized: false,
 }
 
 function Field({ label, id, hint, children }: { label: string; id: string; hint?: string; children: ReactNode }) {
@@ -122,10 +126,15 @@ export function NoticeForm() {
           className={FIELD}
         />
       </Field>
-      <Field label="Postal address (optional)" id="address" hint="Needed for some copyright notices.">
+      <Field
+        label={draft.kind === "copyright" ? "Postal address" : "Postal address (optional)"}
+        id="address"
+        hint="For a copyright notice, the owner's or their agent's postal address, so they can be reached."
+      >
         <textarea
           id="address"
           name="address"
+          required={draft.kind === "copyright"}
           rows={2}
           maxLength={300}
           value={draft.address}
@@ -133,12 +142,32 @@ export function NoticeForm() {
           className={AREA}
         />
       </Field>
-      <Field label="Link to the content" id="url" hint="The address of the post or material on this server, starting with https://.">
+      {draft.kind === "copyright" ? (
+        <Field label="Telephone" id="phone" hint="A number the owner or their agent can call. It is not shown to anyone else.">
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            required
+            autoComplete="tel"
+            maxLength={30}
+            value={draft.phone}
+            onChange={(event) => set("phone", event.target.value)}
+            className={FIELD}
+          />
+        </Field>
+      ) : null}
+      <Field
+        label="Link to the content"
+        id="url"
+        hint="The address of the post or material on this server, starting with https://. Required for a copyright notice."
+      >
         <input
           id="url"
           name="url"
           type="url"
           inputMode="url"
+          required={draft.kind === "copyright"}
           maxLength={500}
           placeholder="https://"
           value={draft.url}
@@ -198,6 +227,19 @@ export function NoticeForm() {
         />
         <span>I confirm that what I have written is accurate, and that I am the owner or am authorised to act for the owner.</span>
       </label>
+      {draft.kind === "copyright" ? (
+        <label className="flex items-start gap-3 text-[14px] leading-relaxed">
+          <input
+            type="checkbox"
+            name="authorized"
+            required
+            checked={draft.authorized}
+            onChange={(event) => set("authorized", event.target.checked)}
+            className="mt-[3px] size-4 shrink-0 cursor-pointer accent-foreground"
+          />
+          <span>Under penalty of perjury, I am the owner of the work, or I am authorised to act for its owner.</span>
+        </label>
+      ) : null}
       <Field label="Sign with your full name" id="signature">
         <input
           id="signature"

@@ -7,7 +7,8 @@ Nothing in this runbook has been run against production. The operator runs each 
 
 - [ ] Counsel has given its preservation advice (`docs/legal-operations.md`), and has seen how chat reports are kept and read (step 4a).
       The child-safety overview is in the Better project as `claude/e2ee-child-safety-legal-overview-2026-11-06.md`. It is not legal advice.
-- [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql` and the chat reporting changes.
+- [ ] The server runs the commit that contains `db/postgres/upgrades/2026-11-e2ee.sql`, `db/postgres/upgrades/2026-11-dmca.sql` and the
+      chat reporting changes.
 - [ ] The commands below run from the repository directory on the server (the moderation commands need `lib/`, which the app's image does not
       carry, so run them from a checkout with `npm install` done, not inside the container).
 
@@ -31,9 +32,11 @@ dumps for 30 days (`BACKUP_KEEP_DAYS`).
 ## 3. Apply the schema upgrade (item 1, second half)
 
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-e2ee.sql
+    docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-dmca.sql
 
-Expect NOTICE lines and no ERROR. The file only adds tables and columns, and it is safe to run again. Run it before the new code: the
-previous code keeps working on the upgraded schema.
+Expect NOTICE lines and no ERROR. Both files only add tables and columns, and both are safe to run again. Run them before the new code:
+the previous code keeps working on the upgraded schema. The second file adds the copyright notice fields (telephone, sworn statement,
+the 48-hour deadline on intimate-image notices) and the counter-notice table.
 
 ## 4. Deploy the new code and restart the app
 

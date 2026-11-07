@@ -66,8 +66,8 @@ export async function translateMessage(messageId: string): Promise<TranslateResu
 
   // A message from someone the viewer has blocked, or who has blocked them, is not readable here either, and nor is a
   // disappearing message whose time is up.
-  const message = await get<{ body: string; lang: string | null; deleted_at: number | null }>(
-    `SELECT m.body, m.lang, m.deleted_at FROM chat_messages m
+  const message = await get<{ body: string; lang: string | null; deleted_at: number | null; cipher: string | null }>(
+    `SELECT m.body, m.lang, m.deleted_at, m.cipher FROM chat_messages m
      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
      WHERE m.id = ? AND (m.expires_at IS NULL OR m.expires_at > ?) AND NOT EXISTS (
        SELECT 1 FROM blocks bl WHERE (bl.blocker_id = ? AND bl.blocked_id = m.sender_id) OR (bl.blocker_id = m.sender_id AND bl.blocked_id = ?))`,
@@ -78,6 +78,8 @@ export async function translateMessage(messageId: string): Promise<TranslateResu
     viewer.id
   )
   if (!message || message.deleted_at !== null) return { ok: false, error: "That message can't be found." }
+  // An encrypted message's words are not on the server, and sending them to the translation service would give them to it.
+  if (message.cipher !== null) return { ok: false, error: "Encrypted messages can't be translated, because their words aren't sent to the translation service." }
   if (message.body.trim() === "") return { ok: false, error: "There is no text to translate." }
   if (message.body.length > TRANSLATE_MAX_CHARS) return { ok: false, error: "This message is too long to translate here." }
 

@@ -10,7 +10,7 @@ import { DIALOG_CLOSE_PHONE, DIALOG_FIT } from "@/components/app/overlay-sizes"
 import type { ReportPublicKey } from "@/lib/chat-reports"
 import { sealLocalReport } from "@/lib/chat-report-client"
 import type { MessageView } from "@/lib/data"
-import { REPORT_REASONS } from "@/lib/rules"
+import { REPORT_REASONS, URGENT_REPORT } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
 // Reports one message of a chat, the way WhatsApp does: the message and the ones before it go to Rhenko, and nobody else in the chat
@@ -54,7 +54,7 @@ export function ChatReportDialog({
         const blocked = await toggleBlock(handle, true)
         if (!blocked.ok) toast.error(blocked.error)
       }
-      toast.success("Report sent.")
+      toast.success(URGENT_REPORT[reason] ? "Report sent. The message has been taken off the chat while we review it." : "Report sent.")
       onOpenChange(false)
     })
   }
@@ -71,9 +71,10 @@ export function ChatReportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-sm", DIALOG_CLOSE_PHONE, DIALOG_FIT)} showCloseButton>
         <DialogTitle className="text-lg font-semibold">Report message</DialogTitle>
+        {/* The wording below is awaiting counsel's approval (docs/lawyer-review.md). Change it only with counsel. */}
         <DialogDescription className="text-sm text-muted-foreground">
           Why are you reporting this message? The message and up to four before it go to Rhenko for review. Nobody else in the chat is
-          told. Rhenko keeps the report for one year.
+          told. Rhenko keeps the report for one year, and passes it on only where the law requires.
         </DialogDescription>
         <fieldset className="flex flex-col gap-1">
           <legend className="sr-only">Reason</legend>

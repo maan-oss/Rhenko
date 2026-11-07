@@ -1,24 +1,30 @@
 "use server"
 
 import { getAgreedViewer } from "@/lib/auth"
+import { all, get } from "@/lib/db"
+import { safetyNumber } from "@/lib/e2ee"
 import {
   activeDeviceOf,
   activeDevicesOf,
   deviceCookieFor,
   forgetDeviceFor,
+  memberDevicesOf,
   registerDevice,
   rememberDeviceFor,
   revokeDevice,
   thisDeviceOf,
+  type MemberDevice,
 } from "@/lib/e2ee-devices"
 import {
   approveLink,
   copyTargetOf,
   historyPageOf,
   linkStateOf,
+  copyableLinksOf,
   pendingLinksOf,
   startLink,
   storeHistoryWraps,
+  type CopyableLink,
   type HistoryRow,
   type LinkState,
   type PendingLink,
@@ -99,6 +105,67 @@ export async function pendingDeviceLinks(): Promise<PendingLinks> {
   if (!viewer) return { ok: false, error: NOT_SIGNED_IN }
   if (!(await approverOf(viewer.id))) return { ok: true, links: [] }
   return { ok: true, links: await pendingLinksOf(viewer.id) }
+}
+
+// The approved links whose history this device can still copy, for a copy that failed part way to be run again.
+export type CopyableLinks = { ok: true; links: CopyableLink[] } | LinkFailure
+export async function copyableDeviceLinks(): Promise<CopyableLinks> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: NOT_SIGNED_IN }
+  const approver = await approverOf(viewer.id)
+  if (!approver) return { ok: true, links: [] }
+  return { ok: true, links: await copyableLinksOf(viewer.id, approver) }
+}
+
+// The safety number for each other person in an encrypted chat: a code that is the same on both people's phones when each holds the
+// other's keys. It is made from the public keys of every active device of both people, so it changes when a browser is linked or
+// removed. Nothing here is secret. A chat that is not encrypted has no safety numbers.
+export type SafetyStatus = "ready" | "they-no-device" | "you-no-device"
+export type SafetyEntry = { id: string; name: string; handle: string; status: SafetyStatus; number: string | null }
+export type SafetyNumbers = { ok: true; encrypted: boolean; entries: SafetyEntry[] } | LinkFailure
+
+const SAFETY_ID_MAX = 64
+const NO_CONVERSATION: LinkFailure = { ok: false, error: "That conversation doesn't exist." }
+
+export async function safetyNumbersFor(conversationId: string): Promise<SafetyNumbers> {
+  const viewer = await getAgreedViewer()
+  if (!viewer) return { ok: false, error: NOT_SIGNED_IN }
+  if (typeof conversationId !== "string" || conversationId.length === 0 || conversationId.length > SAFETY_ID_MAX) return NO_CONVERSATION
+  // Only someone who has accepted the chat can see its people, so only they get its numbers.
+  const conversation = await get<{ e2ee: number | string }>(
+    `SELECT c.e2ee FROM conversations c
+       JOIN conversation_members m ON m.conversation_id = c.id AND m.user_id = ? AND m.status = 'accepted'
+      WHERE c.id = ?`,
+    viewer.id,
+    conversationId
+  )
+  if (!conversation) return NO_CONVERSATION
+  if (Number(conversation.e2ee) !== 1) return { ok: true, encrypted: false, entries: [] }
+
+  const { devices } = await memberDevicesOf(conversationId)
+  const others = await all<{ id: string; name: string; handle: string }>(
+    `SELECT u.id, u.name, u.handle FROM conversation_members m
+       JOIN users u ON u.id = m.user_id
+      WHERE m.conversation_id = ? AND m.user_id <> ? AND m.status = 'accepted' AND u.deactivated_at IS NULL
+      ORDER BY u.handle ASC`,
+    conversationId,
+    viewer.id
+  )
+  const mine = devices.filter((device) => device.user_id === viewer.id)
+  const entries: SafetyEntry[] = []
+  for (const other of others) {
+    const theirs = devices.filter((device) => device.user_id === other.id)
+    const person = { id: other.id, name: other.name, handle: other.handle }
+    if (theirs.length === 0) entries.push({ ...person, status: "they-no-device", number: null })
+    else if (mine.length === 0) entries.push({ ...person, status: "you-no-device", number: null })
+    else entries.push({ ...person, status: "ready", number: await safetyNumber(keysOf(mine), keysOf(theirs)) })
+  }
+  return { ok: true, encrypted: true, entries }
+}
+
+// The public keys of a person's devices, as a safety number takes them.
+function keysOf(devices: MemberDevice[]): string[] {
+  return devices.flatMap((device) => [device.signing_key, device.agreement_key])
 }
 
 // Approves a link from this browser's device. The new device is listed with the account at once.

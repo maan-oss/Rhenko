@@ -23,15 +23,20 @@ const SECTIONS: LegalSection[] = [
           to the designated agent below. A notice must include:
         </P>
         <List>
-          <li>Your full name and a way to contact you: an email address, and a postal address if you have one.</li>
+          <li>Your full name, an email address where we can reply, and a postal address where the owner or their agent can be reached.</li>
+          <li>A telephone number the owner or their agent can call.</li>
           <li>The copyrighted work you say is being copied, and where you own it.</li>
           <li>The address (link) of the material on Rhenko that you say infringes it.</li>
           <li>A statement that you believe in good faith that the use is not authorised by you, your agent or the law.</li>
-          <li>A confirmation that the information in the notice is accurate, and that you are the owner or authorised to act for the owner. The form asks you to confirm this. It does not ask for a statement under penalty of perjury.</li>
-          <li>Your signature, physical or electronic.</li>
+          <li>A confirmation that the information in the notice is accurate.</li>
+          <li>
+            A statement, under penalty of perjury, that you are the owner of the work or are authorised to act for its owner.
+          </li>
+          <li>Your signature, typed as your full name.</li>
         </List>
         <P>
-          A notice that leaves out these things may not be acted on.
+          A notice that leaves out these things is not accepted, and the form says what is missing. We do not hide the post for a
+          copyright notice until a person has reviewed it.
         </P>
       </>
     ),
@@ -74,16 +79,32 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          If your post was hidden because of a copyright notice, you can appeal from <TextLink href="/notices">Notices</TextLink>. The appeal asks for a reason of at least 10 characters. A counter-notice under the copyright law also needs the following, which the appeal form does not ask for:
+          If your post was hidden because of a copyright notice, you can do one of two things from <TextLink href="/notices">Notices</TextLink>.
+          You can appeal, giving a reason of at least 10 characters, and a person decides the appeal. Or you can send a counter-notice.
+          Once you have sent one, the appeal option for that post goes away, and the other way round.
         </P>
+        <P>A counter-notice asks for:</P>
         <List>
-          <li>Your name, address and phone number, or an email address.</li>
-          <li>A statement, under penalty of perjury, that you believe the material was removed by mistake or misidentification.</li>
-          <li>A statement that you consent to the jurisdiction of the courts where you live, or where the operator is based.</li>
-          <li>Your signature.</li>
+          <li>
+            Your full name, postal address and telephone number. We send these to the person who sent the copyright notice, as the law requires.
+          </li>
+          <li>
+            A statement, under penalty of perjury, that you believe the post was removed by mistake or because it was misidentified.
+          </li>
+          <li>
+            Your consent to the jurisdiction of the federal district court for your address, and your agreement to accept legal papers
+            from the person who sent the notice.
+          </li>
+          <li>Your signature, typed as your full name.</li>
         </List>
         <P>
-          An operator puts the post back by hand. Where the law sets a time limit for doing so after a counter-notice, the operator keeps to it, unless the person who sent the notice tells us a court case has started.
+          We send the full counter-notice to the person who sent the copyright notice. The post goes back no sooner than 10 and no
+          later than 14 business days after that person receives it, unless they tell us they have started a court action to stop you
+          from posting the material. If they do, the post stays hidden while the court decides.
+        </P>
+        <P>
+          Business days leave out weekends and US federal public holidays. The dates for your post are shown in Notices once you have
+          sent the counter-notice.
         </P>
       </>
     ),

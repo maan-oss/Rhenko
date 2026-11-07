@@ -227,8 +227,30 @@ export function replyRefusal(setting: ReplySetting): string {
 // What every action says when its post is missing, unpublished, or hidden from the person acting.
 export const POST_UNAVAILABLE = "That post isn't available."
 
-// The reasons on a post's report menu. The intimate-image reason hides the post at once and sends it to priority review.
-export const REPORT_REASONS = ["Spam", "Abusive or harmful", "Misleading", "Intimate image without consent", "Illegal content", "Something else"] as const
+// The reasons on a report menu, for posts and for chat messages. Two of them take the reported item down at once and send it to
+// priority review (URGENT_REPORT below). Child sexual abuse material has its own reason so that it is never filed under "Illegal content".
+export const REPORT_REASONS = [
+  "Spam",
+  "Abusive or harmful",
+  "Misleading",
+  "Intimate image without consent",
+  "Child sexual abuse material",
+  "Illegal content",
+  "Something else",
+] as const
+
+// The reasons that hide the reported post or message at once. Each is recorded under the notice category it maps to (lib/legal.ts
+// URGENT_KINDS), with the explanation the author and the reviewer read.
+export const URGENT_REPORT: Readonly<Partial<Record<string, { category: "intimate_image" | "child_abuse"; explanation: string }>>> = {
+  "Intimate image without consent": {
+    category: "intimate_image",
+    explanation: "Hidden while we review a report that it was shared without the consent of the person in it.",
+  },
+  "Child sexual abuse material": {
+    category: "child_abuse",
+    explanation: "Hidden while we review a report that it shows child sexual abuse material.",
+  },
+}
 
 export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as const
 

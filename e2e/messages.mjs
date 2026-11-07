@@ -135,6 +135,40 @@ async function directFlow({ phone }) {
     assert.equal(JSON.parse(rows[0].sealed).kid, rows[0].kid, "the report is not sealed to the key it names")
   })
 
+  await check(`${where}: a child-safety report takes the message off the chat for both people at once, and keeps the record`, async () => {
+    need(convId, "the conversation")
+    const words = uniq("Reported at once")
+    await sendChat(receiver.page, words)
+    await threadText(sender.page, words).waitFor()
+    await messageRow(sender.page, words).getByRole("button", { name: "More message options" }).click()
+    await sender.page.getByRole("menuitem", { name: "Report", exact: true }).click()
+    const dialog = sender.page.getByRole("dialog", { name: "Report message" })
+    await dialog.getByText("Child sexual abuse material", { exact: true }).click()
+    await acted(sender.page, () => dialog.getByRole("button", { name: "Report", exact: true }).click())
+    await toastText(sender.page, /taken off the chat/)
+    // The pointer still rests over the toast, and a toast under the pointer stays up. Move it away and let the toast clear, so it does
+    // not cover the buttons of the sheets the next checks open.
+    await sender.page.mouse.move(0, 0)
+    await sender.page.locator("[data-sonner-toast]").filter({ hasText: /taken off the chat/ }).waitFor({ state: "detached" })
+    await threadText(sender.page, words).waitFor({ state: "detached" })
+    await threadText(receiver.page, words).waitFor({ state: "detached" })
+    const [report] = await query(
+      "SELECT id, message_id, reason, sealed, retain_until, created_at FROM chat_reports WHERE conversation_id = ? AND reason = ?",
+      convId,
+      "Child sexual abuse material"
+    )
+    need(report, "the child-safety report")
+    assert.ok(!report.sealed.includes(words), "the reported words are stored in the clear")
+    assert.ok(Number(report.retain_until) - Number(report.created_at) >= 364 * 24 * 60 * 60 * 1000, "the report is not kept for a year")
+    const [message] = await query("SELECT body, deleted_at, media_file, attachment FROM chat_messages WHERE id = ?", report.message_id)
+    assert.equal(message.body, "", "the words of the removed message are still stored")
+    assert.notEqual(message.deleted_at, null, "the removed message is not marked deleted")
+    const removals = await query("SELECT category, source FROM chat_message_removals WHERE message_id = ?", report.message_id)
+    assert.equal(removals.length, 1, `expected one record of the removal, found ${removals.length}`)
+    assert.equal(removals[0].category, "child_abuse")
+    assert.equal(removals[0].source, `chat-report:${report.id}`)
+  })
+
   await check(`${where}: a reaction shows on both sides, and pressing it again takes it back`, async () => {
     const emoji = await react(receiver.page, first)
     await reactionChip(receiver.page, first, emoji, 1, true).waitFor()
@@ -269,8 +303,24 @@ async function directFlow({ phone }) {
     await mine.getByRole("button", { name: "Delete message" }).click()
     await acted(sender.page, () => dialog.getByRole("button", { name: "Delete", exact: true }).click())
     for (const person of [sender, receiver]) {
+      // The child-safety report above already left a deleted notice in this thread, so wait for this message's own text to go, not for any notice.
+      await threadText(person.page, first).waitFor({ state: "detached" }).catch(() => undefined) // the assertion below names any copy left
       await person.page.locator("main").getByText("This message was deleted.").first().waitFor()
-      assert.equal(await person.page.locator("main").getByText(first).count(), 0, "the text of a deleted message is still on the page")
+      // On failure the message names the matching elements, so the copy that is still on the page can be read from the log.
+      const copies = await person.page
+        .locator("main")
+        .getByText(first)
+        .evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const chain = []
+            for (let el = node; el && el.tagName !== "MAIN"; el = el.parentElement) {
+              const style = getComputedStyle(el)
+              chain.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 60)}[op=${style.opacity},vis=${style.visibility},disp=${style.display}]`)
+            }
+            return `text=${JSON.stringify(node.textContent)} chain=${chain.slice(0, 7).join(" > ")}`
+          })
+        )
+      assert.equal(copies.length, 0, `the text of a deleted message is still on the page (${person.name}): ${copies.join(" | ")}`)
     }
   })
 

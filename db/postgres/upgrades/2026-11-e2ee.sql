@@ -42,15 +42,6 @@ create table if not exists e2ee_link_requests (
 -- The device a link made on approval, so the approving device can copy the account's message keys to it.
 alter table e2ee_link_requests add column if not exists device_id text references e2ee_devices(id) on delete cascade;
 
--- Message history copied from an existing device to a newly linked one. The body is encrypted to the new device's key, so the
--- server holds it as ciphertext and removes it once the new device has taken it or after it expires.
-create table if not exists e2ee_history_transfers (
-  id text primary key,
-  device_id text not null references e2ee_devices(id) on delete cascade,
-  payload text not null,
-  created_at bigint not null
-);
-
 -- Files waiting to be removed from storage (see db/postgres/schema.sql). The moderation command line queues them here, because
 -- it cannot reach R2 itself.
 create table if not exists pending_file_deletions (
@@ -86,4 +77,22 @@ create table if not exists chat_report_files (
   primary key (report_id, file)
 );
 create index if not exists chat_report_files_file on chat_report_files (file);
+
+-- The NCMEC report number and date, for a report made to NCMEC (see db/postgres/schema.sql).
+alter table chat_reports add column if not exists ncmec_reference text;
+alter table chat_reports add column if not exists ncmec_reported_at bigint;
+
+-- A chat message taken off the server by a moderator or an urgent report (see db/postgres/schema.sql).
+create table if not exists chat_message_removals (
+  id text primary key,
+  message_id text not null,
+  conversation_id text not null,
+  sender_id text not null,
+  category text not null,
+  explanation text not null,
+  source text not null,
+  created_at bigint not null
+);
+create index if not exists chat_message_removals_message on chat_message_removals (message_id);
+create index if not exists chat_message_removals_created on chat_message_removals (created_at);
 commit;

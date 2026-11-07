@@ -4,6 +4,7 @@ import { all } from "@/lib/db"
 import { categoryLabel } from "@/lib/legal"
 import { PageHeader } from "@/components/app/page-header"
 import { AppealForm } from "@/components/app/appeal-form"
+import { CounterNoticeForm } from "@/components/app/counter-notice-form"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 export default function NoticesPage() {
@@ -26,6 +27,11 @@ type NoticeRow = {
   appeal_id: string | null
   appeal_decided_at: number | null
   appeal_note: string
+  counter_id: string | null
+  counter_sent_at: number | null
+  counter_restore_from: number | null
+  counter_restore_by: number | null
+  court_action_at: number | null
 }
 
 type ReportRow = {
@@ -50,6 +56,18 @@ function when(ms: number): string {
 function statusOf(notice: NoticeRow, now: number): { text: string; appealable: boolean } {
   if (notice.restored_at !== null) return { text: `Put back on ${when(notice.restored_at)}. The post is as it was.`, appealable: false }
   if (notice.post_exists === 0) return { text: "Deleted. The post and its files are gone.", appealable: false }
+  if (notice.counter_id !== null) {
+    if (notice.court_action_at !== null) {
+      return {
+        text: "The copyright owner has told us it has started a court action, so the post stays hidden while the court decides.",
+        appealable: false,
+      }
+    }
+    return {
+      text: `You sent a counter-notice on ${when(Number(notice.counter_sent_at))}. The post goes back no sooner than ${when(Number(notice.counter_restore_from))} and no later than ${when(Number(notice.counter_restore_by))}, unless the copyright owner tells us it has started a court action.`,
+      appealable: false,
+    }
+  }
   if (notice.appeal_id !== null) {
     if (notice.appeal_decided_at === null) return { text: "Your appeal is waiting for a decision.", appealable: false }
     const reason = notice.appeal_note ? ` ${notice.appeal_note}` : ""
@@ -75,9 +93,12 @@ async function NoticesBody() {
   const notices = await all<NoticeRow>(
     `SELECT n.id, n.category, n.explanation, n.excerpt, n.created_at, n.appeal_until, n.restored_at,
             (SELECT COUNT(*) FROM posts p WHERE p.id = n.post_id) AS post_exists,
-            a.id AS appeal_id, a.decided_at AS appeal_decided_at, COALESCE(a.decision_note, '') AS appeal_note
+            a.id AS appeal_id, a.decided_at AS appeal_decided_at, COALESCE(a.decision_note, '') AS appeal_note,
+            c.id AS counter_id, c.created_at AS counter_sent_at, c.restore_from AS counter_restore_from,
+            c.restore_by AS counter_restore_by, c.court_action_at
      FROM moderation_notices n
      LEFT JOIN appeals a ON a.notice_id = n.id
+     LEFT JOIN counter_notices c ON c.notice_id = n.id
      WHERE n.user_id = ?
      ORDER BY n.created_at DESC
      LIMIT 100`,
@@ -119,6 +140,9 @@ async function NoticesBody() {
               ) : null}
               <p className="text-[15px] font-semibold">{status.text}</p>
               {status.appealable ? <AppealForm noticeId={notice.id} /> : null}
+              {status.appealable && notice.category === "copyright" && notice.counter_id === null ? (
+                <CounterNoticeForm noticeId={notice.id} />
+              ) : null}
             </article>
           )
         })}

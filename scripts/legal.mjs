@@ -6,6 +6,10 @@
 //   node scripts/legal.mjs decide <noticeId> actioned|rejected --note "<reason>"
 //                                                               record the decision, email the sender, and change the post
 //   node scripts/legal.mjs record-request --summary "<text>"    log an order or request from a court or authority
+//   node scripts/legal.mjs counter-list                         counter-notices still waiting, due, or overdue
+//   node scripts/legal.mjs court-action <noticeId>              the owner has started a court action: keep the post hidden
+//   node scripts/legal.mjs counter-restore <noticeId>           put a post back after its counter-notice window
+//   node scripts/legal.mjs overdue                              intimate-image notices past their 48-hour deadline, still open
 //
 // actioned: the post is hidden (if it is not already) and its author sees the reason and can appeal.
 // rejected: a post hidden because of this notice is put back.
@@ -34,13 +38,21 @@ const USAGE = `Usage:
   node scripts/legal.mjs list
   node scripts/legal.mjs show <noticeId>
   node scripts/legal.mjs decide <noticeId> actioned|rejected --note "<reason>"
-  node scripts/legal.mjs record-request --summary "<text>"`
+  node scripts/legal.mjs record-request --summary "<text>"
+  node scripts/legal.mjs counter-list
+  node scripts/legal.mjs court-action <noticeId>
+  node scripts/legal.mjs counter-restore <noticeId>
+  node scripts/legal.mjs overdue`
 
 const SHAPES = {
   list: { args: 0, options: [] },
   show: { args: 1, options: [] },
   decide: { args: 2, options: ["note"] },
   "record-request": { args: 0, options: ["summary"] },
+  "counter-list": { args: 0, options: [] },
+  "court-action": { args: 1, options: [] },
+  "counter-restore": { args: 1, options: [] },
+  overdue: { args: 0, options: [] },
 }
 const VALUE_OPTIONS = new Set(["note", "summary"])
 
@@ -147,7 +159,7 @@ async function threadIds(conn, postId) {
 
 async function list() {
   const rows = await sql.unsafe(
-    `SELECT id, kind, name, email, url, post_id, created_at FROM legal_notices
+    `SELECT id, kind, name, email, url, post_id, created_at, due_by FROM legal_notices
      WHERE status = 'open'
      ORDER BY CASE WHEN kind IN ('intimate_image', 'child_abuse') THEN 0 ELSE 1 END, created_at ASC, id ASC`
   )
@@ -162,6 +174,7 @@ async function list() {
     console.log(field("Notice", row.id))
     console.log(field("About", `${KINDS[row.kind] ?? row.kind}${URGENT.has(row.kind) ? " (urgent)" : ""}`))
     console.log(field("From", `${row.name} <${row.email}>, sent ${when(row.created_at)}`))
+    if (row.due_by) console.log(field("Decide by", `${when(row.due_by)} (48 hours after it was sent)`))
     if (row.post_id) console.log(field("Post", row.post_id))
     else if (row.url) console.log(field("Link", row.url))
   }
@@ -176,6 +189,7 @@ async function show() {
   console.log(field("About", `${KINDS[notice.kind] ?? notice.kind}${URGENT.has(notice.kind) ? " (urgent)" : ""}`))
   console.log(field("Status", notice.status === "open" ? "open" : `${notice.status}${notice.decided_at ? `, decided ${when(notice.decided_at)}` : ""}`))
   console.log(field("Sent", when(notice.created_at)))
+  if (notice.due_by) console.log(field("Decide by", `${when(notice.due_by)} (48 hours after it was sent)`))
   console.log(field("From", `${notice.name} <${notice.email}>`))
   if (notice.address) console.log(field("Address", notice.address))
   if (notice.url) console.log(field("Link", notice.url))
@@ -293,15 +307,142 @@ async function recordRequest() {
   console.log(`Recorded request ${id}. It counts in the transparency figures.`)
 }
 
-try {
-  // The legal tables are added by the current schema. An older database has to be brought up to date first.
-  const [{ found }] = await sql.unsafe("SELECT (to_regclass('legal_notices') IS NOT NULL)::int AS found")
-  if (!found) fail("This database has not been upgraded for the current version yet. Apply db/postgres/schema.sql, then run this again.")
+// Counter-notices (17 U.S.C. 512(g)). The author of a post removed for copyright may send one. The owner gets it in full, and the
+// post goes back 10 to 14 business days after it arrived, unless the owner says it has started a court action.
+async function counterFor(value) {
+  const complaint = await findNotice(value)
+  if (complaint.kind !== "copyright") fail("Only a copyright notice can have a counter-notice.")
+  const counter = await one(
+    sql,
+    `SELECT c.id, c.restore_from, c.restore_by, c.court_action_at, c.restored_at, n.id AS notice_id, n.post_id
+       FROM counter_notices c JOIN moderation_notices n ON n.id = c.notice_id
+      WHERE n.source = $1`,
+    `legal:${complaint.id}`
+  )
+  if (!counter) fail(`No counter-notice has been sent for notice ${complaint.id}.`)
+  return { complaint, counter }
+}
 
-  if (command === "list") await list()
-  else if (command === "show") await show()
-  else if (command === "decide") await decide()
-  else await recordRequest()
+function counterStatus(row, now) {
+  if (row.court_action_at !== null) return `court action started on ${when(row.court_action_at)}. The post stays hidden.`
+  if (now < row.restore_from) return `waiting. The post can go back no sooner than ${when(row.restore_from)}.`
+  if (now < row.restore_by) return `due. Put it back now, no later than ${when(row.restore_by)}, unless a court action has started.`
+  return `overdue. The window closed ${when(row.restore_by)}. Put it back now, unless a court action has started.`
+}
+
+async function counterList() {
+  const now = Date.now()
+  const rows = await sql.unsafe(
+    `SELECT c.id, c.created_at, c.restore_from, c.restore_by, c.forwarded_at, c.court_action_at, c.name, c.phone,
+            c.removed_location, l.id AS complaint_id, l.email AS complaint_email
+       FROM counter_notices c
+       JOIN moderation_notices n ON n.id = c.notice_id
+       LEFT JOIN legal_notices l ON l.id = substr(n.source, 7)
+      WHERE c.restored_at IS NULL
+      ORDER BY c.restore_by ASC, c.id ASC`
+  )
+  if (rows.length === 0) {
+    console.log("No counter-notice is waiting for a decision.")
+    return
+  }
+  for (const row of rows) {
+    console.log("")
+    console.log(field("Notice", row.complaint_id ?? "(copyright notice not found)"))
+    console.log(field("Counter", `${row.id}, sent ${when(row.created_at)}`))
+    console.log(field("From", `${row.name}, tel ${row.phone}`))
+    console.log(field("Removed", row.removed_location))
+    console.log(field("Status", counterStatus(row, now)))
+    if (row.forwarded_at === null) console.log(field("Owner", `Not sent yet to ${row.complaint_email ?? "the owner"}. Send it by hand.`))
+  }
+  console.log("")
+  console.log("Owner has started a court action:  node scripts/legal.mjs court-action <noticeId>")
+  console.log("Put a post back:                   node scripts/legal.mjs counter-restore <noticeId>")
+}
+
+async function courtAction() {
+  const { complaint, counter } = await counterFor(params[0])
+  if (counter.restored_at !== null) fail(`That post was already put back on ${when(counter.restored_at)}, so there is nothing to keep hidden.`)
+  if (counter.court_action_at !== null) fail(`A court action was already recorded on ${when(counter.court_action_at)}.`)
+  await sql.unsafe("UPDATE counter_notices SET court_action_at = $1 WHERE id = $2", [Date.now(), counter.id])
+  console.log(`Recorded that the copyright owner has started a court action for notice ${complaint.id}.`)
+  console.log("The post stays hidden while the court decides.")
+}
+
+async function counterRestore() {
+  const { complaint, counter } = await counterFor(params[0])
+  if (counter.restored_at !== null) fail(`That post was already put back on ${when(counter.restored_at)}.`)
+  if (counter.court_action_at !== null) fail("The copyright owner has started a court action, so the post stays hidden. Do not put it back.")
+  const now = Date.now()
+  if (now < counter.restore_from) fail(`Too early. The post can go back no sooner than ${when(counter.restore_from)}.`)
+  const post = counter.post_id ? await one(sql, "SELECT id, removed_at FROM posts WHERE id = $1", counter.post_id) : null
+  const other = await one(
+    sql,
+    "SELECT COUNT(*) AS count FROM moderation_notices WHERE post_id = $1 AND id <> $2 AND restored_at IS NULL",
+    counter.post_id,
+    counter.notice_id
+  )
+  if (Number(other.count) > 0) fail("Another notice still hides this post, so it stays hidden. Decide that notice first.")
+
+  await sql.begin(async (tx) => {
+    if (post && post.removed_at !== null) {
+      const ids = await threadIds(tx, post.id)
+      await tx.unsafe("UPDATE posts SET removed_at = NULL WHERE removed_at = $1 AND id = ANY($2::text[])", [post.removed_at, ids])
+    }
+    await tx.unsafe("UPDATE moderation_notices SET restored_at = $1 WHERE id = $2", [now, counter.notice_id])
+    await tx.unsafe("UPDATE counter_notices SET restored_at = $1 WHERE id = $2", [now, counter.id])
+  })
+
+  console.log(`Put the post back for notice ${complaint.id}.${post ? "" : " The post no longer exists, so there was nothing to show again."}`)
+  if (now >= counter.restore_by) console.log(`Note: the window closed ${when(counter.restore_by)}. Keep this date in your records.`)
+}
+
+async function overdue() {
+  const now = Date.now()
+  const rows = await sql.unsafe(
+    `SELECT id, name, email, post_id, due_by FROM legal_notices
+      WHERE status = 'open' AND kind = 'intimate_image' AND due_by IS NOT NULL AND due_by < $1
+      ORDER BY due_by ASC, id ASC`,
+    [now]
+  )
+  if (rows.length === 0) {
+    console.log("No intimate-image notice is past its 48-hour deadline.")
+    return
+  }
+  console.log(`${rows.length} intimate-image ${rows.length === 1 ? "notice is" : "notices are"} past the 48-hour deadline and still open.`)
+  for (const row of rows) {
+    const hours = Math.floor((now - row.due_by) / (60 * 60 * 1000))
+    console.log("")
+    console.log(field("Notice", row.id))
+    console.log(field("From", `${row.name} <${row.email}>`))
+    console.log(field("Due", `${when(row.due_by)}, ${hours} hours ago`))
+    if (row.post_id) console.log(field("Post", row.post_id))
+  }
+  console.log("")
+  console.log('Decide each one now: node scripts/legal.mjs decide <noticeId> actioned|rejected --note "<reason>"')
+}
+
+try {
+  // The legal tables, and the counter-notice table and deadline columns, come from the current schema. An older database has to
+  // be brought up to date first.
+  const [{ found }] = await sql.unsafe(
+    `SELECT (to_regclass('counter_notices') IS NOT NULL
+             AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'legal_notices' AND column_name = 'due_by')) AS found`
+  )
+  if (!found) {
+    fail("This database has not been upgraded for the current version yet. Apply db/postgres/upgrades/2026-11-dmca.sql, then run this again.")
+  }
+
+  const commands = {
+    list,
+    show,
+    decide,
+    "record-request": recordRequest,
+    "counter-list": counterList,
+    "court-action": courtAction,
+    "counter-restore": counterRestore,
+    overdue,
+  }
+  await commands[command]()
 } finally {
   await sql.end()
 }

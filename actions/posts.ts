@@ -25,6 +25,7 @@ import {
   MAX_VIDEOS,
   POST_UNAVAILABLE,
   REPORT_REASONS,
+  URGENT_REPORT,
   UNDO_WINDOW_MS,
   cleanTitle,
   validatePoll,
@@ -636,14 +637,11 @@ export async function reportPost(postId: string, reason: string): Promise<VoidRe
     reason,
     Date.now()
   )
-  // A picture of someone shared without their consent comes off the feeds at once, and a person reviews it after.
-  if (reason === "Intimate image without consent") {
-    await hidePost({
-      postId,
-      category: "intimate_image",
-      explanation: "Hidden while we review a report that it was shared without the consent of the person in it.",
-      source: `report:${reportId}`,
-    })
+  // A picture of someone shared without their consent, or child sexual abuse material, comes off the feeds at once, and a person
+  // reviews it after (URGENT_REPORT in lib/rules.ts).
+  const urgent = URGENT_REPORT[reason]
+  if (urgent) {
+    await hidePost({ postId, category: urgent.category, explanation: urgent.explanation, source: `report:${reportId}` })
   }
   return { ok: true }
 }

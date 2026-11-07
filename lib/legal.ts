@@ -69,3 +69,12 @@ export function noticeKindLabel(id: string): string {
 
 // Notices that must be acted on at once. Their post is hidden as soon as the notice arrives, and a person reviews it after.
 export const URGENT_KINDS: ReadonlySet<string> = new Set(["intimate_image", "child_abuse"])
+
+// A notice about an intimate image must be acted on within this many hours of its arrival: the TAKE IT DOWN Act requires a covered
+// platform to remove the content within 48 hours of a valid request made through its posted process. The deadline is kept on the
+// notice (legal_notices.due_by), and the command line lists the ones past it.
+export const INTIMATE_REMOVAL_HOURS = 48
+
+// After a counter-notice, a post removed for copyright goes back no sooner than 10 and no later than 14 business days after the
+// counter-notice was received, unless the copyright owner has told us it has started a court action (17 U.S.C. 512(g)(2)(C)).
+export const COUNTER_RESTORE_BUSINESS_DAYS = { from: 10, by: 14 } as const

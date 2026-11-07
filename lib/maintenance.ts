@@ -139,6 +139,8 @@ async function keepWithinRetention(now: number): Promise<void> {
   await run("DELETE FROM notifications WHERE read = 1 AND created_at < ?", now - RETENTION.readNotificationsDays * DAY)
   await run("DELETE FROM legal_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
   await run("DELETE FROM moderation_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
+  await run("DELETE FROM chat_message_removals WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
+  await run("DELETE FROM counter_notices WHERE created_at < ?", now - RETENTION.legalNoticesDays * DAY)
   await run("DELETE FROM sahayak_jobs WHERE finished_at IS NOT NULL AND finished_at < ?", now - RETENTION.sahayakDays * DAY)
   await run("DELETE FROM account_signals WHERE created_at < ?", now - RETENTION.signalsDays * DAY)
   // A human-check puzzle is only useful until it expires; a day later it is removed.

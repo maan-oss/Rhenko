@@ -14,12 +14,18 @@
 //                                                             read a chat report with the private key; --out saves its text and files
 //   node scripts/moderation.mjs report-close <reportId> actioned|no-action
 //                                                             close a chat report that was opened
+//   node scripts/moderation.mjs report-ncmec <reportId> --reference <number> [--date YYYY-MM-DD]
+//                                                             record that the report was made to NCMEC; kept one year from then
+//   node scripts/moderation.mjs chat-hide <messageId> --category <id> --explain "<reason>"
+//                                                             take a chat message off the server for everyone, with a record
 //   node scripts/moderation.mjs report-keygen <file>          make the key pair for chat reports, once (docs/encrypted-chats.md)
 //
 // Chat reports are made by someone who reports a message in a chat. The report holds that message and up to four before it, and
 // nobody in the chat is told. Each report is sealed to Rhenko's report key before it is stored, so the server holds only ciphertext.
 // report-open is the only way to read one, and it needs the private key file, which the server never has. A report and its files
-// are kept for one year and then removed by the running app.
+// are kept for one year and then removed by the running app. A report made to NCMEC is kept for one year from the date it was made
+// to NCMEC (report-ncmec), as 18 U.S.C. 2258A(h) asks. A report that gives a child-safety or intimate-image reason takes its message
+// off the chat at once, and chat-hide does the same for any message a moderator decides about.
 //
 // Hiding is the normal step. It keeps the post on the server, marks it, and tells the author why. When the 30-day appeal
 // window closes with no appeal, or an appeal is upheld, the background pass deletes the post and its files.
@@ -70,6 +76,8 @@ const USAGE = `Usage:
   node scripts/moderation.mjs reports
   node scripts/moderation.mjs report-open <reportId> --key <file> [--out <dir>]
   node scripts/moderation.mjs report-close <reportId> actioned|no-action
+  node scripts/moderation.mjs report-ncmec <reportId> --reference <number> [--date YYYY-MM-DD]
+  node scripts/moderation.mjs chat-hide <messageId> --category <id> --explain "<reason>"
   node scripts/moderation.mjs report-keygen <file>
 
 Categories: ${Object.keys(CATEGORIES).join(", ")}`
@@ -86,9 +94,11 @@ const SHAPES = {
   reports: { args: 0, options: [] },
   "report-open": { args: 1, options: ["key", "out"] },
   "report-close": { args: 2, options: [] },
+  "report-ncmec": { args: 1, options: ["reference", "date"] },
+  "chat-hide": { args: 1, options: ["category", "explain"] },
   "report-keygen": { args: 1, options: [] },
 }
-const VALUE_OPTIONS = new Set(["category", "explain", "note", "key", "out"])
+const VALUE_OPTIONS = new Set(["category", "explain", "note", "key", "out", "reference", "date"])
 
 function fail(message) {
   console.error(message)
@@ -541,7 +551,7 @@ async function findChatReport(value) {
 async function chatReports() {
   const rows = await sql.unsafe(
     `SELECT r.id, r.reason, r.created_at, r.retain_until, r.opened_at, r.conversation_id, r.message_id,
-            reporter.handle AS reporter, reported.handle AS sender
+            r.ncmec_reference, r.ncmec_reported_at, reporter.handle AS reporter, reported.handle AS sender
      FROM chat_reports r
      LEFT JOIN users reporter ON reporter.id = r.reporter_id
      LEFT JOIN users reported ON reported.id = r.reported_user_id
@@ -561,6 +571,7 @@ async function chatReports() {
     console.log(field("Sender", `@${row.sender ?? "(deleted account)"}`))
     console.log(field("Opened", row.opened_at === null ? "not yet" : when(row.opened_at)))
     console.log(field("Keep to", when(row.retain_until)))
+    if (row.ncmec_reference) console.log(field("NCMEC", `${row.ncmec_reference}, made ${when(Number(row.ncmec_reported_at))}`))
   }
   console.log("")
   console.log("Open one with: npm run moderation -- report-open <reportId> --key <file> [--out <dir>]")
@@ -645,13 +656,103 @@ async function chatReportClose() {
   console.log(`Closed report ${row.id} as ${outcome}. Its record is kept until ${when(row.retain_until)}.`)
 }
 
+// Records that a chat report was made to NCMEC. The statute asks a provider to keep the report for one year after it is submitted
+// (18 U.S.C. 2258A(h)), so the report is kept until one year after the date given here, if that is later than its current end.
+// The reference is the report number NCMEC's CyberTipline gave. Submitting the report is done outside this command.
+async function chatReportNcmec() {
+  const reference = (options.reference ?? "").trim()
+  if (reference.length < 1 || reference.length > 100) fail("Give the CyberTipline report number with --reference (up to 100 characters).")
+  const date = options.date ?? new Date().toISOString().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) fail("Give the date as YYYY-MM-DD with --date, or leave it out for today.")
+  const reportedAt = Date.parse(`${date}T00:00:00Z`)
+  if (!Number.isFinite(reportedAt)) fail(`"${date}" is not a real date.`)
+  if (reportedAt > Date.now() + 24 * 60 * 60 * 1000) fail("The date is in the future. Give the day the report was made.")
+  const { CHAT_REPORT_RETENTION_MS } = await import("../lib/chat-reports.ts")
+  const row = await findChatReport(params[0])
+  if (row.opened_at === null) fail("Open the report with report-open first, so the review is on record.")
+  if (row.ncmec_reference) fail(`That report was already made to NCMEC as ${row.ncmec_reference} on ${when(Number(row.ncmec_reported_at))}.`)
+  const keepUntil = Math.max(Number(row.retain_until), reportedAt + CHAT_REPORT_RETENTION_MS)
+  const updated = await sql.unsafe(
+    "UPDATE chat_reports SET ncmec_reference = $1, ncmec_reported_at = $2, retain_until = $3 WHERE id = $4 AND ncmec_reference IS NULL",
+    [reference, reportedAt, keepUntil, row.id]
+  )
+  if (updated.count !== 1) fail("The report was not updated. Someone else may have recorded it. Run reports to check.")
+  console.log(`Recorded report ${row.id} as made to NCMEC: ${reference}, on ${date}.`)
+  console.log(`It is kept until ${when(keepUntil)}: one year after the date it was made to NCMEC, or the date it was already kept until, whichever is later.`)
+}
+
+async function findChatMessage(value) {
+  const prefix = idPrefix(value, "message")
+  const rows = await sql.unsafe(
+    "SELECT id, conversation_id, sender_id, media_file, deleted_at FROM chat_messages WHERE substr(id, 1, $1) = $2 LIMIT 2",
+    [prefix.length, prefix]
+  )
+  return onlyMatch(rows, "message", prefix)
+}
+
+// Takes a chat message off the server for everyone, as a moderator decides (lib/chat-moderation.ts). The thread shows it as deleted, and
+// nothing of its words, attachment, sealed content or reactions is left on the server. A chat report that kept the message keeps its
+// copy for the report's year. A stored file is queued for the running app to delete, unless another message or a report still keeps it.
+async function chatHide() {
+  const category = options.category ?? ""
+  if (!Object.hasOwn(CATEGORIES, category)) fail(`Give a category: ${Object.keys(CATEGORIES).join(", ")}.`)
+  const explain = (options.explain ?? "").replace(/\r\n/g, "\n").trim()
+  if ([...explain].length < 10) fail("Explain why in at least 10 characters. The record keeps this.")
+  if ([...explain].length > 500) fail("Keep the explanation under 500 characters.")
+
+  const message = await findChatMessage(params[0])
+  const { clearMessageStatements, removalRecordStatement, numbered } = await import("../lib/chat-moderation.ts")
+  const now = Date.now()
+  const recordId = randomUUID()
+  let queued = false
+  try {
+    await sql.begin(async (tx) => {
+      for (const statement of clearMessageStatements(message.id, now)) {
+        await tx.unsafe(numbered(statement.sql), statement.params)
+      }
+      const record = removalRecordStatement(
+        {
+          id: recordId,
+          messageId: message.id,
+          conversationId: message.conversation_id,
+          senderId: message.sender_id,
+          category,
+          explanation: explain,
+          source: "moderator",
+        },
+        now
+      )
+      await tx.unsafe(numbered(record.sql), record.params)
+      const file = message.media_file
+      if (file && UPLOAD_NAME.test(file)) {
+        const stillKept = await tx.unsafe(
+          "SELECT 1 AS used FROM chat_messages WHERE media_file = $1 UNION ALL SELECT 1 FROM chat_report_files WHERE file = $1 LIMIT 1",
+          [file]
+        )
+        if (stillKept.length === 0) {
+          await tx.unsafe("INSERT INTO pending_file_deletions (name, created_at) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING", [file, now])
+          queued = true
+        }
+      }
+    })
+  } catch (error) {
+    fail(`The message was not removed: ${error.message}. Nothing changed. Run this again.`)
+  }
+  console.log(`Took the message off the chat for everyone (${CATEGORIES[category]}).`)
+  console.log(`Record ${recordId}. The record is kept for the same period as other moderation records.`)
+  if (message.deleted_at !== null) console.log("The sender had already deleted it. The record was still written.")
+  if (queued) console.log("Its stored file is queued for deletion. The server removes it within about 15 seconds.")
+}
+
 try {
   // The moderation tables and columns are part of the current schema. An older database has to be brought up to date first.
   if (
     !(await hasColumn("reports", "outcome")) ||
     !(await hasColumn("posts", "removed_at")) ||
     !(await hasColumn("moderation_notices", "post_id")) ||
-    !(await hasColumn("chat_reports", "sealed"))
+    !(await hasColumn("chat_reports", "sealed")) ||
+    !(await hasColumn("chat_reports", "ncmec_reference")) ||
+    !(await hasColumn("chat_message_removals", "category"))
   ) {
     fail("This database has not been upgraded for the current version yet. Apply db/postgres/schema.sql, then run this again.")
   }
@@ -665,6 +766,8 @@ try {
   else if (command === "reports") await chatReports()
   else if (command === "report-open") await chatReportOpen()
   else if (command === "report-close") await chatReportClose()
+  else if (command === "report-ncmec") await chatReportNcmec()
+  else if (command === "chat-hide") await chatHide()
   else await remove()
 } finally {
   await sql.end()

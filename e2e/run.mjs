@@ -89,6 +89,15 @@ const IGNORED_NOISE = [
       "A page whose session has just ended (signed out on another device, account deactivated or deleted) is refused by the live event stream while it is still open or on its way to the sign-in page. The sign-out and revoke checks assert the redirect itself.",
   },
   {
+    id: "view-beacon-after-deactivation",
+    kind: "console",
+    text: /Failed to load resource: the server responded with a status of 409/,
+    // Only a page address with one segment (a profile, like /handle), not pictures, scripts, API routes or client-router fetches.
+    url: /^https?:\/\/[^/]+\/[^/?]+$/,
+    reason:
+      "A tab that was open on a profile when its account was deactivated still sends the batched dwell time of the post cards on screen (the view beacon). The server refuses that action on the profile address and the client ignores the refusal, so nothing is recorded. The deactivate check asserts the sign-out and the hidden-account message itself.",
+  },
+  {
     id: "resize-observer-loop",
     kind: "pageerror",
     text: /^ResizeObserver loop (limit exceeded|completed with undelivered notifications)/,

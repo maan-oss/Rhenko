@@ -57,18 +57,52 @@ Do not use a personal or outreach email address as any of these contacts. The po
 
 ## Open legal questions for the lawyer
 
-These are gaps the app does not cover yet, from `docs/legal-operations.md` section 6.
+The app now handles each of these one way. The lawyer must confirm the approach or change it. `docs/legal-operations.md`
+section 6 lists what the app still does not do.
 
-1. **Counter-notice statement.** The copyright notice form does not take a statement under penalty of perjury. The
-   appeal form takes only a reason of at least 10 characters. Decide whether both must be added.
-2. **Counter-notice timing.** The point at which a post goes back after a counter-notice is set by hand. The app does
-   not track it. Decide the period and whether the app should track it.
-3. **Geographic restriction.** A post removed under one country's order is removed everywhere on this server. Decide
+1. **Copyright notice requirements.** The form requires the owner's name, postal address, telephone number, the work, the
+   link, the good-faith statement, the accuracy confirmation, a statement under penalty of perjury, and a signature
+   (`lib/notice-rules.ts`). Confirm these against 17 U.S.C. 512(c)(3) and any other market the server serves.
+2. **Counter-notice requirements and wording.** The author gives a name, postal address, telephone number, a statement
+   under penalty of perjury, consent to the federal district court's jurisdiction, agreement to accept service, and a
+   signature. The owner receives the counter-notice in full (17 U.S.C. 512(g)). Confirm the wording on `/copyright`.
+3. **Restore window.** The post goes back no sooner than 10 and no later than 14 business days after the owner receives the
+   counter-notice, unless the owner says it has started a court action. Business days leave out weekends and US federal
+   holidays, using the list in `lib/business-days.ts`. Confirm the period and the holiday list.
+4. **One window for appeal and counter-notice.** Both are open for 30 days after the post is hidden, and a post can have
+   one or the other, not both. Confirm the 30 days, or set a separate period for counter-notices.
+5. **Intimate-image removal deadline.** Each intimate-image notice has a deadline 48 hours after it arrives (`due_by`), and
+   `npm run legal -- overdue` lists any still open after it. Confirm the deadline, and whether the TAKE IT DOWN Act applies
+   to this service. The sources we found give 19 May 2026 as the covered-platform compliance date. Counsel must confirm it.
+6. **Repeat infringers.** The `/copyright` page says accounts that repeatedly infringe are closed. The app does not count
+   repeats or act on them. Decide the policy, and either have the app track it or change the page to match what is done.
+7. **Geographic restriction.** A post removed under one country's order is removed everywhere on this server. Decide
    whether that is acceptable or whether restriction by country is needed.
-4. **Intimate-image removal deadlines.** The app does not track them. Decide the deadline the policy states.
-5. **Request log.** The app keeps no request log, only the proxy in front of it does. Confirm that the Privacy Policy
+8. **Request log.** The app keeps no request log, only the proxy in front of it does. Confirm that the Privacy Policy
    describes this correctly.
-6. **Age.** Age assurance is the date of birth only. Confirm this is what the Terms should say.
+9. **Age.** Age assurance is the date of birth only. Confirm this is what the Terms should say.
+
+## Decisions for counsel and product: encrypted chats
+
+These are built as described, and each needs a decision before launch.
+
+1. **Reaction metadata.** A reaction in an encrypted chat is sent as a plaintext emoji from a fixed list. The server sees
+   which reaction was made to which message, but no words. Decide whether this metadata is acceptable, and say so in the
+   Privacy Policy.
+2. **Video is refused in encrypted chats.** Text, photos, voice messages and files can be sent. Decide whether this is
+   acceptable at launch.
+3. **No link previews in encrypted chats.** A server fetch would show the server the URL. Decide whether that is acceptable.
+4. **Translation is refused for encrypted messages.** Decide whether that is acceptable.
+5. **Push notification text.** A notification for an encrypted message shows "Encrypted message" (`ENCRYPTED_PREVIEW`),
+   not the text. Decide whether this is the wording to keep.
+6. **Chat reports and the report key.** A report is sealed to Rhenko's report public key before it is stored. Only the
+   private key, kept outside the server and the repository, can open it. The operator makes the key pair once, with
+   `npm run moderation -- report-keygen <file outside the repository>` (runbook 4a). Decide who holds the private key and how
+   it is backed up.
+7. **Reports made to NCMEC.** Each is kept for one year from the date it was made to NCMEC (18 U.S.C. 2258A(h)). Counsel
+   advises on preservation before any deletion. Nothing is deleted until that advice is in.
+8. **Court-action contact.** An owner's court-action notice goes to the designated agent at `RHENKO_COPYRIGHT_AGENT_EMAIL`.
+   Set that address before launch.
 
 ## Payment decisions for the operator
 
@@ -105,11 +139,21 @@ text it affects and a recommendation.
 
 ## Verification
 
-- `npx tsc --noEmit`, eslint on the changed files, `npm run test:unit` (121 passing) and `npm run build` all pass.
-- Three runs were needed, and each failure came from the local environment, not the code:
-  1. With the Postgres cluster down, the passkey and direct-message checks failed.
-  2. With Postgres back up but the mail sink not listening, 227 of 232 checks passed. The five that failed were the
-     account email-code checks and three legal notice checks, all of which send mail.
-  3. With the mail sink running, the account and legal areas were rerun: 72 of 72 passed.
-- A phone-sized browser check confirmed the bottom bar is hidden on a chat and on the new-message page, returns on home,
+Checked on 2026-11-07 against the working tree, which is uncommitted on top of 4846274.
+
+- `npx tsc --noEmit` and eslint on the changed TypeScript files: clean. `npm run test:unit`: 417 passing. `npm run build`: passes.
+- End-to-end, encryption off (`RHENKO_E2EE=0`): settings and visibility passed in the full run. The messages area passed with no
+  failures in the last run. The account area passed 37 of 37 in its last run. The legal area passed 41 of 41 in the run before that.
+- End-to-end, encryption on (`RHENKO_E2EE=1`): the encrypted area passed 20 of 20.
+- The messages area is written for plaintext chats. With encryption on, its previews and report checks expect plaintext, so it
+  is not run in encrypted mode. The encrypted area covers encrypted chats.
+- The email checks (account and legal) need the local mail sink (`e2e/lib/mail-sink.mjs`) running, with the server sending to
+  it. When the sink stopped, 14 checks failed on the email step alone.
+- Test-side changes made during this run; none changes the app:
+  - The deletion check waits for the deleted message's own text to leave the thread. A child-safety report earlier in the same
+    chat also leaves a deleted notice, so waiting for any notice had let the check read the thread too early.
+  - The report toast is moved away from the pointer and cleared before the next step, so it does not cover a sheet's button.
+  - A 409 console error from the view beacon of a tab left open on a deactivated account is listed in `IGNORED_NOISE` in
+    `e2e/run.mjs`, with its reason. The deactivate check still asserts the sign-out and the hidden-account message.
+- Earlier, a phone-sized browser check confirmed the bottom bar is hidden on a chat and on the new-message page, returns on home,
   and that a sent message appears at once. Calls were not checked visually.

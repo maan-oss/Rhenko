@@ -1,7 +1,8 @@
 // Legal: the public pages, the age and terms box on sign-up, the agreement screen when the terms change, notices about
-// content (the form, the reference, hiding at once for the most serious kinds, the honeypot), appeals, the moderation
-// and legal command lines, saved searches with the Lists tab, the transparency figures, and the agreement between the
-// code and the command lines about categories and notice kinds.
+// content (the form, the reference, hiding at once for the most serious kinds, the honeypot, the copyright requirements,
+// the 48-hour deadline on intimate-image notices), appeals, copyright counter-notices (sent, waiting, restored, and kept
+// hidden by a court action), the moderation and legal command lines, saved searches with the Lists tab, the transparency
+// figures, and the agreement between the code and the command lines about categories and notice kinds.
 import fs from "node:fs"
 import path from "node:path"
 import { execFile } from "node:child_process"
@@ -20,6 +21,8 @@ const execFileAsync = promisify(execFile)
 const PUBLIC_PAGES = ["/terms", "/privacy", "/rules", "/copyright", "/safety", "/transparency", "/legal", "/notice"]
 const legalSource = read("lib/legal.ts")
 const TERMS_VERSION = legalSource.match(/TERMS_VERSION = "([^"]+)"/)[1]
+const HOUR = 60 * 60 * 1000
+const DAY = 24 * HOUR
 
 function read(file) {
   return fs.readFileSync(path.join(REPO_ROOT, file), "utf8")
@@ -57,7 +60,21 @@ async function postHidden(id) {
 }
 
 // A notice about content, sent from the public form. Fields the kind does not use are left empty.
-async function sendNotice(page, { kind, email, url = "", work = "", description, name = "Notice Sender", honeypot = false }) {
+async function sendNotice(
+  page,
+  {
+    kind,
+    email,
+    url = "",
+    work = "",
+    description,
+    name = "Notice Sender",
+    honeypot = false,
+    postal = "1 Example Street, Testville",
+    phone = "+1 555 010 0199",
+    authorized = true,
+  }
+) {
   await ready(page.locator("#kind"))
   await page.locator("#kind").selectOption(kind)
   await page.locator("#name").fill(name)
@@ -68,6 +85,12 @@ async function sendNotice(page, { kind, email, url = "", work = "", description,
   await page.locator("input[name=good_faith]").check()
   await page.locator("input[name=accurate]").check()
   await page.locator("#signature").fill(name)
+  // A copyright notice also needs the owner's postal address, a telephone number and the sworn statement.
+  if (kind === "copyright") {
+    await page.locator("#address").fill(postal)
+    await page.locator("#phone").fill(phone)
+    if (authorized) await page.locator("input[name=authorized]").check()
+  }
   // A person never sees the hidden field. A bot that fills it is the case this sets up.
   if (honeypot) await page.locator("input[name=website]").evaluate((element) => {
     element.value = "https://spam.example"
@@ -90,6 +113,23 @@ function allowHiddenPrefetch(handle) {
 
 function noticeAddress(tag) {
   return `${tag}-${RUN_ID.toLowerCase()}-${randomWord(4).toLowerCase()}@example.com`
+}
+
+// The author answers a copyright removal with the counter-notice form in Notices. Returns the id of the author's notice.
+async function sendCounterNotice(page, complaintId) {
+  const rows = await query("SELECT id FROM moderation_notices WHERE source = ?", `legal:${complaintId}`)
+  const noticeId = need(rows[0]?.id, "the author's notice for the copyright notice")
+  await go(page, "/notices", page.getByRole("heading", { name: "About your posts" }))
+  const form = page.locator("form").filter({ has: page.locator(`#counter-${noticeId}-name`) })
+  await form.locator(`#counter-${noticeId}-name`).fill("Counter Writer")
+  await form.locator(`#counter-${noticeId}-address`).fill("12 Example Road, Testville")
+  await form.locator(`#counter-${noticeId}-phone`).fill("+1 555 010 0188")
+  await form.locator(`#counter-${noticeId}-signature`).fill("Counter Writer")
+  await form.locator("input[name=mistake]").check()
+  await form.locator("input[name=consent]").check()
+  await acted(page, () => form.getByRole("button", { name: "Send counter-notice", exact: true }).click())
+  await page.getByText("Your counter-notice is in.").waitFor({ timeout: TIMEOUT })
+  return noticeId
 }
 
 export async function run() {
@@ -212,6 +252,26 @@ async function notices() {
       await sender.page.locator('[role="alert"]').filter({ hasText: /Give your name|Give an email|at least 20 characters/ }).first().waitFor({ timeout: TIMEOUT })
     })
 
+    await check("a copyright notice without a telephone number or the sworn statement is refused", async () => {
+      const address = noticeAddress("nophone")
+      await go(sender.page, "/notice", sender.page.locator("#kind"))
+      await sender.page.locator("#kind").evaluate((element) => {
+        element.form.noValidate = true
+      })
+      await sendNotice(sender.page, {
+        kind: "copyright",
+        email: address,
+        url: `${BASE}/${author.handle}/status/${postId}`,
+        work: "My photograph",
+        description: "The photograph in this post is mine, and it was posted without permission.",
+        phone: "",
+        authorized: false,
+      })
+      await sender.page.locator('[role="alert"]').filter({ hasText: /telephone number|penalty of perjury/ }).first().waitFor({ timeout: TIMEOUT })
+      const rows = await query("SELECT id FROM legal_notices WHERE email = ?", address)
+      assert.equal(rows.length, 0, "a copyright notice without a telephone number was kept")
+    })
+
     await check("a notice about an intimate image gets a reference, and hides the post at once", async () => {
       const address = noticeAddress("intimate")
       const mark = markLog()
@@ -225,6 +285,17 @@ async function notices() {
       await sender.page.getByText(/Your reference is/).waitFor({ timeout: TIMEOUT })
       assert.equal(await postHidden(postId), true, "the post is still visible after an intimate image notice")
       await eventually(() => mailCount(address, mark) >= 1, "the reference email")
+    })
+
+    await check("an intimate-image notice has a 48-hour removal deadline, and the command line lists it once that has passed", async () => {
+      const rows = await query("SELECT id, created_at, due_by FROM legal_notices WHERE kind = ? ORDER BY created_at DESC LIMIT 1", "intimate_image")
+      const notice = need(rows[0], "the intimate-image notice")
+      assert.equal(Number(notice.due_by) - Number(notice.created_at), 48 * HOUR, "the deadline is not 48 hours after the notice")
+      // Moves the deadline into the past, so the overdue list has something to show.
+      await execute("UPDATE legal_notices SET due_by = ? WHERE id = ?", Date.now() - HOUR, notice.id)
+      const late = await cli("scripts/legal.mjs", ["overdue"])
+      assert.equal(late.ok, true, late.text)
+      assert.match(late.text, new RegExp(notice.id))
     })
 
     await check("the author is told why the post is hidden, and can appeal once", async () => {
@@ -388,6 +459,75 @@ async function legalDecisions() {
       const again = await cli("scripts/legal.mjs", ["decide", rows[0].id, "rejected", "--note", "A second decision."])
       assert.equal(again.ok, false)
       assert.match(again.text, /already actioned/)
+    })
+
+    await check("the author can send a counter-notice, which goes to the owner in full, and Notices shows its dates", async () => {
+      const mark = markLog()
+      const complaintId = need((await query("SELECT id FROM legal_notices WHERE email = ?", address))[0]?.id, "the copyright notice")
+      const noticeId = await sendCounterNotice(author.page, complaintId)
+      await eventually(() => mailCount(address, mark) >= 1, "the counter-notice email to the owner")
+      const counters = await query("SELECT forwarded_at, restore_from, restore_by FROM counter_notices WHERE notice_id = ?", noticeId)
+      assert.equal(counters.length, 1, "the counter-notice was not kept")
+      assert.ok(counters[0].forwarded_at, "the counter-notice was not sent to the owner")
+      assert.ok(Number(counters[0].restore_by) > Number(counters[0].restore_from), "the restore window is empty")
+      await go(author.page, "/notices", author.page.getByRole("heading", { name: "About your posts" }))
+      assert.match(await bodyText(author.page), /You sent a counter-notice on/)
+      await author.page.getByRole("heading", { name: "Send a counter-notice" }).waitFor({ state: "detached", timeout: TIMEOUT })
+    })
+
+    await check("the command line lists the counter-notice as waiting, and will not put the post back before its window opens", async () => {
+      const complaintId = need((await query("SELECT id FROM legal_notices WHERE email = ?", address))[0]?.id, "the copyright notice")
+      const listed = await cli("scripts/legal.mjs", ["counter-list"])
+      assert.equal(listed.ok, true, listed.text)
+      assert.match(listed.text, /waiting/)
+      const early = await cli("scripts/legal.mjs", ["counter-restore", complaintId])
+      assert.equal(early.ok, false)
+      assert.match(early.text, /Too early/)
+      assert.equal(await postHidden(postId), true, "the post came back before its window opened")
+    })
+
+    await check("once the window opens, the command line puts the post back, and the author sees it", async () => {
+      const complaintId = need((await query("SELECT id FROM legal_notices WHERE email = ?", address))[0]?.id, "the copyright notice")
+      const noticeId = need((await query("SELECT id FROM moderation_notices WHERE source = ?", `legal:${complaintId}`))[0]?.id, "the author's notice")
+      // The real window is 10 to 14 business days. The suite opens it at once so the restore can be checked. The unit tests check
+      // the dates the app computes.
+      await execute("UPDATE counter_notices SET restore_from = ?, restore_by = ? WHERE notice_id = ?", Date.now() - DAY, Date.now() + DAY, noticeId)
+      const restored = await cli("scripts/legal.mjs", ["counter-restore", complaintId])
+      assert.equal(restored.ok, true, restored.text)
+      assert.match(restored.text, /Put the post back/)
+      assert.equal(await postHidden(postId), false, "the post did not come back once its window opened")
+      await go(author.page, "/notices", author.page.getByRole("heading", { name: "About your posts" }))
+      assert.match(await bodyText(author.page), /Put back on/)
+    })
+
+    await check("a court action from the owner keeps a counter-noticed post hidden", async () => {
+      const body3 = `A drawing I made ${RUN_ID} ${randomWord(4)}`
+      await writePost(author.page, body3)
+      const postId3 = need(await postIdByBody(author.handle, body3), "the third post")
+      const address3 = noticeAddress("court")
+      await go(sender.page, "/notice", sender.page.locator("#kind"))
+      await sendNotice(sender.page, {
+        kind: "copyright",
+        email: address3,
+        url: `${BASE}/${author.handle}/status/${postId3}`,
+        work: "My drawing, first published in 2020",
+        description: "The drawing in this post is mine, and it was posted without permission.",
+      })
+      await sender.page.getByText(/Your reference is/).waitFor({ timeout: TIMEOUT })
+      const complaint3 = need((await query("SELECT id FROM legal_notices WHERE email = ?", address3))[0]?.id, "the third notice")
+      const decided = await cli("scripts/legal.mjs", ["decide", complaint3, "actioned", "--note", "The drawing is the sender's, as the notice says."])
+      assert.equal(decided.ok, true, decided.text)
+      assert.equal(await postHidden(postId3), true, "an actioned notice did not hide the third post")
+      await sendCounterNotice(author.page, complaint3)
+      const court = await cli("scripts/legal.mjs", ["court-action", complaint3])
+      assert.equal(court.ok, true, court.text)
+      assert.match(court.text, /court action/)
+      const refused = await cli("scripts/legal.mjs", ["counter-restore", complaint3])
+      assert.equal(refused.ok, false)
+      assert.match(refused.text, /court action/)
+      assert.equal(await postHidden(postId3), true, "the post came back after a court action")
+      const listed = await cli("scripts/legal.mjs", ["counter-list"])
+      assert.match(listed.text, /court action started/)
     })
 
     await check("the command line records an order from an authority", async () => {

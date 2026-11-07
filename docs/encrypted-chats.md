@@ -54,12 +54,22 @@ It must be linked:
 `setUpThisDevice` only replaces a device when the cookie's device is the account's only active device. Signing out clears the keys from the browser,
 so signing in again on the same browser needs a link when the account has other devices.
 
+## Safety numbers
+
+Contact info in an encrypted chat (Chat options, then Contact info) shows a safety number for each other accepted member of the chat.
+Each number is 60 digits. `safetyNumber` in `lib/e2ee.ts` computes it from the signing and agreement keys of every active device of the
+two people, sorted so that both sides get the same value. `safetyNumbersFor` in `actions/e2ee.ts` returns the numbers only to an accepted
+member of that chat. A member who has no device yet, or whose devices are all deactivated, has no number, and the dialog says why.
+
+A number changes when a browser is linked or removed, so a change is the signal to compare again. The server works from public keys only.
+Comparing the numbers is up to the two people, in person or over another channel. The app does not check them.
+
 ## Reading, searching, exporting
 
 - Messages are opened on the device by `openSealed`. A message the device has no wrap for shows a notice rather than an error.
 - Each device pins the signing key it first sees for another device (IndexedDB store `pins`, keystore version 2). If a later key differs, messages from
   that device are not opened and the thread shows a notice (`KEY_CHANGED` in `lib/e2ee-client.ts`). Pinning is trust on first use by this browser.
-  There is no safety-number comparison between devices yet.
+  Safety numbers, which let two people compare their keys, are under Contact info (see Safety numbers below).
 - Search in an encrypted chat runs on the device over the rows it has opened (`searchOnDevice`). Export runs on the device too
   (`exportRowsForDevice`, `exportedMessage`). The server's export route returns 409 for a chat with sealed messages.
 - The account data download (`app/api/account-data/route.ts`) lists encrypted messages with `encrypted: true` and no text, attachments, or files.
@@ -68,7 +78,9 @@ so signing in again on the same browser needs a link when the account has other 
 ## Known limits
 
 - Linking relies on the user comparing the six-digit code. There is no second check of either device's key.
-- If a copy fails after approval, the new device has no history for the chat, and the UI has no retry. Approving again creates a new link.
+- If a copy stops partway, the new device has only part of the history. Settings, Devices and encryption shows History copies with Copy again
+  until the copy window closes (`LINK_COPY_MS`). Copying again only adds what is still missing. Messages the approving device cannot open
+  are counted as skipped, and they cannot be copied from that device.
 - The history copy is paged by the cursor. There is no total cap.
 - Metadata listed above is visible to the server. Reaction emoji are plaintext.
 - Pinning trusts the first key the server gives this browser for each device.

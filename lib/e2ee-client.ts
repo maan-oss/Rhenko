@@ -139,17 +139,20 @@ export async function linkThisBrowser(
   return { ok: false, error: "Linking stopped before a device approved it." }
 }
 
-// Copies the account's message keys to the device an approved link made, from this device. Each key is read here only to be wrapped
-// for the new device; nothing leaves this device in the clear. Reports the running count. A message this device can't open is left out.
+// Copies the account's message keys to the device an approved link made, a page at a time, from this device. Each key is read here only
+// to be wrapped for the new device; nothing leaves this device in the clear. `count` is the keys the new browser gained, and `skipped` is
+// the messages this browser could not open to copy (they stay unreadable there). Running it again is safe: keys already copied are not
+// copied twice.
 export async function shareHistoryWithLink(
   code: string,
   onProgress: (copied: number) => void
-): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; count: number; skipped: number } | { ok: false; error: string }> {
   const own = await readyDevice()
   const target = await copyTargetForLink(code)
   if (!target.ok) return target
   let after = ""
   let count = 0
+  let skipped = 0
   for (;;) {
     const page = await historyBatchForLink(code, after)
     if (!page.ok) return page
@@ -167,7 +170,8 @@ export async function shareHistoryWithLink(
         })
         wraps.push({ messageId: row.messageId, ...copy })
       } catch {
-        // Left out: the message stays unreadable on the new device, as it is here.
+        // Not copied: the message stays unreadable on the new device, as it is on this one.
+        skipped++
       }
     }
     if (wraps.length > 0) {
@@ -179,7 +183,7 @@ export async function shareHistoryWithLink(
     if (page.rows.length < HISTORY_BATCH_MAX) break
     after = page.rows[page.rows.length - 1].messageId
   }
-  return { ok: true, count }
+  return { ok: true, count, skipped }
 }
 
 function browserLabel(): string {
@@ -211,6 +215,8 @@ type SendOptions = {
   mentions: string[]
   poll: { ids: string[]; multiple: boolean } | null
   forwardOf: string | null
+  // A post shared into the chat. Its id is visible to the server, as it is for a post shared in a chat that is not encrypted.
+  postId?: string | null
 }
 
 // Seals a payload for every device in the chat and sends it as a new message. The message id is picked here, because it is bound into
@@ -237,6 +243,7 @@ async function sendSealedPayload(conversationId: string, payload: MessagePayload
       mentions: options.mentions,
       poll: options.poll,
       forwardOf: options.forwardOf,
+      postId: options.postId ?? null,
     })
     if (result.error) return { ok: false, error: result.error }
     return { ok: true }
@@ -252,6 +259,20 @@ export async function sendSealedText(input: { conversationId: string; body: stri
     mentions: mentionedHandles(input.body),
     poll: null,
     forwardOf: null,
+  })
+}
+
+// Shares a post into an encrypted chat with a note. The note is sealed; the post is the card the thread shows, by its id. The share
+// sheet calls this for each encrypted chat its post share returns (actions/messages.ts sharePostWith).
+export async function sendEncryptedPostShare(input: { conversationId: string; postId: string; note: string }): Promise<SealedSend> {
+  const note = input.note.replace(/\r\n/g, "\n").trim()
+  if ([...note].length > MAX_DM) return { ok: false, error: TOO_LONG }
+  return sendSealedPayload(input.conversationId, { kind: "text", body: note }, {
+    replyTo: null,
+    mentions: mentionedHandles(note),
+    poll: null,
+    forwardOf: null,
+    postId: input.postId,
   })
 }
 

@@ -49,7 +49,10 @@ const SUMMARY = (
       </li>
       <li>Rhenko does not sell your data, and does not share personal information with advertisers.</li>
       <li>Payments are taken by Stripe. Rhenko never sees your card number or bank details.</li>
-      <li>The operator can reach everything stored on this server, including messages, which are not end-to-end encrypted.</li>
+      <li>
+        The operator can reach what is stored on this server. Messages in a chat that is not end-to-end encrypted can be read by the
+        operator. In an end-to-end encrypted chat, the content is sealed on your devices and the server cannot read it.
+      </li>
       <li>
         Your email address, if you add one, is used only to send you codes, and the daily digest if you turn it on. Date of birth is used
         only to check you are {MINIMUM_AGE} or older.
@@ -251,8 +254,16 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          Messages are stored as you send them, with the reactions to them, and voice messages are stored like photos. They are not end-to-end encrypted, so the operator
-          can technically read them. They are kept until they are deleted.
+          Messages are stored as you send them, with the reactions to them, and voice messages are stored like photos. A message in a
+          chat that is not end-to-end encrypted can be read by the operator. In a chat that is end-to-end encrypted, the text, photos,
+          voice messages and files are encrypted on your devices before they reach the server, and the server stores only the
+          encrypted content. The server still sees who is in the chat, when a message was sent, its size, and the reaction chosen.
+          Messages are kept until they are deleted.
+        </P>
+        <P>
+          In an end-to-end encrypted chat, Contact info shows a safety number for each other person. You can compare it with them
+          to check that you are talking to the right devices. A new browser or device changes the number. Rhenko does not check the
+          numbers for you.
         </P>
         <List>
           <li>Deleting a message you sent erases its text and photo for everyone in the conversation.</li>

@@ -888,9 +888,10 @@ function MessageRow({
                 ) : message.body ? (
                   <>
                     <PostBody text={message.body} className="text-[15px]" />
-                    {/* Empty unless a translate control shows, so it adds no space (and no gap) under the words. */}
+                    {/* Empty unless a translate control shows, so it adds no space (and no gap) under the words. A sealed message is
+                        never translated: translating sends its words to the translation service, and the server must not see them. */}
                     <div className="relative z-10 empty:hidden">
-                      <TranslateControl kind="message" id={message.id} lang={message.lang} />
+                      {message.sealed ? null : <TranslateControl kind="message" id={message.id} lang={message.lang} />}
                     </div>
                   </>
                 ) : null}

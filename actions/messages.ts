@@ -40,6 +40,7 @@ import { checkEncryptedSend } from "@/lib/e2ee"
 import { activeDevicesOf, knownDevicesOf, memberDevicesOf, thisDeviceOf } from "@/lib/e2ee-devices"
 import { ENCRYPTED_PREVIEW, SEALED_BODY, encryptedChatsEnabled, type SealedWrap } from "@/lib/e2ee-chat"
 import { reportFileKept } from "@/lib/chat-report-store"
+import { clearChatMessage } from "@/lib/chat-removal"
 import { EXPORTS_PER_HOUR, EXPORT_WINDOW_MS, type ExportRow } from "@/lib/chat-export"
 
 export type ChatState = { error?: string; sent?: boolean }
@@ -158,10 +159,10 @@ async function isSealed(messageId: string): Promise<boolean> {
   return (await get("SELECT 1 AS found FROM chat_messages WHERE id = ? AND cipher IS NOT NULL", messageId)) !== undefined
 }
 // Features that still need the text on the server are refused in an encrypted chat until they are sealed too.
-const SEALED_EDIT_REFUSAL = "Editing isn't available in encrypted chats yet."
+// An encrypted message is changed by the device that sent it, which seals the new words. The server does not change its words.
+const SEALED_EDIT_REFUSAL = "An encrypted message is edited from the chat, which seals the change on this device. Reload and try again."
 const SEALED_FORWARD_REFUSAL = "An encrypted message can only be forwarded to another encrypted chat."
 const FORWARD_TO_ENCRYPTED_REFUSAL = "A message from a chat that isn't encrypted can't be forwarded into an encrypted chat."
-const SHARE_TO_ENCRYPTED_REFUSAL = "Sharing a post with a note isn't available in encrypted chats yet."
 
 async function follows(followerId: string, followeeId: string): Promise<boolean> {
   return await get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", followerId, followeeId) !== undefined
@@ -951,6 +952,15 @@ async function sendSealed(data: Record<string, unknown>, file: File | null, view
     )
     if (!target || await blockedEitherWay(viewer.id, target.sender_id)) return { error: "That message can't be replied to anymore." }
   }
+  // A post shared into the chat, with its note sealed in the message. The server keeps the post's id, which the thread shows as a card,
+  // and nothing of the note. A shared post carries nothing else.
+  const sharedPost = data.postId === undefined || data.postId === null ? null : asId(data.postId)
+  if (data.postId !== undefined && data.postId !== null) {
+    if (!sharedPost || !(await sendablePost(sharedPost, viewer.id))) return { error: POST_UNAVAILABLE }
+    if (file || viewOnce || (data.poll !== undefined && data.poll !== null) || asId(data.forwardOf)) {
+      return { error: "A shared post can only be sent with a note." }
+    }
+  }
   const slowDown =
     (await tooFast(`dm:${viewer.id}`, DM_LIMIT, DM_WINDOW_MS, "You're sending messages too fast.")) ??
     (file ? await tooFast(`upload:${viewer.id}`, PHOTO_LIMIT, PHOTO_WINDOW_MS, "You've sent a lot of files.") : null)
@@ -985,7 +995,7 @@ async function sendSealed(data: Record<string, unknown>, file: File | null, view
   const mediaFile = file ? await saveSealedUpload(file) : null
   if (file && !mediaFile) return { error: "That file couldn't be saved. Try again." }
   try {
-    await insertMessage(conversationId, viewer.id, SEALED_BODY, mediaFile, null, replyToId, poll ? { kind: "poll", ...poll } : null, forwardOf !== null, viewOnce && mediaFile !== null, {
+    await insertMessage(conversationId, viewer.id, SEALED_BODY, mediaFile, sharedPost, replyToId, poll ? { kind: "poll", ...poll } : null, forwardOf !== null, viewOnce && mediaFile !== null, {
       id,
       cipher: JSON.stringify(checked.envelope),
       wraps: checked.wraps,
@@ -1142,8 +1152,15 @@ export async function voteInChatPoll(messageId: string, choices: unknown): Promi
   return { ok: true }
 }
 
+// A share to an encrypted chat is not sent here: the server cannot seal the note. It is returned with the chat, and the sender's device
+// seals the note and sends the post with it (sendEncryptedPostShare).
 type ShareResult =
-  | { ok: true; sent: { handle: string; conversationId: string }[]; failed: { handle: string; error: string }[] }
+  | {
+      ok: true
+      sent: { handle: string; conversationId: string }[]
+      encrypted: { handle: string; conversationId: string }[]
+      failed: { handle: string; error: string }[]
+    }
   | { ok: false; error: string }
 
 // Sends a post to several people at once, each in their own chat, with an optional note.
@@ -1160,6 +1177,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
   if (people.length === 0) return { ok: false, error: "Choose someone to send this to." }
 
   const sent: { handle: string; conversationId: string }[] = []
+  const encrypted: { handle: string; conversationId: string }[] = []
   const failed: { handle: string; error: string }[] = []
   for (const handle of people) {
     const target = await get<{ id: string; handle: string }>("SELECT id, handle FROM users WHERE handle = ? AND deactivated_at IS NULL", handle)
@@ -1192,7 +1210,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
       continue
     }
     if (await isEncryptedChat(opened.id)) {
-      failed.push({ handle: target.handle, error: SHARE_TO_ENCRYPTED_REFUSAL })
+      encrypted.push({ handle: target.handle, conversationId: opened.id })
       continue
     }
     await insertMessage(opened.id, viewer.id, clean, null, id, null, null)
@@ -1200,7 +1218,7 @@ export async function sharePostWith(postId: string, handles: string[], note: str
     sent.push({ handle: target.handle, conversationId: opened.id })
   }
   refresh()
-  return { ok: true, sent, failed }
+  return { ok: true, sent, encrypted, failed }
 }
 
 // The people to offer when sharing: recent chats for an empty search, otherwise accounts that match the search.
@@ -1265,25 +1283,12 @@ export async function deleteMessage(messageId: string): Promise<VoidResult> {
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(messageId)
   const message = id
-    ? await get<{ sender_id: string; conversation_id: string; media_file: string | null }>(
-        "SELECT sender_id, conversation_id, media_file FROM chat_messages WHERE id = ?",
-        id
-      )
+    ? await get<{ sender_id: string; conversation_id: string }>("SELECT sender_id, conversation_id FROM chat_messages WHERE id = ?", id)
     : undefined
   if (!id || !message || message.sender_id !== viewer.id) return { ok: false, error: "You can only delete your own messages." }
-  // A sealed message keeps no ciphertext or wraps once it is deleted, so nothing of its text is left on the server.
-  await run("UPDATE chat_messages SET deleted_at = ?, body = '', media_file = NULL, post_id = NULL, cipher = NULL WHERE id = ?", Date.now(), id)
-  await run("DELETE FROM chat_message_wraps WHERE message_id = ?", id)
-  await run("DELETE FROM message_reactions WHERE message_id = ?", id)
-  await run("DELETE FROM message_translations WHERE message_id = ?", id)
-  // A deleted message is no longer pinned, and nobody is reminded of it.
-  await run("DELETE FROM chat_pinned_messages WHERE message_id = ?", id)
-  await run("DELETE FROM chat_message_reminders WHERE message_id = ?", id)
-  // A forwarded copy can share this file, so it is removed only once no message still points at it. A chat report that
-  // reported the message keeps the file for a year, so it stays too.
-  if (message.media_file && !(await get("SELECT 1 AS found FROM chat_messages WHERE media_file = ? LIMIT 1", message.media_file)) && !(await reportFileKept(message.media_file))) {
-    await removeUpload(message.media_file)
-  }
+  // Everything the message carries leaves the server: its words, its attachment, a sealed message's ciphertext and wraps, reactions,
+  // translations, its pin and its reminders. A stored file a forwarded copy or a chat report still keeps stays (lib/chat-removal.ts).
+  await clearChatMessage(id, Date.now())
   await publish(await memberIds(message.conversation_id), { type: "message", conversationId: message.conversation_id })
   refresh()
   return { ok: true }

@@ -27,12 +27,31 @@ async function eventually(holds, what, timeout = 15_000) {
   }
 }
 
+// The safety number a person sees for the other person in a chat, read from the contact info dialog: twelve groups of five digits.
+async function safetyNumberShown(page, convId) {
+  const options = page.getByRole("button", { name: "Chat options", exact: true })
+  await go(page, `/messages/${convId}`, options)
+  await options.click()
+  await page.getByRole("menuitem", { name: "Contact info", exact: true }).click()
+  const section = page.locator('section[aria-labelledby="chat-safety"]')
+  let groups = []
+  await eventually(async () => {
+    if ((await section.count()) === 0) return false
+    groups = (await section.innerText()).match(/\b\d{5}\b/g) ?? []
+    return groups.length === 12
+  }, "the safety number in contact info")
+  await page.keyboard.press("Escape")
+  return groups.join(" ")
+}
+
 async function chatFlow() {
   const sender = await createUser({ tag: "ens" })
   const receiver = await createUser({ tag: "enr" })
   const first = `Sealed first ${RUN_ID}${randomWord(4)}`
   const reply = `Sealed reply ${RUN_ID}${randomWord(4)}`
   let convId = null
+  let numberBefore = null
+  let second = null
 
   await check("a new chat is encrypted, and the first message reads on the sender's device", async () => {
     await openProfile(sender.page, receiver.handle)
@@ -55,6 +74,14 @@ async function chatFlow() {
     await chatBox(receiver.page).waitFor()
     await sendChat(receiver.page, reply)
     await threadText(sender.page, reply).waitFor()
+  })
+
+  await check("both people see the same safety number for each other, made of sixty digits", async () => {
+    need(convId, "the conversation")
+    numberBefore = await safetyNumberShown(sender.page, convId)
+    assert.match(numberBefore, /^(\d{5} ){11}\d{5}$/, "the sender's safety number is not sixty digits")
+    const theirs = await safetyNumberShown(receiver.page, convId)
+    assert.equal(theirs, numberBefore, "the two people see different safety numbers")
   })
 
   await check("the server keeps no words of the chat: no body text, and every message is sealed for both devices", async () => {
@@ -317,7 +344,7 @@ async function chatFlow() {
 
   await check("a second browser of the same person is linked from the first, and reads the chat's history on it", async () => {
     need(convId, "the conversation")
-    const second = await signInElsewhere(receiver)
+    second = await signInElsewhere(receiver)
     // The account already has a device, so this browser can't make its own: it has to be linked from one of them.
     await go(second.page, "/settings/devices", second.page.getByRole("button", { name: "Link this browser", exact: true }))
     await acted(second.page, () => second.page.getByRole("button", { name: "Link this browser", exact: true }).click())
@@ -336,5 +363,15 @@ async function chatFlow() {
       receiver.handle
     )
     assert.equal(Number(count?.c), 2, "the account does not have two active devices after the link")
+  })
+
+  await check("linking a browser changes the safety number, and the first browsers and the new one all show the new number", async () => {
+    need(convId, "the conversation")
+    need(second, "the new browser")
+    need(numberBefore, "the safety number before the link")
+    const after = await safetyNumberShown(sender.page, convId)
+    assert.notEqual(after, numberBefore, "the safety number did not change when a browser was linked")
+    assert.equal(await safetyNumberShown(receiver.page, convId), after, "the first browser shows a different number from the other person")
+    assert.equal(await safetyNumberShown(second.page, convId), after, "the new browser shows a different number")
   })
 }

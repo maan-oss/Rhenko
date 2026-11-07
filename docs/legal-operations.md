@@ -17,7 +17,8 @@ written from the laws as they stood in October 2026. Check them before you rely 
 | Statement of reasons and appeal (DSA Articles 16, 17) | Hidden post → notice to the author → appeal in Notices → decision |
 | Notice and action, with acknowledgement and decision to the sender (DSA Article 16) | `/notice` form, `scripts/legal.mjs` |
 | Immediate hiding for intimate images and child sexual abuse | `URGENT_KINDS` in `lib/legal.ts`; applied when a notice or report arrives |
-| Copyright notices and counter-notices (DMCA section 512) | `/copyright`, `/notice`, `/notices` |
+| Copyright notices and counter-notices (DMCA section 512) | `/copyright`, `/notice`, `/notices`; the rules in `lib/notice-rules.ts`; the restore window in `lib/business-days.ts` and `COUNTER_RESTORE_BUSINESS_DAYS` |
+| Intimate-image removal within 48 hours of a valid notice | `INTIMATE_REMOVAL_HOURS` in `lib/legal.ts`; `due_by` on each notice; `npm run legal -- overdue` |
 | Retention limits enforced by the background tick | `RETENTION` in `lib/legal.ts`, `keepWithinRetention` in `lib/maintenance.ts` |
 | Hidden posts deleted after the appeal window | `purgeHidden` in `lib/moderation.ts` |
 | Transparency figures | `/transparency`, read from the server's records each time |
@@ -83,6 +84,8 @@ Work through this list in order. Each item names who is responsible.
 npm run moderation -- list          # open reports, oldest first
 npm run moderation -- appeals       # appeals waiting for a decision
 npm run legal -- list               # open notices; urgent ones first
+npm run legal -- overdue            # intimate-image notices past their 48-hour deadline
+npm run legal -- counter-list       # counter-notices waiting, due or overdue
 ```
 
 - **Urgent first.** Intimate-image and child-abuse notices are already hidden when they arrive. Decide them the same day.
@@ -106,12 +109,26 @@ eSafety Commissioner or the police in Australia. Keep the record of what you rep
 preservation of evidence before you delete anything.
 
 **Intimate images without consent.** Hide at once. In India, act within two hours of a valid complaint. Tell the person
-who complained when it is done. Do not leave the content visible while you check the complaint.
+who complained when it is done. Do not leave the content visible while you check the complaint. Each notice also has a
+removal deadline 48 hours after it arrived (`due_by`, under the TAKE IT DOWN Act). `npm run legal -- overdue` lists any notice
+still open after that. Decide it straight away and record why.
 
-**Copyright.** Check the notice has the parts in `/copyright`. Hide the post with `legal decide actioned` if the notice is
-valid. The author may send a counter-notice from Notices. If none comes, or it is refused, the post stays hidden. If a
-counter-notice is valid, restore the post after 10 to 14 business days unless the sender tells you a court case has
-started. Track repeat infringers and close their accounts.
+**Copyright.** The notice form requires everything `/copyright` lists: the owner's name, postal address and telephone number,
+the work, the link, the good-faith statement, the accuracy confirmation, the statement under penalty of perjury, and a signature.
+A copyright notice does not hide the post. A person decides it, with `npm run legal -- decide <noticeId> actioned|rejected
+--note "<reason>"`.
+
+When the author sends a counter-notice from Notices, the app emails the full counter-notice to the owner and records the
+window. The post goes back no sooner than 10 and no later than 14 business days after the counter-notice arrived. Business
+days leave out weekends and US federal holidays, from the list in `lib/business-days.ts`, which the lawyer should check.
+
+- `npm run legal -- counter-list` shows each counter-notice as waiting, due or overdue, and whether it reached the owner. If
+  the owner was not emailed, send the counter-notice by hand from the operator's mailbox.
+- If the owner tells you it has started a court action, record it with `npm run legal -- court-action <noticeId>`, where the
+  id is the copyright notice's reference that the owner quoted. The post stays hidden while the court decides.
+- Otherwise put the post back with `npm run legal -- counter-restore <noticeId>`, once the window is open. The command refuses
+  before the window opens and after a court action. If the window has already closed, it still restores and notes the date.
+- The app does not track repeat infringers or close accounts for them. That decision is the operator's, with a lawyer.
 
 **Orders from courts and authorities.** Check the order is valid and comes from the right authority. Comply with what it
 requires, and say so to the author where the law allows. Record it with `npm run legal -- record-request --summary "<what
@@ -128,7 +145,7 @@ and the answer in the operator's own records, because the app does not keep a re
 Tell affected people in plain words what happened, what data, and what they can do. Record every step.
 
 **Retention.** The tick removes views and profile visits after 90 days, For you impressions and time on screen after 30 days, read
-notifications after 180 days, notices and moderation records after three years, and "Not now" choices on connection suggestions after
+notifications after 180 days, notices, counter-notices and moderation records after three years, and "Not now" choices on connection suggestions after
 180 days. Translations are removed with the post when it is edited, and with the message when it is deleted. The For you ranking is refit from those
 impressions once an hour (`trainFeedModel` in `lib/feed-learning.ts`); its weights hold no record of any one person. Check the backups too: they keep what was deleted until they are replaced.
 
@@ -146,6 +163,8 @@ large enough for a formal transparency report under the DSA, the lawyer will say
 - Automated scanning of images for known abuse material. The operator must add that, with a provider, if it is required.
 - Audited transparency reports.
 - Posting, following, messages, lists, circles, calls, payments, advertising, the feed and the media routes refuse an account that has not agreed to the current Terms (`requireAgreedViewer` and `getAgreedViewer`). Account actions (password, two-factor, sessions, email, deactivation and deletion) still accept it, so a person can always secure or leave their account. Every new server action must use one of the two checks unless it is an account action.
-- Counter-notice details the copyright law asks for: the appeal form takes only a reason of at least 10 characters. The copyright notice form does not take a statement under penalty of perjury. Lawyer to decide whether to add both.
-- Timing for putting a post back after a counter-notice is set by the operator by hand, and is not tracked by the app.
-- Intimate-image removal deadlines are not tracked, and there is no self-harm detection.
+- Repeat-infringer tracking and closing accounts for it. Notices and decisions are kept, but no count is made or acted on.
+- Sending a counter-notice by email to the owner depends on the operator's mail setup. If mail is not set up, the app records the
+  counter-notice, `counter-list` shows it as not sent, and the operator sends it by hand.
+- Self-harm detection.
+- Lawyer to confirm the wording of the counter-notice and copyright notice requirements, and the restore windows, before launch.

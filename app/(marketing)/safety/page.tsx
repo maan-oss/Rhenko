@@ -29,6 +29,12 @@ const SECTIONS: LegalSection[] = [
           Some reports are acted on at once. A report of an intimate image shared without consent hides the post while it is
           reviewed.
         </P>
+        <P>
+          You can also report a message from someone else in a chat. Open its More message options menu, choose Report, then give the reason. The
+          report holds that message and up to four messages before it. Nobody in the chat is told. The report is sealed to
+          Rhenko&apos;s report key before it is stored, so the server holds only ciphertext, and only the operator can open it. A report
+          with a child-safety or intimate-image reason takes the message off the chat at once, for both people.
+        </P>
       </>
     ),
   },
