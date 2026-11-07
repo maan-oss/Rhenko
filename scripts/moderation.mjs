@@ -41,7 +41,8 @@
 import readline from "node:readline/promises"
 import { randomUUID } from "node:crypto"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path"
+import { fileURLToPath } from "node:url"
 import postgres from "postgres"
 
 // These mirror lib/legal.ts. The e2e suite checks that they still match.
@@ -61,7 +62,9 @@ const CATEGORIES = {
 const APPEAL_MS = 30 * 24 * 60 * 60 * 1000
 const EXCERPT_CHARS = 140
 
-const UPLOAD_NAME = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov)$/
+// The stored name the app gives an upload. It must match UPLOAD_NAME_PATTERN in lib/uploads.ts, or a voice note or document would be
+// left in storage after its message is hidden. tests/upload-names.test.mjs checks that the two lists are the same.
+const UPLOAD_NAME = /^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga|mp3|wav|pdf|txt|csv|docx|xlsx|pptx|zip|sealed)$/
 const SAFE_NAME = /^[A-Za-z0-9_-]{1,64}$/
 // The stored name the app gives a file: 32 hex digits and an extension.
 const SAFE_FILE = /^[a-f0-9]{32}\.[a-z0-9]{1,5}$/
@@ -517,6 +520,12 @@ async function remove() {
 // so the rest of this command runs without them.
 async function keygen(file) {
   if (!file) fail(USAGE)
+  // The private key must never sit in the repository, where it could be committed or copied with the code.
+  const repository = resolvePath(dirname(fileURLToPath(import.meta.url)), "..")
+  const within = relative(repository, resolvePath(file))
+  if (within === "" || (within.split(sep)[0] !== ".." && !isAbsolute(within))) {
+    fail(`${file} is inside the repository. Choose a file outside it, for example in a folder only the operator can read.`)
+  }
   const { reportKeyId } = await import("../lib/chat-reports.ts")
   const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])
   const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey)

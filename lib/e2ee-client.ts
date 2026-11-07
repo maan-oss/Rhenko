@@ -37,7 +37,8 @@ import {
 } from "@/actions/messages"
 
 const UNSUPPORTED = "This browser can't encrypt messages here. Open Rhenko over HTTPS in a current browser."
-const SEND_FAILED = "That message couldn't be sent. Try again."
+// The same reason a plaintext chat gives, so a dropped connection reads the same in both kinds of chat.
+const SEND_FAILED = "Your message did not send. Check your connection and try again."
 const OPEN_FAILED = "This message couldn't be opened on this device."
 const NOT_OPENED_HERE = "Sent before this device could read the chat."
 const PHOTO_FAILED = "That photo couldn't be prepared. Try another."

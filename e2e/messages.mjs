@@ -28,6 +28,30 @@ function uniq(label) {
   return `${label} ${RUN_ID}${randomWord(4)}`
 }
 
+// With encryption on, a chat row shows the fixed label for a sealed message, never its text (lib/e2ee-payload.ts). The
+// rows below are found by the label the page really shows, so the same check works in both modes.
+const ENCRYPTED = process.env.RHENKO_E2EE === "1"
+const ENCRYPTED_PREVIEW = "Encrypted message"
+function previewOf(text) {
+  return ENCRYPTED ? ENCRYPTED_PREVIEW : text
+}
+
+// Resolves once the server has saved a message from this handle in the conversation. Used where the request carries sealed
+// text, so the words are not there to wait for.
+async function savedInChat(conversationId, handle) {
+  const deadline = Date.now() + TIMEOUT
+  for (;;) {
+    const [row] = await query(
+      "SELECT COUNT(*) AS n FROM chat_messages WHERE conversation_id = ? AND cipher IS NOT NULL AND sender_id = (SELECT id FROM users WHERE handle = ?)",
+      conversationId,
+      handle
+    )
+    if (Number(row.n) > 0) return
+    if (Date.now() > deadline) throw new Error(`no sealed message from @${handle} was saved in ${conversationId} within ${TIMEOUT} ms`)
+    await sleep(200)
+  }
+}
+
 export async function run() {
   area("messages")
   for (const phone of [false, true]) {
@@ -95,7 +119,7 @@ async function directFlow({ phone }) {
     await note.waitFor()
     await note.click()
     await receiver.page.waitForURL((url) => url.searchParams.get("tab") === "requests")
-    const row = receiver.page.locator("main").getByRole("link").filter({ hasText: sender.name }).filter({ hasText: first }).first()
+    const row = receiver.page.locator("main").getByRole("link").filter({ hasText: sender.name }).filter({ hasText: previewOf(first) }).first()
     await row.waitFor()
     await row.click()
     await receiver.page.waitForURL((url) => url.pathname === `/messages/${convId}`)
@@ -200,7 +224,9 @@ async function directFlow({ phone }) {
     try {
       await chatBox(page).fill(words)
       await chatBox(page).press("Enter")
-      await page.getByRole("alert").filter({ hasText: "did not send" }).waitFor()
+      // A plaintext send says why in place. An encrypted one says why in a notice, because its text is sealed on this device first.
+      if (ENCRYPTED) await toastText(page, /did not send/)
+      else await page.getByRole("alert").filter({ hasText: "did not send" }).waitFor()
       await until(page, () => document.querySelectorAll("[data-flight]").length === 0)
       assert.equal(await chatBox(page).inputValue(), words, "the text left the box although the message did not send")
       assert.equal(await inThread(), 0, "the failed message is still in the thread")
@@ -239,13 +265,14 @@ async function directFlow({ phone }) {
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
     for (const person of [sender, receiver]) {
       await person.page.locator('main audio[aria-label="Voice message"]').first().waitFor()
+      // A plaintext voice message plays from the server's file. An encrypted one is opened on this device, so it plays from a blob.
       await until(
         person.page,
-        () => {
+        (sealed) => {
           const audio = document.querySelector('main audio[aria-label="Voice message"]')
-          return audio instanceof HTMLAudioElement && audio.readyState >= 1 && audio.src.includes("/media/")
+          return audio instanceof HTMLAudioElement && audio.readyState >= 1 && (sealed ? audio.src.startsWith("blob:") : audio.src.includes("/media/"))
         },
-        null,
+        ENCRYPTED,
         { timeout: 20_000 }
       )
     }
@@ -330,7 +357,7 @@ async function directFlow({ phone }) {
     await openMessages(receiver.page)
     await openChat(sender.page, convId)
     await sendChat(sender.page, ping)
-    const row = receiver.page.locator("main").getByRole("link").filter({ hasText: sender.name }).filter({ hasText: ping }).first()
+    const row = receiver.page.locator("main").getByRole("link").filter({ hasText: sender.name }).filter({ hasText: previewOf(ping) }).first()
     await row.waitFor()
     await row.getByLabel("1 unread message").waitFor()
     // Opening the thread marks it read. The check waits for the server to confirm that before leaving the page, so a
@@ -355,7 +382,7 @@ async function directFlow({ phone }) {
     await toastText(receiver.page, /^Conversation muted/)
     await waitForMuteLabel(receiver.page, "Unmute conversation")
     await idleOnSettings(receiver.page)
-    const missing = expectBanner(receiver.page, quiet, 5000)
+    const missing = expectBanner(receiver.page, previewOf(quiet), 5000)
     await openChat(sender.page, convId)
     await sendChat(sender.page, quiet)
     assert.equal(await missing, false, "a muted conversation produced a banner")
@@ -364,7 +391,7 @@ async function directFlow({ phone }) {
     await clickMuteSwitch(receiver.page, "Unmute conversation")
     await toastText(receiver.page, /^Conversation unmuted/)
     await idleOnSettings(receiver.page)
-    const shown = expectBanner(receiver.page, loud)
+    const shown = expectBanner(receiver.page, previewOf(loud))
     await sendChat(sender.page, loud)
     assert.equal(await shown, true, "an unmuted conversation produced no banner")
   })
@@ -590,15 +617,18 @@ async function requestsFlow() {
     convId = await waitForConversation(asker.page)
     // The bubble shows before the server saves the message, so wait for the save before the other person looks.
     // Typing also posts to this conversation, so the wait is for the send itself: the POST that carries the note.
-    const saved = asker.page.waitForResponse(
-      (r) => r.request().method() === "POST" && r.url().includes(`/messages/${convId}`) && (r.request().postData() ?? "").includes(note),
-      { timeout: TIMEOUT }
-    )
+    // In an encrypted chat the request carries sealed text, not the words, so the wait is for the row the server saves.
+    const saved = ENCRYPTED
+      ? savedInChat(convId, asker.handle)
+      : asker.page.waitForResponse(
+          (r) => r.request().method() === "POST" && r.url().includes(`/messages/${convId}`) && (r.request().postData() ?? "").includes(note),
+          { timeout: TIMEOUT }
+        )
     saved.catch(() => {})
     await sendChat(asker.page, note)
     await saved
     await openMessages(target.page, "requests")
-    await target.page.locator("main").getByRole("link").filter({ hasText: asker.name }).filter({ hasText: note }).first().waitFor()
+    await target.page.locator("main").getByRole("link").filter({ hasText: asker.name }).filter({ hasText: previewOf(note) }).first().waitFor()
   })
 
   await check("messages: Decline removes the request for the receiver and the sender keeps the thread", async () => {
@@ -609,7 +639,7 @@ async function requestsFlow() {
     await target.page.waitForURL((url) => url.pathname === "/messages" && url.searchParams.get("tab") === "requests")
     await target.page.getByText("No message requests").waitFor()
     await openMessages(asker.page)
-    await asker.page.locator("main").getByRole("link").filter({ hasText: target.name }).filter({ hasText: note }).first().waitFor()
+    await asker.page.locator("main").getByRole("link").filter({ hasText: target.name }).filter({ hasText: previewOf(note) }).first().waitFor()
   })
 
   await check("messages: the New message form refuses unknown handles, yourself, and anyone who blocked you", async () => {

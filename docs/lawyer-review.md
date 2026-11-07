@@ -139,17 +139,28 @@ text it affects and a recommendation.
 
 ## Verification
 
-Checked on 2026-11-07 against the working tree, committed as d3b084b on rhenko-app-features and pushed.
+Checked on 2026-11-07 against the working tree. The last commit with these checks is d3b084b on rhenko-app-features; the changes
+listed below were made after it and are not committed yet.
 
-- `npx tsc --noEmit` and eslint on the changed TypeScript files: clean. `npm run test:unit`: 417 passing. `npm run build`: passes.
-- End-to-end, encryption off (`RHENKO_E2EE=0`): settings and visibility passed in the full run. The messages area passed with no
-  failures in the last run. The account area passed 37 of 37 in its last run. The legal area passed 41 of 41 in the run before that.
-- End-to-end, encryption on (`RHENKO_E2EE=1`): the encrypted area passed 20 of 20.
-- The messages area is written for plaintext chats. With encryption on, its previews and report checks expect plaintext, so it
-  is not run in encrypted mode. The encrypted area covers encrypted chats.
-- The email checks (account and legal) need the local mail sink (`e2e/lib/mail-sink.mjs`) running, with the server sending to
-  it. When the sink stopped, 14 checks failed on the email step alone.
-- Test-side changes made during this run; none changes the app:
+- `npx tsc --noEmit`, eslint on the changed TypeScript files, and `npm run build`: clean. `npm run test:unit`: 419 passing.
+- End-to-end, encryption off (`RHENKO_E2EE=0`): the full run, every area except `encrypted`, passed 545 of 545.
+- End-to-end, encryption on (`RHENKO_E2EE=1`): the full run, every area, passed 565 of 565. The encrypted area has 20 checks and
+  all pass. The messages area passes 48 of 48 in each mode.
+- The email checks in the account and legal areas ran with the local mail sink (`e2e/lib/mail-sink.mjs`) up, with the server
+  sending to it.
+- Runbook step 5 was rehearsed on the test database inside one transaction, ended with `rollback`, so nothing was deleted. The
+  dry run and the rehearsal both counted 186 plaintext messages, and the rehearsal queued 17 files. The first version of the file
+  name pattern left out the voice notes and documents the app accepts, and it did not keep files a chat report still holds. Both
+  are fixed in the runbook and in `scripts/moderation.mjs`, and `tests/upload-names.test.mjs` keeps the three lists the same.
+- App change: a send that fails in an encrypted chat now says "Your message did not send. Check your connection and try again.",
+  the same as a plaintext chat.
+- Command line: `report-keygen` refuses a key file inside the repository.
+- Test-side changes; none changes the app's behaviour:
+  - The messages checks find an encrypted chat's rows by the label an encrypted row shows ("Encrypted message"), read the banner
+    and the voice player the way an encrypted chat shows them, and wait for the save in the database, because the request holds
+    sealed text.
+  - The encrypted area has a check that a device whose signing key changed is refused with a notice, and that its messages read
+    again once the key is back.
   - The deletion check waits for the deleted message's own text to leave the thread. A child-safety report earlier in the same
     chat also leaves a deleted notice, so waiting for any notice had let the check read the thread too early.
   - The report toast is moved away from the pointer and cleared before the next step, so it does not cover a sheet's button.

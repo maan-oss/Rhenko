@@ -80,7 +80,9 @@ b. Check for attachments that are not stored as a file. If this count is not zer
     where c.e2ee = 0 and m.attachment is not null and m.media_file is null;
 
 c. Delete the messages and queue the files that nothing else uses, in one transaction. The running app removes queued files from storage
-   within about 15 seconds, and checks each file again before it deletes it, the same way `scripts/moderation.mjs remove` does.
+   within about 15 seconds, and checks each file again before it deletes it, the same way `scripts/moderation.mjs remove` does. The name pattern is every upload type the
+   app accepts (lib/uploads.ts), so a voice note or a document is queued too, and the last check keeps a file that a chat report still
+   holds. `tests/upload-names.test.mjs` keeps the pattern in step with the app; change them together.
 
     begin;
     create temp table doomed on commit drop as
@@ -88,13 +90,14 @@ c. Delete the messages and queue the files that nothing else uses, in one transa
     insert into pending_file_deletions (name, created_at)
       select distinct d.media_file, (extract(epoch from now()) * 1000)::bigint
       from doomed d
-      where d.media_file ~ '^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov)$'
+      where d.media_file ~ '^[a-f0-9]{32}\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|oga|mp3|wav|pdf|txt|csv|docx|xlsx|pptx|zip|sealed)$'
         and not exists (select 1 from chat_messages m2 where m2.media_file = d.media_file and m2.id not in (select id from doomed))
         and not exists (select 1 from post_media p where p.file = d.media_file)
         and not exists (select 1 from posts p where p.media_file = d.media_file)
         and not exists (select 1 from users u where u.avatar_file = d.media_file or u.banner_file = d.media_file)
         and not exists (select 1 from link_previews l where l.image_file = d.media_file)
         and not exists (select 1 from ad_campaigns a where a.picture_file = d.media_file)
+        and not exists (select 1 from chat_report_files f where f.file = d.media_file)
       on conflict (name) do nothing;
     delete from chat_messages where id in (select id from doomed);
     select count(*) as deleted from doomed;

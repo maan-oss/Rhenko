@@ -44,6 +44,77 @@ async function safetyNumberShown(page, convId) {
   return groups.join(" ")
 }
 
+// This browser's encryption database (lib/e2ee-keystore.ts): the ids of the devices it holds keys for, and the signing key it first
+// saw for each device in a chat. The page reads and writes them directly, the way the app does.
+async function deviceIds(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open("rhenko-e2ee")
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const keys = db.transaction("devices", "readonly").objectStore("devices").getAllKeys()
+          keys.onsuccess = () => {
+            db.close()
+            resolve(keys.result)
+          }
+          keys.onerror = () => {
+            db.close()
+            reject(keys.error)
+          }
+        }
+      })
+  )
+}
+
+async function pinnedKey(page, device) {
+  return page.evaluate(
+    (id) =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open("rhenko-e2ee")
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const get = db.transaction("pins", "readonly").objectStore("pins").get(id)
+          get.onsuccess = () => {
+            db.close()
+            resolve(get.result ?? null)
+          }
+          get.onerror = () => {
+            db.close()
+            reject(get.error)
+          }
+        }
+      }),
+    device
+  )
+}
+
+async function setPinnedKey(page, device, value) {
+  await page.evaluate(
+    ({ id, signing }) =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open("rhenko-e2ee")
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction("pins", "readwrite")
+          transaction.objectStore("pins").put(signing, id)
+          transaction.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          transaction.onerror = () => {
+            db.close()
+            reject(transaction.error)
+          }
+        }
+      }),
+    { id: device, signing: value }
+  )
+}
+
 async function chatFlow() {
   const sender = await createUser({ tag: "ens" })
   const receiver = await createUser({ tag: "enr" })
@@ -373,5 +444,28 @@ async function chatFlow() {
     assert.notEqual(after, numberBefore, "the safety number did not change when a browser was linked")
     assert.equal(await safetyNumberShown(receiver.page, convId), after, "the first browser shows a different number from the other person")
     assert.equal(await safetyNumberShown(second.page, convId), after, "the new browser shows a different number")
+  })
+
+  await check("a device whose signing key has changed is refused with a notice, and its messages read again once the key is back", async () => {
+    need(convId, "the conversation")
+    const devices = await deviceIds(sender.page)
+    assert.equal(devices.length, 1, `expected one device in the sender's browser, found ${devices.length}`)
+    const device = devices[0]
+    const original = await pinnedKey(receiver.page, device)
+    assert.ok(original, "the receiver's browser has not remembered the sender's key, so there is nothing to change")
+    const words = `Sent after a key changed ${RUN_ID}${randomWord(4)}`
+    try {
+      // The browser keeps the key it first saw for each device. A different value there is what a changed key looks like to it.
+      await setPinnedKey(receiver.page, device, "a key this browser never saw")
+      await go(sender.page, `/messages/${convId}`, chatBox(sender.page))
+      await sendChat(sender.page, words)
+      await receiver.page.locator("main").getByText("has a different key from the one this browser saw before").first().waitFor()
+      assert.equal(await receiver.page.locator("main").getByText(words).count(), 0, "the words of a message from a changed key are shown")
+    } finally {
+      await setPinnedKey(receiver.page, device, original)
+    }
+    // A fresh load forgets which keys had changed, so the same message reads once the key is back.
+    await go(receiver.page, `/messages/${convId}`, threadText(receiver.page, words))
+    await threadText(receiver.page, first).waitFor()
   })
 }
