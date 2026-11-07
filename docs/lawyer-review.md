@@ -139,8 +139,8 @@ text it affects and a recommendation.
 
 ## Verification
 
-Checked on 2026-11-07 against the working tree. The last commit with these checks is d3b084b on rhenko-app-features; the changes
-listed below were made after it and are not committed yet.
+Checked on 2026-11-07. The changes listed below are committed in 8f37578 on rhenko-app-features. The plaintext full run was made
+before the final moderation, runbook and test-only edits, and has not been rerun since.
 
 - `npx tsc --noEmit`, eslint on the changed TypeScript files, and `npm run build`: clean. `npm run test:unit`: 419 passing.
 - End-to-end, encryption off (`RHENKO_E2EE=0`): the full run, every area except `encrypted`, passed 545 of 545.
