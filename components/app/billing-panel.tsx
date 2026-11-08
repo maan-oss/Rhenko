@@ -57,11 +57,11 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
         </h2>
         {state.plus.active ? (
           <p className="text-[15px]">
-            {state.plus.cancelAtPeriodEnd ? "Plus ends " : "Plus renews "}
+            {state.plus.cancelAtPeriodEnd ? "You're still on Plus. It ends " : "You're on Plus. It renews "}
             {state.plus.periodEnd ? <LocalTime at={state.plus.periodEnd} variant="full" /> : "at the end of this period"}.
           </p>
         ) : (
-          <p className="text-[15px]">{plusPrice ? `${plusPrice}, billed by Stripe. Cancel any time.` : "The price is not set up yet."}</p>
+          <p className="text-[15px]">{plusPrice ? `${plusPrice}, billed securely by Stripe. Cancel any time.` : "Plus isn't ready to buy yet. Check back soon."}</p>
         )}
         <div className="flex flex-col gap-2">
           <p className="text-[15px] font-semibold">Plus includes</p>
@@ -74,7 +74,7 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
           </ul>
           <p className="text-[15px] text-muted-foreground">Plus does not change who sees your posts, how replies are ordered, or what search finds.</p>
         </div>
-        {!state.plus.active && !state.emailVerified ? <p className="text-[15px]">Confirm your email address first. Rhenko Plus needs one.</p> : null}
+        {!state.plus.active && !state.emailVerified ? <p className="text-[15px]">Confirm your email address first, then you can start Plus.</p> : null}
         <div className="flex flex-wrap gap-2">
           {state.plus.active ? (
             <Button type="button" variant="outline" disabled={disabled} onClick={() => go(openBilling)} className="h-10 rounded-full px-4 font-semibold">
@@ -98,15 +98,18 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
                 </Button>
               }
               title="Withdraw from Plus?"
-              description="Plus ends now, and the first payment is refunded to the card it was paid with. You can withdraw within 14 days of starting."
+              description="Plus ends right away, and your first payment goes back to the card you paid with. You can do this within 14 days of starting."
               confirmLabel="Withdraw and refund"
               action={() => withdraw("plus")}
-              onDone={() => router.refresh()}
+              onDone={() => {
+                toast.success("Plus is withdrawn. Your refund is on its way to the card you paid with.")
+                router.refresh()
+              }}
             />
           ) : null}
         </div>
         {state.plus.withdrawable ? (
-          <p className="text-sm text-muted-foreground">Withdraw within 14 days of starting, and the first payment is refunded. To cancel after that, use Manage billing.</p>
+          <p className="text-sm text-muted-foreground">Changed your mind? Withdraw within 14 days of starting and your first payment comes back. After that, use Manage billing to cancel. Plus keeps running until the end of the period you paid for.</p>
         ) : null}
       </section>
 
@@ -116,8 +119,8 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
             Your older subscriber badge
           </h2>
           <p className="text-[15px] text-muted-foreground">
-            You subscribed to the paid subscriber ring before Rhenko Plus included it. Plus includes the ring now, so you can cancel this one
-            here. It does not check who you are.
+            You bought the paid subscriber ring before Rhenko Plus included it. Plus has the ring too, so you can keep this one or cancel it
+            here. The ring shows that you pay. It doesn&apos;t check who you are.
           </p>
           <p className="text-[15px]">
             {state.verified.cancelAtPeriodEnd ? "The badge ends " : "The badge renews "}
@@ -150,20 +153,20 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
           Tips and payouts
         </h2>
         <p className="text-[15px] text-muted-foreground">
-          People can tip your posts. Rhenko keeps a share of each tip, which the tip dialog shows before anyone pays. The rest is paid to your bank through Stripe. Stripe asks
-          for your identity and bank details. Rhenko does not keep them.
+          People can tip your posts. Rhenko keeps a small share of each tip, and the tip window shows that before anyone pays. The rest goes to
+          your bank through Stripe. Stripe handles your identity and bank details, so Rhenko never sees them.
         </p>
         <p className="text-[15px]">
           {state.tips.count === 0
-            ? "No tips received yet."
-            : `${state.tips.count} ${state.tips.count === 1 ? "tip" : "tips"} received, ${formatMoney(state.tips.total ?? 0, state.tips.currency)} after Rhenko's share.`}
+            ? "No tips yet. When someone tips one of your posts, it shows up here."
+            : `You've had ${state.tips.count} ${state.tips.count === 1 ? "tip" : "tips"}, worth ${formatMoney(state.tips.total ?? 0, state.tips.currency)} to you after Rhenko's share.`}
         </p>
         <p className="text-[15px]">
           {state.payouts.ready
-            ? "Payouts are ready. Tips you receive are paid out by Stripe."
+            ? "You're all set. Tips go straight to your bank through Stripe."
             : state.payouts.started
-              ? "Payouts are not ready yet. Finish the Stripe steps to receive tips."
-              : "Set up payouts to receive tips."}
+              ? "Almost there. Finish the Stripe steps to start receiving tips."
+              : "Set up payouts so you can receive tips."}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" disabled={disabled || state.payouts.ready} onClick={() => go(startPayouts)} className="h-10 rounded-full px-4 font-semibold">

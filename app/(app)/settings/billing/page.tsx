@@ -7,10 +7,10 @@ import { RevealSuspense } from "@/components/app/reveal-suspense"
 type SearchParams = Promise<{ checkout?: string | string[]; payouts?: string | string[] }>
 
 const NOTICES: Record<string, string> = {
-  "checkout:done": "Thanks. Your subscription shows here once Stripe confirms the payment, usually within a minute.",
-  "checkout:cancelled": "Checkout was cancelled. Nothing was charged.",
-  "payouts:return": "Payout details saved. Stripe checks them before tips can be paid to you.",
-  "payouts:refresh": "That Stripe link has expired. Start the payout setup again.",
+  "checkout:done": "Welcome aboard. Your Plus will show here as soon as Stripe confirms your payment, usually within a minute.",
+  "checkout:cancelled": "No worries. You left checkout, and nothing was charged.",
+  "payouts:return": "Thanks, your payout details are saved. Stripe is checking them, and tips can reach you once it's done.",
+  "payouts:refresh": "That Stripe link has expired. Tap Set up payouts to get a fresh one.",
 }
 
 export default function BillingPage({ searchParams }: { searchParams: SearchParams }) {

@@ -222,6 +222,11 @@ export async function keepPaymentRecords(userId: string): Promise<void> {
   )
 }
 
+// The address people are told to write to about payments. Shown on Stripe's pages, so it is the same one Stripe has on file.
+export function supportEmail(): string {
+  return (process.env.RHENKO_SUPPORT_EMAIL ?? "info.rhenko@gmail.com").trim()
+}
+
 // The subscription checkout. The person pays Stripe's page, and the webhook records the result.
 export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promise<string> {
   // The paid badge on its own is no longer sold. Rhenko Plus includes it. Existing badge subscriptions keep working.
@@ -241,7 +246,12 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
     subscription_data: { metadata: { user_id: viewer.id, kind }, billing_mode: { type: "flexible" } },
     metadata: { user_id: viewer.id, kind },
     automatic_tax: { enabled: taxEnabled() },
-    custom_text: { submit: { message: "Cancel any time in Settings. Withdraw within 14 days for a full refund." } },
+    custom_text: {
+      submit: {
+        message: `Cancel any time in Settings. Changed your mind? Withdraw within ${WITHDRAW_DAYS} days for a full refund. Questions? Email ${supportEmail()}.`,
+      },
+      after_submit: { message: "Welcome to Rhenko Plus, and thank you for supporting us. Your perks switch on as soon as Stripe confirms your payment." },
+    },
     // With tax on, Stripe needs the customer's address. Checkout asks for it and saves it to the customer.
     ...(taxEnabled()
       ? { billing_address_collection: "required", ...(customer ? { customer_update: { address: "auto", name: "auto" } } : {}) }
@@ -266,7 +276,10 @@ export async function withdrawFromSubscription(viewer: Viewer, kind: Kind): Prom
   const row = await activeSubscription(viewer.id, kind)
   if (!row) return { ok: false, error: "There is no active subscription to withdraw from." }
   if (Date.now() - row.created_at > WITHDRAW_DAYS * 24 * 60 * 60 * 1000) {
-    return { ok: false, error: `You can withdraw within ${WITHDRAW_DAYS} days of starting. After that, cancel and the subscription ends at the end of the period you paid for.` }
+    return {
+      ok: false,
+      error: `The ${WITHDRAW_DAYS}-day window to withdraw has passed. You can still cancel, and Plus runs until the end of the period you have paid for.`,
+    }
   }
   const cancelled = await stripe().subscriptions.cancel(row.id, {}, { idempotencyKey: `withdraw-cancel-${row.id}` })
   await saveSubscription(cancelled)
@@ -298,7 +311,10 @@ export async function tipCheckoutUrl(viewer: Viewer, postId: string, amount: num
     mode: "payment",
     line_items: [{ quantity: 1, price_data: { currency: CURRENCY, unit_amount: amount, product_data: { name: `Tip for @${post.handle}` } } }],
     payment_intent_data: { application_fee_amount: fee, transfer_data: { destination: account.account_id } },
-    custom_text: { submit: { message: `Goes to @${post.handle}, less Rhenko's ${tipFeePercent()}% fee.` } },
+    custom_text: {
+      submit: { message: `Thank you for supporting @${post.handle}. Your tip goes to them, less Rhenko's ${tipFeePercent()}% fee.` },
+      after_submit: { message: `Thanks for the tip! It is on its way to @${post.handle}.` },
+    },
     client_reference_id: viewer.id,
     metadata: { kind: "tip", from_user_id: viewer.id, to_user_id: post.author_id, post_id: postId, fee: String(fee) },
     success_url: `${origin}/${post.handle}/status/${postId}?tip=thanks`,

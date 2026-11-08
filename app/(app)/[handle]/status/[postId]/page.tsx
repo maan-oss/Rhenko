@@ -9,19 +9,21 @@ import { PostCard } from "@/components/app/post-card"
 import { replyRefusal } from "@/lib/rules"
 
 type Params = Promise<{ handle: string; postId: string }>
+type SearchParams = Promise<{ tip?: string | string[] }>
 
 // Existence checks run before anything streams, so a missing record gets a real 404.
 export const instant = false
 
 // A post opens only for someone who may see it. Anyone else gets the same page as a missing post.
-export default async function StatusPage({ params }: { params: Params }) {
+export default async function StatusPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const { postId } = await params
   const viewer = await requireViewer()
   if (!await canSeePost(postId, viewer.id)) notFound()
-  return <StatusBody params={params} />
+  const { tip } = await searchParams
+  return <StatusBody params={params} tipped={tip === "thanks"} />
 }
 
-async function StatusBody({ params }: { params: Params }) {
+async function StatusBody({ params, tipped }: { params: Params; tipped: boolean }) {
   const viewer = await requireViewer()
   const { handle, postId } = await params
   const post = await canSeePost(postId, viewer.id) ? await getPost(postId, viewer.id) : null
@@ -41,6 +43,11 @@ async function StatusBody({ params }: { params: Params }) {
   return (
     <>
       <PageHeader title="Post" backHref="/" />
+      {tipped ? (
+        <p role="status" className="border-b border-border px-4 py-3 text-[15px]">
+          Thanks for the tip! It&apos;s on its way to @{handle}.
+        </p>
+      ) : null}
       {parent ? (
         <PostCard post={parent} viewer={viewer} />
       ) : post.replyToId ? (

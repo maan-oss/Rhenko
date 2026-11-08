@@ -18,8 +18,8 @@ import {
 type Started = { ok: true; url: string } | { ok: false; error: string }
 type Done = { ok: true } | { ok: false; error: string }
 
-const NOT_SET_UP = "Payments are not set up on this server yet."
-const TRY_AGAIN = "Payments could not start. Try again in a moment."
+const NOT_SET_UP = "Payments aren't set up on this server yet, so nothing can be bought here for now."
+const TRY_AGAIN = "Something went wrong starting that. Give it a moment, then try again."
 
 // Errors from Stripe are logged, and the person sees a plain message. Errors from the app's own rules are shown as they are.
 function failure(error: unknown): { ok: false; error: string } {
@@ -37,7 +37,7 @@ function kindOf(value: unknown): Kind | null {
 export async function startSubscription(value: string): Promise<Started> {
   const viewer = await requireAgreedViewer()
   const kind = kindOf(value)
-  if (!kind) return { ok: false, error: "That subscription does not exist." }
+  if (!kind) return { ok: false, error: "That subscription isn't one Rhenko offers." }
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
   try {
     return { ok: true, url: await subscriptionCheckoutUrl(viewer, kind) }
@@ -59,7 +59,7 @@ export async function openBilling(): Promise<Started> {
 export async function withdraw(value: string): Promise<Done> {
   const viewer = await requireAgreedViewer()
   const kind = kindOf(value)
-  if (!kind) return { ok: false, error: "That subscription does not exist." }
+  if (!kind) return { ok: false, error: "That subscription isn't one Rhenko offers." }
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
   try {
     return await withdrawFromSubscription(viewer, kind)
@@ -70,7 +70,7 @@ export async function withdraw(value: string): Promise<Done> {
 
 export async function startTip(postId: string, amount: number): Promise<Started> {
   const viewer = await requireAgreedViewer()
-  if (typeof postId !== "string" || !Number.isInteger(amount)) return { ok: false, error: "That tip is not valid." }
+  if (typeof postId !== "string" || !Number.isInteger(amount)) return { ok: false, error: "That tip amount isn't valid. Pick one of the amounts on offer." }
   if (!paymentsConfigured()) return { ok: false, error: NOT_SET_UP }
   try {
     return { ok: true, url: await tipCheckoutUrl(viewer, postId, amount) }

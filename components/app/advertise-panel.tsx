@@ -123,7 +123,7 @@ function Balance({ data }: { data: AdvertiseData }) {
           Balance {formatMoney(account.balance, data.currency)}. Campaigns draw from it.
         </p>
       </div>
-      {data.creditAdded ? <p role="status" className="text-[15px]">Credit added. It shows here once the payment is confirmed.</p> : null}
+      {data.creditAdded ? <p role="status" className="text-[15px]">Thanks, your credit is on its way. It shows here as soon as Stripe confirms the payment.</p> : null}
       {data.paymentsReady ? (
         <div className="flex flex-wrap items-center gap-2">
           <fieldset className="flex flex-wrap gap-2">
@@ -140,7 +140,7 @@ function Balance({ data }: { data: AdvertiseData }) {
           </Button>
         </div>
       ) : (
-        <p className="text-[15px] text-muted-foreground">Adding credit needs payments, which are not set up on this server yet.</p>
+        <p className="text-[15px] text-muted-foreground">Adding credit isn&apos;t available yet, because payments aren&apos;t set up on this server.</p>
       )}
     </section>
   )
