@@ -237,9 +237,13 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
     line_items: [{ price, quantity: 1 }],
     client_reference_id: viewer.id,
     ...(customer ? { customer: customer.customer_id } : viewer.email ? { customer_email: viewer.email } : {}),
-    subscription_data: { metadata: { user_id: viewer.id, kind } },
+    subscription_data: { metadata: { user_id: viewer.id, kind }, billing_mode: { type: "flexible" } },
     metadata: { user_id: viewer.id, kind },
     automatic_tax: { enabled: taxEnabled() },
+    // With tax on, Stripe needs the customer's address. Checkout asks for it and saves it to the customer.
+    ...(taxEnabled()
+      ? { billing_address_collection: "required", ...(customer ? { customer_update: { address: "auto", name: "auto" } } : {}) }
+      : {}),
     success_url: `${origin}/settings/billing?checkout=done`,
     cancel_url: `${origin}/settings/billing?checkout=cancelled`,
   })
@@ -262,13 +266,13 @@ export async function withdrawFromSubscription(viewer: Viewer, kind: Kind): Prom
   if (Date.now() - row.created_at > WITHDRAW_DAYS * 24 * 60 * 60 * 1000) {
     return { ok: false, error: `You can withdraw within ${WITHDRAW_DAYS} days of starting. After that, cancel and the subscription ends at the end of the period you paid for.` }
   }
-  const cancelled = await stripe().subscriptions.cancel(row.id)
+  const cancelled = await stripe().subscriptions.cancel(row.id, {}, { idempotencyKey: `withdraw-cancel-${row.id}` })
   await saveSubscription(cancelled)
   const invoices = await stripe().invoices.list({ subscription: row.id, limit: 1 })
   const invoice = invoices.data[0] as (Stripe.Invoice & { payment_intent?: string | { id: string } | null }) | undefined
   const intent = invoice ? idOf(invoice.payment_intent as string | { id: string } | null | undefined) : null
   if (invoice && invoice.status === "paid" && invoice.amount_paid > 0 && intent) {
-    await stripe().refunds.create({ payment_intent: intent })
+    await stripe().refunds.create({ payment_intent: intent }, { idempotencyKey: `withdraw-refund-${row.id}` })
   }
   return { ok: true }
 }
@@ -312,9 +316,10 @@ export async function payoutOnboardingUrl(viewer: Viewer): Promise<string> {
       email: viewer.email ?? undefined,
       capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
       metadata: { user_id: viewer.id },
-    })
+    }, { idempotencyKey: `connect-account-${viewer.id}` })
+    // Two requests at the same moment get the same Stripe account (the key above), and the row is written once.
     await run(
-      "INSERT INTO connect_accounts (user_id, account_id, charges_enabled, payouts_enabled, updated_at) VALUES (?, ?, 0, 0, ?)",
+      "INSERT INTO connect_accounts (user_id, account_id, charges_enabled, payouts_enabled, updated_at) VALUES (?, ?, 0, 0, ?) ON CONFLICT(user_id) DO NOTHING",
       viewer.id,
       created.id,
       Date.now()
