@@ -66,8 +66,10 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
         <div className="flex flex-col gap-2">
           <p className="text-[15px] font-semibold">Plus includes</p>
           <ul className="list-disc space-y-2 pl-5 text-[15px]">
-            {PLUS_INCLUDES.map((line) => (
-              <li key={line}>{line}</li>
+            {PLUS_INCLUDES.map((line, index) => (
+              <li key={line} className="reveal-in" style={{ animationDelay: `${index * 50}ms` }}>
+                {line}
+              </li>
             ))}
           </ul>
           <p className="text-[15px] text-muted-foreground">Plus does not change who sees your posts, how replies are ordered, or what search finds.</p>
@@ -83,7 +85,7 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
               type="button"
               disabled={disabled || !plusPrice || !state.emailVerified}
               onClick={() => go(() => startSubscription("plus"))}
-              className="h-10 rounded-full px-4 font-semibold"
+              className="h-10 rounded-full px-4 font-semibold transition-transform duration-150 active:scale-[0.97]"
             >
               Subscribe to Plus
             </Button>
