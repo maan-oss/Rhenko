@@ -46,8 +46,8 @@ export async function boostSetupFor(viewerId: string, postId: string): Promise<B
     viewerId
   )
   if (!account) return blocked("A boost is an ad, so it needs an advertising account first.", true)
-  if (account.status !== "active") return blocked("Your advertising account is not active, so you cannot boost a post right now.")
-  if (post.has_extra === 1) return blocked("Only text posts can be boosted for now.")
+  if (account.status !== "active") return blocked("Boosts are off because your advertising account is not active.")
+  if (post.has_extra === 1) return blocked("Only text posts can be boosted for now. Photos, videos and polls cannot be.")
 
   const publicUrl = (process.env.RHENKO_PUBLIC_URL ?? "").replace(/\/+$/, "")
   const made = publicUrl ? boostCopy({ text: post.body, handle: post.handle, postId }, publicUrl) : { problem: "Boosts are not set up on this server yet." }

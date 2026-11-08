@@ -141,7 +141,7 @@ export function BoostForm({
     return (
       <section aria-live="polite" className="flex flex-col items-center gap-2 px-6 pt-6 pb-8 text-center">
         <p className="text-[17px] font-semibold">Sent for review</p>
-        <p className="text-pretty text-[15px] text-muted-foreground">A person checks it before it runs. While it runs, it is labelled Ad.</p>
+        <p className="text-pretty text-[15px] text-muted-foreground">A person checks it before it runs. Once it runs, it is labelled Ad.</p>
         <Link
           href={`/advertise/campaigns/${sent}`}
           className="mt-4 inline-flex h-12 items-center rounded-full border border-border px-6 text-[15px] font-semibold transition-colors duration-200 hover:bg-muted"
@@ -163,7 +163,7 @@ export function BoostForm({
         >
           <span className="text-muted-foreground">Pay with</span>
           <span className="flex items-center gap-1 font-semibold">
-            {canAfford ? `Balance ${formatMoney(balance, currency)}` : "Add funds"}
+            Balance {formatMoney(balance, currency)}
             <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
           </span>
         </Link>
@@ -174,8 +174,8 @@ export function BoostForm({
       </div>
 
       <p className="px-2 text-center text-[12px] leading-relaxed text-pretty text-muted-foreground">
-        A person checks each boost before it runs. Views are estimates, so the real number can be lower.{" "}
-        <Link href="/transparency/ads" className="underline underline-offset-4 hover:text-foreground">
+        A view is one person seeing the ad once in a day. The About figures are forecasts at the current price.{" "}
+        <Link href="/transparency/ads#boosts" className="underline underline-offset-4 hover:text-foreground">
           How boosts work
         </Link>
       </p>
@@ -190,13 +190,17 @@ export function BoostForm({
           {pending ? "Sending" : "Boost post"}
         </Button>
       ) : (
-        <p className="text-center text-[15px]">
-          Your balance is too low for a boost.{" "}
-          <Link href="/advertise" className="font-semibold underline underline-offset-4">
+        <div className="flex flex-col gap-3">
+          <p className="text-center text-[15px] text-pretty">
+            A boost needs at least {formatMoney(smallest * 100, currency)} in your balance. Your balance is {formatMoney(balance, currency)}.
+          </p>
+          <Link
+            href="/advertise"
+            className="flex h-14 w-full items-center justify-center rounded-full bg-foreground text-[16px] font-semibold text-background transition-colors duration-200 hover:bg-foreground/90"
+          >
             Add funds
-          </Link>{" "}
-          first.
-        </p>
+          </Link>
+        </div>
       )}
       {error ? (
         <p role="alert" className="text-center text-[15px] text-destructive">

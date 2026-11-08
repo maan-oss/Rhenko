@@ -101,7 +101,7 @@ export function CampaignView({ campaign: c }: { campaign: CampaignDetails }) {
 
       <section aria-labelledby="campaign-ad" className="flex flex-col border-t border-border">
         <h2 id="campaign-ad" className="px-4 pt-5 pb-1 text-base font-semibold">
-          How it looks
+          How people see it
         </h2>
         <AdCard ad={c.ad} preview />
       </section>

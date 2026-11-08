@@ -20,6 +20,11 @@ export function CampaignControls({ campaignId, status, isBoost }: { campaignId: 
   if (!canPause && !canResume && !canEnd) return null
 
   const endLabel = status === "in_review" ? "Withdraw" : isBoost ? "End boost" : "End campaign"
+  const noun = isBoost ? "boost" : "campaign"
+  const confirmText =
+    status === "in_review"
+      ? `The ${noun} will not run, and nothing is charged. Money not yet spent stays in your balance.`
+      : `This ${noun} stops now and cannot be started again. Money not yet spent stays in your balance.`
 
   const act = (run: () => Promise<{ ok: true } | { ok: false; error: string }>) =>
     startTransition(async () => {
@@ -54,15 +59,13 @@ export function CampaignControls({ campaignId, status, isBoost }: { campaignId: 
       </div>
       {confirming ? (
         <div className="flex flex-col gap-3">
-          <p className="text-[15px]">
-            This cannot be undone, and it cannot be started again. Money not yet spent stays in your balance.
-          </p>
+          <p className="text-[15px]">{confirmText}</p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="destructive" disabled={pending} onClick={() => act(() => endCampaign(campaignId))} className="h-10 rounded-full px-5 font-semibold">
               {pending ? "Ending" : `Yes, ${endLabel.toLowerCase()}`}
             </Button>
             <Button type="button" variant="outline" disabled={pending} onClick={() => setConfirming(false)} className="h-10 rounded-full px-5 font-semibold">
-              Keep it running
+              Go back
             </Button>
           </div>
         </div>

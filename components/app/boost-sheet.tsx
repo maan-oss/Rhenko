@@ -65,7 +65,7 @@ export function BoostSheet({
           </DialogClose>
           <DialogTitle className="text-[17px] font-semibold">Boost post</DialogTitle>
           <Link
-            href="/transparency/ads"
+            href="/transparency/ads#boosts"
             aria-label="How boosts work"
             className="grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-muted"
           >

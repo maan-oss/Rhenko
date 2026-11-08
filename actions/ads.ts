@@ -82,7 +82,7 @@ export async function createCampaign(_previous: FormState, formData: FormData): 
   if (!account) return { error: "Set up an advertising account first." }
   const waiting = await get<{ n: number }>("SELECT COUNT(*) AS n FROM ad_campaigns WHERE account_id = ? AND status = 'in_review'", account.id)
   if ((waiting?.n ?? 0) >= AD_CAMPAIGNS_WAITING_MAX) {
-    return { error: `You can have ${AD_CAMPAIGNS_WAITING_MAX} campaigns waiting for review. Wait for one to be reviewed.` }
+    return { error: `You already have ${AD_CAMPAIGNS_WAITING_MAX} campaigns or boosts waiting for review. Wait for one to be reviewed before you send another.` }
   }
   const amount = Number(text(formData.get("budget"), 12).replace(/,/g, ""))
   if (!Number.isFinite(amount)) return { error: "Enter the budget as an amount, such as 25 or 25.50." }
@@ -181,8 +181,8 @@ export async function boostPost(postId: string, dollars: number): Promise<BoostR
   if (typeof postId !== "string" || !/^[0-9a-f-]{36}$/.test(postId)) return { ok: false, error: "That post is not available." }
   if (!(BOOST_BUDGETS as readonly number[]).includes(dollars)) return { ok: false, error: "Choose one of the amounts." }
   const account = await get<{ id: string; status: string }>("SELECT id, status FROM ad_accounts WHERE user_id = ?", viewer.id)
-  if (!account) return { ok: false, error: "Set up advertising first. A boost is an ad.", needsAccount: true }
-  if (account.status !== "active") return { ok: false, error: "Your advertising account is not active." }
+  if (!account) return { ok: false, error: "A boost is an ad, so it needs an advertising account first.", needsAccount: true }
+  if (account.status !== "active") return { ok: false, error: "Boosts are off because your advertising account is not active." }
   const publicUrl = (process.env.RHENKO_PUBLIC_URL ?? "").replace(/\/+$/, "")
   if (!publicUrl) return { ok: false, error: "Boosts are not set up on this server yet." }
   const post = await get<{ body: string; handle: string; has_extra: number }>(
@@ -195,7 +195,7 @@ export async function boostPost(postId: string, dollars: number): Promise<BoostR
     viewer.id
   )
   if (!post) return { ok: false, error: "That post is not available." }
-  if (post.has_extra === 1) return { ok: false, error: "Only text posts can be boosted for now." }
+  if (post.has_extra === 1) return { ok: false, error: "Only text posts can be boosted for now. Photos, videos and polls cannot be." }
   const made = boostCopy({ text: post.body, handle: post.handle, postId }, publicUrl)
   if ("problem" in made) return { ok: false, error: made.problem }
   if (await get("SELECT 1 AS found FROM ad_campaigns WHERE post_id = ? AND status IN ('in_review', 'active', 'paused')", postId)) {
@@ -203,7 +203,7 @@ export async function boostPost(postId: string, dollars: number): Promise<BoostR
   }
   const waiting = await get<{ n: number }>("SELECT COUNT(*) AS n FROM ad_campaigns WHERE account_id = ? AND status = 'in_review'", account.id)
   if ((waiting?.n ?? 0) >= AD_CAMPAIGNS_WAITING_MAX) {
-    return { ok: false, error: `You can have ${AD_CAMPAIGNS_WAITING_MAX} campaigns waiting for review. Wait for one to be reviewed.` }
+    return { ok: false, error: `You already have ${AD_CAMPAIGNS_WAITING_MAX} campaigns or boosts waiting for review. Wait for one to be reviewed before you send another.` }
   }
   const campaignId = newId()
   await run(

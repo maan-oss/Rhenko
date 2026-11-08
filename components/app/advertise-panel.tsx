@@ -55,7 +55,7 @@ export function AdvertisePanel({ data }: { data: AdvertiseData }) {
       <section className="flex flex-col gap-2 px-4 py-4 text-[15px] text-muted-foreground">
         <p>
           Ads are shown in the home feeds, one after every eight posts, to adults who do not pay for Plus. A campaign is charged per
-          thousand impressions from its balance, and it stops at its budget. Read the{" "}
+          thousand views from its balance, and it stops at its budget. Read the{" "}
           <Link href="/transparency/ads" className="underline underline-offset-4 hover:text-foreground">
             advertising policy
           </Link>{" "}
@@ -123,7 +123,7 @@ function Balance({ data }: { data: AdvertiseData }) {
           Balance {formatMoney(account.balance, data.currency)}. Campaigns draw from it.
         </p>
       </div>
-      {data.creditAdded ? <p role="status" className="text-[15px]">Credit added. It appears here once Stripe confirms the payment.</p> : null}
+      {data.creditAdded ? <p role="status" className="text-[15px]">Credit added. It shows here once the payment is confirmed.</p> : null}
       {data.paymentsReady ? (
         <div className="flex flex-wrap items-center gap-2">
           <fieldset className="flex flex-wrap gap-2">
@@ -165,7 +165,7 @@ function CampaignForm() {
       <Field label="Topic (optional)" hint={`One word. People who follow it see this ad. Up to ${AD_TOPIC_MAX} characters.`}>
         <input name="topic" maxLength={AD_TOPIC_MAX} placeholder="cooking" className={FIELD_INPUT} />
       </Field>
-      <Field label="Budget" hint="The most this campaign may spend, in the account's currency. Charged per thousand impressions.">
+      <Field label="Budget" hint="The most this campaign may spend, in the account's currency. Charged per thousand views.">
         <input name="budget" inputMode="decimal" required placeholder="25.00" className={FIELD_INPUT} />
       </Field>
       <ErrorLine message={state.error} />
@@ -224,7 +224,7 @@ function CampaignItem({ campaign, currency }: { campaign: CampaignRow; currency:
       {campaign.status === "rejected" && campaign.review_note ? <p className="text-[15px]">Reason: {campaign.review_note}</p> : null}
       <p className="text-[14px] text-muted-foreground">
         {formatMoney(campaign.spent, currency)} of {formatMoney(campaign.budget, currency)} spent. {campaign.impressions.toLocaleString("en-US")}{" "}
-        {campaign.impressions === 1 ? "impression" : "impressions"}, {campaign.clicks.toLocaleString("en-US")} {campaign.clicks === 1 ? "click" : "clicks"}.
+        {campaign.impressions === 1 ? "view" : "views"}, {campaign.clicks.toLocaleString("en-US")} {campaign.clicks === 1 ? "click" : "clicks"}.
       </p>
       {campaign.status === "active" || campaign.status === "paused" ? (
         <div>

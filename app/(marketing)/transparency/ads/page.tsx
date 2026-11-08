@@ -76,7 +76,7 @@ const SECTIONS: LegalSection[] = [
       <>
         <P>
           Advertising is paid in advance. Money added to the account becomes a balance, and campaigns draw from it. A campaign is charged per
-          thousand impressions at the rate shown in the ad library below, and it stops once its budget is spent. An impression is one person
+          thousand views at the rate shown in the ad library below, and it stops once its budget is spent. A view is one person
           seeing one ad on one day; a second view of the same ad by the same person that day is not charged.
         </P>
         <P>
@@ -167,7 +167,7 @@ async function Library() {
   return (
     <div className="flex flex-col gap-4">
       <P>
-        Rate: {formatMoney(cpmCents(), CURRENCY)} per thousand impressions. Shown to adults aged {MINIMUM_AGE} and over who do not pay for Plus.
+        Rate: {formatMoney(cpmCents(), CURRENCY)} per thousand views. Shown to adults aged {MINIMUM_AGE} and over who do not pay for Plus.
       </P>
       <P>
         The library lists up to the 200 campaigns most recently reviewed. Campaigns from advertisers whose accounts are not active are left out.
