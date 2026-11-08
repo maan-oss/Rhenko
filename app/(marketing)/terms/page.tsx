@@ -32,7 +32,7 @@ const SUMMARY = (
       <li>You can delete your account whenever you like.</li>
       <li>
         Rhenko Plus and tips are optional. You can cancel a subscription at any time, and withdraw from one within 14 days of
-        starting it. Paying does not change who sees your posts.
+        starting it. Plus gives your posts a boost in For you, and tips and the subscriber ring do not change who sees your posts.
       </li>
       <li>Some home feeds show labelled ads. Rhenko Plus removes them.</li>
     </List>
@@ -129,8 +129,8 @@ const SECTIONS: LegalSection[] = [
           <li>
             <B>Rhenko Plus</B> removes ads from your home feed, gives you 24 hours to edit a post instead of one hour, shows the paid
             subscriber ring beside your name, lets you use an animated GIF as your profile picture, and lets you post videos up to 10
-            minutes long instead of 2 minutes 20 seconds, within the same size limit for everyone. It renews automatically at the price
-            shown until you cancel.
+            minutes long instead of 2 minutes 20 seconds, within the same size limit for everyone. It also gives your posts a boost in
+            For you, so more people see them. It renews automatically at the price shown until you cancel.
           </li>
           <li>
             <B>The paid subscriber ring</B> is part of Rhenko Plus. It shows that you pay. It is not an identity check, and it does not
@@ -151,8 +151,9 @@ const SECTIONS: LegalSection[] = [
             <B>Price changes.</B> If the price of a subscription changes, we tell you at least 30 days before the new price applies, and you can cancel before it does.
           </li>
           <li>
-            <B>Reach.</B> Paying changes what you can do, not who sees your posts. No paid feature changes how a post is ranked or how many
-            people it reaches.
+            <B>Reach.</B> Rhenko Plus is the only paid feature that changes reach: a post by someone who pays for Plus gets a boost in
+            For you. The boost is only in For you, and it does not change how replies are ordered or what search finds. Tips and the
+            subscriber ring do not change how a post is ranked or how many people it reaches.
           </li>
           <li>
             <B>Tax.</B> Prices may not include sales tax, VAT, GST or a similar tax. Where one is charged, it is shown at checkout before you

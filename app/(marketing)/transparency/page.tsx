@@ -250,7 +250,8 @@ const SECTIONS: LegalSection[] = [
         <li>
           <B>For you</B> ranks the posts and reposts you are allowed to see by how likely you are to like, repost, bookmark or read
           them. Who you follow and what they like, your hashtags, how recent and how engaged a post is, and what you have already
-          seen or read all count. Posts you mark Not interested leave your feed.
+          seen or read all count. A post by someone who pays for Rhenko Plus gets a boost here, so more people see it. Posts you mark
+          Not interested leave your feed.
         </li>
         <li>
           The weights behind For you are learned from what people did after they were shown posts, refreshed about once an hour, and
@@ -262,7 +263,7 @@ const SECTIONS: LegalSection[] = [
         <li>
           <B>Explore</B> is sorted by top or by latest. Top adds up likes, reposts (counted twice) and replies.
         </li>
-        <li>No feed is ranked by who has paid.</li>
+        <li>For you is the only feed where paying changes the order, and only for Plus. Following and Explore do not change for anyone who pays.</li>
         <li>
           Ads are placed about every eight posts in the home feeds, sometimes nine. Each one is labelled Ad. They are not shown to people under 18 or to
           people who pay for Rhenko Plus.
@@ -382,6 +383,7 @@ const SECTIONS: LegalSection[] = [
         <li>
           <B>Rhenko Plus</B> removes ads from the home feeds, gives 24 hours to edit a post instead of one hour, lets a profile picture be
           an animated GIF, and allows videos up to 10 minutes long instead of 2 minutes 20 seconds, within the same size limit for everyone.
+          It also gives your posts a boost in For you, so more people see them.
         </li>
         <li>
           <B>The paid subscriber ring</B> shows beside a name that the person pays. It changes nothing else.
@@ -389,7 +391,7 @@ const SECTIONS: LegalSection[] = [
         <li>
           <B>Tips</B> are paid from one person to another. They do not change who sees a post.
         </li>
-        <li>No paid feature changes how a post is ranked, how far it reaches, or who can see it.</li>
+        <li>Apart from the For you boost for Plus, no paid feature changes how a post is ranked, how far it reaches, or who can see it. A boost is an ad, labelled Ad.</li>
       </List>
     ),
   },

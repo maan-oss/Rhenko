@@ -33,6 +33,9 @@ export const DWELL_MS = 3000
 // An author with fewer followers than this is a small account. The explore pool and one feature look at them.
 export const SMALL_AUTHOR = 300
 const ENGAGE_SHARE = 0.7
+// A post from someone who pays for Rhenko Plus scores this much higher in For you, so it reaches more people. It is a plain
+// multiplier rather than a learned feature, so the weights the model learns from people's taps stay as they are.
+export const PLUS_REACH = 1.5
 
 // Where a candidate came from. When several pools found a post, the first of these in the list is kept.
 export type Source = "follow" | "repost" | "social" | "affinity" | "topic" | "popular" | "explore" | "fresh"
@@ -60,6 +63,8 @@ export type Candidate = {
   // How many times the viewer has liked, reposted or bookmarked this author's posts in the last thirty days.
   affinity: number
   authorFollowers: number
+  // The author pays for Rhenko Plus. Their posts get the PLUS_REACH boost in For you.
+  authorPlus: boolean
   // The post has a web link in it.
   links: boolean
   // Characters in the post's text.
@@ -140,6 +145,7 @@ export function predict(weights: number[], x: number[]): number {
 export function score(c: Candidate, now: number, weights: Weights = PRIOR): number {
   const x = featuresOf(c, now)
   let value = ENGAGE_SHARE * predict(weights.engage, x) + (1 - ENGAGE_SHARE) * predict(weights.dwell, x)
+  if (c.authorPlus) value *= PLUS_REACH
   if (c.dwelledMs >= DWELL_MS) value *= 0.1
   if (c.seen) value *= 0.15
   if (c.engagedByViewer) value *= 0.3

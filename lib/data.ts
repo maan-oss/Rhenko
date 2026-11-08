@@ -704,11 +704,14 @@ type CandidatePost = {
   quotes: number
   views: number
   author_followers: number
+  // Truthy when the author pays for Rhenko Plus. The database may return it as a number or a boolean.
+  author_plus: number | boolean
 }
 
 const CANDIDATE_COLUMNS = `p.id AS post_id, p.body, p.author_id, p.created_at, p.likes_count AS likes,
   p.reposts_count AS reposted, p.replies_count AS replies, p.quotes_count AS quotes, p.views_count AS views,
-  au.followers_count AS author_followers`
+  au.followers_count AS author_followers,
+  EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.user_id = p.author_id AND sub.kind = 'plus' AND sub.status IN ('active', 'trialing')) AS author_plus`
 // A post that a check has limited or held stays out of For you. A held post is also hidden, so this covers limited ones.
 const NOT_RESTRICTED = "NOT EXISTS (SELECT 1 FROM post_risk pr WHERE pr.post_id = p.id AND pr.action <> 'allow')"
 
@@ -920,6 +923,7 @@ async function rankCandidates(viewerId: string, at: number): Promise<Candidate[]
       socialCount: socialCount.get(row.post_id) ?? 0,
       affinity: affinity.get(row.author_id) ?? 0,
       authorFollowers: row.author_followers,
+      authorPlus: Boolean(row.author_plus),
       links: /https?:\/\//i.test(row.body),
       length: row.body.length,
       seen: served.has(row.post_id),

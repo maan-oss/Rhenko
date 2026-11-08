@@ -120,11 +120,13 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "paid",
-    title: "Paid features do not buy reach",
+    title: "Paid features and reach",
     body: (
       <P>
-        Nobody can pay to have a post ranked higher, shown to more people, or pushed into a feed. Paid features change what you can do
-        and see, not how far a post goes. The Following feed is ordered by time, and For you is ranked by predicted interest, as the{" "}
+        Rhenko Plus is the one paid subscription that changes reach. A post by someone who pays for Plus gets a boost in For you, so
+        more people see it. Apart from that, nobody can pay to have a post ranked higher or pushed into a feed. A boost is an ad, labelled
+        Ad, and does not change how a post is ranked. Tips and the paid subscriber ring do not change who sees a post. The Following feed
+        is ordered by time, and For you is ranked by predicted interest, as the{" "}
         <TextLink href="/transparency">transparency page</TextLink> explains. Authors can hide the like, repost, quote, reply and view
         counts on their own posts, and then no one else sees them.
       </P>

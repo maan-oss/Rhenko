@@ -22,6 +22,7 @@ import {
   NEW_VOICE_EVERY,
   isNewVoice,
   withNewVoices,
+  PLUS_REACH,
 } from "../lib/ranking.ts"
 
 const NOW = Date.UTC(2026, 9, 12, 12, 0, 0)
@@ -45,6 +46,7 @@ function post(id, author, overrides = {}) {
     socialCount: 0,
     affinity: 0,
     authorFollowers: 1000,
+    authorPlus: false,
     links: false,
     length: 80,
     seen: false,
@@ -309,4 +311,24 @@ test("withNewVoices keeps every candidate exactly once", () => {
   const out = withNewVoices(list, NOW)
   assert.equal(out.length, list.length)
   assert.deepEqual(out.map((c) => c.key).sort(), list.map((c) => c.key).sort())
+})
+
+test("a post from a Plus author scores by the reach boost, and a post from anyone else is unchanged", () => {
+  const plain = score(post("a", "x", { likes: 5 }), NOW)
+  assert.equal(score(post("a", "x", { likes: 5, authorPlus: true }), NOW), plain * PLUS_REACH)
+  assert.equal(score(post("a", "x", { likes: 5, authorPlus: false }), NOW), plain)
+})
+
+test("an identical Plus post ranks ahead of one from an account that does not pay", () => {
+  const plain = post("plain", "p1", { likes: 4 })
+  const plus = post("plus", "p2", { likes: 4, authorPlus: true })
+  const ranked = rank([plain, plus], NOW, 2)
+  assert.equal(ranked[0].postId, "plus")
+})
+
+test("the reach boost does not lift a post the viewer has already seen", () => {
+  const seenPlain = score(post("a", "x", { likes: 5, seen: true }), NOW)
+  const seenPlus = score(post("a", "x", { likes: 5, seen: true, authorPlus: true }), NOW)
+  assert.ok(Math.abs(seenPlus - seenPlain * PLUS_REACH) < 1e-12)
+  assert.ok(seenPlus < score(post("a", "x", { likes: 5 }), NOW) * 0.5)
 })

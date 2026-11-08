@@ -18,6 +18,7 @@ type Props = {
 
 // What Rhenko Plus includes, in the order the page lists it. Each line is true of the code: see the rules and upload checks.
 const PLUS_INCLUDES = [
+  "Your posts get a boost in For you, so more people see them.",
   "No ads in your home feed.",
   "Edit a post for a day, instead of an hour.",
   "The paid subscriber ring beside your name. It shows that you pay. It does not check who you are.",
@@ -72,7 +73,7 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
               </li>
             ))}
           </ul>
-          <p className="text-[15px] text-muted-foreground">Plus does not change who sees your posts, how replies are ordered, or what search finds.</p>
+          <p className="text-[15px] text-muted-foreground">The boost is only in For you. Replies and search work the same for everyone.</p>
         </div>
         {!state.plus.active && !state.emailVerified ? <p className="text-[15px]">Confirm your email address first, then you can start Plus.</p> : null}
         <div className="flex flex-wrap gap-2">

@@ -398,6 +398,10 @@ const SECTIONS: LegalSection[] = [
             have already liked, reposted or bookmarked it.
           </li>
           <li>Whether the post has a web link, how long it is, and how many followers its author has.</li>
+          <li>
+            Whether the author pays for Rhenko Plus. A post by a Plus author gets a boost in For you, so more people see it. The
+            ranking sees only whether that subscription is active, and no payment details.
+          </li>
         </List>
         <P>
           Two rules keep the feed varied: no author fills more than two of the top places, and posts from the same kind of source
