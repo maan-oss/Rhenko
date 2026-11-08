@@ -19,7 +19,8 @@ const PRICE_TTL_MS = 60 * 60 * 1000
 
 // ── Configuration ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-export const CURRENCY = (process.env.RHENKO_CURRENCY ?? "usd").toLowerCase()
+// The account's own currency (Australian dollars). Prices in other currencies are set on the Stripe price itself.
+export const CURRENCY = (process.env.RHENKO_CURRENCY ?? "aud").toLowerCase()
 
 // Tip amounts in whole currency units, from RHENKO_TIP_AMOUNTS (for example "3,5,10"). Stored and charged in minor units.
 export function tipAmounts(): number[] {
@@ -240,6 +241,7 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
     subscription_data: { metadata: { user_id: viewer.id, kind }, billing_mode: { type: "flexible" } },
     metadata: { user_id: viewer.id, kind },
     automatic_tax: { enabled: taxEnabled() },
+    custom_text: { submit: { message: "Cancel any time in Settings. Withdraw within 14 days for a full refund." } },
     // With tax on, Stripe needs the customer's address. Checkout asks for it and saves it to the customer.
     ...(taxEnabled()
       ? { billing_address_collection: "required", ...(customer ? { customer_update: { address: "auto", name: "auto" } } : {}) }
@@ -296,6 +298,7 @@ export async function tipCheckoutUrl(viewer: Viewer, postId: string, amount: num
     mode: "payment",
     line_items: [{ quantity: 1, price_data: { currency: CURRENCY, unit_amount: amount, product_data: { name: `Tip for @${post.handle}` } } }],
     payment_intent_data: { application_fee_amount: fee, transfer_data: { destination: account.account_id } },
+    custom_text: { submit: { message: `Goes to @${post.handle}, less Rhenko's ${tipFeePercent()}% fee.` } },
     client_reference_id: viewer.id,
     metadata: { kind: "tip", from_user_id: viewer.id, to_user_id: post.author_id, post_id: postId, fee: String(fee) },
     success_url: `${origin}/${post.handle}/status/${postId}?tip=thanks`,
