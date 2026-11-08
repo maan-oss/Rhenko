@@ -76,7 +76,7 @@ These are read from the environment. A missing value shows "not yet published" o
 | `RHENKO_COPYRIGHT_AGENT_ADDRESS` | Copyright | Not set. Needed with the agent. |
 | `RHENKO_EU_REPRESENTATIVE` | Privacy, Terms | Not set. Rhenko is open to EU users and is not established in the EU, so counsel must decide whether a representative is needed (GDPR Article 27). |
 | `RHENKO_UK_REPRESENTATIVE` | Privacy, Terms | Not set. Same question for the UK. |
-| `RHENKO_HOSTING_LOCATION` | Terms, Privacy | **Set to `Brisbane, Queensland, Australia`, as the operator says.** Check it before launch: `docs/hosting-costs.md` plans a DigitalOcean droplet, and DigitalOcean has no Brisbane data centre. The nearest is Sydney, and Bangalore is also listed. The page must name the real location. |
+| `RHENKO_HOSTING_LOCATION` | Terms, Privacy | **Set to `India`, as the operator says.** Name the city before launch. `docs/hosting-costs.md` plans a DigitalOcean droplet, and DigitalOcean's Indian region is Bangalore, so that is the likely city. Its price there is not yet confirmed. The page must name the real location. Counsel checks the storage wording against India's Digital Personal Data Protection Act 2023 and the Australian Privacy Act's rules on sending data overseas. |
 | `RHENKO_GOVERNING_LAW` | Terms | **Set to `Queensland, Australia`**, with the courts of Brisbane. The operator confirmed it. |
 
 ### Registering the copyright agent (operator's own step)
@@ -106,7 +106,7 @@ Counsel may change any of these. The app and the pages follow each decision as w
    receives the counter-notice in full (17 U.S.C. 512(g)). Counsel confirms the wording on `/copyright`.
 3. **Restore window. Decided: 10 to 14 business days.** The post goes back no sooner than 10 and no later than 14 business days after
    the owner receives the counter-notice, unless the owner says it has started a court action. Business days leave out weekends and US
-   federal holidays (`lib/business-days.ts`). X's copyright policy also uses a 10-business-day window, so this matches a large platform.
+   federal holidays (`lib/business-days.ts`).
 4. **One window for appeal and counter-notice. Decided: 30 days.** Both are open for 30 days after the post is hidden.
 5. **Intimate-image removal deadline. Decided: 24 hours.** The app's deadline is `INTIMATE_REMOVAL_HOURS = 24`, set on each notice as
    `due_by`. The TAKE IT DOWN Act gives a covered platform 48 hours from a valid request, and eSafety's removal notices give 24 hours
@@ -183,15 +183,11 @@ Five benefits, as the Transparency page states them:
 4. An animated GIF profile picture.
 5. Videos up to 10 minutes (600 seconds), against 2 minutes 20 seconds (140 seconds) for everyone else.
 
-The comparison with X, feature by feature, with a test column for each claim, is in `docs/plus-comparison.md`. Where a claim could not be
-tested, the document says so.
-
-Known gaps, stated in the comparison document:
+Known gaps:
 - A lapsed Plus account keeps its GIF profile picture.
 - Animated banners are open to everyone, not only Plus.
 - Video in encrypted chats uses the same limit as everyone else. (Video is refused in encrypted chats for now; see decision 2.)
 - A trimmed 10-minute video may exceed the three-minute processing budget. Not measured.
-- One analytics claim in the comparison document is unverified and marked as such.
 
 ## Payment decisions for the operator
 
@@ -217,7 +213,7 @@ These cannot be finished in the repository. Each needs an operator action or a d
 
 - The business contact addresses (contact, privacy, grievance, copyright agent) and the registered copyright agent, which the operator
   registers himself.
-- Confirmation of the hosting location against the actual server (Brisbane, Sydney or Bangalore).
+- Confirmation of the hosting city in India against the actual server.
 - Counsel's review of the pages and of the decisions above, and a record of it before `RHENKO_LEGAL_REVIEWED` is set.
 - **An age-estimation provider** for under-16s, which the identity check cannot screen (decision 9).
 - **A scanner for known abuse material**, with an adapter in `lib/image-scan.ts`. Until it is connected, photos and videos are refused
@@ -252,8 +248,7 @@ Run on 8 November 2026, after the final code change.
 
 ## What was not done
 
-- **The benchmark against other large platforms is partial.** X's copyright policy was read. Bluesky, Reddit, Meta, Discord, WhatsApp and
-  Signal were not. Two research agents stalled and were stopped without reports.
+- **The benchmark against other large platforms is not finished.** Two research agents stalled and were stopped without reports.
 - **The eSafety figure was read from eSafety's media release**, fetched on 7 November 2026. The minimum-age facts come from the
   government fact sheet of January 2026, which does not state the date the obligation started. The TAKE IT DOWN Act's 48 hours and the
   minimum-age commencement date should be checked by counsel against the statute and the regulator's own notice.
