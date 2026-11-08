@@ -8,8 +8,9 @@ import { formatMoney } from "@/lib/money"
 
 export type BoostOption = { amount: number; views: number }
 
-// The budget choices for a boost. Each shows the most it can spend and about how many views that buys. Sending puts the post
-// in review. Nothing runs until a person approves it.
+// Pick the most a boost may spend, then send it for review. Each choice shows about how many views it buys. The second
+// choice is picked to start, which is where most posts land. Sending puts the boost in review. Nothing runs until a person
+// approves it.
 export function BoostForm({
   postId,
   options,
@@ -25,21 +26,29 @@ export function BoostForm({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<string | null>(null)
+  const [selected, setSelected] = useState<number>(options[1]?.amount ?? options[0]?.amount ?? 0)
   const smallest = Math.min(...options.map((option) => option.amount))
+  const canAfford = balance >= smallest * 100
 
-  const send = (amount: number) =>
+  const send = () =>
     startTransition(async () => {
       setError(null)
-      const result = await boostPost(postId, amount)
+      const result = await boostPost(postId, selected)
       if (result.ok) setSent(result.campaignId)
       else setError(result.error)
     })
 
   if (sent) {
     return (
-      <section className="flex flex-col gap-3 px-4 py-4" aria-live="polite">
-        <p className="text-[15px]">Sent for review. A person checks it before it runs, and it is labelled Ad while it runs.</p>
-        <Link href={`/advertise/campaigns/${sent}`} className="w-fit font-semibold underline underline-offset-4">
+      <section aria-live="polite" className="flex flex-col gap-4 border-t border-border px-4 py-5">
+        <div className="flex flex-col gap-1">
+          <p className="text-[17px] font-semibold">Sent for review</p>
+          <p className="text-[15px] text-muted-foreground">A person checks it before it runs. While it runs, it is labelled Ad.</p>
+        </div>
+        <Link
+          href={`/advertise/campaigns/${sent}`}
+          className="inline-flex h-11 w-fit items-center rounded-full border border-border px-5 text-[15px] font-semibold transition-colors duration-200 hover:bg-muted"
+        >
           See this boost
         </Link>
       </section>
@@ -47,48 +56,72 @@ export function BoostForm({
   }
 
   return (
-    <section className="flex flex-col gap-4 px-4 py-4" aria-labelledby="choose-budget">
-      <div className="flex flex-col gap-1">
-        <h2 id="choose-budget" className="text-lg font-semibold">
-          Choose a budget
+    <section aria-labelledby="choose-budget" className="flex flex-col">
+      <div className="flex flex-col gap-1 px-4 pt-5 pb-3">
+        <h2 id="choose-budget" className="text-base font-semibold">
+          Budget
         </h2>
-        <p className="text-[15px] text-muted-foreground">
-          The most this boost can spend. It is paid from your balance, which is {formatMoney(balance, currency)}, one view at a time.
+        <p className="text-pretty text-[15px] text-muted-foreground">
+          The most this boost can spend. Your balance is {formatMoney(balance, currency)}.
         </p>
       </div>
-      <ul className="flex flex-col gap-2">
-        {options.map((option) => (
-          <li key={option.amount}>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => send(option.amount)}
-              className="h-auto w-full justify-between rounded-2xl px-4 py-3 text-left"
+      <div role="radiogroup" aria-labelledby="choose-budget" className="flex flex-col">
+        {options.map((option) => {
+          const checked = option.amount === selected
+          return (
+            <label
+              key={option.amount}
+              className="flex cursor-pointer items-center gap-4 border-t border-border px-4 py-4 transition-colors duration-200 hover:bg-muted/50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
             >
-              <span className="font-semibold">Up to {formatMoney(option.amount * 100, currency)}</span>
-              <span className="text-[14px] font-normal text-muted-foreground">About {option.views.toLocaleString("en-US")} views</span>
-            </Button>
-          </li>
-        ))}
-      </ul>
-      <p className="text-[14px] text-muted-foreground">
-        A view is one person seeing the ad on one day. Each person counts once a day, so the real number can be lower than the estimate.
-      </p>
-      {balance < smallest * 100 ? (
-        <p className="text-[15px]">
-          Your balance is too low for a boost.{" "}
-          <Link href="/advertise" className="font-semibold underline underline-offset-4">
-            Add funds
-          </Link>{" "}
-          first.
+              <input
+                type="radio"
+                name="boost-budget"
+                value={option.amount}
+                checked={checked}
+                disabled={pending}
+                onChange={() => setSelected(option.amount)}
+                className="peer sr-only"
+              />
+              <span
+                aria-hidden="true"
+                className="grid size-5 shrink-0 place-items-center rounded-full border border-foreground/40 peer-checked:border-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2"
+              >
+                <span className={`size-2.5 rounded-full bg-foreground transition-transform duration-200 ${checked ? "scale-100" : "scale-0"}`} />
+              </span>
+              <span className="flex-1 text-[17px] font-semibold tabular-nums">Up to {formatMoney(option.amount * 100, currency)}</span>
+              <span className="text-[15px] text-muted-foreground tabular-nums">About {option.views.toLocaleString("en-US")} views</span>
+            </label>
+          )
+        })}
+      </div>
+      <div className="flex flex-col gap-4 border-t border-border px-4 py-5">
+        <p className="text-pretty text-[14px] text-muted-foreground">
+          A view is one person seeing the ad on one day. Each person counts once a day, so the real number can be lower than the estimate.
         </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-[15px] text-destructive">
-          {error}
-        </p>
-      ) : null}
+        {canAfford ? (
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={send}
+            className="h-12 w-full rounded-full text-[15px] font-semibold sm:w-fit sm:px-8"
+          >
+            {pending ? "Sending" : "Send for review"}
+          </Button>
+        ) : (
+          <p className="text-[15px]">
+            Your balance is too low for a boost.{" "}
+            <Link href="/advertise" className="font-semibold underline underline-offset-4">
+              Add funds
+            </Link>{" "}
+            first.
+          </p>
+        )}
+        {error ? (
+          <p role="alert" className="text-[15px] text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </section>
   )
 }

@@ -4,8 +4,7 @@ import { requireAgreedViewer } from "@/lib/auth"
 import { get } from "@/lib/db"
 import { BOOST_BUDGETS, MICRO_PER_CENT, boostCopy, boostViews, hostOf, type AdView } from "@/lib/ad-rules"
 import { CURRENCY } from "@/lib/payments"
-import { AdCard } from "@/components/app/ad-card"
-import { BoostForm } from "@/components/app/boost-form"
+import { BoostView } from "@/components/app/boost-view"
 import { PageHeader } from "@/components/app/page-header"
 import Link from "@/components/app/link"
 
@@ -73,20 +72,13 @@ export default async function BoostPostPage({ params }: { params: Params }) {
       }
       const options = BOOST_BUDGETS.map((amount) => ({ amount, views: boostViews(amount) }))
       body = (
-        <>
-          <section aria-labelledby="how-it-looks" className="flex flex-col">
-            <h2 id="how-it-looks" className="px-4 pt-4 text-lg font-semibold">
-              How it will look
-            </h2>
-            <AdCard ad={ad} preview />
-          </section>
-          <BoostForm
-            postId={postId}
-            options={options}
-            currency={CURRENCY}
-            balance={Math.floor(account.balance_micro / MICRO_PER_CENT)}
-          />
-        </>
+        <BoostView
+          postId={postId}
+          ad={ad}
+          options={options}
+          currency={CURRENCY}
+          balance={Math.floor(account.balance_micro / MICRO_PER_CENT)}
+        />
       )
     }
   }
