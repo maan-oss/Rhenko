@@ -107,7 +107,8 @@ const SECTIONS: LegalSection[] = [
             Identity. You photograph a government ID, and take a live selfie, and Stripe checks them against each other. Stripe receives
             those, and Rhenko does not. Rhenko keeps only the result (18 or over, or not), the day it was made, and Stripe&apos;s identifier
             for the check. It does not keep your date of birth, your ID or your photo. Once the result is in, Rhenko asks Stripe to delete
-            the ID and selfie, and it asks again if you delete your account before then.
+            the ID and selfie, and it asks again if you delete your account before then. If you turn on the ID checked mark in Settings, anyone can see that you passed
+            the check. They do not see your date of birth, your ID or the day of the check.
           </li>
           <li>
             <B>Agreement.</B> The version of the Terms and Privacy Policy you agreed to, and when you agreed.

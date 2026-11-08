@@ -28,6 +28,7 @@ import {
 } from "@/lib/auth"
 import { cleanEmail, emailProblem, EMAIL_CODE_MINUTES, MAX_EMAIL, passwordProblem } from "@/lib/account-rules"
 import { hangUpFor } from "@/lib/call-state"
+import { OG_LIMIT } from "@/lib/badges"
 import { get, run } from "@/lib/db"
 import { unlinkBrowserDevice } from "@/lib/e2ee-devices"
 import { sendMail } from "@/lib/mail"
@@ -102,8 +103,8 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const hash = await hashPassword(password)
   try {
     await run(
-      `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at, terms_version, terms_accepted_at, onboarding)
-       VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL, ?, ?, 'pending')`,
+      `INSERT INTO users (id, handle, name, bio, location, website, avatar_file, banner_file, password_hash, created_at, birthday, email, email_verified_at, terms_version, terms_accepted_at, onboarding, og_badge)
+       VALUES (?, ?, ?, '', '', '', NULL, NULL, ?, ?, ?, ?, NULL, ?, ?, 'pending', (CASE WHEN (SELECT COUNT(*) FROM users) < ? THEN 1 ELSE 0 END))`,
       id,
       handle,
       name,
@@ -112,7 +113,8 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
       birthday,
       email || null,
       TERMS_VERSION,
-      Date.now()
+      Date.now(),
+      OG_LIMIT
     )
   } catch (error) {
     if (isUniqueViolation(error, "users.email")) return { error: emailTaken }

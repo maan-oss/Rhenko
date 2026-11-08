@@ -1,5 +1,5 @@
 import { Avatar } from "@/components/app/avatar"
-import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
+import { MarkBadges, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { FollowButton } from "@/components/app/follow-button"
 import { ProfileLink } from "@/components/app/profile-hover"
 import { RemoveFollowerButton } from "@/components/app/remove-follower-button"
@@ -29,6 +29,7 @@ export function PersonRow({
             <span className="truncate">{user.name}</span>
             {user.verified ? <VerifiedBadge /> : null}
             {user.paidVerified ? <SubscriberBadge /> : null}
+            {user.marks ? <MarkBadges marks={user.marks} /> : null}
           </span>
           <span className="block truncate text-sm text-muted-foreground">@{user.handle}</span>
         </ProfileLink>

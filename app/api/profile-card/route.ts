@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     avatarFile: profile.avatarFile,
     verified: profile.verified,
     paidVerified: profile.paidVerified,
+    marks: profile.marks,
     followers: profile.followers,
     following: profile.following,
     self: rel.self,

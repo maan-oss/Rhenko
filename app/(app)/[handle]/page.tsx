@@ -18,7 +18,7 @@ import { ProfileBanner } from "@/components/app/profile-banner"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
 import { ProfileTabs } from "@/components/app/profile-tabs"
-import { AiLabel, LockedBadge, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
+import { AiLabel, LockedBadge, MarkBadges, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
 type Params = Promise<{ handle: string }>
@@ -140,6 +140,7 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
               {profile.name}
               {profile.verified ? <VerifiedBadge /> : null}
               {profile.paidVerified ? <SubscriberBadge /> : null}
+              <MarkBadges marks={profile.marks} />
               {profile.bot ? <AiLabel /> : null}
               {profile.protected ? <LockedBadge /> : null}
             </h2>

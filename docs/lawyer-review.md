@@ -41,6 +41,8 @@ The operator details the pages read come from `app/_legal/operator.tsx`, which r
   the video length (see Rhenko Plus below).
 - **Advertising:** "An advertising account belongs to one adult with a birthday" is unchanged. Counsel may want it to refer to the
   identity check as well.
+- **Privacy, What is stored (age check):** if a person turns on the ID checked mark in Settings, other people can see that the check was
+  passed. Nothing else about the check is shown. See Badges below.
 
 ## Earlier changes (7 November 2026)
 
@@ -141,6 +143,23 @@ Counsel may change any of these. The app and the pages follow each decision as w
    - Counsel must decide whether the position under the minimum-age rule holds with this check plus the under-16 provider, and whether
      the government's age-assurance guidance accepts it.
 
+### Badges
+
+- **OG. Decided: the first 1,000 accounts** (`OG_LIMIT` in `lib/badges.ts`). The mark is set when an account is made, by the number of
+  accounts that exist at that moment. Built on 8 November 2026 on the operator's instruction. The figure is an operator choice, for
+  counsel to confirm that it is not described as a promise.
+- **Veteran. Decided: an account at least one year old** (`VETERAN_DAYS`). It is worked out from the creation date each time a profile or
+  post is shown. Built on 8 November 2026 on the operator's instruction.
+- **ID checked. Decided: shown only if the person turns it on, and only once they have passed the age check** (decision 9). The mark tells
+  other people that Stripe checked the person's ID against a selfie. It does not show the name, date of birth, ID or the day of the
+  check. The switch is in Settings and is off by default. Built on 8 November 2026. The operator asked for a public verified badge; opt-in
+  was chosen by the assistant so that the disclosure is the person's own choice. Counsel must check that the Privacy Policy wording
+  (What is stored, and Who else receives data) is enough, since other people now see that the check was passed.
+- **Country of origin. Decided: not collected.** It is a sensitive attribute under the privacy rules, and collecting it needs an
+  explicit choice and counsel review. Country of residence is unchanged.
+- **Boost and affiliates: not decided, not built.** Neither exists in the app. The operator has not said what they should do. An
+  affiliate scheme that pays people would need payout and tax records, which this packet does not cover.
+
 ### Images and videos
 
 10. **Image and video scanning. Decided: refuse every photo and video until a scanner for known abuse material is connected.** Built on
@@ -220,21 +239,22 @@ These cannot be finished in the repository. Each needs an operator action or a d
   (decision 10), and so are all files in encrypted chats (encrypted decision 2).
 - Stripe Identity enabled and checked for an Australian business account, and the four identity webhook events configured on the live
   Stripe webhook.
-- Production steps in the runbook: applying the five upgrade files before the new code, the webhook, and the Plus price in the live
+- Production steps in the runbook: applying the six upgrade files before the new code, the webhook, and the Plus price in the live
   Stripe account. They need access to the server, which this session does not have.
 - Existing users must complete the identity check before they can post (decision 9). Tell them before the switch.
 
 ## Verification
 
-Run on 8 November 2026, after the final code change.
+Run on 8 November 2026, before the badges change (see the last point below).
 
 - `npx tsc --noEmit`: clean.
-- `npm run test:unit`: 430 pass, 0 fail. This includes the age rules (`tests/age-rules.test.mjs`) and the image-scan rules
+- `npm run test:unit`: 434 pass, 0 fail, including the badge rules (`tests/badges.test.mjs`). This includes the age rules (`tests/age-rules.test.mjs`) and the image-scan rules
   (`tests/image-scan.test.mjs`), and `tests/legal-mirror.test.mjs`, which keeps the repeat-infringer numbers the same in the app and in
   `scripts/legal.mjs`.
 - `eslint` on the changed TypeScript files: clean.
+- The badges change (OG, Veteran, the ID checked switch) was made after the end-to-end runs below. Those runs were not repeated for it.
 - End-to-end, on the production build (`npm run build`, then `node server.mjs` with `RHENKO_IMAGE_SCAN` unset, on a scratch database
-  loaded from the schema and all five upgrade files, with `E2E_STRIPE=1` and the Stripe stand-in): 278 checks pass and 26 fail. Each
+  loaded from the schema and the first five upgrade files, with `E2E_STRIPE=1` and the Stripe stand-in): 278 checks pass and 26 fail. Each
   of the 26 needs a photo, video, voice message, document or animated avatar, which production refuses by design (decision 10 and
   encrypted decision 2). Some are checks that follow one of those refusals in the same conversation, such as the edit check, whose
   composer still holds the refused document. The age area passes 4 of 4, including the under-18 check. The legal area passes 42 of 42,

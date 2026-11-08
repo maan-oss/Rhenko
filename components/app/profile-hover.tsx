@@ -4,9 +4,10 @@ import { useEffect, useState, type ReactNode } from "react"
 import Link from "@/components/app/link"
 import { PreviewCard } from "@base-ui/react/preview-card"
 import { Avatar } from "@/components/app/avatar"
-import { SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
+import { MarkBadges, SubscriberBadge, VerifiedBadge } from "@/components/app/badges"
 import { FollowButton, type FollowState } from "@/components/app/follow-button"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { AccountMarks } from "@/lib/badges"
 
 type Card = {
   handle: string
@@ -15,6 +16,7 @@ type Card = {
   avatarFile: string | null
   verified: boolean
   paidVerified: boolean
+  marks: AccountMarks
   followers: number
   following: number
   self: boolean
@@ -69,6 +71,7 @@ function CardBody({ handle }: { handle: string }) {
             {card.name}
             {card.verified ? <VerifiedBadge className="ml-1 inline-block align-[-2px]" /> : null}
             {card.paidVerified ? <SubscriberBadge className="ml-1 inline-block align-[-2px]" /> : null}
+            <MarkBadges marks={card.marks} className="ml-1 inline-block align-[-2px]" />
           </p>
           <p className="truncate text-sm text-muted-foreground">@{card.handle}</p>
         </div>

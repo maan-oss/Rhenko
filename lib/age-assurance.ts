@@ -14,12 +14,13 @@ import { MINIMUM_AGE } from "@/lib/legal"
 import { stripe } from "@/lib/payments"
 
 // The stored state. Read from the database, not the viewer, so a result that has just come in shows at once.
-export async function ageCheckState(userId: string): Promise<{ check: AgeCheck; checkedAt: number | null }> {
-  const row = await get<{ age_check: AgeCheck; age_checked_at: number | null }>(
-    "SELECT age_check, age_checked_at FROM users WHERE id = ?",
+// idBadge: the person has chosen to show the ID-checked mark. It means nothing unless the check is adult.
+export async function ageCheckState(userId: string): Promise<{ check: AgeCheck; checkedAt: number | null; idBadge: boolean }> {
+  const row = await get<{ age_check: AgeCheck; age_checked_at: number | null; show_id_badge: number }>(
+    "SELECT age_check, age_checked_at, show_id_badge FROM users WHERE id = ?",
     userId
   )
-  return { check: row?.age_check ?? "none", checkedAt: row?.age_checked_at ?? null }
+  return { check: row?.age_check ?? "none", checkedAt: row?.age_checked_at ?? null, idBadge: row?.show_id_badge === 1 }
 }
 
 // The line to show instead of posting, messaging or uploading, or null when the account may do so. Read from the database.

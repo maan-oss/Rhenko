@@ -1,3 +1,4 @@
+import type { AccountMarks } from "@/lib/badges"
 import { cn } from "@/lib/utils"
 
 // Verified accounts get an ink check. Labelled for screen readers.
@@ -34,6 +35,32 @@ export function AiLabel({ className }: { className?: string }) {
     >
       AI
     </span>
+  )
+}
+
+// The marks an account earns from its record, or from a choice it made. OG and Veteran are words, in the same style as the AI label.
+// The ID-checked mark is a shield with a tick: not the ink check, and not the ring. Each one says what it means.
+export function MarkBadges({ marks, className }: { marks: AccountMarks; className?: string }) {
+  const word = cn("ml-1 inline-flex items-center rounded-[4px] border border-foreground/30 px-1 align-[1px] text-xs font-semibold leading-4 text-foreground", className)
+  return (
+    <>
+      {marks.og ? (
+        <span title="One of the first accounts on Rhenko" className={word}>
+          OG
+        </span>
+      ) : null}
+      {marks.veteran ? (
+        <span title="On Rhenko for at least a year" className={word}>
+          Veteran
+        </span>
+      ) : null}
+      {marks.idChecked ? (
+        <svg viewBox="0 0 24 24" role="img" aria-label="ID checked. Stripe checked this person's ID against a live selfie. Rhenko holds only the result." className={cn("size-[1em] shrink-0 text-foreground", className)}>
+          <path d="M12 2.5l8 3v6c0 4.8-3.4 8.6-8 10-4.6-1.4-8-5.2-8-10v-6z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M8.5 12.2l2.4 2.4 4.6-4.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : null}
+    </>
   )
 }
 

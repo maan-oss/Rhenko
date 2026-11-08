@@ -30,6 +30,7 @@ import { dwellSince, hiddenPosts, modelWeights, recentlyServed, recordImpression
 import { mutedWordFilter } from "@/lib/social-rules"
 import { ENCRYPTED_PREVIEW, type SealedAttachmentView, type SealedView, type SealedWrap } from "@/lib/e2ee-chat"
 import { thisDeviceOf } from "@/lib/e2ee-devices"
+import { accountMarks, MARK_COLUMNS, type AccountMarks } from "@/lib/badges"
 
 // Shared read models. Everything a page or API route renders comes from here,
 // so visibility rules (blocks, mutes, protected accounts, muted words) are
@@ -45,6 +46,8 @@ export type MiniUser = {
   paidVerified?: boolean
   // The account is Sahayak, an AI assistant, and says so wherever it appears.
   bot?: boolean
+  // OG, Veteran and the ID-checked mark (lib/badges.ts). Set where a row carries them; absent elsewhere, and then nothing shows.
+  marks?: AccountMarks
 }
 
 export type MediaItem = { id: string; file: string; kind: MediaKind; alt: string; stickers: StickerSet | null }
@@ -146,6 +149,9 @@ type PostRow = {
   author_paid_verified: number
   author_bot: number
   author_hide_counts: number
+  mark_og: number
+  mark_created_at: number
+  mark_id_checked: number
   tippable: number
   replies: number
   reposts: number
@@ -346,6 +352,7 @@ async function fetchCores(ids: string[], viewerId: string): Promise<Map<string, 
        u.id AS author_id, u.handle AS author_handle, u.name AS author_name, u.avatar_file AS author_avatar, u.verified AS author_verified,
        u.paid_verified AS author_paid_verified, u.bot AS author_bot,
        u.hide_counts AS author_hide_counts,
+       ${MARK_COLUMNS},
        (u.id <> ? AND EXISTS(SELECT 1 FROM connect_accounts ca WHERE ca.user_id = u.id AND ca.charges_enabled = 1)) AS tippable,
        p.replies_count AS replies,
        p.reposts_count AS reposts,
@@ -436,6 +443,7 @@ async function fetchCores(ids: string[], viewerId: string): Promise<Map<string, 
         verified: r.author_verified === 1,
         paidVerified: r.author_paid_verified === 1,
         bot: r.author_bot === 1,
+        marks: accountMarks(r),
       },
       // Counts an author has hidden are zero for everyone else. Ranking is not affected by this: it only changes what is shown.
       replies: hideFor(r) ? 0 : r.replies,
@@ -1467,6 +1475,8 @@ type ProfileView = {
   verified: boolean
   // An active paid verification subscription. It makes no identity claim.
   paidVerified: boolean
+  // OG, Veteran and the ID-checked mark (lib/badges.ts).
+  marks: AccountMarks
   bot: boolean
   protected: boolean
   deactivated: boolean
@@ -1513,9 +1523,12 @@ export async function getProfileByHandle(handle: string, viewerId: string): Prom
     followers: number
     following: number
     posts: number
+    mark_og: number
+    mark_created_at: number
+    mark_id_checked: number
   }>(
     `SELECT u.id, u.handle, u.name, u.bio, u.location, u.website, u.avatar_file, u.banner_file, u.status, u.created_at,
-       u.verified, u.paid_verified, u.bot, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday,
+       u.verified, u.paid_verified, u.bot, u.protected, u.deactivated_at, u.pinned_post_id, u.birthday, ${MARK_COLUMNS},
        u.followers_count AS followers, u.following_count AS following, u.posts_count AS posts
      FROM users u WHERE u.handle = ?`,
     handle
@@ -1539,6 +1552,7 @@ export async function getProfileByHandle(handle: string, viewerId: string): Prom
     posts: row.posts,
     verified: row.verified === 1,
     paidVerified: row.paid_verified === 1,
+    marks: accountMarks(row),
   bot: row.bot === 1,
     protected: row.protected === 1,
     deactivated: row.deactivated_at !== null,
@@ -1573,7 +1587,7 @@ export async function mutualFollowers(profileId: string, viewerId: string, limit
 export type UserCard = MiniUser & { bio: string; following: boolean; followsMe: boolean }
 
 // A person card that is safe to show a viewer: blocked and deactivated accounts are left out.
-const CARD_SQL = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, u.bio,
+const CARD_SQL = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, u.bio, ${MARK_COLUMNS},
   EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = u.id) AS following,
   EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = u.id AND f.followee_id = ?) AS follows_me
   FROM users u`
@@ -1588,6 +1602,9 @@ type CardRow = {
   bio: string
   following: number
   follows_me: number
+  mark_og: number
+  mark_created_at: number
+  mark_id_checked: number
 }
 
 function toCard(r: CardRow): UserCard {
@@ -1598,6 +1615,7 @@ function toCard(r: CardRow): UserCard {
     avatarFile: r.avatar_file,
     verified: r.verified === 1,
     paidVerified: r.paid_verified === 1,
+    marks: accountMarks(r),
     bio: r.bio,
     following: r.following === 1,
     followsMe: r.follows_me === 1,
@@ -1671,7 +1689,7 @@ export async function peopleOfPage(
     if (owner.protected === 1 && !await get("SELECT 1 AS found FROM follows WHERE follower_id = ? AND followee_id = ?", viewerId, userId)) return empty
   }
   const join = kind === "followers" ? "f.follower_id = u.id AND f.followee_id = ?" : "f.followee_id = u.id AND f.follower_id = ?"
-  const select = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, u.bio,
+  const select = `SELECT u.id, u.handle, u.name, u.avatar_file, u.verified, u.paid_verified, u.bio, ${MARK_COLUMNS},
        EXISTS(SELECT 1 FROM follows x WHERE x.follower_id = ? AND x.followee_id = u.id) AS following,
        EXISTS(SELECT 1 FROM follows x WHERE x.follower_id = u.id AND x.followee_id = ?) AS follows_me,
        f.created_at AS followed_at

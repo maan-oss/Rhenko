@@ -3,6 +3,7 @@
 import Stripe from "stripe"
 import { requireAgreedViewer } from "@/lib/auth"
 import { startAgeCheck } from "@/lib/age-assurance"
+import { get, run } from "@/lib/db"
 
 type Started =
   | { ok: true; url: string }
@@ -31,4 +32,13 @@ export async function beginAgeCheck(): Promise<Started> {
     }
     return { ok: false, error: "The age check could not start. Try again in a moment." }
   }
+}
+
+// Shows or hides the ID-checked mark on this person's profile and posts. Only an account that has passed the check can show it.
+export async function setIdBadge(show: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  const viewer = await requireAgreedViewer()
+  const row = await get<{ age_check: string }>("SELECT age_check FROM users WHERE id = ?", viewer.id)
+  if (row?.age_check !== "adult") return { ok: false, error: "Confirm your age before you can show this mark." }
+  await run("UPDATE users SET show_id_badge = ? WHERE id = ?", show ? 1 : 0, viewer.id)
+  return { ok: true }
 }
