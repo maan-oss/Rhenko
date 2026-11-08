@@ -16,6 +16,12 @@ export type Kind = "plus" | "verified"
 const WITHDRAW_DAYS = 14
 const TIP_FEE_LIMIT = 50
 const PRICE_TTL_MS = 60 * 60 * 1000
+// A price that takes longer than this to come from Stripe is shown as not ready, so a slow answer never holds the page.
+const PRICE_WAIT_MS = 3000
+// How long the page waits for Stripe to confirm a checkout on return. Past this, the webhook records it and the purchase check still stops a second payment.
+const RETURN_WAIT_MS = 4000
+// A Rhenko Plus payment Stripe has started but not confirmed counts as pending for a day. After that it is treated as never paid.
+const PENDING_MS = 24 * 60 * 60 * 1000
 
 // ── Configuration ───────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -78,12 +84,30 @@ export function stripe(): Stripe {
   if (!client) {
     const key = process.env.STRIPE_SECRET_KEY
     if (!key) throw new Error("Payments are not set up on this server.")
-    client = new Stripe(key, apiOptions())
+    // A slow answer from Stripe must not hold a page for the SDK default of 80 seconds.
+    client = new Stripe(key, { ...apiOptions(), timeout: 10_000, maxNetworkRetries: 1 })
   }
   return client
 }
 
 // ── Prices shown to people come from Stripe, so the page never shows a different amount from the one charged ─────────
+
+// Waits for a request to Stripe, but no longer than ms.
+function within<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Stripe took too long to answer.")), ms)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
 
 const prices = new Map<string, { label: string; at: number }>()
 
@@ -91,7 +115,7 @@ export async function priceLabel(priceId: string): Promise<string | null> {
   const known = prices.get(priceId)
   if (known && Date.now() - known.at < PRICE_TTL_MS) return known.label
   try {
-    const price = await stripe().prices.retrieve(priceId)
+    const price = await within(stripe().prices.retrieve(priceId), PRICE_WAIT_MS)
     if (price.unit_amount === null) return null
     const interval = price.recurring?.interval === "year" ? "year" : "month"
     const label = `${formatMoney(price.unit_amount, price.currency)} a ${interval}`
@@ -112,6 +136,11 @@ async function activeSubscription(userId: string, kind: Kind): Promise<Subscript
     userId,
     kind
   )
+}
+
+// A subscription Stripe has started but not confirmed, such as one waiting on the bank. Another cannot be started until it settles.
+async function pendingSubscription(userId: string, kind: Kind): Promise<boolean> {
+  return Boolean(await get("SELECT 1 AS found FROM subscriptions WHERE user_id = ? AND kind = ? AND status = 'incomplete' AND created_at > ?", userId, kind, Date.now() - PENDING_MS))
 }
 
 function subscriptionKind(subscription: Stripe.Subscription): Kind | null {
@@ -236,7 +265,18 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
   // Plus includes the paid subscriber ring, and the ring needs a confirmed address.
   if (!viewer.emailVerified) throw new Error("Confirm your email address first. Rhenko Plus needs one.")
   if (await activeSubscription(viewer.id, kind)) throw new Error("You already have this subscription.")
+  if (await pendingSubscription(viewer.id, kind)) throw new Error("Your payment is still going through. Give it a minute, then refresh this page.")
   const customer = await get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
+  if (customer) {
+    // Stripe may hold a subscription the database has not recorded yet (the webhook can be late). It must never be bought twice.
+    const existing = await stripe().subscriptions.list({ customer: customer.customer_id, status: "all", limit: 20 })
+    const open = existing.data.find((sub) => subscriptionKind(sub) === kind && ["active", "trialing", "incomplete", "past_due", "unpaid"].includes(sub.status))
+    if (open) {
+      await saveSubscription(open)
+      if (open.status === "incomplete") throw new Error("Your payment is still going through. Give it a minute, then refresh this page.")
+      throw new Error("You already have this subscription.")
+    }
+  }
   const origin = publicOrigin()
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
@@ -256,18 +296,34 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
     ...(taxEnabled()
       ? { billing_address_collection: "required", ...(customer ? { customer_update: { address: "auto", name: "auto" } } : {}) }
       : {}),
-    success_url: `${origin}/plus?checkout=done`,
+    // Stripe fills in the checkout id, so the page can read the subscription as it opens.
+    success_url: `${origin}/plus?checkout=done&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/plus?checkout=cancelled`,
   })
   if (!session.url) throw new Error("Stripe did not return a payment page. Try again.")
   return session.url
 }
 
+// Reads a checkout this person just paid, straight from Stripe, and records its subscription. Plus is then on as the page opens,
+// without waiting for the webhook. Only a checkout this person started is read, and the webhook records the same thing, so a
+// failure here is logged and the page carries on.
+export async function completeCheckout(viewer: Viewer, sessionId: string): Promise<void> {
+  if (!paymentsConfigured() || !/^cs_[A-Za-z0-9_]{1,200}$/.test(sessionId)) return
+  try {
+    const session = await within(stripe().checkout.sessions.retrieve(sessionId, { expand: ["subscription"] }), RETURN_WAIT_MS)
+    if (session.mode !== "subscription" || session.client_reference_id !== viewer.id) return
+    if (!session.subscription || typeof session.subscription === "string") return
+    await saveSubscription(session.subscription)
+  } catch (error) {
+    console.error("could not read a checkout on return", error instanceof Error ? error.message : error)
+  }
+}
+
 // The customer portal: change a card, see invoices, or cancel. Stripe runs it, so the app never sees card details.
 export async function billingPortalUrl(viewer: Viewer): Promise<string> {
   const customer = await get<{ customer_id: string }>("SELECT customer_id FROM stripe_customers WHERE user_id = ?", viewer.id)
   if (!customer) throw new Error("You have no subscription to manage yet.")
-  const session = await stripe().billingPortal.sessions.create({ customer: customer.customer_id, return_url: `${publicOrigin()}/settings/billing` })
+  const session = await stripe().billingPortal.sessions.create({ customer: customer.customer_id, return_url: `${publicOrigin()}/plus` })
   return session.url
 }
 
@@ -488,7 +544,7 @@ async function apply(event: Stripe.Event): Promise<void> {
 export type BillingState = {
   configured: boolean
   emailVerified: boolean
-  plus: { active: boolean; cancelAtPeriodEnd: boolean; periodEnd: number | null; withdrawable: boolean }
+  plus: { active: boolean; pending: boolean; cancelAtPeriodEnd: boolean; periodEnd: number | null; withdrawable: boolean }
   // The badge subscription sold before Rhenko Plus. Only shown to people who already have one.
   verified: { active: boolean; cancelAtPeriodEnd: boolean; periodEnd: number | null; withdrawable: boolean }
   tips: { count: number; total: number; currency: string }
@@ -503,11 +559,13 @@ export async function billingState(viewer: Viewer): Promise<BillingState> {
     viewer.id
   )
   const account = await get<{ charges_enabled: number }>("SELECT charges_enabled FROM connect_accounts WHERE user_id = ?", viewer.id)
+  const plusPending = !plus && (await pendingSubscription(viewer.id, "plus"))
   return {
     configured: paymentsConfigured(),
     emailVerified: viewer.emailVerified,
     plus: {
       active: Boolean(plus),
+      pending: plusPending,
       cancelAtPeriodEnd: plus?.cancel_at_period_end === 1,
       periodEnd: plus?.current_period_end ?? null,
       withdrawable: Boolean(plus && Date.now() - plus.created_at <= WITHDRAW_DAYS * 24 * 60 * 60 * 1000),

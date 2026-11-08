@@ -101,8 +101,8 @@ async function paymentFlows(mock) {
   await check("the billing page shows Plus at the price Stripe reports, with what it includes", async () => {
     await go(payer.page, "/plus", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
     await payer.page.getByText("$4.99 a month").first().waitFor({ timeout: TIMEOUT })
-    await payer.page.getByText("The paid subscriber ring beside your name").waitFor()
-    await payer.page.getByText("Videos up to 10 minutes long").waitFor()
+    await payer.page.getByRole("img", { name: /^Rhenko Plus subscriber/ }).first().waitFor()
+    await payer.page.getByText("Videos up to 10 minutes", { exact: true }).waitFor()
     await payer.page.getByRole("button", { name: /^Subscribe for / }).waitFor()
     assert.equal(await payer.page.getByRole("heading", { name: "Paid subscriber badge", exact: true }).count(), 0, "the badge-only product is still offered")
   })
@@ -112,7 +112,7 @@ async function paymentFlows(mock) {
     await payer.page.waitForURL((url) => url.origin === ORIGIN && url.pathname.startsWith("/pay/"), { timeout: TIMEOUT })
     await payer.page.getByRole("button", { name: "Subscribe", exact: true }).click()
     await payer.page.waitForURL((url) => url.pathname === "/plus" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
-    await payer.page.getByText("Thanks. Your subscription shows here").waitFor()
+    await payer.page.getByRole("heading", { name: "You're on Plus" }).waitFor({ timeout: TIMEOUT })
     await payer.page.getByText(/^Renews /).waitFor({ timeout: TIMEOUT })
     const rows = await query("SELECT kind, status FROM subscriptions WHERE user_id = ?", await userId(payer.handle))
     assert.equal(rows.length, 1, "one subscription row")
@@ -134,7 +134,7 @@ async function paymentFlows(mock) {
     await openProfile(creator.page, payer.handle)
     await waitForPost(creator.page, text)
     const shown = card(creator.page, text)
-    await shown.getByRole("img", { name: /Paid subscriber\. Rhenko has not checked this person's identity\./ }).first().waitFor({ timeout: TIMEOUT })
+    await shown.getByRole("img", { name: /Rhenko Plus subscriber\. Rhenko has not checked this person's identity\./ }).first().waitFor({ timeout: TIMEOUT })
     assert.equal(await shown.getByRole("img", { name: "Verified account" }).count(), 0, "the paid ring was shown as the verified check")
   })
 
@@ -162,7 +162,7 @@ async function paymentFlows(mock) {
     await go(creator.page, "/settings/notifications", creator.page.getByRole("heading", { name: "Priority", exact: true }))
     const row = creator.page.getByRole("switch", { name: `Priority notifications from ${payer.name}` })
     await row.waitFor({ timeout: TIMEOUT })
-    await row.getByRole("img", { name: /Paid subscriber\. Rhenko has not checked this person's identity\./ }).waitFor()
+    await row.getByRole("img", { name: /Rhenko Plus subscriber\. Rhenko has not checked this person's identity\./ }).waitFor()
   })
 
   await check("a free account is asked to trim a video longer than 2 minutes 20 seconds", async () => {
@@ -195,14 +195,14 @@ async function paymentFlows(mock) {
     await toastText(creator.page, /Animated profile pictures are part of Rhenko Plus/)
     // The server refuses it too, for a form that sends the file anyway.
     await sendFileQuietly(dialog.locator("input[name=avatar]"), gif)
-    await dialog.getByRole("button", { name: "Save profile", exact: true }).click()
+    await dialog.getByRole("button", { name: "Save", exact: true }).click()
     await dialog.getByRole("alert").getByText(/Animated profile pictures are part of Rhenko Plus/).waitFor({ timeout: TIMEOUT })
     const refused = await query("SELECT avatar_file FROM users WHERE handle = ?", creator.handle)
     assert.ok(!String(refused[0]?.avatar_file ?? "").endsWith(".gif"), "a free account's GIF was kept")
     // A still picture is framed and kept as before.
     await dialog.locator("input[name=avatar]").setInputFiles(makePng(`still-${RUN_ID}.png`, { seed: 21 }))
     await creator.page.getByRole("dialog", { name: "Position your photo" }).getByRole("button", { name: "Use this", exact: true }).click()
-    await dialog.getByRole("button", { name: "Save profile", exact: true }).click()
+    await dialog.getByRole("button", { name: "Save", exact: true }).click()
     await toastText(creator.page, /^Profile saved\./)
     const still = await query("SELECT avatar_file FROM users WHERE handle = ?", creator.handle)
     assert.ok(still[0]?.avatar_file && !still[0].avatar_file.endsWith(".gif"), "a still picture was not kept")
@@ -211,7 +211,7 @@ async function paymentFlows(mock) {
     await payer.page.getByRole("button", { name: "Edit profile", exact: true }).click()
     const payerDialog = payer.page.getByRole("dialog", { name: "Edit profile" })
     await payerDialog.locator("input[name=avatar]").setInputFiles(gif)
-    await payerDialog.getByRole("button", { name: "Save profile", exact: true }).click()
+    await payerDialog.getByRole("button", { name: "Save", exact: true }).click()
     await toastText(payer.page, /^Profile saved\./)
     const animated = await query("SELECT avatar_file FROM users WHERE handle = ?", payer.handle)
     assert.ok(animated[0]?.avatar_file?.endsWith(".gif"), "the Plus subscriber's animated picture was not kept as a GIF")
@@ -277,8 +277,8 @@ async function paymentFlows(mock) {
     await go(creator.page, "/settings/billing", creator.page.getByRole("heading", { name: "Tips and payouts" }))
     await creator.page.getByRole("button", { name: "Set up payouts", exact: true }).click()
     await creator.page.waitForURL((url) => url.pathname === "/settings/billing" && url.searchParams.get("payouts") === "return", { timeout: TIMEOUT })
-    await creator.page.getByText("Payout details saved.").waitFor()
-    await creator.page.getByText("Payouts are ready.").waitFor({ timeout: TIMEOUT })
+    await creator.page.getByText("Thanks, your payout details are saved.").waitFor()
+    await creator.page.getByText("You're all set. Tips go straight to your bank through Stripe.").waitFor({ timeout: TIMEOUT })
   })
 
   const tipText = `Tip post ${RUN_ID}${randomWord(4)}`
@@ -299,7 +299,7 @@ async function paymentFlows(mock) {
     assert.equal(rows[0].fee, 50, "Rhenko's share of a $5.00 tip at 10%")
     assert.equal(rows[0].status, "paid")
     await go(creator.page, "/settings/billing", creator.page.getByRole("heading", { name: "Tips and payouts" }))
-    await creator.page.getByText("1 tip received, $4.50 after Rhenko's share.").waitFor({ timeout: TIMEOUT })
+    await creator.page.getByText("You've had 1 tip, worth $4.50 to you after Rhenko's share.").waitFor({ timeout: TIMEOUT })
   })
 
   await check("a repeated webhook for a tip changes nothing", async () => {

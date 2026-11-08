@@ -115,6 +115,20 @@ export async function startStripeMock({ port, webhookUrl, webhookSecret, origin 
         return send(response, 200, session)
       }
 
+      if (method === "GET" && path === "/v1/subscriptions") {
+        const customer = url.searchParams.get("customer")
+        const data = [...state.subscriptions.values()].filter((sub) => !customer || sub.customer === customer)
+        return send(response, 200, { object: "list", data, has_more: false })
+      }
+
+      if (method === "GET" && path.startsWith("/v1/checkout/sessions/")) {
+        const session = state.sessions.get(decodeURIComponent(path.slice("/v1/checkout/sessions/".length)))
+        if (!session) return send(response, 404, { error: { type: "invalid_request_error", message: "No such checkout session." } })
+        // The subscription comes back in full, as the request asks for it to be expanded.
+        const subscription = session.subscription ? state.subscriptions.get(session.subscription) : undefined
+        return send(response, 200, { ...session, subscription: subscription ?? null })
+      }
+
       if (method === "GET" && path.startsWith("/pay/")) {
         const session = state.sessions.get(path.slice("/pay/".length))
         if (!session) return send(response, 404, "No such checkout.", "text/plain")
@@ -157,7 +171,8 @@ export async function startStripeMock({ port, webhookUrl, webhookSecret, origin 
           session.payment_intent = intent
           await deliver("checkout.session.completed", { ...session, payment_status: "paid", payment_intent: intent, amount_total: session.amount_total })
         }
-        response.writeHead(302, { Location: session.success_url })
+        // Stripe fills the checkout id into the return address, as it does on the real site.
+        response.writeHead(302, { Location: String(session.success_url).replace("{CHECKOUT_SESSION_ID}", session.id) })
         return response.end()
       }
 
