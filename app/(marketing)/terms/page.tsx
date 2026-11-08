@@ -138,7 +138,7 @@ const SECTIONS: LegalSection[] = [
             before Plus included it keeps it until that subscription ends, and can cancel it in Settings.
           </li>
           <li>
-            <B>Cancelling</B> is done in Settings, under Subscriptions and tips. The subscription then ends at the end of the period you
+            <B>Cancelling</B> is done in Settings, under Rhenko Plus, with Manage billing. The subscription then ends at the end of the period you
             have paid for. Cancelling does not refund that period, except under the withdrawal right below or where the law requires a
             refund.
           </li>

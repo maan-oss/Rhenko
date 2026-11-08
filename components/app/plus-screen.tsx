@@ -4,10 +4,10 @@ import { useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { motion, useReducedMotion } from "motion/react"
 import { toast } from "sonner"
-import { Ban, Clock, Sparkles, TrendingUp, Video, type LucideIcon } from "lucide-react"
+import { Ban, Clock, Heart, MessageCircle, Repeat2, Sparkles, TrendingUp, Video, type LucideIcon } from "lucide-react"
 import { openBilling, startSubscription, withdraw } from "@/actions/payments"
-import { SubscriberBadge } from "@/components/app/badges"
 import { Avatar } from "@/components/app/avatar"
+import { SubscriberBadge } from "@/components/app/badges"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import Link from "@/components/app/link"
 import { SPRING_POP } from "@/components/app/motion"
@@ -20,39 +20,31 @@ type Props = {
   viewer: Viewer
   state: BillingState
   price: string | null
-  // The checkout result from Stripe's return address: "done", "cancelled", or nothing.
+  // Stripe's return result: "done" after a payment, or nothing.
   checkout: string
 }
 
-// How long the page keeps checking for Stripe's confirmation after checkout, and how often it asks.
-const CONFIRM_EVERY_MS = 3000
-const CONFIRM_TRIES = 20
+// Stripe sends the person back a moment before the payment is confirmed. The page asks again a few times, quietly, so the
+// subscription appears on its own. It never asks more than this.
+const RECHECK_AFTER_MS = [2000, 6000, 12000]
 
-// Ease for everything that moves on this page: the same curve the app's sheets use.
-const EASE = [0.22, 1, 0.36, 1] as const
-
-// The screen for Rhenko Plus: what it is, what it changes, the price, and the buttons. Each button asks the server for a
-// Stripe page and sends the person there, so no card number is typed into this app.
+// Rhenko Plus. It shows a post as it looks with Plus, what Plus adds, and one button. The post is built the way the feed
+// builds one, so the mark sits beside the name exactly as it does everywhere else.
 export function PlusScreen({ viewer, state, price, checkout }: Props) {
   const router = useRouter()
   const reduce = useReducedMotion()
   const [pending, startTransition] = useTransition()
 
   const active = state.plus.active
-  // Stripe sends the person back before the webhook has marked Plus active. Check again until it has.
-  const confirming = checkout === "done" && !active
-  const subscribed = checkout === "done" && active
+  const justPaid = checkout === "done"
+  // Paid, but Stripe has not confirmed it yet. Buying again now would be a second charge, so the button waits.
+  const awaiting = justPaid && !active
 
   useEffect(() => {
-    if (!confirming) return
-    let tries = 0
-    const id = window.setInterval(() => {
-      tries += 1
-      router.refresh()
-      if (tries >= CONFIRM_TRIES) window.clearInterval(id)
-    }, CONFIRM_EVERY_MS)
-    return () => window.clearInterval(id)
-  }, [confirming, router])
+    if (!awaiting) return
+    const timers = RECHECK_AFTER_MS.map((ms) => window.setTimeout(() => router.refresh(), ms))
+    return () => timers.forEach((id) => window.clearTimeout(id))
+  }, [awaiting, router])
 
   const go = (action: () => Promise<{ ok: true; url: string } | { ok: false; error: string }>) =>
     startTransition(async () => {
@@ -61,300 +53,149 @@ export function PlusScreen({ viewer, state, price, checkout }: Props) {
       else toast.error(result.error)
     })
 
-  const busy = !state.configured || pending
+  const canBuy = state.configured && price !== null && state.emailVerified && !pending && !awaiting
 
   return (
-    <div className="flex flex-col gap-10 px-4 pt-6 pb-10">
-      {subscribed ? <Welcome renews={state.plus} reduce={reduce} /> : null}
-      {confirming ? <Confirming /> : null}
-      {checkout === "cancelled" ? (
-        <p role="status" className="rounded-xl border border-border px-4 py-3 text-[15px]">
-          No worries. You left checkout, and nothing was charged.
+    <div className="flex flex-col px-4 pt-6 pb-10">
+      <header className="flex flex-col gap-1">
+        <h2 className="text-3xl font-semibold tracking-tight">{active ? "You're on Plus" : "More reach for your posts"}</h2>
+        <p className="text-[15px] text-muted-foreground">
+          {active ? <Status state={state} /> : <Price state={state} price={price} />}
         </p>
-      ) : null}
+      </header>
 
-      {subscribed || confirming ? null : (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-balance text-[30px] leading-[1.15] font-semibold tracking-[-0.02em]">
-            {active ? "Your perks are on." : "Your posts reach more people."}
-          </h2>
-          <p className="text-[16px] leading-6 text-muted-foreground">
-            Plus boosts your posts in For you and takes the ads out of your home feed. Replies and search work the same for everyone.
-          </p>
-        </div>
-      )}
+      <section aria-label="Preview" className="mt-8">
+        <article className="flex gap-3 border-y border-border py-3">
+          <Avatar user={viewer} size={40} className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            <header className="flex min-w-0 items-baseline gap-x-2 leading-tight">
+              <span className="inline-flex min-w-0 items-center font-semibold">
+                <span className="truncate">{viewer.name}</span>
+                <motion.span
+                  className="ml-1 inline-flex shrink-0"
+                  initial={justPaid && active && !reduce ? { scale: 0.5 } : false}
+                  animate={{ scale: 1 }}
+                  transition={SPRING_POP}
+                >
+                  <SubscriberBadge />
+                </motion.span>
+              </span>
+              <span className="min-w-0 truncate text-[15px] text-muted-foreground">@{viewer.handle}</span>
+            </header>
+            <p className="mt-0.5 text-[15px] leading-relaxed">Finally shipped the thing I have been working on.</p>
+            <div className="mt-3 flex gap-8 text-muted-foreground" aria-hidden="true">
+              <MessageCircle className="size-[18px]" strokeWidth={1.8} />
+              <Repeat2 className="size-[18px]" strokeWidth={1.8} />
+              <Heart className="size-[18px]" strokeWidth={1.8} />
+            </div>
+          </div>
+        </article>
+      </section>
 
-      <Preview viewer={viewer} />
-
-      <ul className="flex flex-col">
+      <ul className="mt-2 flex flex-col">
         {BENEFITS.map((benefit, index) => (
-          <li key={benefit.title} className="reveal-in flex gap-4 border-b border-border py-5 first:pt-0 last:border-b-0" style={{ animationDelay: `${index * 50}ms` }}>
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-foreground" aria-hidden="true">
-              {benefit.icon ? <benefit.icon className="size-5" strokeWidth={1.8} /> : <SubscriberBadge className="size-5" />}
-            </span>
-            <div className="flex min-w-0 flex-col gap-1">
-              <h3 className="text-[16px] leading-6 font-semibold">{benefit.title}</h3>
-              <p className="text-[15px] leading-6 text-muted-foreground">{benefit.detail}</p>
-              {benefit.compare ? <Compare rows={benefit.compare} reduce={reduce} /> : null}
+          <li
+            key={benefit.title}
+            className="reveal-in flex items-start gap-4 border-b border-border py-4 last:border-b-0"
+            style={{ animationDelay: `${index * 40}ms` }}
+          >
+            <benefit.icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden="true" />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <p className="text-[15px] font-medium">{benefit.title}</p>
+              {benefit.detail ? <p className="text-[14px] leading-5 text-muted-foreground">{benefit.detail}</p> : null}
             </div>
           </li>
         ))}
       </ul>
 
-      {active ? <Subscribed state={state} welcome={subscribed} disabled={busy} onManage={() => go(openBilling)} /> : (
-        <Offer state={state} price={price} pending={pending} onSubscribe={() => go(() => startSubscription("plus"))} />
-      )}
+      <section className="mt-6 flex flex-col gap-3">
+        {active ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!state.configured || pending}
+              onClick={() => go(openBilling)}
+              className="h-12 w-full rounded-full text-[16px] font-semibold"
+            >
+              Manage billing
+            </Button>
+            {state.plus.withdrawable ? (
+              <div className="flex justify-center">
+                <ConfirmDialog
+                  trigger={
+                    <Button type="button" variant="ghost" disabled={!state.configured || pending} className="h-10 rounded-full px-4 text-[15px] text-muted-foreground">
+                      Withdraw
+                    </Button>
+                  }
+                  title="Withdraw from Plus?"
+                  description="Plus ends right away, and your first payment goes back to the card you paid with. You can do this within 14 days of starting."
+                  confirmLabel="Withdraw and refund"
+                  action={() => withdraw("plus")}
+                  onDone={() => toast.success("Plus is withdrawn. Your refund is on its way.")}
+                />
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              disabled={!canBuy}
+              onClick={() => go(() => startSubscription("plus"))}
+              className="h-12 w-full rounded-full text-[16px] font-semibold transition-transform duration-150 active:scale-[0.98]"
+            >
+              {buttonLabel(state, price, pending)}
+            </Button>
+            <p className="text-center text-[13px] leading-5 text-muted-foreground">
+              Renews monthly until you cancel. Withdraw within 14 days for a full refund.
+            </p>
+            <p className="text-center text-[13px] text-muted-foreground">
+              <Link href="/terms" className="underline underline-offset-4 hover:text-foreground">
+                Terms
+              </Link>
+              {" · "}
+              <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
+                Privacy
+              </Link>
+            </p>
+          </>
+        )}
+      </section>
     </div>
   )
 }
 
-type Benefit = {
-  title: string
-  detail: string
-  // A plain icon. The subscriber mark has none, and draws its own.
-  icon?: LucideIcon
-  // Two numbers shown to scale, so the difference is plain without reading the detail.
-  compare?: { label: string; value: string; share: number; strong?: boolean }[]
-}
+type Benefit = { icon: LucideIcon; title: string; detail?: string }
 
 const BENEFITS: Benefit[] = [
-  {
-    icon: TrendingUp,
-    title: "More people see your posts",
-    detail: "Your posts get a boost in For you. It is the only place Plus changes who sees a post.",
-  },
-  {
-    icon: Ban,
-    title: "No ads in your home feed",
-    detail: "The labelled ads are taken out of the home feed you scroll.",
-  },
-  {
-    icon: Clock,
-    title: "A day to edit a post",
-    detail: "Fix a typo or a link for 24 hours after you post, instead of one hour.",
-    compare: [
-      { label: "Free", value: "1 hour", share: 4.2 },
-      { label: "Plus", value: "24 hours", share: 100, strong: true },
-    ],
-  },
-  {
-    icon: Video,
-    title: "Longer videos",
-    detail: "Up to 10 minutes, instead of 2 minutes 20 seconds. The 100 MB limit is the same for everyone.",
-    compare: [
-      { label: "Free", value: "2:20", share: 23.3 },
-      { label: "Plus", value: "10:00", share: 100, strong: true },
-    ],
-  },
-  {
-    icon: Sparkles,
-    title: "An animated profile picture",
-    detail: "Use a GIF as your picture, so it moves wherever your picture shows.",
-  },
-  {
-    title: "A subscriber mark",
-    detail: "A blue tick beside your name shows that you pay. Rhenko has not checked who you are.",
-  },
+  { icon: TrendingUp, title: "More people see your posts", detail: "Plus boosts them in For you. Replies and search stay the same." },
+  { icon: Ban, title: "No ads in your home feed" },
+  { icon: Clock, title: "24 hours to edit a post" },
+  { icon: Video, title: "Videos up to 10 minutes" },
+  { icon: Sparkles, title: "An animated profile picture" },
 ]
 
-// The person's own name and picture, with a sample post and the two things Plus adds to it. It is a preview, not a post.
-function Preview({ viewer }: { viewer: Viewer }) {
+function Price({ state, price }: { state: BillingState; price: string | null }) {
+  if (!state.configured) return <>Payments aren&apos;t set up on this server yet.</>
+  if (price === null) return <>Plus isn&apos;t ready to buy yet.</>
+  return <>{price}, billed monthly.</>
+}
+
+function Status({ state }: { state: BillingState }) {
+  const plus = state.plus
+  if (!plus.periodEnd) return <>Thanks for supporting Rhenko.</>
   return (
-    <section aria-labelledby="plus-preview" className="flex flex-col gap-3">
-      <h3 id="plus-preview" className="text-[13px] font-medium tracking-[0.01em] text-muted-foreground">
-        What a post looks like with Plus
-      </h3>
-      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-        <div className="flex items-start gap-3">
-          <Avatar user={viewer} size={40} />
-          <div className="flex min-w-0 flex-col">
-            <p className="flex min-w-0 items-center gap-1 text-[15px] leading-5 font-semibold">
-              <span className="truncate">{viewer.name}</span>
-              <SubscriberBadge className="size-[1em] text-[14px]" />
-            </p>
-            <p className="truncate text-[14px] leading-5 text-muted-foreground">@{viewer.handle}</p>
-          </div>
-        </div>
-        <p className="text-[16px] leading-6">Finally shipped the thing I have been working on for months.</p>
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full border border-border px-2.5 py-1 text-[13px]">Editable for 24 hours</span>
-          <span className="rounded-full border border-border px-2.5 py-1 text-[13px]">Boosted in For you</span>
-        </div>
-      </div>
-    </section>
+    <>
+      {plus.cancelAtPeriodEnd ? "Ends " : "Renews "}
+      <LocalTime at={plus.periodEnd} variant="full" />
+    </>
   )
 }
 
-// Two bars drawn to the same scale, so the gap shows at a glance. They grow once when the screen opens.
-function Compare({ rows, reduce }: { rows: NonNullable<Benefit["compare"]>; reduce: boolean | null }) {
-  return (
-    <div className="mt-2 flex flex-col gap-2" aria-hidden="true">
-      {rows.map((row, index) => (
-        <div key={row.label} className="flex items-center gap-3 text-[13px] leading-5">
-          <span className="w-10 shrink-0 text-muted-foreground">{row.label}</span>
-          <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-            <motion.span
-              className={row.strong ? "absolute inset-y-0 left-0 rounded-full bg-foreground" : "absolute inset-y-0 left-0 rounded-full bg-muted-foreground/60"}
-              style={{ width: `${row.share}%`, originX: 0 }}
-              initial={reduce ? false : { scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 0.6, delay: 0.25 + index * 0.12, ease: EASE }}
-            />
-          </span>
-          <span className="w-20 shrink-0 text-right tabular-nums">{row.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// The offer for someone who is not on Plus: the price, what happens when they pay, and the one button.
-function Offer({ state, price, pending, onSubscribe }: { state: BillingState; price: string | null; pending: boolean; onSubscribe: () => void }) {
-  const canBuy = state.configured && price !== null && state.emailVerified
-  return (
-    <section aria-labelledby="plus-offer" className="flex flex-col gap-4 border-t border-border pt-6">
-      <h3 id="plus-offer" className="sr-only">
-        Subscribe to Plus
-      </h3>
-      {!state.configured ? (
-        <p className="text-[15px] text-muted-foreground">Plus can&apos;t be bought on this server yet. Nothing here will charge you.</p>
-      ) : price === null ? (
-        <p className="text-[15px] text-muted-foreground">Plus isn&apos;t ready to buy yet. Check back soon.</p>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <p className="text-[22px] leading-7 font-semibold">{price}</p>
-          <p className="text-[14px] leading-5 text-muted-foreground">Billed monthly by Stripe. Cancel any time.</p>
-        </div>
-      )}
-      {state.configured && price !== null && !state.emailVerified ? (
-        <p className="text-[15px]">Confirm your email address first, then you can start Plus.</p>
-      ) : null}
-      <Button
-        type="button"
-        disabled={pending || !canBuy}
-        onClick={onSubscribe}
-        className="h-12 w-full rounded-full text-[16px] font-semibold transition-transform duration-150 active:scale-[0.98]"
-      >
-        {buttonLabel(state, price, pending)}
-      </Button>
-      <p className="text-[13px] leading-5 text-muted-foreground">
-        Renews each month until you cancel. Cancel any time in Settings, and Plus runs to the end of the month you have paid for. Changed
-        your mind? Withdraw within 14 days of starting for a full refund. Read the{" "}
-        <Link href="/terms" className="underline underline-offset-4 hover:text-foreground">
-          terms
-        </Link>{" "}
-        and the{" "}
-        <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
-          privacy policy
-        </Link>
-        .
-      </p>
-      <div className="flex justify-center">
-        <Link href="/settings" className="text-[15px] text-muted-foreground underline underline-offset-4 hover:text-foreground">
-          Not now
-        </Link>
-      </div>
-    </section>
-  )
-}
-
-// The button says what it does: the purchase and its price, or why it cannot be pressed yet.
+// The button says what it does: confirm the email, open checkout, or subscribe for the price.
 function buttonLabel(state: BillingState, price: string | null, pending: boolean): string {
   if (!state.emailVerified) return "Confirm your email to subscribe"
   if (pending) return "Opening checkout"
   return price ? `Subscribe for ${price}` : "Subscribe"
-}
-
-// The state for someone on Plus: when it renews or ends, and how to change it.
-function Subscribed({ state, welcome, disabled, onManage }: { state: BillingState; welcome: boolean; disabled: boolean; onManage: () => void }) {
-  const plus = state.plus
-  // Straight after checkout the thank-you already says this, so the heading and the renewal line only read for screen readers.
-  return (
-    <section aria-labelledby="plus-status" className="flex flex-col gap-4 border-t border-border pt-6">
-      <div className="flex flex-col gap-1">
-        <h3 id="plus-status" className={welcome ? "sr-only" : "text-[20px] leading-7 font-semibold"}>
-          You&apos;re on Plus
-        </h3>
-        {welcome ? null : (
-          <p className="text-[15px] leading-6 text-muted-foreground">
-            {plus.cancelAtPeriodEnd ? "It ends " : "It renews "}
-            {plus.periodEnd ? <LocalTime at={plus.periodEnd} variant="full" /> : "at the end of this period"}.
-          </p>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" disabled={disabled} onClick={onManage} className="h-11 rounded-full px-5 font-semibold">
-          Manage billing
-        </Button>
-        {plus.withdrawable ? (
-          <ConfirmDialog
-            trigger={
-              <Button type="button" variant="outline" disabled={disabled} className="h-11 rounded-full px-5 font-semibold">
-                Withdraw
-              </Button>
-            }
-            title="Withdraw from Plus?"
-            description="Plus ends right away, and your first payment goes back to the card you paid with. You can do this within 14 days of starting."
-            confirmLabel="Withdraw and refund"
-            action={() => withdraw("plus")}
-            onDone={() => toast.success("Plus is withdrawn. Your refund is on its way to the card you paid with.")}
-          />
-        ) : null}
-      </div>
-      {plus.withdrawable ? (
-        <p className="text-[13px] leading-5 text-muted-foreground">
-          Changed your mind? Withdraw within 14 days of starting and your first payment comes back. After that, cancel in Manage billing. Plus
-          keeps running until the end of the period you paid for.
-        </p>
-      ) : null}
-    </section>
-  )
-}
-
-// The thank-you after a payment that Stripe has confirmed. The mark settles into place once, and nothing repeats.
-function Welcome({ renews, reduce }: { renews: BillingState["plus"]; reduce: boolean | null }) {
-  return (
-    <section aria-labelledby="plus-welcome" role="status" className="flex flex-col items-start gap-4 pt-2">
-      <motion.span
-        aria-hidden="true"
-        className="grid size-16 place-items-center rounded-full bg-secondary"
-        initial={reduce ? false : { scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={reduce ? { duration: 0 } : SPRING_POP}
-      >
-        <SubscriberBadge className="size-9" />
-      </motion.span>
-      <div className="flex flex-col gap-2">
-        <h2 id="plus-welcome" className="text-balance text-[28px] leading-[1.15] font-semibold tracking-[-0.02em]">
-          You&apos;re on Plus.
-        </h2>
-        <p className="text-[16px] leading-6 text-muted-foreground">
-          Thanks for supporting Rhenko. Your perks are on, and a receipt is on its way to your email.
-          {renews.periodEnd ? (
-            <>
-              {" "}
-              It renews <LocalTime at={renews.periodEnd} variant="full" />.
-            </>
-          ) : null}
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// Shown while Stripe's confirmation is on its way. The page checks again on its own.
-function Confirming() {
-  return (
-    <section aria-labelledby="plus-confirming" role="status" className="flex items-start gap-3 pt-2">
-      <span aria-hidden="true" className="mt-1 size-5 shrink-0 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground motion-reduce:animate-none" />
-      <div className="flex flex-col gap-1">
-        <h2 id="plus-confirming" className="text-[20px] leading-7 font-semibold">
-          Confirming your payment
-        </h2>
-        <p className="text-[15px] leading-6 text-muted-foreground">
-          Stripe usually confirms within a minute. This page checks again for you, and Plus appears here as soon as it is confirmed.
-        </p>
-      </div>
-    </section>
-  )
 }

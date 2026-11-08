@@ -113,7 +113,7 @@ async function paymentFlows(mock) {
     await payer.page.getByRole("button", { name: "Subscribe", exact: true }).click()
     await payer.page.waitForURL((url) => url.pathname === "/plus" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
     await payer.page.getByText("Thanks. Your subscription shows here").waitFor()
-    await payer.page.getByText(/Plus renews/).waitFor({ timeout: TIMEOUT })
+    await payer.page.getByText(/^Renews /).waitFor({ timeout: TIMEOUT })
     const rows = await query("SELECT kind, status FROM subscriptions WHERE user_id = ?", await userId(payer.handle))
     assert.equal(rows.length, 1, "one subscription row")
     assert.equal(rows[0].kind, "plus")
@@ -122,7 +122,7 @@ async function paymentFlows(mock) {
 
   await check("Rhenko Plus needs a confirmed email address before it can be bought", async () => {
     await go(unconfirmed.page, "/plus", unconfirmed.page.getByRole("heading", { name: "Rhenko Plus" }))
-    await unconfirmed.page.getByText("Confirm your email address first, then you can start Plus.").waitFor({ timeout: TIMEOUT })
+    await unconfirmed.page.getByRole("button", { name: "Confirm your email to subscribe", exact: true }).waitFor({ timeout: TIMEOUT })
     assert.equal(await unconfirmed.page.getByRole("button", { name: "Confirm your email to subscribe", exact: true }).isDisabled(), true, "Subscribe is enabled without a confirmed email")
   })
 
