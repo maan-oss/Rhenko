@@ -75,7 +75,9 @@ export function PlusScreen({ viewer, state, price, checkout }: Props) {
 
       {subscribed || confirming ? null : (
         <div className="flex flex-col gap-3">
-          <h2 className="text-balance text-[30px] leading-[1.15] font-semibold tracking-[-0.02em]">Your posts reach more people.</h2>
+          <h2 className="text-balance text-[30px] leading-[1.15] font-semibold tracking-[-0.02em]">
+            {active ? "Your perks are on." : "Your posts reach more people."}
+          </h2>
           <p className="text-[16px] leading-6 text-muted-foreground">
             Plus boosts your posts in For you and takes the ads out of your home feed. Replies and search work the same for everyone.
           </p>
@@ -86,7 +88,7 @@ export function PlusScreen({ viewer, state, price, checkout }: Props) {
 
       <ul className="flex flex-col">
         {BENEFITS.map((benefit, index) => (
-          <li key={benefit.title} className="reveal-in flex gap-4 border-b border-border py-5 first:pt-0" style={{ animationDelay: `${index * 50}ms` }}>
+          <li key={benefit.title} className="reveal-in flex gap-4 border-b border-border py-5 first:pt-0 last:border-b-0" style={{ animationDelay: `${index * 50}ms` }}>
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-foreground" aria-hidden="true">
               {benefit.icon ? <benefit.icon className="size-5" strokeWidth={1.8} /> : <SubscriberBadge className="size-5" />}
             </span>
@@ -99,8 +101,8 @@ export function PlusScreen({ viewer, state, price, checkout }: Props) {
         ))}
       </ul>
 
-      {active ? <Subscribed state={state} disabled={busy} onManage={() => go(openBilling)} /> : (
-        <Offer state={state} price={price} busy={busy} onSubscribe={() => go(() => startSubscription("plus"))} />
+      {active ? <Subscribed state={state} welcome={subscribed} disabled={busy} onManage={() => go(openBilling)} /> : (
+        <Offer state={state} price={price} pending={pending} onSubscribe={() => go(() => startSubscription("plus"))} />
       )}
     </div>
   )
@@ -207,7 +209,7 @@ function Compare({ rows, reduce }: { rows: NonNullable<Benefit["compare"]>; redu
 }
 
 // The offer for someone who is not on Plus: the price, what happens when they pay, and the one button.
-function Offer({ state, price, busy, onSubscribe }: { state: BillingState; price: string | null; busy: boolean; onSubscribe: () => void }) {
+function Offer({ state, price, pending, onSubscribe }: { state: BillingState; price: string | null; pending: boolean; onSubscribe: () => void }) {
   const canBuy = state.configured && price !== null && state.emailVerified
   return (
     <section aria-labelledby="plus-offer" className="flex flex-col gap-4 border-t border-border pt-6">
@@ -229,11 +231,11 @@ function Offer({ state, price, busy, onSubscribe }: { state: BillingState; price
       ) : null}
       <Button
         type="button"
-        disabled={busy || !canBuy}
+        disabled={pending || !canBuy}
         onClick={onSubscribe}
         className="h-12 w-full rounded-full text-[16px] font-semibold transition-transform duration-150 active:scale-[0.98]"
       >
-        {!state.emailVerified ? "Confirm your email to subscribe" : pendingLabel(busy, price)}
+        {buttonLabel(state, price, pending)}
       </Button>
       <p className="text-[13px] leading-5 text-muted-foreground">
         Renews each month until you cancel. Cancel any time in Settings, and Plus runs to the end of the month you have paid for. Changed
@@ -256,24 +258,29 @@ function Offer({ state, price, busy, onSubscribe }: { state: BillingState; price
   )
 }
 
-function pendingLabel(busy: boolean, price: string | null): string {
-  if (busy) return "Opening checkout"
+// The button says what it does: the purchase and its price, or why it cannot be pressed yet.
+function buttonLabel(state: BillingState, price: string | null, pending: boolean): string {
+  if (!state.emailVerified) return "Confirm your email to subscribe"
+  if (pending) return "Opening checkout"
   return price ? `Subscribe for ${price}` : "Subscribe"
 }
 
 // The state for someone on Plus: when it renews or ends, and how to change it.
-function Subscribed({ state, disabled, onManage }: { state: BillingState; disabled: boolean; onManage: () => void }) {
+function Subscribed({ state, welcome, disabled, onManage }: { state: BillingState; welcome: boolean; disabled: boolean; onManage: () => void }) {
   const plus = state.plus
+  // Straight after checkout the thank-you already says this, so the heading and the renewal line only read for screen readers.
   return (
     <section aria-labelledby="plus-status" className="flex flex-col gap-4 border-t border-border pt-6">
       <div className="flex flex-col gap-1">
-        <h3 id="plus-status" className="text-[20px] leading-7 font-semibold">
+        <h3 id="plus-status" className={welcome ? "sr-only" : "text-[20px] leading-7 font-semibold"}>
           You&apos;re on Plus
         </h3>
-        <p className="text-[15px] leading-6 text-muted-foreground">
-          {plus.cancelAtPeriodEnd ? "It ends " : "It renews "}
-          {plus.periodEnd ? <LocalTime at={plus.periodEnd} variant="full" /> : "at the end of this period"}.
-        </p>
+        {welcome ? null : (
+          <p className="text-[15px] leading-6 text-muted-foreground">
+            {plus.cancelAtPeriodEnd ? "It ends " : "It renews "}
+            {plus.periodEnd ? <LocalTime at={plus.periodEnd} variant="full" /> : "at the end of this period"}.
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" disabled={disabled} onClick={onManage} className="h-11 rounded-full px-5 font-semibold">
