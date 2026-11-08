@@ -14,6 +14,7 @@ import { toggleBlock, toggleMute } from "@/actions/social"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { Composer } from "@/components/app/composer"
 import { EditPostDialog } from "@/components/app/edit-post-dialog"
+import { BoostSheet } from "@/components/app/boost-sheet"
 import { ShareSheet } from "@/components/app/share-sheet"
 import { TipDialog } from "@/components/app/tip-dialog"
 import { PostBody } from "@/components/app/post-body"
@@ -169,6 +170,7 @@ function BookmarkIcon({ saved, reduce }: { saved: boolean; reduce: boolean }) {
 }
 
 export function PostActions(props: Props) {
+  const [boostOpen, setBoostOpen] = useState(false)
   const {
     viewer,
     postId,
@@ -338,7 +340,7 @@ export function PostActions(props: Props) {
           : []),
         ...(isRoot
           ? [
-              <DropdownMenuItem key="boost" className={MENU_ITEM_PHONE} onClick={() => router.push(`${statusHref}/boost`)}>
+              <DropdownMenuItem key="boost" className={MENU_ITEM_PHONE} onClick={() => setBoostOpen(true)}>
                 <Megaphone className="size-4" /> Boost post
               </DropdownMenuItem>,
             ]
@@ -538,6 +540,7 @@ export function PostActions(props: Props) {
         </DialogContent>
       </Dialog>
 
+      {isRoot ? <BoostSheet postId={postId} open={boostOpen} onClose={() => setBoostOpen(false)} /> : null}
       {!isOwn && tippable ? <TipDialog open={tipOpen} onOpenChange={setTipOpen} postId={postId} handle={author.handle} /> : null}
       {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} title={props.title} media={media} windowMs={editWindowMs} reply={!isRoot} /> : null}
 

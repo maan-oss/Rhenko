@@ -27,11 +27,14 @@ export function BottomSheet({
   open,
   onClose,
   label,
+  rest = REST_HEIGHT,
   children,
 }: {
   open: boolean
   onClose: () => void
   label: string
+  // How tall the sheet rests when its content needs room, for a sheet whose controls must show without a scroll.
+  rest?: string
   children: React.ReactNode
 }) {
   const mounted = useMounted()
@@ -117,8 +120,8 @@ export function BottomSheet({
             role="dialog"
             aria-modal="true"
             aria-label={label}
-            initial={{ y: "100%", maxHeight: REST_HEIGHT }}
-            animate={{ y: offset, height: full ? FULL_HEIGHT : "auto", maxHeight: full ? FULL_HEIGHT : REST_HEIGHT }}
+            initial={{ y: "100%", maxHeight: rest }}
+            animate={{ y: offset, height: full ? FULL_HEIGHT : "auto", maxHeight: full ? FULL_HEIGHT : rest }}
             exit={{ y: "100%", transition: SHEET_SETTLE }}
             transition={dragging || reduce ? { duration: 0 } : SPRING_SHEET}
             className="fixed inset-x-0 bottom-0 z-[90] mx-auto flex w-full max-w-[560px] flex-col overflow-hidden rounded-t-[32px] border-x border-t border-border bg-popover text-popover-foreground shadow-[0_-30px_70px_-20px_rgba(0,0,0,0.5)]"

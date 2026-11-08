@@ -8,6 +8,7 @@ import { AD_CAMPAIGNS_WAITING_MAX, BOOST_BUDGETS, MICRO_PER_CENT, boostCopy, cam
 import { CURRENCY, adCreditUrl, paymentsConfigured } from "@/lib/payments"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { ageFrom } from "@/lib/rules"
+import { boostSetupFor, type BoostSetup } from "@/lib/boost-setup"
 
 export type FormState = { error?: string; done?: boolean }
 
@@ -167,6 +168,13 @@ export async function startAdCredit(amount: number): Promise<{ ok: true; url: st
 // Boosts one of the viewer's own posts. The post becomes a campaign with the post's own words as its ad. A person reviews it
 // before it runs, and it is paid from the advertising balance as people see it. Only a top-level text post, and only once.
 export type BoostResult = { ok: true; campaignId: string } | { ok: false; error: string; needsAccount?: boolean }
+
+// What the boost sheet shows for one post: the ad as it will look, the budgets, and the balance. Only the author gets anything.
+export async function boostSetup(postId: string): Promise<BoostSetup> {
+  const viewer = await requireAgreedViewer()
+  if (typeof postId !== "string" || !/^[0-9a-f-]{36}$/.test(postId)) return { kind: "missing" }
+  return boostSetupFor(viewer.id, postId)
+}
 
 export async function boostPost(postId: string, dollars: number): Promise<BoostResult> {
   const viewer = await requireAgreedViewer()

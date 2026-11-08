@@ -125,7 +125,13 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
                 <BarChart3 className="size-4" aria-hidden="true" />
                 <span className="max-sm:sr-only">Analytics</span>
               </Link>
-              <ProfileEditDialog defaults={{ name: profile.name, bio: profile.bio }} plus={viewer.plus} />
+              <ProfileEditDialog
+                defaults={{ name: profile.name, bio: profile.bio }}
+                plus={viewer.plus}
+                current={{ id: profile.id, name: profile.name, avatarFile: profile.avatarFile }}
+                bannerFile={profile.bannerFile}
+                handle={profile.handle}
+              />
             </>
           ) : (
             <ProfileActions handle={profile.handle} state={followState} blocked={rel.blockedByMe} muted={rel.muted} notifying={profile.notifying} from={fromPost} />
