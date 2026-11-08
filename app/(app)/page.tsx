@@ -1,6 +1,5 @@
 import { Suspense } from "react"
 import Link from "@/components/app/link"
-import dynamic from "next/dynamic"
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { connection } from "next/server"
@@ -14,6 +13,7 @@ import { normalizeTag, topicLabel } from "@/lib/rules"
 import { snoozedTopics } from "@/lib/topic-snoozes"
 import { pinnedTimelines } from "@/lib/timelines"
 import { firstParam } from "@/lib/params"
+import { SignedOutHome } from "@/components/marketing/signed-out-home"
 import { Avatar } from "@/components/app/avatar"
 import { ComposeAction } from "@/components/app/compose-action"
 import { RememberFeedTab } from "@/components/app/remember-feed-tab"
@@ -28,10 +28,6 @@ import { FeedSkeleton } from "@/components/app/feed-skeleton"
 import { FollowButton } from "@/components/app/follow-button"
 import { SetupBanner } from "@/components/app/setup-banner"
 import { TopicChips } from "@/components/app/topic-chips"
-
-// The signed-out landing page brings a chart library and a shader with it. Signed-in people never see it, so its client
-// parts load only when it is shown.
-const Landing = dynamic(() => import("@/components/marketing/landing").then((module) => module.Landing))
 
 type SearchParams = Promise<{ tab?: string | string[]; topic?: string | string[] }>
 
@@ -63,7 +59,7 @@ export default function HomePage({ searchParams }: { searchParams: SearchParams 
 }
 
 async function Home({ searchParams }: { searchParams: SearchParams }) {
-  if (!(await getViewer())) return <Landing />
+  if (!(await getViewer())) return <SignedOutHome />
   const viewer = await requireViewer()
   const params = await searchParams
   // An address with a tab in it wins. Without one, Home opens on the tab the person last chose, so Home does not drop them
