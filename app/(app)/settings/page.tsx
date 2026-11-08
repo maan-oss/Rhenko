@@ -29,6 +29,7 @@ const GROUPS = [
   {
     title: "Subscriptions and ads",
     sections: [
+      { href: "/plus", title: "Rhenko Plus" },
       { href: "/settings/billing", title: "Subscriptions and tips" },
       { href: "/advertise", title: "Advertising" },
     ],

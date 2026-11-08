@@ -256,8 +256,8 @@ export async function subscriptionCheckoutUrl(viewer: Viewer, kind: Kind): Promi
     ...(taxEnabled()
       ? { billing_address_collection: "required", ...(customer ? { customer_update: { address: "auto", name: "auto" } } : {}) }
       : {}),
-    success_url: `${origin}/settings/billing?checkout=done`,
-    cancel_url: `${origin}/settings/billing?checkout=cancelled`,
+    success_url: `${origin}/plus?checkout=done`,
+    cancel_url: `${origin}/plus?checkout=cancelled`,
   })
   if (!session.url) throw new Error("Stripe did not return a payment page. Try again.")
   return session.url

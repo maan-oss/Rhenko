@@ -4,11 +4,9 @@ import { BillingPanel } from "@/components/app/billing-panel"
 import { PageHeader } from "@/components/app/page-header"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
 
-type SearchParams = Promise<{ checkout?: string | string[]; payouts?: string | string[] }>
+type SearchParams = Promise<{ payouts?: string | string[] }>
 
 const NOTICES: Record<string, string> = {
-  "checkout:done": "Welcome aboard. Your Plus will show here as soon as Stripe confirms your payment, usually within a minute.",
-  "checkout:cancelled": "No worries. You left checkout, and nothing was charged.",
   "payouts:return": "Thanks, your payout details are saved. Stripe is checking them, and tips can reach you once it's done.",
   "payouts:refresh": "That Stripe link has expired. Tap Set up payouts to get a fresh one.",
 }
@@ -30,8 +28,7 @@ async function BillingBody({ searchParams }: { searchParams: SearchParams }) {
   const state = await billingState(viewer)
   const plusId = priceIdFor("plus")
   const plusPrice = plusId ? await priceLabel(plusId) : null
-  const checkout = typeof params.checkout === "string" ? params.checkout : ""
   const payouts = typeof params.payouts === "string" ? params.payouts : ""
-  const notice = NOTICES[`checkout:${checkout}`] ?? NOTICES[`payouts:${payouts}`] ?? null
+  const notice = NOTICES[`payouts:${payouts}`] ?? null
   return <BillingPanel state={state} plusPrice={plusPrice} notice={notice} />
 }

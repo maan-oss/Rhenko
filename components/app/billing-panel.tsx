@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { toast } from "sonner"
-import { openBilling, startPayouts, startSubscription, withdraw } from "@/actions/payments"
+import { openBilling, startPayouts, withdraw } from "@/actions/payments"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
+import Link from "@/components/app/link"
 import { LocalTime } from "@/components/app/time-text"
 import { Button } from "@/components/ui/button"
 import type { BillingState } from "@/lib/payments"
@@ -16,18 +17,8 @@ type Props = {
   notice: string | null
 }
 
-// What Rhenko Plus includes, in the order the page lists it. Each line is true of the code: see the rules and upload checks.
-const PLUS_INCLUDES = [
-  "Your posts get a boost in For you, so more people see them.",
-  "No ads in your home feed.",
-  "Edit a post for a day, instead of an hour.",
-  "The paid subscriber ring beside your name. It shows that you pay. It does not check who you are.",
-  "An animated profile picture, which can be a GIF.",
-  "Videos up to 10 minutes long, instead of 2 minutes 20 seconds. The 100 MB size limit is the same for everyone.",
-]
-
 // The billing page's controls. Each one asks the server for a Stripe page and then sends the person there, so no card
-// number is typed into this app. Money shown here comes from Stripe's own price.
+// number is typed into this app. Money shown here comes from Stripe's own price. Rhenko Plus has its own screen, at /plus.
 export function BillingPanel({ state, plusPrice, notice }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -62,56 +53,18 @@ export function BillingPanel({ state, plusPrice, notice }: Props) {
             {state.plus.periodEnd ? <LocalTime at={state.plus.periodEnd} variant="full" /> : "at the end of this period"}.
           </p>
         ) : (
-          <p className="text-[15px]">{plusPrice ? `${plusPrice}, billed securely by Stripe. Cancel any time.` : "Plus isn't ready to buy yet. Check back soon."}</p>
+          <p className="text-[15px] text-muted-foreground">
+            {plusPrice ? `${plusPrice}. Your posts get a boost in For you, and the ads leave your home feed.` : "Plus isn't ready to buy yet. Check back soon."}
+          </p>
         )}
-        <div className="flex flex-col gap-2">
-          <p className="text-[15px] font-semibold">Plus includes</p>
-          <ul className="list-disc space-y-2 pl-5 text-[15px]">
-            {PLUS_INCLUDES.map((line, index) => (
-              <li key={line} className="reveal-in" style={{ animationDelay: `${index * 50}ms` }}>
-                {line}
-              </li>
-            ))}
-          </ul>
-          <p className="text-[15px] text-muted-foreground">The boost is only in For you. Replies and search work the same for everyone.</p>
+        <div>
+          <Link
+            href="/plus"
+            className="inline-flex h-10 items-center rounded-full border border-border px-4 font-semibold transition-colors hover:bg-accent"
+          >
+            {state.plus.active ? "Manage Plus" : "See what Plus includes"}
+          </Link>
         </div>
-        {!state.plus.active && !state.emailVerified ? <p className="text-[15px]">Confirm your email address first, then you can start Plus.</p> : null}
-        <div className="flex flex-wrap gap-2">
-          {state.plus.active ? (
-            <Button type="button" variant="outline" disabled={disabled} onClick={() => go(openBilling)} className="h-10 rounded-full px-4 font-semibold">
-              Manage billing
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              disabled={disabled || !plusPrice || !state.emailVerified}
-              onClick={() => go(() => startSubscription("plus"))}
-              className="h-10 rounded-full px-4 font-semibold transition-transform duration-150 active:scale-[0.97]"
-            >
-              Subscribe to Plus
-            </Button>
-          )}
-          {state.plus.withdrawable ? (
-            <ConfirmDialog
-              trigger={
-                <Button type="button" variant="outline" disabled={disabled} className="h-10 rounded-full px-4 font-semibold">
-                  Withdraw
-                </Button>
-              }
-              title="Withdraw from Plus?"
-              description="Plus ends right away, and your first payment goes back to the card you paid with. You can do this within 14 days of starting."
-              confirmLabel="Withdraw and refund"
-              action={() => withdraw("plus")}
-              onDone={() => {
-                toast.success("Plus is withdrawn. Your refund is on its way to the card you paid with.")
-                router.refresh()
-              }}
-            />
-          ) : null}
-        </div>
-        {state.plus.withdrawable ? (
-          <p className="text-sm text-muted-foreground">Changed your mind? Withdraw within 14 days of starting and your first payment comes back. After that, use Manage billing to cancel. Plus keeps running until the end of the period you paid for.</p>
-        ) : null}
       </section>
 
       {state.verified.active ? (

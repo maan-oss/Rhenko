@@ -36,11 +36,11 @@ export async function run() {
 
 // Subscribes the person to Plus through the stand-in checkout, the same way the first check does.
 async function subscribePlus(page) {
-  await go(page, "/settings/billing", page.getByRole("heading", { name: "Rhenko Plus" }))
-  await page.getByRole("button", { name: "Subscribe to Plus", exact: true }).click()
+  await go(page, "/plus", page.getByRole("heading", { name: "Rhenko Plus" }))
+  await page.getByRole("button", { name: /^Subscribe for / }).click()
   await page.waitForURL((url) => url.origin === ORIGIN && url.pathname.startsWith("/pay/"), { timeout: TIMEOUT })
   await page.getByRole("button", { name: "Subscribe", exact: true }).click()
-  await page.waitForURL((url) => url.pathname === "/settings/billing" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
+  await page.waitForURL((url) => url.pathname === "/plus" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
 }
 
 async function userId(handle) {
@@ -99,19 +99,19 @@ async function paymentFlows(mock) {
   await execute("UPDATE users SET email_verified_at = ? WHERE handle IN (?, ?, ?)", Date.now(), payer.handle, creator.handle, tipper.handle)
 
   await check("the billing page shows Plus at the price Stripe reports, with what it includes", async () => {
-    await go(payer.page, "/settings/billing", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
+    await go(payer.page, "/plus", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
     await payer.page.getByText("$4.99 a month").first().waitFor({ timeout: TIMEOUT })
     await payer.page.getByText("The paid subscriber ring beside your name").waitFor()
     await payer.page.getByText("Videos up to 10 minutes long").waitFor()
-    await payer.page.getByRole("button", { name: "Subscribe to Plus", exact: true }).waitFor()
+    await payer.page.getByRole("button", { name: /^Subscribe for / }).waitFor()
     assert.equal(await payer.page.getByRole("heading", { name: "Paid subscriber badge", exact: true }).count(), 0, "the badge-only product is still offered")
   })
 
   await check("Plus starts through Stripe's checkout, and the page then shows when it renews", async () => {
-    await payer.page.getByRole("button", { name: "Subscribe to Plus", exact: true }).click()
+    await payer.page.getByRole("button", { name: /^Subscribe for / }).click()
     await payer.page.waitForURL((url) => url.origin === ORIGIN && url.pathname.startsWith("/pay/"), { timeout: TIMEOUT })
     await payer.page.getByRole("button", { name: "Subscribe", exact: true }).click()
-    await payer.page.waitForURL((url) => url.pathname === "/settings/billing" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
+    await payer.page.waitForURL((url) => url.pathname === "/plus" && url.searchParams.get("checkout") === "done", { timeout: TIMEOUT })
     await payer.page.getByText("Thanks. Your subscription shows here").waitFor()
     await payer.page.getByText(/Plus renews/).waitFor({ timeout: TIMEOUT })
     const rows = await query("SELECT kind, status FROM subscriptions WHERE user_id = ?", await userId(payer.handle))
@@ -121,9 +121,9 @@ async function paymentFlows(mock) {
   })
 
   await check("Rhenko Plus needs a confirmed email address before it can be bought", async () => {
-    await go(unconfirmed.page, "/settings/billing", unconfirmed.page.getByRole("heading", { name: "Rhenko Plus" }))
-    await unconfirmed.page.getByText("Confirm your email address first. Rhenko Plus needs one.").waitFor({ timeout: TIMEOUT })
-    assert.equal(await unconfirmed.page.getByRole("button", { name: "Subscribe to Plus", exact: true }).isDisabled(), true, "Subscribe is enabled without a confirmed email")
+    await go(unconfirmed.page, "/plus", unconfirmed.page.getByRole("heading", { name: "Rhenko Plus" }))
+    await unconfirmed.page.getByText("Confirm your email address first, then you can start Plus.").waitFor({ timeout: TIMEOUT })
+    assert.equal(await unconfirmed.page.getByRole("button", { name: "Confirm your email to subscribe", exact: true }).isDisabled(), true, "Subscribe is enabled without a confirmed email")
   })
 
   await check("Plus shows the paid subscriber ring on the person's posts, and never the verified check", async () => {
@@ -239,11 +239,11 @@ async function paymentFlows(mock) {
   })
 
   await check("Plus can be withdrawn within 14 days, and the first payment is refunded", async () => {
-    await go(payer.page, "/settings/billing", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
+    await go(payer.page, "/plus", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
     const before = mock.state.refunds.length
     await payer.page.getByRole("button", { name: "Withdraw", exact: true }).click()
     await payer.page.getByRole("button", { name: "Withdraw and refund", exact: true }).click()
-    await payer.page.getByRole("button", { name: "Subscribe to Plus", exact: true }).waitFor({ timeout: TIMEOUT })
+    await payer.page.getByRole("button", { name: /^Subscribe for / }).waitFor({ timeout: TIMEOUT })
     assert.equal(mock.state.refunds.length, before + 1, "no refund was made")
     const rows = await query("SELECT status FROM subscriptions WHERE user_id = ? AND kind = 'plus'", await userId(payer.handle))
     assert.equal(rows.every((row) => row.status === "canceled"), true, "a Plus row is still active")
