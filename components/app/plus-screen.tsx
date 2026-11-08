@@ -56,7 +56,7 @@ export function PlusScreen({ viewer, state, price, checkout }: Props) {
   const canBuy = state.configured && price !== null && state.emailVerified && !pending && !awaiting
 
   return (
-    <div className="flex flex-col px-4 pt-6 pb-10">
+    <div className="flex flex-col px-4 pt-6 pb-32 lg:pb-10">
       <header className="flex flex-col gap-1">
         <h2 className="text-3xl font-semibold tracking-tight">{active ? "You're on Plus" : "More reach for your posts"}</h2>
         <p className="text-[15px] text-muted-foreground">
@@ -137,7 +137,7 @@ export function PlusScreen({ viewer, state, price, checkout }: Props) {
               </div>
             ) : null}
           </>
-        ) : (
+        ) : awaiting ? null : (
           <>
             <Button
               type="button"
