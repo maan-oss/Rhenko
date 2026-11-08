@@ -166,7 +166,7 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             <B>Advertising.</B> If you run ads: the business name, country, contact email, the time you accepted the advertising policy,
-            and your campaigns and their results. If you report an ad, the report and the reason you gave. The operator can see who sent
+            and your campaigns and their results. A boosted post&apos;s words and link are kept in its campaign, and the ad library shows the words until you delete the post. If you report an ad, the report and the reason you gave. The operator can see who sent
             each report. The advertiser cannot.
           </li>
           <li>

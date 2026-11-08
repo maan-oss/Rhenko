@@ -4,7 +4,7 @@ import Link from "@/components/app/link"
 import { useRouter } from "next/navigation"
 import { useOptimistic, useState, useTransition } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
+import { Ban, BellOff, Bookmark, Coins, Eye, EyeOff, Flag, Heart, Megaphone, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Quote, Repeat2, Share2, Sparkles, ThumbsDown, Trash2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { markNotInterested } from "@/actions/feed"
 import { snoozeForYouTopic } from "@/actions/topic-snoozes"
@@ -16,6 +16,7 @@ import { Composer } from "@/components/app/composer"
 import { EditPostDialog } from "@/components/app/edit-post-dialog"
 import { ShareSheet } from "@/components/app/share-sheet"
 import { TipDialog } from "@/components/app/tip-dialog"
+import { BoostDialog } from "@/components/app/boost-dialog"
 import { PostBody } from "@/components/app/post-body"
 import { DIALOG_CLOSE_PHONE, DIALOG_FIT, MENU_ITEM_PHONE } from "@/components/app/overlay-sizes"
 import type { AvatarUser } from "@/components/app/avatar"
@@ -223,6 +224,7 @@ export function PostActions(props: Props) {
   const [tipOpen, setTipOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [boostOpen, setBoostOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [reason, setReason] = useState<string>(REPORT_REASONS[0])
   const [reportPending, startReport] = useTransition()
@@ -333,6 +335,13 @@ export function PostActions(props: Props) {
               <DropdownMenuItem key="pin" className={MENU_ITEM_PHONE} onClick={() => run(() => pinPost(pinned ? null : postId), pinned ? "Unpinned from your profile." : "Pinned to your profile.")}>
                 {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
                 {pinned ? "Unpin from profile" : "Pin to profile"}
+              </DropdownMenuItem>,
+            ]
+          : []),
+        ...(isRoot
+          ? [
+              <DropdownMenuItem key="boost" className={MENU_ITEM_PHONE} onClick={() => setBoostOpen(true)}>
+                <Megaphone className="size-4" /> Boost post
               </DropdownMenuItem>,
             ]
           : []),
@@ -532,6 +541,7 @@ export function PostActions(props: Props) {
       </Dialog>
 
       {!isOwn && tippable ? <TipDialog open={tipOpen} onOpenChange={setTipOpen} postId={postId} handle={author.handle} /> : null}
+      {isOwn && isRoot ? <BoostDialog open={boostOpen} onOpenChange={setBoostOpen} postId={postId} /> : null}
       {isOwn ? <EditPostDialog open={editOpen} onOpenChange={setEditOpen} postId={postId} body={props.body} title={props.title} media={media} windowMs={editWindowMs} reply={!isRoot} /> : null}
 
       <ShareSheet

@@ -618,3 +618,11 @@ html[data-nav-away="true"] [data-app-main] {
     animation: none;
   }
 }
+
+/* Badge colours (components/app/badges.tsx). One place to change the set. */
+:root {
+  --badge-plus: #3b82f6;
+  --badge-og: #e5a22a;
+  --badge-veteran: #7c8aa5;
+  --badge-id: #16a06b;
+}

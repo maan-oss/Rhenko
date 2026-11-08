@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import Stripe from "stripe"
 import { newId, requireAgreedViewer } from "@/lib/auth"
 import { get, run } from "@/lib/db"
-import { AD_CAMPAIGNS_WAITING_MAX, MICRO_PER_CENT, campaignProblem, normalizeTopic } from "@/lib/ad-rules"
+import { AD_CAMPAIGNS_WAITING_MAX, BOOST_BUDGETS, MICRO_PER_CENT, boostCopy, campaignProblem, normalizeTopic } from "@/lib/ad-rules"
 import { CURRENCY, adCreditUrl, paymentsConfigured } from "@/lib/payments"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { ageFrom } from "@/lib/rules"
@@ -145,4 +145,53 @@ export async function startAdCredit(amount: number): Promise<{ ok: true; url: st
     }
     return { ok: false, error: error instanceof Error ? error.message : TRY_AGAIN }
   }
+}
+
+// The amounts a boost can spend, and the currency they are in.
+export async function boostBudgetOptions(): Promise<{ amounts: number[]; currency: string }> {
+  await requireAgreedViewer()
+  return { amounts: BOOST_BUDGETS, currency: CURRENCY }
+}
+
+// Boosts one of the viewer's own posts. The post becomes a campaign with the post's text as its ad. A person reviews it
+// before it runs, and it is paid from the advertising balance as people see it. Only a top-level post, and only once.
+export async function boostPost(postId: string, dollars: number): Promise<{ ok: true } | { ok: false; error: string; needsAccount?: boolean }> {
+  const viewer = await requireAgreedViewer()
+  if (typeof postId !== "string" || !/^[0-9a-f-]{36}$/.test(postId)) return { ok: false, error: "That post is not available." }
+  if (!(BOOST_BUDGETS as readonly number[]).includes(dollars)) return { ok: false, error: "Choose one of the amounts." }
+  const account = await get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
+  if (!account) return { ok: false, error: "Set up advertising first. A boost is an ad.", needsAccount: true }
+  const publicUrl = (process.env.RHENKO_PUBLIC_URL ?? "").replace(/\/+$/, "")
+  if (!publicUrl) return { ok: false, error: "Boosts are not set up on this server yet." }
+  const post = await get<{ body: string; handle: string }>(
+    `SELECT p.body, u.handle FROM posts p JOIN users u ON u.id = p.author_id
+     WHERE p.id = ? AND p.author_id = ? AND p.reply_to_id IS NULL AND p.is_draft = 0`,
+    postId,
+    viewer.id
+  )
+  if (!post) return { ok: false, error: "That post is not available." }
+  const made = boostCopy({ text: post.body, handle: post.handle, postId }, publicUrl)
+  if ("problem" in made) return { ok: false, error: made.problem }
+  if (await get("SELECT 1 AS found FROM ad_campaigns WHERE post_id = ? AND status IN ('in_review', 'active', 'paused')", postId)) {
+    return { ok: false, error: "This post is already boosted." }
+  }
+  const waiting = await get<{ n: number }>("SELECT COUNT(*) AS n FROM ad_campaigns WHERE account_id = ? AND status = 'in_review'", account.id)
+  if ((waiting?.n ?? 0) >= AD_CAMPAIGNS_WAITING_MAX) {
+    return { ok: false, error: `You can have ${AD_CAMPAIGNS_WAITING_MAX} campaigns waiting for review. Wait for one to be reviewed.` }
+  }
+  await run(
+    `INSERT INTO ad_campaigns (id, account_id, headline, body, cta, link_url, picture_file, topic, budget_micro, spent_micro, impressions, clicks, status, review_note, reviewed_at, created_at, post_id)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, 0, 0, 0, 'in_review', NULL, NULL, ?, ?)`,
+    newId(),
+    account.id,
+    made.copy.headline,
+    made.copy.body,
+    made.copy.cta,
+    made.copy.link,
+    dollars * 100 * MICRO_PER_CENT,
+    Date.now(),
+    postId
+  )
+  revalidatePath("/advertise")
+  return { ok: true }
 }

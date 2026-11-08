@@ -205,6 +205,7 @@ const SECTIONS: LegalSection[] = [
           <li>An ad aimed at a topic is shown only to people who follow that topic. Nothing else about you is used to choose an ad.</li>
           <li>Advertisers do not learn who saw or clicked their ad. They see how many times it was shown and clicked.</li>
           <li>A person reviews every campaign before it runs. The operator can refuse or stop an ad at any time.</li>
+          <li>You can boost one of your own posts. A boost is an ad: it is labelled Ad and runs under the advertising policy. Deleting the post ends it.</li>
         </List>
       </>
     ),

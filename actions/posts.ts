@@ -376,6 +376,11 @@ export async function deletePost(postId: string): Promise<VoidResult> {
 
   // Replies go with their parent, so their media is removed too.
   const files = await mediaFilesFor(await thread(postId))
+  // A boost of this post stops with it, and its copy (the post's own words) is blanked, so nothing of the post stays in the ad library.
+  await run(
+    "UPDATE ad_campaigns SET status = CASE WHEN status IN ('in_review', 'active', 'paused') THEN 'ended' ELSE status END, headline = 'Deleted post', body = '' WHERE post_id = ?",
+    postId
+  )
   await run("DELETE FROM posts WHERE id = ? AND author_id = ?", postId, viewer.id)
   await removeFiles(files)
   refresh()

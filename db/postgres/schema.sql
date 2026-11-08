@@ -415,6 +415,7 @@ CREATE TABLE ad_campaigns (
   impressions bigint NOT NULL DEFAULT 0,
   clicks bigint NOT NULL DEFAULT 0,
   status text NOT NULL check (status IN ('in_review', 'rejected', 'active', 'paused', 'ended')),
+  post_id text, -- the post this campaign boosts; null for an ordinary campaign (lib/ad-rules.ts)
   review_note text,
   reviewed_at bigint,
   created_at bigint NOT NULL
@@ -625,6 +626,8 @@ CREATE TABLE timeline_pins (
     created_at bigint NOT NULL,
     PRIMARY KEY (user_id, list_id)
   );
+
+CREATE INDEX ad_campaigns_post ON ad_campaigns (post_id);
 
 CREATE TABLE ad_reports (
   id text PRIMARY KEY,

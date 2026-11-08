@@ -103,6 +103,39 @@ function adLinkProblem(link: string): string | null {
   return null
 }
 
+// Boosts. A boost makes one of the author's own posts into an ad. The policy screen reads the whole post, not only the part an
+// ad shows, the campaign is reviewed like any other, and it is labelled Ad. The amounts are the most a boost can spend.
+export const BOOST_BUDGETS = [5, 10, 25, 50]
+const BOOST_CTA = "View post"
+
+export type BoostCopy = { headline: string; body: string; cta: string; link: string }
+
+// The ad for a post, or the reason it cannot be boosted. publicUrl is the site's address without a trailing slash.
+export function boostCopy(post: { text: string; handle: string; postId: string }, publicUrl: string): { copy: BoostCopy } | { problem: string } {
+  const text = post.text.replace(/\s+/g, " ").trim()
+  if ([...text].length < 10) return { problem: "Boosts need at least 10 characters of text. Add more to the post first." }
+  const problem = policyProblem(text)
+  if (problem) return { problem }
+  return {
+    copy: {
+      headline: clip(text, AD_HEADLINE_MAX),
+      body: `From @${post.handle}. Open the post to read all of it.`,
+      cta: BOOST_CTA,
+      link: `${publicUrl}/${post.handle}/status/${post.postId}`,
+    },
+  }
+}
+
+// The first max characters, cut at a word where one is near, with an ellipsis when cut.
+function clip(text: string, max: number): string {
+  const chars = [...text]
+  if (chars.length <= max) return text
+  const cut = chars.slice(0, max - 1).join("")
+  const space = cut.lastIndexOf(" ")
+  const kept = space > (max - 1) * 0.6 ? cut.slice(0, space) : cut
+  return `${kept.replace(/[\s,.;:!?-]+$/, "")}…`
+}
+
 // What an ad shows. The button goes to the site's own redirect, which counts the click and then sends the person on.
 export type AdView = {
   id: string

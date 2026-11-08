@@ -3,7 +3,7 @@ import { connection } from "next/server"
 import { all } from "@/lib/db"
 import { LegalPage, List, P, TextLink, type LegalSection } from "@/app/_legal/shell"
 import { LEGAL_UPDATED, MINIMUM_AGE } from "@/lib/legal"
-import { AD_EVERY, cpmCents, hostOf } from "@/lib/ad-rules"
+import { AD_EVERY, BOOST_BUDGETS, cpmCents, hostOf } from "@/lib/ad-rules"
 import { CURRENCY } from "@/lib/payments"
 import { formatMoney } from "@/lib/money"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
@@ -89,6 +89,24 @@ const SECTIONS: LegalSection[] = [
     ),
   },
   {
+    id: "boosts",
+    title: "Boosted posts",
+    body: (
+      <>
+        <P>
+          Someone with an advertising account can boost one of their own posts, not a reply, from the post&apos;s menu. A boost is an ad. A
+          person reviews it like every other campaign, it is labelled Ad, it runs under the rules on this page, and it is paid from the ad
+          balance.
+        </P>
+        <P>
+          The ad&apos;s headline is the start of the post, and its body names the author and says to open the post to read all of it. The
+          button opens the post. Budgets are fixed at {BOOST_BUDGETS.map((amount) => formatMoney(amount * 100, CURRENCY)).join(", ")}. Deleting
+          the post ends the boost and removes its words from the ad library.
+        </P>
+      </>
+    ),
+  },
+  {
     id: "changes",
     title: "Changing and ending an ad",
     body: (
@@ -142,6 +160,7 @@ async function Library() {
     `SELECT c.headline, c.body, c.link_url, c.topic, c.status, c.impressions, a.business_name, a.country
      FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id
      WHERE c.status IN ('active', 'paused', 'ended') AND a.status = 'active'
+       AND (c.post_id IS NULL OR EXISTS (SELECT 1 FROM posts p WHERE p.id = c.post_id))
      ORDER BY c.reviewed_at DESC, c.created_at DESC LIMIT 200`
   )
   return (

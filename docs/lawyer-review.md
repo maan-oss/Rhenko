@@ -157,8 +157,17 @@ Counsel may change any of these. The app and the pages follow each decision as w
   (What is stored, and Who else receives data) is enough, since other people now see that the check was passed.
 - **Country of origin. Decided: not collected.** It is a sensitive attribute under the privacy rules, and collecting it needs an
   explicit choice and counsel review. Country of residence is unchanged.
-- **Boost and affiliates: not decided, not built.** Neither exists in the app. The operator has not said what they should do. An
-  affiliate scheme that pays people would need payout and tax records, which this packet does not cover.
+- **Boost. Decided: a boost is an ad for one of the author's own posts.** Built on 8 November 2026 on the operator's instruction (decision
+  made by the assistant, for counsel to confirm). It uses the ad system unchanged: a person reviews it, it is labelled Ad, it is shown only
+  to adults who do not pay for Plus, and it is charged from the ad balance at fixed budgets of $5, $10, $25 or $50 (`BOOST_BUDGETS` in
+  `lib/ad-rules.ts`). Its copy is the start of the post (`boostCopy`), so the post's words appear in the public ad library while the post
+  exists. Deleting the post ends the boost and removes its words from the library. Counsel should confirm that showing a person's own
+  post in the ad library is acceptable.
+- **Plus check mark. Decided by the assistant, to confirm with the operator: a blue check on a Plus subscriber's account means only that
+  the account pays for Plus.** It is not an identity claim, and its label says Rhenko has not checked the person. The operator asked for a
+  check like the one on X; counsel should confirm the wording.
+- **Affiliates. Dropped by the operator on 8 November 2026.** Nothing is built and nothing is planned in this packet. An affiliate scheme
+  that paid people would need payout and tax records, which this packet does not cover.
 
 ### Images and videos
 
@@ -239,7 +248,7 @@ These cannot be finished in the repository. Each needs an operator action or a d
   (decision 10), and so are all files in encrypted chats (encrypted decision 2).
 - Stripe Identity enabled and checked for an Australian business account, and the four identity webhook events configured on the live
   Stripe webhook.
-- Production steps in the runbook: applying the six upgrade files before the new code, the webhook, and the Plus price in the live
+- Production steps in the runbook: applying the seven upgrade files before the new code, the webhook, and the Plus price in the live
   Stripe account. They need access to the server, which this session does not have.
 - Existing users must complete the identity check before they can post (decision 9). Tell them before the switch.
 
