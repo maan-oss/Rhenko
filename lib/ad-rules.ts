@@ -103,28 +103,41 @@ function adLinkProblem(link: string): string | null {
   return null
 }
 
-// Boosts. A boost makes one of the author's own posts into an ad. The policy screen reads the whole post, not only the part an
-// ad shows, the campaign is reviewed like any other, and it is labelled Ad. The amounts are the most a boost can spend.
+// Boosts. A boost makes one of the author's own text posts into an ad. The policy screen reads the whole post, not only the part an
+// ad shows. The campaign is reviewed like any other, and it is labelled Ad. The amounts are the most a boost can spend, in dollars.
 export const BOOST_BUDGETS = [5, 10, 25, 50]
+// The most of a post an ad shows. A longer post is cut at a word, and the button opens the whole post.
+export const BOOST_BODY_MAX = 1000
 const BOOST_CTA = "View post"
 
 export type BoostCopy = { headline: string; body: string; cta: string; link: string }
 
-// The ad for a post, or the reason it cannot be boosted. publicUrl is the site's address without a trailing slash.
+// The ad for a post, or the reason it cannot be boosted. publicUrl is the site's address without a trailing slash. The policy
+// screen reads the whole post. The ad keeps the post's own words, as written, cut at a word when the post is longer than the limit.
 export function boostCopy(post: { text: string; handle: string; postId: string }, publicUrl: string): { copy: BoostCopy } | { problem: string } {
-  const text = post.text.replace(/\s+/g, " ").trim()
-  if ([...text].length < 10) return { problem: "Boosts need at least 10 characters of text. Add more to the post first." }
-  const problem = policyProblem(text)
+  const flat = post.text.replace(/\s+/g, " ").trim()
+  if ([...flat].length < 10) return { problem: "Boosts need at least 10 characters of text. Add more to the post first." }
+  const problem = policyProblem(flat)
   if (problem) return { problem }
+  const words = post.text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim()
   return {
     copy: {
-      headline: clip(text, AD_HEADLINE_MAX),
-      body: `From @${post.handle}. Open the post to read all of it.`,
+      headline: clip(flat, AD_HEADLINE_MAX),
+      body: clip(words, BOOST_BODY_MAX),
       cta: BOOST_CTA,
       link: `${publicUrl}/${post.handle}/status/${post.postId}`,
     },
   }
 }
+
+// How many views a budget buys at the current price, at most. A view is one person seeing the ad on one day.
+export function boostViews(dollars: number): number {
+  return Math.floor((dollars * 100 * MICRO_PER_CENT) / impressionCostMicro())
+}
+
+// SQL for a campaign that may run or be listed: not a boost, or a boost whose post is still on Rhenko and whose author has not
+// closed their account. The campaign table must be aliased c.
+export const LIVE_CAMPAIGN_SQL = `(c.post_id IS NULL OR EXISTS (SELECT 1 FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = c.post_id AND p.removed_at IS NULL AND u.deactivated_at IS NULL))`
 
 // The first max characters, cut at a word where one is near, with an ellipsis when cut.
 function clip(text: string, max: number): string {
@@ -145,6 +158,18 @@ export type AdView = {
   href: string
   advertiser: string
   host: string
+  // A boost: the body is the post's own words, and byline names its author.
+  boost?: boolean
+  byline?: string
+}
+
+// What each campaign status is called on the advertiser's pages.
+export const CAMPAIGN_STATUS_LABEL: Record<"in_review" | "rejected" | "active" | "paused" | "ended", string> = {
+  in_review: "Waiting for review",
+  rejected: "Not approved",
+  active: "Running",
+  paused: "Paused",
+  ended: "Ended",
 }
 
 export type AdItem = { key: string; ad: AdView }

@@ -160,8 +160,9 @@ Counsel may change any of these. The app and the pages follow each decision as w
 - **Boost. Decided: a boost is an ad for one of the author's own posts.** Built on 8 November 2026 on the operator's instruction (decision
   made by the assistant, for counsel to confirm). It uses the ad system unchanged: a person reviews it, it is labelled Ad, it is shown only
   to adults who do not pay for Plus, and it is charged from the ad balance at fixed budgets of $5, $10, $25 or $50 (`BOOST_BUDGETS` in
-  `lib/ad-rules.ts`). Its copy is the start of the post (`boostCopy`), so the post's words appear in the public ad library while the post
-  exists. Deleting the post ends the boost and removes its words from the library. Counsel should confirm that showing a person's own
+  `lib/ad-rules.ts`). Its copy is the post's own words, as written, cut at 1,000 characters (`BOOST_BODY_MAX`), so they appear in the public ad
+  library while the post exists. Photos, videos and polls cannot be boosted. A boost stops when its post is removed or deleted, or its
+  author closes the account (`LIVE_CAMPAIGN_SQL`). Deleting the post also removes its words from the library. Counsel should confirm that showing a person's own
   post in the ad library is acceptable.
 - **Plus check mark. Decided by the assistant, to confirm with the operator: a blue check on a Plus subscriber's account means only that
   the account pays for Plus.** It is not an identity claim, and its label says Rhenko has not checked the person. The operator asked for a

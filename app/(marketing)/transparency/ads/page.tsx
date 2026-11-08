@@ -3,7 +3,7 @@ import { connection } from "next/server"
 import { all } from "@/lib/db"
 import { LegalPage, List, P, TextLink, type LegalSection } from "@/app/_legal/shell"
 import { LEGAL_UPDATED, MINIMUM_AGE } from "@/lib/legal"
-import { AD_EVERY, BOOST_BUDGETS, cpmCents, hostOf } from "@/lib/ad-rules"
+import { AD_EVERY, BOOST_BODY_MAX, BOOST_BUDGETS, LIVE_CAMPAIGN_SQL, cpmCents, hostOf } from "@/lib/ad-rules"
 import { CURRENCY } from "@/lib/payments"
 import { formatMoney } from "@/lib/money"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
@@ -99,9 +99,10 @@ const SECTIONS: LegalSection[] = [
           balance.
         </P>
         <P>
-          The ad&apos;s headline is the start of the post, and its body names the author and says to open the post to read all of it. The
-          button opens the post. Budgets are fixed at {BOOST_BUDGETS.map((amount) => formatMoney(amount * 100, CURRENCY)).join(", ")}. Deleting
-          the post ends the boost and removes its words from the ad library.
+          The ad shows the post&apos;s own words, as written, with its author&apos;s handle and a button that opens the post. A post longer than{" "}
+          {BOOST_BODY_MAX.toLocaleString("en")} characters is cut at a word, and the button opens the whole post. Photos, videos and polls cannot be
+          boosted for now. Budgets are fixed at {BOOST_BUDGETS.map((amount) => formatMoney(amount * 100, CURRENCY)).join(", ")}. A boost stops if its
+          post is removed or deleted, or the author closes their account. Deleting the post also removes its words from the ad library.
         </P>
       </>
     ),
@@ -160,7 +161,7 @@ async function Library() {
     `SELECT c.headline, c.body, c.link_url, c.topic, c.status, c.impressions, a.business_name, a.country
      FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id
      WHERE c.status IN ('active', 'paused', 'ended') AND a.status = 'active'
-       AND (c.post_id IS NULL OR EXISTS (SELECT 1 FROM posts p WHERE p.id = c.post_id))
+       AND ${LIVE_CAMPAIGN_SQL}
      ORDER BY c.reviewed_at DESC, c.created_at DESC LIMIT 200`
   )
   return (

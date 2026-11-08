@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { createAdAccount, createCampaign, setCampaignPaused, startAdCredit, type FormState } from "@/actions/ads"
 import { ErrorLine, Field, FIELD_INPUT } from "@/components/app/form-bits"
 import { Button } from "@/components/ui/button"
-import { ADD_CREDIT_OPTIONS, AD_BODY_MAX, AD_CTA_MAX, AD_HEADLINE_MAX, AD_LINK_MAX, AD_TOPIC_MAX } from "@/lib/ad-rules"
+import { ADD_CREDIT_OPTIONS, AD_BODY_MAX, AD_CTA_MAX, AD_HEADLINE_MAX, AD_LINK_MAX, AD_TOPIC_MAX, CAMPAIGN_STATUS_LABEL } from "@/lib/ad-rules"
 import { formatMoney } from "@/lib/money"
 
 export type CampaignRow = {
@@ -20,6 +20,8 @@ export type CampaignRow = {
   spent: number
   impressions: number
   clicks: number
+  // A boost of one of the account holder's own posts, rather than an ordinary campaign.
+  boost: boolean
 }
 
 export type AdvertiseData = {
@@ -29,14 +31,6 @@ export type AdvertiseData = {
   campaigns: CampaignRow[]
   creditAdded: boolean
   adult: boolean
-}
-
-const STATUS: Record<CampaignRow["status"], string> = {
-  in_review: "Waiting for review",
-  rejected: "Not approved",
-  active: "Running",
-  paused: "Paused",
-  ended: "Ended",
 }
 
 function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }) {
@@ -217,8 +211,15 @@ function CampaignItem({ campaign, currency }: { campaign: CampaignRow; currency:
   return (
     <li className="flex flex-col gap-2 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[16px] font-semibold">{campaign.headline}</h3>
-        <span className="text-[14px] text-muted-foreground">{STATUS[campaign.status]}</span>
+        <h3 className="text-[16px] font-semibold">
+          <Link href={`/advertise/campaigns/${campaign.id}`} className="underline-offset-4 hover:underline">
+            {campaign.headline}
+          </Link>
+        </h3>
+        <span className="text-[14px] text-muted-foreground">
+          {campaign.boost ? "Boost, " : ""}
+          {CAMPAIGN_STATUS_LABEL[campaign.status]}
+        </span>
       </div>
       {campaign.status === "rejected" && campaign.review_note ? <p className="text-[15px]">Reason: {campaign.review_note}</p> : null}
       <p className="text-[14px] text-muted-foreground">

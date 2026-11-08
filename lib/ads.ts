@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { newId, runChanges } from "@/lib/auth"
 import { all, get, run, transaction } from "@/lib/db"
 import type { FeedItem, Page } from "@/lib/data"
-import { AD_EVERY, impressionCostMicro, hostOf, type AdView, type FeedEntry } from "@/lib/ad-rules"
+import { AD_EVERY, LIVE_CAMPAIGN_SQL, impressionCostMicro, hostOf, type AdView, type FeedEntry } from "@/lib/ad-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { ageFrom } from "@/lib/rules"
 
@@ -34,16 +34,20 @@ type Candidate = {
   link_url: string
   account_id: string
   business_name: string
+  post_id: string | null
+  handle: string | null
 }
 
 // Campaigns that may run now, the ones that have spent the least of their budget first, with a random order between
 // equals so one campaign does not always come first.
 async function candidatesFor(viewerId: string, limit: number): Promise<Candidate[]> {
   return await all<Candidate>(
-    `SELECT c.id, c.headline, c.body, c.cta, c.link_url, c.account_id, a.business_name
+    `SELECT c.id, c.headline, c.body, c.cta, c.link_url, c.account_id, a.business_name, c.post_id,
+       (SELECT u.handle FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = c.post_id) AS handle
      FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id
      WHERE c.status = 'active' AND a.status = 'active' AND c.spent_micro < c.budget_micro AND a.balance_micro >= ?
        AND (c.topic IS NULL OR EXISTS (SELECT 1 FROM topic_follows tf WHERE tf.user_id = ? AND tf.tag = c.topic))
+       AND ${LIVE_CAMPAIGN_SQL}
      ORDER BY CAST(c.spent_micro AS REAL) / c.budget_micro ASC, RANDOM()
      LIMIT ?`,
     impressionCostMicro(),
@@ -108,6 +112,8 @@ export async function withAds(page: Page<FeedItem>, viewerId: string): Promise<P
       href: `/api/ads/click/${candidate.id}`,
       advertiser: candidate.business_name,
       host: hostOf(candidate.link_url),
+      boost: candidate.post_id !== null,
+      byline: candidate.handle ? `@${candidate.handle}` : undefined,
     })
   }
   if (chosen.length === 0) return page

@@ -4,6 +4,8 @@ import { requireViewer } from "@/lib/auth"
 import { postAnalytics } from "@/lib/data"
 import { pluralize } from "@/lib/format"
 import { DEFINITIONS } from "@/lib/metric-definitions"
+import { get } from "@/lib/db"
+import { CAMPAIGN_STATUS_LABEL } from "@/lib/ad-rules"
 import { exact } from "@/components/app/analytics-bits"
 import { PageHeader } from "@/components/app/page-header"
 import { TrendChart } from "@/components/app/trend-chart"
@@ -24,6 +26,13 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
   if (stats.handle.toLowerCase() !== handle.toLowerCase()) redirect(`/${stats.handle}/status/${stats.id}/analytics`)
 
   const statusHref = `/${stats.handle}/status/${stats.id}`
+
+  // The author's latest boost of this post, if there is one: its status and how many views it has bought.
+  const boost = await get<{ id: string; status: "in_review" | "rejected" | "active" | "paused" | "ended"; impressions: number }>(
+    "SELECT c.id, c.status, c.impressions FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.post_id = ? AND a.user_id = ? ORDER BY c.created_at DESC LIMIT 1",
+    postId,
+    viewer.id
+  )
 
   // The five ways people respond, each with its own count.
   const actions = [
@@ -109,6 +118,27 @@ export default async function PostAnalyticsPage({ params }: { params: Params }) 
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="boost" className="mt-5 flex flex-col border-t border-border px-4 pt-5 pb-2">
+        <h2 id="boost" className="pb-2 text-base font-semibold">
+          Boost
+        </h2>
+        {boost ? (
+          <>
+            <p className="flex items-baseline justify-between gap-3 border-t border-border py-3.5 text-[15px] first:border-t-0">
+              <span>{CAMPAIGN_STATUS_LABEL[boost.status]}</span>
+              <span className="font-semibold tabular-nums">{exact(boost.impressions)} boosted views</span>
+            </p>
+            <Link href={`/advertise/campaigns/${boost.id}`} className="w-fit pt-2 font-semibold underline underline-offset-4">
+              See this boost
+            </Link>
+          </>
+        ) : (
+          <Link href={`${statusHref}/boost`} className="w-fit py-3.5 font-semibold underline underline-offset-4">
+            Boost this post
+          </Link>
+        )}
       </section>
 
       <p className="px-4 py-5 text-sm leading-relaxed text-muted-foreground">

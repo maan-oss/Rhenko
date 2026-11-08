@@ -40,8 +40,9 @@ async function AdvertiseBody({ searchParams }: { searchParams: SearchParams }) {
         spent_micro: number
         impressions: number
         clicks: number
+        post_id: string | null
       }>(
-        "SELECT id, headline, status, review_note, budget_micro, spent_micro, impressions, clicks FROM ad_campaigns WHERE account_id = ? ORDER BY created_at DESC LIMIT 100",
+        "SELECT id, headline, status, review_note, budget_micro, spent_micro, impressions, clicks, post_id FROM ad_campaigns WHERE account_id = ? ORDER BY created_at DESC LIMIT 100",
         account.id
       )
     : []
@@ -67,6 +68,7 @@ async function AdvertiseBody({ searchParams }: { searchParams: SearchParams }) {
       spent: Math.floor(campaign.spent_micro / MICRO_PER_CENT),
       impressions: campaign.impressions,
       clicks: campaign.clicks,
+      boost: campaign.post_id !== null,
     })),
   }
   return <AdvertisePanel data={data} />

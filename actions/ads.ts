@@ -130,6 +130,23 @@ export async function setCampaignPaused(campaignId: string, paused: boolean): Pr
   return { ok: true }
 }
 
+// Ends a boost or campaign for good, or withdraws one still waiting for review. Nothing more is shown, and money not yet spent
+// stays in the balance. It cannot be started again, so the page asks first.
+export async function endCampaign(campaignId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const viewer = await requireAgreedViewer()
+  if (typeof campaignId !== "string" || !/^[0-9a-f-]{36}$/.test(campaignId)) return { ok: false, error: "That campaign does not exist." }
+  const row = await get<{ status: string }>(
+    "SELECT c.status FROM ad_campaigns c JOIN ad_accounts a ON a.id = c.account_id WHERE c.id = ? AND a.user_id = ?",
+    campaignId,
+    viewer.id
+  )
+  if (!row) return { ok: false, error: "That campaign does not exist." }
+  if (!["in_review", "active", "paused"].includes(row.status)) return { ok: false, error: "This campaign has already ended." }
+  await run("UPDATE ad_campaigns SET status = 'ended' WHERE id = ?", campaignId)
+  revalidatePath("/advertise")
+  return { ok: true }
+}
+
 // Starts a Stripe checkout that adds to the advertising balance. The balance changes only when Stripe confirms the payment.
 export async function startAdCredit(amount: number): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const viewer = await requireAgreedViewer()
@@ -147,29 +164,30 @@ export async function startAdCredit(amount: number): Promise<{ ok: true; url: st
   }
 }
 
-// The amounts a boost can spend, and the currency they are in.
-export async function boostBudgetOptions(): Promise<{ amounts: number[]; currency: string }> {
-  await requireAgreedViewer()
-  return { amounts: BOOST_BUDGETS, currency: CURRENCY }
-}
+// Boosts one of the viewer's own posts. The post becomes a campaign with the post's own words as its ad. A person reviews it
+// before it runs, and it is paid from the advertising balance as people see it. Only a top-level text post, and only once.
+export type BoostResult = { ok: true; campaignId: string } | { ok: false; error: string; needsAccount?: boolean }
 
-// Boosts one of the viewer's own posts. The post becomes a campaign with the post's text as its ad. A person reviews it
-// before it runs, and it is paid from the advertising balance as people see it. Only a top-level post, and only once.
-export async function boostPost(postId: string, dollars: number): Promise<{ ok: true } | { ok: false; error: string; needsAccount?: boolean }> {
+export async function boostPost(postId: string, dollars: number): Promise<BoostResult> {
   const viewer = await requireAgreedViewer()
   if (typeof postId !== "string" || !/^[0-9a-f-]{36}$/.test(postId)) return { ok: false, error: "That post is not available." }
   if (!(BOOST_BUDGETS as readonly number[]).includes(dollars)) return { ok: false, error: "Choose one of the amounts." }
-  const account = await get<{ id: string }>("SELECT id FROM ad_accounts WHERE user_id = ?", viewer.id)
+  const account = await get<{ id: string; status: string }>("SELECT id, status FROM ad_accounts WHERE user_id = ?", viewer.id)
   if (!account) return { ok: false, error: "Set up advertising first. A boost is an ad.", needsAccount: true }
+  if (account.status !== "active") return { ok: false, error: "Your advertising account is not active." }
   const publicUrl = (process.env.RHENKO_PUBLIC_URL ?? "").replace(/\/+$/, "")
   if (!publicUrl) return { ok: false, error: "Boosts are not set up on this server yet." }
-  const post = await get<{ body: string; handle: string }>(
-    `SELECT p.body, u.handle FROM posts p JOIN users u ON u.id = p.author_id
-     WHERE p.id = ? AND p.author_id = ? AND p.reply_to_id IS NULL AND p.is_draft = 0`,
+  const post = await get<{ body: string; handle: string; has_extra: number }>(
+    `SELECT p.body, u.handle,
+       CASE WHEN p.media_file IS NOT NULL OR EXISTS (SELECT 1 FROM post_media m WHERE m.post_id = p.id)
+         OR EXISTS (SELECT 1 FROM polls pl WHERE pl.post_id = p.id) THEN 1 ELSE 0 END AS has_extra
+     FROM posts p JOIN users u ON u.id = p.author_id
+     WHERE p.id = ? AND p.author_id = ? AND p.reply_to_id IS NULL AND p.is_draft = 0 AND p.publish_at IS NULL AND p.removed_at IS NULL`,
     postId,
     viewer.id
   )
   if (!post) return { ok: false, error: "That post is not available." }
+  if (post.has_extra === 1) return { ok: false, error: "Only text posts can be boosted for now." }
   const made = boostCopy({ text: post.body, handle: post.handle, postId }, publicUrl)
   if ("problem" in made) return { ok: false, error: made.problem }
   if (await get("SELECT 1 AS found FROM ad_campaigns WHERE post_id = ? AND status IN ('in_review', 'active', 'paused')", postId)) {
@@ -179,10 +197,11 @@ export async function boostPost(postId: string, dollars: number): Promise<{ ok: 
   if ((waiting?.n ?? 0) >= AD_CAMPAIGNS_WAITING_MAX) {
     return { ok: false, error: `You can have ${AD_CAMPAIGNS_WAITING_MAX} campaigns waiting for review. Wait for one to be reviewed.` }
   }
+  const campaignId = newId()
   await run(
     `INSERT INTO ad_campaigns (id, account_id, headline, body, cta, link_url, picture_file, topic, budget_micro, spent_micro, impressions, clicks, status, review_note, reviewed_at, created_at, post_id)
      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, 0, 0, 0, 'in_review', NULL, NULL, ?, ?)`,
-    newId(),
+    campaignId,
     account.id,
     made.copy.headline,
     made.copy.body,
@@ -193,5 +212,5 @@ export async function boostPost(postId: string, dollars: number): Promise<{ ok: 
     postId
   )
   revalidatePath("/advertise")
-  return { ok: true }
+  return { ok: true, campaignId }
 }
