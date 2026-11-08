@@ -101,7 +101,6 @@ async function paymentFlows(mock) {
   await check("the billing page shows Plus at the price Stripe reports, with what it includes", async () => {
     await go(payer.page, "/plus", payer.page.getByRole("heading", { name: "Rhenko Plus" }))
     await payer.page.getByText("$4.99 a month").first().waitFor({ timeout: TIMEOUT })
-    await payer.page.getByRole("img", { name: /^Rhenko Plus subscriber/ }).first().waitFor()
     await payer.page.getByText("Videos up to 10 minutes", { exact: true }).waitFor()
     await payer.page.getByRole("button", { name: /^Subscribe for / }).waitFor()
     assert.equal(await payer.page.getByRole("heading", { name: "Paid subscriber badge", exact: true }).count(), 0, "the badge-only product is still offered")

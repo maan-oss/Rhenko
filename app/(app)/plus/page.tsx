@@ -27,7 +27,7 @@ async function PlusBody({ searchParams }: { searchParams: SearchParams }) {
   if (checkout === "done" && sessionId) await completeCheckout(viewer, sessionId)
   const plusId = priceIdFor("plus")
   const [state, price] = await Promise.all([billingState(viewer), plusId ? priceLabel(plusId) : null])
-  return <PlusScreen viewer={viewer} state={state} price={price} checkout={checkout} />
+  return <PlusScreen state={state} price={price} checkout={checkout} />
 }
 
 function first(value: string | string[] | undefined): string {
