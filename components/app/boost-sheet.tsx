@@ -2,10 +2,11 @@
 
 import Link from "@/components/app/link"
 import { useEffect, useState, type ReactNode } from "react"
-import { X } from "lucide-react"
+import { CircleHelp, X } from "lucide-react"
 import { boostSetup } from "@/actions/ads"
-import { BottomSheet } from "@/components/app/bottom-sheet"
 import { BoostForm } from "@/components/app/boost-form"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { BoostSetup } from "@/lib/boost-setup"
 
 type Loader = (postId: string) => Promise<BoostSetup>
@@ -13,8 +14,9 @@ type Loader = (postId: string) => Promise<BoostSetup>
 const PILL_LINK =
   "inline-flex h-12 items-center rounded-full border border-border px-6 text-[15px] font-semibold transition-colors duration-200 hover:bg-muted"
 
-// Boost a post from a sheet that rises over it, as X does. It loads what the boost would be each time it opens, so the
-// balance and the views it buys are current.
+// Boost a post from the post's menu. On a phone it rises from the bottom edge, flush with the screen, as X's does. On a computer it
+// is a dialog in the middle of the screen. It loads what the boost would be each time it opens, so the balance and the views it
+// buys are current.
 export function BoostSheet({
   postId,
   open,
@@ -44,32 +46,49 @@ export function BoostSheet({
   }, [open, postId, load])
 
   return (
-    <BottomSheet open={open} onClose={onClose} label="Boost post" rest="86dvh">
-      <div className="relative flex h-14 items-center justify-center">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute top-1/2 left-3 grid size-10 -translate-y-1/2 place-items-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring outline-none"
-        >
-          <X className="size-5" strokeWidth={1.8} aria-hidden="true" />
-        </button>
-        <h2 className="text-[17px] font-semibold">Boost post</h2>
-      </div>
-      <BoostSheetBody setup={setup} />
-    </BottomSheet>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[400px] max-sm:top-auto max-sm:right-0 max-sm:bottom-0 max-sm:left-0 max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-[32px] max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)] max-sm:data-open:zoom-in-100 max-sm:data-closed:zoom-out-100"
+      >
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-2">
+          <DialogClose
+            aria-label="Close"
+            render={<Button variant="ghost" size="icon" className="size-10 text-foreground" />}
+          >
+            <X className="size-5" strokeWidth={1.8} aria-hidden="true" />
+          </DialogClose>
+          <DialogTitle className="text-[17px] font-semibold">Boost post</DialogTitle>
+          <Link
+            href="/transparency/ads"
+            aria-label="How boosts work"
+            className="grid size-10 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-muted"
+          >
+            <CircleHelp className="size-5" strokeWidth={1.8} aria-hidden="true" />
+          </Link>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <BoostBody setup={setup} />
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-// What the sheet shows: the post as its ad will look and the budget choice, or the one reason the post cannot be boosted.
-export function BoostSheetBody({ setup }: { setup: BoostSetup | null }) {
+// What a boost shows: the budget choice, or the one reason the post cannot be boosted.
+export function BoostBody({ setup }: { setup: BoostSetup | null }) {
   if (setup === null) {
     return (
-      <div aria-busy="true" aria-label="Loading" className="flex flex-col gap-2 px-4 pb-4">
-        <div className="h-[72px] animate-pulse rounded-2xl bg-muted" />
-        <div className="h-16 animate-pulse rounded-2xl bg-muted" />
-        <div className="h-16 animate-pulse rounded-2xl bg-muted" />
-        <div className="mt-2 h-14 animate-pulse rounded-full bg-muted" />
+      <div aria-busy="true" aria-label="Loading" className="flex flex-col gap-4 px-4 pt-2 pb-4">
+        <div className="h-[280px] animate-pulse rounded-2xl bg-muted" />
+        <div className="h-14 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-14 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-14 animate-pulse rounded-full bg-muted" />
       </div>
     )
   }
@@ -100,19 +119,9 @@ export function BoostSheetBody({ setup }: { setup: BoostSetup | null }) {
     )
   }
 
-  return (
-    <>
-      <div className="px-4 pb-4">
-        <div className="rounded-2xl bg-muted px-4 py-3">
-          <p className="text-[12px] font-semibold text-muted-foreground">Ad · {setup.ad.advertiser}</p>
-          <p className="mt-1 line-clamp-3 text-[15px] leading-snug break-words whitespace-pre-line">{setup.ad.body}</p>
-        </div>
-      </div>
-      <BoostForm postId={setup.postId} options={setup.options} currency={setup.currency} balance={setup.balance} />
-    </>
-  )
+  return <BoostForm postId={setup.postId} options={setup.options} currency={setup.currency} balance={setup.balance} />
 }
 
 function Notice({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col items-center gap-4 px-6 pt-4 pb-6 text-center text-[15px] text-pretty">{children}</div>
+  return <div className="flex flex-col items-center gap-4 px-6 py-8 text-center text-[15px] text-pretty">{children}</div>
 }

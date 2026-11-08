@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { requireAgreedViewer } from "@/lib/auth"
 import { boostSetupFor } from "@/lib/boost-setup"
-import { BoostSheetBody } from "@/components/app/boost-sheet"
+import { BoostBody } from "@/components/app/boost-sheet"
 import { PageHeader } from "@/components/app/page-header"
 
 type Params = Promise<{ handle: string; postId: string }>
@@ -19,7 +19,7 @@ export default async function BoostPostPage({ params }: { params: Params }) {
     <>
       <PageHeader title="Boost post" backHref={`/${setup.handle}/status/${postId}`} />
       <div className="mx-auto w-full max-w-[560px]">
-        <BoostSheetBody setup={setup} />
+        <BoostBody setup={setup} />
       </div>
     </>
   )

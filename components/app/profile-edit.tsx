@@ -1,44 +1,50 @@
 "use client"
 
-import { useRef, useState, type ChangeEvent } from "react"
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
-import { Camera } from "lucide-react"
+import { Camera, X } from "lucide-react"
 import { updateProfile, type ProfileState } from "@/actions/social"
 import { Avatar, type AvatarUser } from "@/components/app/avatar"
 import { PhotoCrop } from "@/components/app/photo-crop"
 import { ProfileBanner } from "@/components/app/profile-banner"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ANIMATED_AVATAR_MESSAGE, MAX_BIO, MAX_NAME } from "@/lib/rules"
 
 // The profile itself: name, bio, photo and banner. Where someone is, their languages, interests and website are edited on
 // About you (Settings), so they stay off the profile. A photo is framed in the crop dialog before it is kept.
+//
+// On a phone the editor fills the screen, as X's does; on a computer it is a dialog in the middle. Save is in the header.
 type Defaults = { name: string; bio: string }
 type Kind = "avatar" | "banner"
 // A photo picked in this dialog and framed, shown as a preview until it is saved.
 type Picked = { name: string; url: string }
 
 const FILE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif"
-const FIELD =
-  "h-12 w-full rounded-full bg-muted px-5 text-[15px] outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
+const INPUT = "w-full bg-transparent text-[17px] outline-none placeholder:text-muted-foreground"
 
 function SaveButton() {
   const { pending } = useFormStatus()
   return (
-    <Button type="submit" disabled={pending} className="h-11 rounded-full px-6 font-semibold">
-      {pending ? "Saving" : "Save profile"}
+    <Button
+      type="submit"
+      disabled={pending}
+      className="h-9 rounded-full bg-foreground px-4 text-[14px] font-semibold text-background hover:bg-foreground/90 max-sm:h-9"
+    >
+      {pending ? "Saving" : "Save"}
     </Button>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// A field is one bordered box with its label small above the value, as X's edit screens draw them.
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-semibold">{label}</span>
+    <label className="flex flex-col gap-1 rounded-2xl border border-border px-4 py-2.5 transition-colors duration-200 focus-within:border-foreground">
+      <span className="text-[13px] text-muted-foreground">{label}</span>
       {children}
-    </div>
+    </label>
   )
 }
 
@@ -104,72 +110,70 @@ export function ProfileEditDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="outline" className="h-11 flex-1 rounded-full px-5 font-semibold" />}>Edit profile</DialogTrigger>
-      <DialogContent className="max-h-[90dvh] gap-0 overflow-y-auto p-0 sm:max-w-lg" showCloseButton>
-        <form action={action} className="flex flex-col gap-5 p-6">
-          <DialogTitle className="pr-8 text-lg font-semibold">Edit profile</DialogTitle>
-          <Field label="Name">
-            <input name="name" required maxLength={MAX_NAME} defaultValue={defaults.name} className={FIELD} />
-          </Field>
-          <Field label="Bio">
-            <textarea
-              name="bio"
-              rows={3}
-              maxLength={MAX_BIO}
-              defaultValue={defaults.bio}
-              className="rounded-3xl bg-muted px-5 py-3 text-[15px] outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
-            />
-          </Field>
-          <Field label="Profile photo">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => avatarInput.current?.click()}
-                aria-label="Choose a new profile photo"
-                className="group relative shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="block size-24 overflow-hidden rounded-full bg-muted">
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px] max-sm:top-0 max-sm:right-0 max-sm:bottom-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:ring-0 max-sm:pt-[env(safe-area-inset-top)] max-sm:pb-[env(safe-area-inset-bottom)] max-sm:data-open:zoom-in-100 max-sm:data-closed:zoom-out-100"
+      >
+        <form id="profile-form" action={action} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-2">
+            <DialogClose aria-label="Close" render={<Button variant="ghost" size="icon" className="size-10 text-foreground" />}>
+              <X className="size-5" strokeWidth={1.8} aria-hidden="true" />
+            </DialogClose>
+            <DialogTitle className="text-[17px] font-semibold">Edit profile</DialogTitle>
+            <SaveButton />
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="flex flex-col gap-5 p-4 sm:p-6">
+              <div className="relative">
+                <ProfileBanner file={bannerFile} src={chosen.banner?.url ?? null} handle={handle} className="aspect-[3/1] w-full rounded-2xl" />
+                <button
+                  type="button"
+                  onClick={() => bannerInput.current?.click()}
+                  aria-label="Change banner"
+                  className="absolute top-1/2 left-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-foreground/70 text-background outline-none transition-colors duration-200 hover:bg-foreground/80 focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Camera className="size-5" strokeWidth={1.8} aria-hidden="true" />
+                </button>
+                <input ref={bannerInput} name="banner" type="file" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, "banner")} />
+              </div>
+
+              <div className="-mt-12 pl-1">
+                <button
+                  type="button"
+                  onClick={() => avatarInput.current?.click()}
+                  aria-label="Change profile photo"
+                  className="group relative grid size-24 place-items-center overflow-hidden rounded-full ring-4 ring-popover outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   {chosen.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={chosen.avatar.url} alt="" className="size-full object-cover" />
                   ) : (
                     <Avatar user={current} size={96} />
                   )}
-                </span>
-                <span
-                  aria-hidden="true"
-                  className="absolute right-0 bottom-0 grid size-8 place-items-center rounded-full bg-foreground text-background ring-[3px] ring-popover transition-transform duration-200 group-hover:scale-105"
-                >
-                  <Camera className="size-4" strokeWidth={2} />
-                </span>
-              </button>
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-[15px] font-medium">{chosen.avatar ? "New photo ready" : "Current photo"}</span>
-                <span className="text-[13px] text-muted-foreground">Tap the photo to choose a new one. You frame it before it is kept.</span>
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-0 grid place-items-center bg-foreground/35 text-background transition-colors duration-200 group-hover:bg-foreground/45"
+                  >
+                    <Camera className="size-6" strokeWidth={1.8} />
+                  </span>
+                </button>
+                <input ref={avatarInput} name="avatar" type="file" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, "avatar")} />
               </div>
+
+              <Field label="Name">
+                <input name="name" required maxLength={MAX_NAME} defaultValue={defaults.name} className={INPUT} />
+              </Field>
+              <Field label="Bio">
+                <textarea name="bio" rows={3} maxLength={MAX_BIO} defaultValue={defaults.bio} className={`${INPUT} resize-none`} />
+              </Field>
+
+              {state.error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {state.error}
+                </p>
+              ) : null}
             </div>
-            <input ref={avatarInput} name="avatar" type="file" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, "avatar")} />
-          </Field>
-          <Field label="Banner">
-            <div className="relative">
-              <ProfileBanner file={bannerFile} src={chosen.banner?.url ?? null} handle={handle} className="aspect-[3/1] w-full rounded-2xl" />
-              <button
-                type="button"
-                onClick={() => bannerInput.current?.click()}
-                className="absolute right-3 bottom-3 inline-flex h-9 items-center gap-2 rounded-full bg-background/90 px-3.5 text-[13px] font-semibold text-foreground shadow-sm backdrop-blur outline-none transition-colors duration-200 hover:bg-background focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Camera className="size-4" strokeWidth={2} aria-hidden="true" />
-                {chosen.banner ? "Change again" : "Change banner"}
-              </button>
-            </div>
-            <input ref={bannerInput} name="banner" type="file" accept={FILE_ACCEPT} tabIndex={-1} className="hidden" onChange={(event) => pickPhoto(event, "banner")} />
-          </Field>
-          {state.error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {state.error}
-            </p>
-          ) : null}
-          <div className="flex justify-end pt-1">
-            <SaveButton />
           </div>
         </form>
         {cropping ? (

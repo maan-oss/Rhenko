@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from
 import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
 import { toast } from "sonner"
-import { Avatar } from "@/components/app/avatar"
+import { RhenkoSymbol } from "@/components/brand/symbol"
 import type { RealtimeEvent } from "@/lib/bus"
 import { dismissLiveCall, getCallState, getServerCallState, joinLiveCall, subscribeCall, type LiveGroupCall } from "@/lib/call-engine"
 import { pluralize } from "@/lib/format"
@@ -16,9 +16,10 @@ const LIFETIME_MS = 5000
 // The newest two are shown; an older one makes way.
 const MAX_SHOWN = 2
 
-// One compact card, the same on a phone and a computer: the sender's picture, a bold line, and a quiet line under it.
+// The card every banner uses, as the notification pill on iOS and X draws it: a compact translucent pill, the app mark, a bold line
+// and a quiet line under it. The same on a phone and a computer.
 const CARD =
-  "pointer-events-auto relative w-full max-w-[400px] rounded-[22px] border border-border/60 bg-popover/95 text-popover-foreground shadow-[0_18px_44px_-16px_rgba(0,0,0,0.38)] backdrop-blur-xl"
+  "pointer-events-auto relative w-max min-w-[240px] max-w-[min(380px,calc(100vw-1.5rem))] rounded-[28px] bg-popover/75 text-popover-foreground shadow-[0_14px_40px_-14px_rgba(0,0,0,0.4)] ring-1 ring-foreground/10 backdrop-blur-2xl"
 
 // The rise and the swipe are shared by every banner, so they all move the same way.
 const ENTER = { initial: { opacity: 0, y: -22, scale: 0.97 }, animate: { opacity: 1, y: 0, scale: 1 }, exit: { opacity: 0, y: -14, transition: { duration: 0.16 } } }
@@ -26,9 +27,9 @@ const SPRING = { type: "spring", stiffness: 480, damping: 38 } as const
 
 let nextKey = 0
 
-// The in-app banners: a message, a request, a notification or a missed call. On a phone they drop from the top of the screen;
-// on a computer they sit top right. Tapping one opens what it is about. A group call going on in one of your groups gets a
-// Join banner that stays until the call ends, you join, or you swipe it away.
+// The in-app banners: a message, a request, a notification or a missed call. They drop from the top centre of the screen, and tapping
+// one opens what it is about. A group call going on in one of your groups gets a Join banner that stays until the call ends, you join,
+// or you swipe it away.
 export function BannerHost() {
   const router = useRouter()
   const pathname = usePathname()
@@ -71,19 +72,24 @@ export function BannerHost() {
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-3 top-[max(10px,env(safe-area-inset-top))] z-[75] flex flex-col items-center gap-2 lg:inset-x-auto lg:top-5 lg:right-5 lg:items-end"
+      className="pointer-events-none fixed inset-x-0 top-[max(10px,env(safe-area-inset-top))] z-[75] flex flex-col items-center gap-2 px-3"
     >
       <AnimatePresence initial={false}>
         {joinable.map((live) => (
           <JoinBanner key={`join-${live.callId}`} live={live} onOpen={() => router.push(`/messages/${live.conversationId}`)} />
         ))}
-        {/* Newest first on a phone; on a computer the stack grows downward from the corner, so the newest is at the top. */}
+        {/* The newest is on top; an older one moves down beneath it. */}
         {banners.map((banner) => (
           <BannerCard key={banner.key} banner={banner} onOpen={() => open(banner)} onDismiss={() => dismiss(banner.key)} />
         ))}
       </AnimatePresence>
     </div>
   )
+}
+
+// The Rhenko app mark that leads every banner, as a notification's app icon does.
+function AppMark() {
+  return <RhenkoSymbol label="Rhenko" className="size-9" />
 }
 
 function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () => void; onDismiss: () => void }) {
@@ -112,9 +118,9 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-[22px] py-2.5 pr-4 pl-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full items-center gap-3 rounded-[28px] py-2.5 pr-5 pl-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Avatar user={banner.from} size={36} />
+        <AppMark />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] leading-5 font-semibold">{banner.title}</span>
           <span className="block truncate text-[14px] leading-5 text-muted-foreground">{banner.preview ?? banner.line}</span>
@@ -128,7 +134,6 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
 function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void }) {
   const [pending, startTransition] = useTransition()
   const count = live.people.length
-  const first = live.people[0]
 
   function join() {
     startTransition(async () => {
@@ -153,9 +158,9 @@ function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void 
         <button
           type="button"
           onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-[18px] text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[28px] text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {first ? <Avatar user={first} size={36} /> : null}
+          <AppMark />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15px] leading-5 font-semibold">{live.title}</span>
             <span className="block truncate text-[14px] leading-5 text-muted-foreground">
@@ -168,7 +173,7 @@ function JoinBanner({ live, onOpen }: { live: LiveGroupCall; onOpen: () => void 
           onClick={join}
           disabled={pending}
           aria-busy={pending}
-          className="h-9 shrink-0 rounded-full bg-foreground px-4 text-[14px] font-semibold whitespace-nowrap text-background outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="h-8 shrink-0 rounded-full bg-foreground px-3.5 text-[13px] font-semibold whitespace-nowrap text-background outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           Join
         </button>
