@@ -178,7 +178,7 @@ async function Library() {
           <li key={index} className="flex flex-col gap-1 py-4">
             <p className="text-[14px] text-muted-foreground">
               {row.business_name} ({row.country}) · {row.status === "ended" ? "Ended" : row.status === "paused" ? "Paused" : "Running"} ·{" "}
-              {row.impressions.toLocaleString("en")} impressions
+              {row.impressions.toLocaleString("en")} {row.impressions === 1 ? "view" : "views"}
             </p>
             <p className="text-[16px] font-semibold">{row.headline}</p>
             <p className="text-[15px]">{row.body}</p>
