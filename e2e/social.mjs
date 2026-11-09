@@ -1,7 +1,7 @@
 // People and discovery: follow, protected accounts and follow requests, mute, block, muted words, lists, search with
 // operators, Explore and topics. The flows that differ by screen run on a computer and on a phone.
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, randomWord, sleep } from "./lib/env.mjs"
+import { RUN_ID, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import { makePng } from "./lib/files.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
@@ -131,7 +131,9 @@ async function followFlow({ phone }) {
 
   await check(`${where}: resting on a name shows the person's card, and Follow works from it`, async () => {
     await openProfile(fan.page, star.handle)
-    const nameLink = card(fan.page, starPost).getByRole("link", { name: star.name, exact: true })
+    // The name link also carries the account's badges, whose titles join its accessible name (an OG mark, say), so match its start.
+    // The avatar link is "<name> profile" and is left out.
+    const nameLink = card(fan.page, starPost).getByRole("link", { name: new RegExp(`^${escapeRegExp(star.name)}(?! profile)`) })
     const popup = fan.page.locator(`[aria-label="@${star.handle} profile preview"]`)
     await nameLink.hover()
     // A phone has no hover, so the name is only a link and no card opens.
@@ -141,7 +143,8 @@ async function followFlow({ phone }) {
       return
     }
     await popup.waitFor()
-    await popup.getByText(star.name, { exact: true }).waitFor()
+    // The name is a text node followed by the badges, so no element holds the name alone: match the start of its text.
+    await popup.getByText(new RegExp(`^${escapeRegExp(star.name)}`)).first().waitFor()
     await acted(fan.page, () => popup.getByRole("button", { name: `Follow @${star.handle}`, exact: true }).click())
     await toastText(fan.page, new RegExp(`^You follow @${star.handle}`, "i"))
     await popup.getByRole("button", { name: `Unfollow @${star.handle}`, exact: true }).waitFor()

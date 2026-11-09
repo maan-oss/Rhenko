@@ -102,7 +102,11 @@ async function settingsPages({ phone }) {
     const titles = (await nav.getByRole("link").allInnerTexts()).map((text) => text.trim())
     // Notices and Legal are their own pages, reached from this list (last, under Policies), so they are listed but not
     // opened as sections.
-    const expected = [...SECTIONS.map((section) => section.title), "Notices and appeals", "Legal"]
+    // Rhenko Plus, Notices and Legal are their own pages, reached from this list, so they are listed but not opened as
+    // sections. Rhenko Plus sits just above Subscriptions and tips, and Notices and Legal come last, under Policies.
+    const titlesOnly = SECTIONS.map((section) => section.title)
+    const billing = titlesOnly.indexOf("Subscriptions and tips")
+    const expected = [...titlesOnly.slice(0, billing), "Rhenko Plus", ...titlesOnly.slice(billing), "Notices and appeals", "Legal"]
     assert.deepEqual(titles, expected, "the Settings page lists different sections than expected")
     await page.locator("main").getByRole("button", { name: "Log out", exact: true }).waitFor()
     for (const section of SECTIONS) {

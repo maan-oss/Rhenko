@@ -171,7 +171,8 @@ async function signUpRules() {
       await fresh.page.locator("[data-step]:visible").getByRole("button", { name: "Continue", exact: true }).click()
       // Read while the birthday screen is still showing: the next screen hides it.
       await pickBirthday(fresh.page, { year: 2001, month: 1, day: 28 })
-      const shown = (await fresh.page.locator("#field-birthday").innerText()).trim()
+      // The field's text is its label and then the date: the date is the last line.
+      const shown = (await fresh.page.locator("#field-birthday").innerText()).split("\n").pop().trim()
       assert.equal(shown, readableDate({ year: 2001, month: 1, day: 28 }))
       const hidden = await fresh.page.locator("input[name=birthday]").inputValue()
       assert.equal(hidden, "2001-02-28", "the form sends a different date than the one shown")
