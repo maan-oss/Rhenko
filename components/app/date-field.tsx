@@ -394,7 +394,7 @@ export function DateField({
           "flex w-full items-center gap-3 text-left outline-none",
           variant === "card"
             ? cn(
-                "relative h-16 rounded-[20px] border bg-card px-5 text-[17px] transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:shadow-[0_0_0_3px_var(--halo)]",
+                "relative h-16 rounded-[20px] border bg-card px-5 text-[17px] transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:border-foreground/55 focus-visible:shadow-[0_0_0_4px_rgb(31_29_25/0.08)]",
                 invalid ? "border-destructive" : "border-border"
               )
             : "h-12 rounded-full bg-muted px-5 text-base transition-[background-color] duration-200 hover:bg-foreground/[0.06] focus:bg-background focus:shadow-[0_0_0_3px_var(--halo)]"

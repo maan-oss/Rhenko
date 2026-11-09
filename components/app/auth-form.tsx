@@ -23,7 +23,9 @@ import { SPRING_SHEET } from "@/components/app/motion"
 import { DateField } from "@/components/app/date-field"
 import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
 import { ErrorText, FloatingInput } from "@/components/app/floating-field"
-import { AuthBack, AuthBar, AuthFooter, AuthMark, AuthTitle, AuthTopLink, PRIMARY_BUTTON } from "@/components/app/auth-frame"
+import { AuthBar, AuthFooter, AuthMark, AuthTitle, AuthTopLink, PRIMARY_BUTTON } from "@/components/app/auth-frame"
+import { SocialSignUpButton } from "@/components/app/social-buttons"
+import { toast } from "sonner"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
@@ -75,7 +77,8 @@ function TextField({
   )
 }
 
-// The password field can show what was typed. The button is a real button, so it works from the keyboard too.
+// The password field can show what was typed. The button is a real button, so it works from the keyboard too. While the text is
+// hidden it is drawn in the system font, whose dots are round; the app's own font draws them as squares.
 function PasswordField({
   name,
   label,
@@ -104,6 +107,7 @@ function PasswordField({
       enterKeyHint="go"
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      className={shown ? undefined : "font-[system-ui]"}
       help={help}
       trailing={
         <button
@@ -156,10 +160,20 @@ function HandleField({
 }
 
 // The one primary action on a screen. It is disabled until the screen can be sent. While it works it says what it is doing.
-function SubmitButton({ label, pendingLabel, disabled }: { label: string; pendingLabel: string; disabled?: boolean }) {
+function SubmitButton({
+  label,
+  pendingLabel,
+  disabled,
+  className,
+}: {
+  label: string
+  pendingLabel: string
+  disabled?: boolean
+  className?: string
+}) {
   const { pending } = useFormStatus()
   return (
-    <button type="submit" disabled={pending || disabled} aria-busy={pending || undefined} className={PRIMARY_BUTTON}>
+    <button type="submit" disabled={pending || disabled} aria-busy={pending || undefined} className={cn(PRIMARY_BUTTON, className)}>
       {pending ? pendingLabel : label}
     </button>
   )
@@ -376,7 +390,7 @@ function SignupForm({ notice }: { notice: ReactNode }) {
   return (
     <form ref={formRef} action={formAction} onSubmit={onSubmit} className="settle-clean flex flex-1 flex-col" noValidate>
       <AuthBar
-        left={step > 0 ? <AuthBack onClick={() => setStep(step - 1)} /> : <AuthMark />}
+        left={<AuthMark />}
         right={step === 0 ? <AuthTopLink href="/login">Log in</AuthTopLink> : null}
       />
       <div className="mt-3">
@@ -400,7 +414,17 @@ function SignupForm({ notice }: { notice: ReactNode }) {
         >
           <section data-step={0} className={screen(0)}>
             <AuthTitle title="Create your account">Start with a name and a handle.</AuthTitle>
-            <div className={cn(FIELDS, "mt-8")}>
+            {/* A provider sign-up sits above the form, as on the native sign-up screens. */}
+            <div className="mt-6 flex flex-col gap-3">
+              <SocialSignUpButton provider="google" onClick={() => toast("Sign up with Google isn't connected yet.")} />
+              <SocialSignUpButton provider="apple" onClick={() => toast("Sign up with Apple isn't connected yet.")} />
+            </div>
+            <div className="mt-5 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <div className={cn(FIELDS, "mt-5")}>
               <TextField
                 name="name"
                 label="Name"
@@ -458,9 +482,12 @@ function SignupForm({ notice }: { notice: ReactNode }) {
               />
             </div>
             <AuthFooter>
-              <Button onClick={() => setStep(2)} disabled={!valid[1]}>
-                Continue
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button onClick={() => setStep(2)} disabled={!valid[1]} className="flex-1">
+                  Continue
+                </Button>
+                <BackButton onClick={() => setStep(0)} />
+              </div>
             </AuthFooter>
           </section>
 
@@ -500,7 +527,15 @@ function SignupForm({ notice }: { notice: ReactNode }) {
             <AuthFooter>
               {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
               {step === SIGNUP_LAST ? <ProofCheck key={check.key} quiet onReady={check.onReady} /> : null}
-              <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
+              <div className="flex items-center gap-3">
+                <SubmitButton
+                  label="Create account"
+                  pendingLabel="Creating account"
+                  disabled={!valid[2] || check.proof === ""}
+                  className="flex-1"
+                />
+                <BackButton onClick={() => setStep(1)} />
+              </div>
             </AuthFooter>
           </section>
         </motion.div>
@@ -514,10 +549,33 @@ function SignupForm({ notice }: { notice: ReactNode }) {
   )
 }
 
-// The primary action on a step that is not the last one. It does not send the form.
-function Button({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
+// Back to the step before, at the bottom right beside the primary action. It does not send the form.
+function BackButton({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={PRIMARY_BUTTON}>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-14 shrink-0 items-center justify-center rounded-full border border-border bg-card px-7 text-[17px] font-semibold text-foreground transition-colors duration-200 hover:bg-foreground/[0.04]"
+    >
+      Back
+    </button>
+  )
+}
+
+// The primary action on a step that is not the last one. It does not send the form.
+function Button({
+  onClick,
+  disabled,
+  children,
+  className,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={cn(PRIMARY_BUTTON, className)}>
       {children}
     </button>
   )

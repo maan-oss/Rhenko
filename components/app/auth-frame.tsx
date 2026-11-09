@@ -74,7 +74,7 @@ export function AuthTitle({ title, children }: { title: string; children?: React
 
 // The bottom of a screen: its primary action and what sits with it. It rests on the bottom edge of the screen.
 export function AuthFooter({ children }: { children: ReactNode }) {
-  return <div className="mt-auto flex flex-col gap-3 pt-8">{children}</div>
+  return <div className="mt-auto flex flex-col gap-3 pt-6">{children}</div>
 }
 
 // The primary action on every auth and setup screen: one full-width pill, 56 points tall, as in the native sign-up flows.

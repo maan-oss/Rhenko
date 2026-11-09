@@ -5,23 +5,23 @@ import { cn } from "@/lib/utils"
 // the field is empty, and rises to the top edge once the person focuses it or types. The input keeps a placeholder of a single
 // space, which is what lets the label know whether it is empty, so no example text is ever shown.
 export const FIELD_INPUT =
-  "peer block h-16 w-full min-w-0 rounded-[20px] border border-border bg-card px-5 pt-5 text-[17px] text-foreground outline-none transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:shadow-[0_0_0_3px_var(--halo)] aria-[invalid=true]:border-destructive"
+  "peer block h-16 w-full min-w-0 rounded-[20px] border border-border bg-card px-5 pt-5 text-[17px] text-foreground outline-none transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:border-foreground/55 focus-visible:shadow-[0_0_0_4px_rgb(31_29_25/0.08)] aria-[invalid=true]:border-destructive"
 
 export const FIELD_LABEL =
   "pointer-events-none absolute left-5 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-[17px] leading-6 text-muted-foreground transition-[top,translate,font-size,line-height] duration-200 peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-[13px] peer-focus:leading-4 peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-[13px] peer-[:not(:placeholder-shown)]:leading-4"
 
-// A field's error is the red box the birthday uses, so every problem reads the same way on every screen.
+// A problem is plain red text under what it is about, lined up with the text inside the fields. It is not a box of its own.
 export function ErrorText({ message }: { message?: string | null }) {
   if (!message) return null
   return (
-    <p role="alert" className="settle rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[14px] leading-snug text-destructive">
+    <p role="alert" className="px-5 text-[14px] leading-snug text-destructive">
       {message}
     </p>
   )
 }
 
-// A labelled field. `optional` puts a quiet "Optional" beside the label. `prefix` is a fixed character at the start of the text
-// (the @ in a handle). `trailing` is a control placed inside the box at its end (the show-password button).
+// A labelled field. `optional` puts "(optional)" in brackets after the label. `prefix` is a fixed character at the start of the
+// text (the @ in a handle). `trailing` is a control placed inside the box at its end (the show-password button).
 export function FloatingInput({
   id,
   label,
@@ -63,7 +63,7 @@ export function FloatingInput({
         ) : null}
         <label htmlFor={id} className={FIELD_LABEL}>
           {label}
-          {optional ? <span className="text-[13px] text-muted-foreground">Optional</span> : null}
+          {optional ? <span>(optional)</span> : null}
         </label>
         {trailing}
       </div>
