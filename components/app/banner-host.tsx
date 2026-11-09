@@ -123,7 +123,8 @@ function BannerCard({ banner, onOpen, onDismiss }: { banner: Banner; onOpen: () 
         <AppMark />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] leading-5 font-semibold">{banner.title}</span>
-          <span className="block truncate text-[14px] leading-5 text-muted-foreground">{banner.preview ?? banner.line}</span>
+          <span className="block truncate text-[14px] leading-5 text-muted-foreground">{banner.line}</span>
+          {banner.preview ? <span className="block truncate text-[13px] leading-5 text-muted-foreground/70">{banner.preview}</span> : null}
         </span>
       </button>
     </motion.div>

@@ -1,8 +1,6 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { recordDwell } from "@/actions/feed"
-import { recordViews } from "@/actions/posts"
 import type { ClickKind } from "@/lib/post-clicks"
 
 // Two things are measured as a post reaches the screen, for the person looking at it.
@@ -25,13 +23,28 @@ const onScreen = new Map<string, number>()
 let dwellTimer: number | undefined
 let listening = false
 
+// Sent as a keepalive request, so it still goes through when the person has moved on to another page. It goes to a route rather
+// than a server action: an action is sent to whichever page is showing when it goes out, and that page may not have it.
+function send(body: { views?: string[]; dwell?: { postId: string; ms: number }[] }): Promise<boolean> {
+  return fetch("/api/post-views", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    keepalive: true,
+    credentials: "same-origin",
+  }).then(
+    (response) => response.ok,
+    () => false
+  )
+}
+
 function flush() {
   timer = undefined
   const ids = [...queue]
   queue.clear()
   if (ids.length === 0) return
-  recordViews(ids).catch(() => {
-    for (const id of ids) seen.delete(id)
+  void send({ views: ids }).then((sent) => {
+    if (!sent) for (const id of ids) seen.delete(id)
   })
 }
 
@@ -63,7 +76,7 @@ function tick() {
   const batch = [...dwell].slice(0, MAX_DWELL_BATCH)
   for (const [postId] of batch) dwell.delete(postId)
   if (batch.length > 0) {
-    recordDwell(batch.map(([postId, ms]) => ({ postId, ms: Math.round(ms) }))).catch(() => {})
+    void send({ dwell: batch.map(([postId, ms]) => ({ postId, ms: Math.round(ms) })) })
   }
   if (onScreen.size > 0 || dwell.size > 0) scheduleTick()
 }

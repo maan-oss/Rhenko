@@ -1,10 +1,19 @@
 import { requireViewer } from "@/lib/auth"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 import { snoozesFor } from "@/lib/topic-snoozes"
 import { PageHeader } from "@/components/app/page-header"
 import { SnoozedTopics } from "@/components/app/snoozed-topics"
 
 // The topics snoozed out of For you, each until its time passes. Unsnoozing brings its posts back on the next load.
-export default async function ForYouSettingsPage() {
+export default function ForYouSettingsPage() {
+  return (
+    <RevealSuspense>
+      <ForYouSettingsBody />
+    </RevealSuspense>
+  )
+}
+
+async function ForYouSettingsBody() {
   const viewer = await requireViewer()
   // The page is rendered for each request, and a snooze is listed only while its time has not passed.
   // eslint-disable-next-line react-hooks/purity

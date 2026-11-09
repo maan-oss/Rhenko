@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react"
 import { SettingsLogout } from "@/components/app/account-menu"
 import { PageHeader } from "@/components/app/page-header"
 import { requireViewer } from "@/lib/auth"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 
 // Settings is a list of sections in four groups. Each section is its own page, so no page is one long scroll.
 const GROUPS = [
@@ -43,7 +44,15 @@ const GROUPS = [
   },
 ]
 
-export default async function SettingsPage() {
+export default function SettingsPage() {
+  return (
+    <RevealSuspense>
+      <SettingsBody />
+    </RevealSuspense>
+  )
+}
+
+async function SettingsBody() {
   // A session that was signed out elsewhere goes to the sign-in page, the same as the other settings pages.
   await requireViewer()
   return (

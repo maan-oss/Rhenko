@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, use, useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Check, Users } from "lucide-react"
 import { toast } from "sonner"
 import { forwardMessage, listForwardTargets, type ForwardTarget } from "@/actions/messages"
@@ -21,7 +21,23 @@ export function ForwardDialog({
   sealed: SealedSource | null
   onOpenChange: (open: boolean) => void
 }) {
-  const [targets] = useState(() => listForwardTargets())
+  // The chats are asked for once the dialog is open. The call is made from an effect and its result lands in a callback, so the
+  // server action is never called while rendering.
+  const [targets, setTargets] = useState<ForwardTarget[] | "failed" | null>(null)
+  useEffect(() => {
+    let live = true
+    listForwardTargets().then(
+      (list) => {
+        if (live) setTargets(list)
+      },
+      () => {
+        if (live) setTargets("failed")
+      }
+    )
+    return () => {
+      live = false
+    }
+  }, [])
   const [picked, setPicked] = useState<string[]>([])
   const [pending, startTransition] = useTransition()
 
@@ -44,14 +60,17 @@ export function ForwardDialog({
     })
   }
 
+  const loading = <p className="py-8 text-center text-sm text-muted-foreground">Loading your chats…</p>
+  const failed = <p className="py-8 text-center text-sm text-muted-foreground">Couldn&apos;t load your chats. Close this and try again.</p>
+
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogTitle>Forward message</DialogTitle>
         <DialogDescription>Choose up to {FORWARD_TARGETS_MAX} chats. The copy is marked as forwarded.</DialogDescription>
-        <Suspense fallback={<p className="py-8 text-center text-sm text-muted-foreground">Loading your chats…</p>}>
-          <TargetList promise={targets} picked={picked} encrypted={sealed !== null} onToggle={toggle} />
-        </Suspense>
+        {targets === null ? loading : targets === "failed" ? failed : (
+          <TargetList targets={targets} picked={picked} encrypted={sealed !== null} onToggle={toggle} />
+        )}
         <div className="flex items-center justify-between gap-2 pt-2">
           <span className="text-sm text-muted-foreground tabular-nums">
             {picked.length} of {FORWARD_TARGETS_MAX}
@@ -80,17 +99,16 @@ export function ForwardDialog({
 }
 
 function TargetList({
-  promise,
+  targets,
   picked,
   encrypted,
   onToggle,
 }: {
-  promise: Promise<ForwardTarget[]>
+  targets: ForwardTarget[]
   picked: string[]
   encrypted: boolean
   onToggle: (id: string) => void
 }) {
-  const targets = use(promise)
   if (targets.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">You don&apos;t have any chats to forward to yet.</p>
   }

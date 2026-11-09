@@ -1,12 +1,21 @@
 import Link from "@/components/app/link"
 import { requireViewer } from "@/lib/auth"
+import { RevealSuspense } from "@/components/app/reveal-suspense"
 import { all, get } from "@/lib/db"
 import { AboutSettings } from "@/components/app/about-settings"
 import { PageHeader } from "@/components/app/page-header"
 
 // About you: the details on the About page (location and website) and the interests that fill the feed. Interests are
 // private. Where you are for suggestions, and your languages, are on Connections and languages.
-export default async function AboutSettingsPage() {
+export default function AboutSettingsPage() {
+  return (
+    <RevealSuspense>
+      <AboutSettingsBody />
+    </RevealSuspense>
+  )
+}
+
+async function AboutSettingsBody() {
   const viewer = await requireViewer()
   const profile = await get<{ location: string | null; website: string | null; handle: string }>(
     "SELECT location, website, handle FROM users WHERE id = ?",

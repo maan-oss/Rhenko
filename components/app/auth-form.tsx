@@ -138,6 +138,8 @@ function HandleField({
 }) {
   const [left, setLeft] = useState(false)
   const problem = isLogin || value.length === 0 ? null : handleProblem(value)
+  // A problem is named once the person has left the field, or from the second character, so the first letter is not judged alone.
+  const named = left || value.length >= 2
   return (
     <FloatingInput
       id="field-handle"
@@ -154,7 +156,7 @@ function HandleField({
       onBlur={() => setLeft(true)}
       help={isLogin ? null : "3 to 15 letters, numbers or underscores."}
       aside={isLogin ? null : <Counter length={value.length} max={HANDLE_MAX} from={11} />}
-      error={left ? problem : null}
+      error={named ? problem : null}
     />
   )
 }
@@ -461,7 +463,7 @@ function SignupForm({ notice }: { notice: ReactNode }) {
           </section>
 
           <section data-step={1} className={screen(1)}>
-            <AuthTitle title="When were you born?">Only you can see this.</AuthTitle>
+            <AuthTitle title="When were you born?">You must be 18 or older to join.</AuthTitle>
             {/* The birthday and the email are fields of their own, each in its full shape. A message shows under the birthday only
                 when the date is too young, and only once the calendar has closed, so it never appears while the person is choosing. */}
             <div className={cn(FIELDS, "mt-8")}>
