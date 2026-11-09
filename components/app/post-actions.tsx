@@ -547,7 +547,12 @@ export function PostActions(props: Props) {
       <ShareSheet
         open={shareOpen}
         onOpenChange={setShareOpen}
-        post={{ id: postId, body: props.body, author: { name: author.name, handle: author.handle, avatarFile: author.avatarFile } }}
+        post={{
+          id: postId,
+          body: props.body,
+          author: { name: author.name, handle: author.handle, avatarFile: author.avatarFile },
+          media: media.map((item) => ({ file: item.file, kind: item.kind })),
+        }}
       />
 
       {isOwn ? (

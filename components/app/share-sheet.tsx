@@ -3,16 +3,18 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react"
 import Link from "@/components/app/link"
 import { motion } from "motion/react"
-import { Check, Code2, Link2, Search, Send, Share2, X, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Camera, Check, Code2, Copy, Download, Link2, Search, Send, Share2, X, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { sharePostWith, shareRecipients } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { BottomSheet } from "@/components/app/bottom-sheet"
 import { DIALOG_FIT } from "@/components/app/overlay-sizes"
+import { makePostPicture } from "@/components/app/post-picture"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { sendEncryptedPostShare } from "@/lib/e2ee-client"
 import type { MiniUser } from "@/lib/data"
 import { MAX_DM } from "@/lib/rules"
+import type { MediaKind } from "@/lib/uploads"
 import { useIsDesktop } from "@/lib/use-media"
 import { cn } from "@/lib/utils"
 
@@ -20,7 +22,11 @@ type SharePost = {
   id: string
   body: string
   author: { name: string; handle: string; avatarFile: string | null }
+  media: { file: string; kind: MediaKind }[]
 }
+
+// The picture the Screenshot tile makes: the PNG itself, and the address it can be shown at until the sheet closes.
+type Picture = { blob: Blob; url: string; file: File }
 
 const EXCERPT_MAX = 140
 const RECIPIENT_MAX = 10
@@ -106,6 +112,14 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
   const [sent, setSent] = useState<Sent | null>(null)
   const [copied, setCopied] = useState<"link" | "embed" | null>(null)
   const [sending, startSending] = useTransition()
+  const [picture, setPicture] = useState<Picture | null>(null)
+  const [making, setMaking] = useState(false)
+
+  // The picture's address is released when the sheet shows something else, so the browser can drop its copy.
+  useEffect(() => {
+    if (!picture) return
+    return () => URL.revokeObjectURL(picture.url)
+  }, [picture])
 
   // Recent chats first. Typing searches everyone who can be reached, a moment after the last key.
   useEffect(() => {
@@ -201,7 +215,57 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
     }
   }
 
+  // The Screenshot tile draws the post as a picture right away, then shows it to copy, share or save.
+  async function takePicture() {
+    if (making) return
+    setMaking(true)
+    try {
+      const blob = await makePostPicture(post, window.location.host)
+      setPicture({ blob, url: URL.createObjectURL(blob), file: new File([blob], `rhenko-post-${post.id}.png`, { type: "image/png" }) })
+    } catch {
+      toast.error("Couldn't make the picture.")
+    } finally {
+      setMaking(false)
+    }
+  }
+
+  async function copyPicture(blob: Blob) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+      toast.success("Picture copied.")
+    } catch {
+      toast.error("Couldn't copy the picture here. Save it instead.")
+    }
+  }
+
+  async function sharePicture(file: File) {
+    try {
+      await navigator.share({ files: [file], title: `${post.author.name} on Rhenko` })
+    } catch {
+      // Closing the system sheet is not an error.
+    }
+  }
+
+  function savePicture(saved: Picture) {
+    const link = document.createElement("a")
+    link.href = saved.url
+    link.download = saved.file.name
+    link.click()
+  }
+
   if (sent) return <SentView sent={sent} onDone={onDone} />
+  if (picture) {
+    return (
+      <PictureView
+        picture={picture}
+        author={post.author.name}
+        onBack={() => setPicture(null)}
+        onCopy={() => copyPicture(picture.blob)}
+        onShare={() => sharePicture(picture.file)}
+        onSave={() => savePicture(picture)}
+      />
+    )
+  }
 
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function"
   const excerpt = excerptOf(post.body)
@@ -320,7 +384,8 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
         </button>
       </div>
 
-      <div className={cn("mt-5 grid gap-2 border-t border-border px-5 pt-4", canNativeShare ? "grid-cols-3" : "grid-cols-2")}>
+      <div className={cn("mt-5 grid gap-2 border-t border-border px-5 pt-4", canNativeShare ? "grid-cols-4" : "grid-cols-3")}>
+        <ActionTile icon={Camera} label={making ? "Making…" : "Screenshot"} onClick={takePicture} />
         <ActionTile icon={copied === "link" ? Check : Link2} label={copied === "link" ? "Copied" : "Copy link"} onClick={copyLink} />
         {canNativeShare ? <ActionTile icon={Share2} label="Share…" onClick={nativeShare} /> : null}
         <ActionTile icon={copied === "embed" ? Check : Code2} label={copied === "embed" ? "Copied" : "Copy embed code"} onClick={copyEmbed} />
@@ -341,6 +406,56 @@ function ActionTile({ icon: Icon, label, onClick }: { icon: LucideIcon; label: s
       </span>
       {label}
     </button>
+  )
+}
+
+// The picture the Screenshot tile made. It can be copied to the clipboard, handed to the system's share sheet when the browser has
+// one, or saved as a PNG.
+function PictureView({
+  picture,
+  author,
+  onBack,
+  onCopy,
+  onShare,
+  onSave,
+}: {
+  picture: Picture
+  author: string
+  onBack: () => void
+  onCopy: () => void
+  onShare: () => void
+  onSave: () => void
+}) {
+  const canShareFile = typeof navigator !== "undefined" && typeof navigator.canShare === "function" && navigator.canShare({ files: [picture.file] })
+  return (
+    <div className="flex flex-col pb-2">
+      <div className="flex items-center gap-2 px-3 pt-4 pb-3">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to sharing"
+          className="grid size-11 place-items-center rounded-full transition-colors duration-200 hover:bg-foreground/5"
+        >
+          <ArrowLeft className="size-5" strokeWidth={2} aria-hidden="true" />
+        </button>
+        <p className="text-[19px] font-semibold tracking-tight">Screenshot</p>
+      </div>
+
+      <div className="px-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={picture.url}
+          alt={`Picture of ${author}'s post`}
+          className="mx-auto max-h-[52dvh] w-auto max-w-full rounded-[20px] border border-border object-contain"
+        />
+      </div>
+
+      <div className={cn("mt-5 grid gap-2 border-t border-border px-5 pt-4", canShareFile ? "grid-cols-3" : "grid-cols-2")}>
+        <ActionTile icon={Copy} label="Copy picture" onClick={onCopy} />
+        {canShareFile ? <ActionTile icon={Share2} label="Share…" onClick={onShare} /> : null}
+        <ActionTile icon={Download} label="Save picture" onClick={onSave} />
+      </div>
+    </div>
   )
 }
 
