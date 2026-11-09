@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
 import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
-import { Eye, EyeOff } from "lucide-react"
+import { ChevronLeft, Eye, EyeOff } from "lucide-react"
 import { requestStamp } from "@/actions/proof"
 import { ProofCheck } from "@/components/app/proof-check"
 import { PasskeyLoginButton, SecurityKeyButton } from "@/components/app/passkey-panel"
@@ -137,6 +137,7 @@ function PasswordField({
           autoCapitalize="none"
           spellCheck={false}
           placeholder={placeholder}
+          enterKeyHint="go"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           className={cn(FIELD, FIELD_FOCUS, "pr-12")}
@@ -191,6 +192,7 @@ function HandleField({
           name="handle"
           maxLength={HANDLE_MAX}
           autoComplete={isLogin ? "username" : "off"}
+          enterKeyHint="next"
           autoCapitalize="none"
           spellCheck={false}
           placeholder="your_handle"
@@ -431,7 +433,10 @@ function SignupForm() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} />
+      <div className="relative flex h-11 items-center justify-center">
+        {step > 0 ? <BackIcon onClick={() => setStep(step - 1)} /> : null}
+        <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} />
+      </div>
 
       <form ref={formRef} action={formAction} onSubmit={onSubmit} className="flex w-full flex-col gap-5" noValidate>
         <div className="grid">
@@ -444,6 +449,7 @@ function SignupForm() {
             name="name"
             label="Name"
             autoComplete="name"
+            enterKeyHint="next"
             maxLength={MAX_NAME}
             placeholder="Dan"
             value={name}
@@ -488,7 +494,6 @@ function SignupForm() {
             <Button onClick={() => setStep(2)} disabled={!valid[1]}>
               Continue
             </Button>
-            <BackButton onClick={() => setStep(0)} />
           </div>
         </section>
 
@@ -531,7 +536,6 @@ function SignupForm() {
             {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
             {step === SIGNUP_LAST ? <ProofCheck key={check.key} quiet onReady={check.onReady} /> : null}
             <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
-            <BackButton onClick={() => setStep(1)} />
           </div>
         </section>
 
@@ -563,14 +567,17 @@ function Button({ onClick, disabled, children }: { onClick: () => void; disabled
   )
 }
 
-function BackButton({ onClick }: { onClick: () => void }) {
+// The way back on a sign-up screen: a chevron at the left of the progress row, as in iOS. The primary button stays the last
+// thing on each screen, and the back control is reachable by thumb without taking up a line of its own.
+function BackIcon({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="h-10 w-full rounded-full text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+      aria-label="Back"
+      className="tap-44 absolute top-1/2 left-0 grid size-9 -translate-y-1/2 place-items-center rounded-full text-foreground transition-colors hover:bg-foreground/5"
     >
-      Back
+      <ChevronLeft className="size-6" aria-hidden="true" />
     </button>
   )
 }

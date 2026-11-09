@@ -37,7 +37,6 @@ async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
     <>
       <div className="settle mb-5 flex flex-col gap-2">
         <h1 className="text-[30px] leading-tight font-semibold tracking-tight">{adding ? "Add an account" : "Welcome back"}</h1>
-        <p className="text-[15px] leading-relaxed text-muted-foreground">Use your handle and password.</p>
       </div>
       {notice ? <div className="mb-4"><AuthNotice>{notice}</AuthNotice></div> : null}
       <AuthForm mode="login" next={back} />

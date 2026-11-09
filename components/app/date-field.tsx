@@ -119,7 +119,9 @@ export function DateField({
         onClick={() => setOpen((value) => !value)}
         className={cn(
           "flex h-12 w-full items-center gap-3 px-5 text-left text-base outline-none transition-[background-color,border-radius] duration-200",
-          open ? "rounded-t-[26px] rounded-b-none bg-background" : "rounded-full bg-muted hover:bg-foreground/[0.06] focus:bg-background"
+          open
+            ? "rounded-t-[26px] rounded-b-none bg-background"
+            : "rounded-full bg-muted hover:bg-foreground/[0.06] focus:bg-background focus:shadow-[0_0_0_3px_var(--halo)]"
         )}
       >
         <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
