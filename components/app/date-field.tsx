@@ -372,6 +372,10 @@ export function DateField({
   )
 
   const icon = <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+  // The card's label sits in the middle while the field is empty and rises to the top once a date is chosen or the calendar
+  // opens. The date is shown beneath it, so the card reads as the same floating field as the others.
+  const floated = open || Boolean(selected)
+  const value = variant === "card" && !selected ? "" : shown
 
   return (
     // While open, the field is raised above the dimming layer, so the value stays readable and in place.
@@ -390,29 +394,39 @@ export function DateField({
           "flex w-full items-center gap-3 text-left outline-none",
           variant === "card"
             ? cn(
-                "h-14 rounded-[20px] border bg-card px-4 text-[17px] transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:shadow-[0_0_0_3px_var(--halo)]",
+                "relative h-16 rounded-[20px] border bg-card px-5 text-[17px] transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:shadow-[0_0_0_3px_var(--halo)]",
                 invalid ? "border-destructive" : "border-border"
               )
             : "h-12 rounded-full bg-muted px-5 text-base transition-[background-color] duration-200 hover:bg-foreground/[0.06] focus:bg-background focus:shadow-[0_0_0_3px_var(--halo)]"
         )}
       >
         {variant === "pill" ? icon : null}
-        <span className="relative min-w-0 flex-1">
+        {variant === "card" ? (
+          <span
+            className={cn(
+              "pointer-events-none absolute left-5 text-muted-foreground transition-[top,translate,font-size,line-height] duration-200",
+              floated ? "top-2 text-[13px] leading-4" : "top-1/2 -translate-y-1/2 leading-6"
+            )}
+          >
+            {label ?? placeholder}
+          </span>
+        ) : null}
+        <span className={cn("min-w-0", variant === "card" ? "absolute inset-x-5 top-[calc(50%+10px)] -translate-y-1/2 pr-7" : "relative flex-1")}>
           {/* A new value fades up in place of the old one, so a pick reads as a change rather than a jump. */}
           <AnimatePresence initial={false} mode="popLayout">
             <motion.span
-              key={shown}
+              key={value}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={pageTransition}
               className={cn("block whitespace-nowrap", selected ? "text-foreground" : "text-muted-foreground")}
             >
-              {shown}
+              {value}
             </motion.span>
           </AnimatePresence>
         </span>
-        {variant === "card" ? icon : null}
+        {variant === "card" ? <span className="ml-auto flex">{icon}</span> : null}
       </button>
 
       {mounted

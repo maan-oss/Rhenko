@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { saveWhere } from "@/actions/connections"
 import { saveAbout } from "@/actions/social"
 import { WhereFields, type WhereValue } from "@/components/app/connection-fields"
-import { OnboardingSteps, SETUP_GHOST, SETUP_INPUT, SETUP_PRIMARY, SETUP_STEPS } from "@/components/app/onboarding-steps"
+import { OnboardingSteps, SETUP_GHOST, SETUP_PRIMARY, SETUP_STEPS } from "@/components/app/onboarding-steps"
+import { FloatingInput } from "@/components/app/floating-field"
 import { MAX_LOCATION } from "@/lib/rules"
 
 // The second setup screen: where someone is. The location is shown on the profile's About page, in any words. The city and
@@ -61,14 +62,14 @@ export function LocationSetup({ initial }: { initial: LocationStart }) {
             </h2>
             <p className="text-[13px] text-muted-foreground">Shown on your profile.</p>
           </div>
-          <input
-            aria-labelledby="location-title"
+          <FloatingInput
+            id="field-location"
             name="location"
+            label="City or region"
+            optional
             maxLength={MAX_LOCATION}
             value={location}
             onChange={(event) => setLocation(event.target.value)}
-            placeholder="A city, a region, or nothing at all"
-            className={SETUP_INPUT}
           />
         </section>
 

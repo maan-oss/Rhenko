@@ -22,18 +22,15 @@ import { motion, useReducedMotion } from "motion/react"
 import { SPRING_SHEET } from "@/components/app/motion"
 import { DateField } from "@/components/app/date-field"
 import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
+import { ErrorText, FloatingInput } from "@/components/app/floating-field"
 import { AuthBack, AuthBar, AuthFooter, AuthMark, AuthTitle, AuthTopLink, PRIMARY_BUTTON } from "@/components/app/auth-frame"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
-// A form is a group of rows, the way a phone app lists its fields: a small label above a plain input, and a hint or an
-// error under it. The group is one card with a hairline between rows, so the fields read as one form.
-const GROUP = "flex flex-col divide-y divide-border rounded-[20px] border border-border bg-card"
-const ROW =
-  "flex flex-col gap-1 px-4 pt-3 pb-3.5 first:rounded-t-[20px] last:rounded-b-[20px] transition-colors duration-200 focus-within:bg-background"
-const INPUT = "block h-7 w-full min-w-0 bg-transparent text-[17px] text-foreground outline-none placeholder:text-muted-foreground"
+// The fields of a form stand one above another, each in its own full shape, with the same gap as the birthday field.
+const FIELDS = "flex flex-col gap-3"
 const EMAIL_TAKEN = "That email is already used by another account. Use a different one, or leave it blank."
 const LINK = "font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground"
 
@@ -47,55 +44,34 @@ function Counter({ length, max, from }: { length: number; max: number; from: num
   )
 }
 
-function Field({
-  id,
-  label,
-  aside,
-  help,
-  error,
-  children,
-}: {
-  id: string
-  label: string
-  aside?: ReactNode
-  help?: ReactNode
-  error?: string | null
-  children: ReactNode
-}) {
-  return (
-    <div className={ROW}>
-      <div className="flex min-h-4 items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-[13px] font-medium text-muted-foreground">
-          {label}
-        </label>
-        {aside}
-      </div>
-      {children}
-      {error ? (
-        <p role="alert" className="text-[13px] leading-snug text-destructive">
-          {error}
-        </p>
-      ) : help ? (
-        <div className="text-[13px] leading-snug text-muted-foreground">{help}</div>
-      ) : null}
-    </div>
-  )
-}
-
+// A labelled field. The label is the only text in an empty field, so no example is shown.
 function TextField({
   name,
   label,
   help,
   error,
   aside,
-  className,
+  optional,
   ...input
-}: { name: string; label: string; help?: ReactNode; error?: string | null; aside?: ReactNode } & InputHTMLAttributes<HTMLInputElement>) {
-  const id = `field-${name}`
+}: {
+  name: string
+  label: string
+  help?: ReactNode
+  error?: string | null
+  aside?: ReactNode
+  optional?: boolean
+} & InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <Field id={id} label={label} aside={aside} help={help} error={error}>
-      <input id={id} name={name} className={cn(INPUT, className)} aria-invalid={error ? true : undefined} {...input} />
-    </Field>
+    <FloatingInput
+      id={`field-${name}`}
+      name={name}
+      label={label}
+      optional={optional}
+      help={help}
+      error={error}
+      aside={aside}
+      {...input}
+    />
   )
 }
 
@@ -103,7 +79,6 @@ function TextField({
 function PasswordField({
   name,
   label,
-  placeholder,
   autoComplete,
   value,
   onChange,
@@ -111,46 +86,43 @@ function PasswordField({
 }: {
   name: string
   label: string
-  placeholder: string
   autoComplete: string
   value: string
   onChange: (value: string) => void
   help?: ReactNode
 }) {
-  const id = `field-${name}`
   const [shown, setShown] = useState(false)
   return (
-    <Field id={id} label={label} help={help}>
-      <div className="relative">
-        <input
-          id={id}
-          name={name}
-          type={shown ? "text" : "password"}
-          autoComplete={autoComplete}
-          autoCapitalize="none"
-          spellCheck={false}
-          enterKeyHint="go"
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={cn(INPUT, "pr-11")}
-        />
+    <FloatingInput
+      id={`field-${name}`}
+      name={name}
+      label={label}
+      type={shown ? "text" : "password"}
+      autoComplete={autoComplete}
+      autoCapitalize="none"
+      spellCheck={false}
+      enterKeyHint="go"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      help={help}
+      trailing={
         <button
           type="button"
           onClick={() => setShown((current) => !current)}
           aria-label={shown ? "Hide password" : "Show password"}
           aria-pressed={shown}
           tabIndex={-1}
-          className="absolute top-1/2 right-0 grid size-11 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+          className="absolute top-1/2 right-2 grid size-11 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
         >
           {shown ? <EyeOff className="size-[18px]" aria-hidden="true" /> : <Eye className="size-[18px]" aria-hidden="true" />}
         </button>
-      </div>
-    </Field>
+      }
+    />
   )
 }
 
-// The @ is part of the field, so it is always there and never typed.
+// The @ is part of the field, so it is always there and never typed. A handle's problem is named once the person leaves the
+// field, not on each letter.
 function HandleField({
   isLogin,
   value,
@@ -160,36 +132,26 @@ function HandleField({
   value: string
   onChange: (value: string) => void
 }) {
-  const id = "field-handle"
+  const [left, setLeft] = useState(false)
   const problem = isLogin || value.length === 0 ? null : handleProblem(value)
   return (
-    <Field
-      id={id}
+    <FloatingInput
+      id="field-handle"
+      name="handle"
       label="Handle"
-      aside={isLogin ? null : <Counter length={value.length} max={HANDLE_MAX} from={11} />}
+      prefix="@"
+      maxLength={HANDLE_MAX}
+      autoComplete={isLogin ? "username" : "off"}
+      autoCapitalize="none"
+      spellCheck={false}
+      enterKeyHint={isLogin ? "next" : "done"}
+      value={value}
+      onChange={(event) => onChange(event.target.value.replace(/^@+/, ""))}
+      onBlur={() => setLeft(true)}
       help={isLogin ? null : "3 to 15 letters, numbers or underscores."}
-      error={problem}
-    >
-      <div className="flex h-7 items-center gap-1 text-[17px]">
-        <span aria-hidden="true" className="select-none text-muted-foreground">
-          @
-        </span>
-        <input
-          id={id}
-          name="handle"
-          maxLength={HANDLE_MAX}
-          autoComplete={isLogin ? "username" : "off"}
-          autoCapitalize="none"
-          spellCheck={false}
-          enterKeyHint={isLogin ? "next" : "done"}
-          placeholder="your_handle"
-          aria-invalid={problem ? true : undefined}
-          value={value}
-          onChange={(event) => onChange(event.target.value.replace(/^@+/, ""))}
-          className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-        />
-      </div>
-    </Field>
+      aside={isLogin ? null : <Counter length={value.length} max={HANDLE_MAX} from={11} />}
+      error={left ? problem : null}
+    />
   )
 }
 
@@ -200,15 +162,6 @@ function SubmitButton({ label, pendingLabel, disabled }: { label: string; pendin
     <button type="submit" disabled={pending || disabled} aria-busy={pending || undefined} className={PRIMARY_BUTTON}>
       {pending ? pendingLabel : label}
     </button>
-  )
-}
-
-function ErrorText({ message }: { message?: string }) {
-  if (!message) return null
-  return (
-    <p role="alert" className="settle rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[14px] leading-snug text-destructive">
-      {message}
-    </p>
   )
 }
 
@@ -280,7 +233,7 @@ function useCheckAnswer(reply: { error?: string; sent?: boolean; proofRequired?:
   return { proof, key, onReady: (value: string | null) => setProof(value ?? "") }
 }
 
-// Sign in: the handle and password as one card, the primary action at the bottom, then the forgot link, then the passkey.
+// Sign in: the handle and password, one above the other, the primary action at the bottom, then the forgot link, then the passkey.
 function LoginForm({ next }: { next: string | null }) {
   const [state, formAction] = useSafeActionState(login, {} as AuthState)
   const [handle, setHandle] = useState("")
@@ -288,16 +241,9 @@ function LoginForm({ next }: { next: string | null }) {
   const check = useCheckAnswer(state)
   return (
     <form action={formAction} className="settle flex flex-1 flex-col">
-      <div className={cn(GROUP, "mt-8")}>
+      <div className={cn(FIELDS, "mt-8")}>
         <HandleField isLogin value={handle} onChange={setHandle} />
-        <PasswordField
-          name="password"
-          label="Password"
-          placeholder="Your password"
-          autoComplete="current-password"
-          value={password}
-          onChange={setPassword}
-        />
+        <PasswordField name="password" label="Password" autoComplete="current-password" value={password} onChange={setPassword} />
       </div>
       <HoneyPot />
       <input type="hidden" name="proof" value={state.proofRequired ? check.proof : ""} />
@@ -342,6 +288,8 @@ function SignupForm({ notice }: { notice: ReactNode }) {
   const [handle, setHandle] = useState("")
   const [birthday, setBirthday] = useState("")
   const [email, setEmail] = useState("")
+  // The email is named as wrong only once the person has left its field, never while they are still typing it.
+  const [emailLeft, setEmailLeft] = useState(false)
   const [password, setPassword] = useState("")
   const [agree, setAgree] = useState(false)
   // While the date drawer is open, the birthday group is raised above it and the screen lifts by `lift` pixels, so the field
@@ -452,14 +400,13 @@ function SignupForm({ notice }: { notice: ReactNode }) {
         >
           <section data-step={0} className={screen(0)}>
             <AuthTitle title="Create your account">Start with a name and a handle.</AuthTitle>
-            <div className={cn(GROUP, "mt-8")}>
+            <div className={cn(FIELDS, "mt-8")}>
               <TextField
                 name="name"
                 label="Name"
                 autoComplete="name"
                 enterKeyHint="next"
                 maxLength={MAX_NAME}
-                placeholder="Dan"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 aside={<Counter length={name.length} max={MAX_NAME} from={40} />}
@@ -475,9 +422,9 @@ function SignupForm({ notice }: { notice: ReactNode }) {
 
           <section data-step={1} className={screen(1)}>
             <AuthTitle title="When were you born?">Only you can see this.</AuthTitle>
-            {/* The birthday is a field of its own, in its full shape. A message shows under it only when the date is too young,
-                and only once the calendar has closed, so it never appears while the person is still choosing. */}
-            <div className="mt-8 flex flex-col gap-2">
+            {/* The birthday and the email are fields of their own, each in its full shape. A message shows under the birthday only
+                when the date is too young, and only once the calendar has closed, so it never appears while the person is choosing. */}
+            <div className={cn(FIELDS, "mt-8")}>
               <DateField
                 id="field-birthday"
                 name="birthday"
@@ -489,21 +436,25 @@ function SignupForm({ notice }: { notice: ReactNode }) {
                 onSheetChange={(open, lift) => setDatePick((current) => (current.open === open && current.lift === lift ? current : { open, lift }))}
               />
               {showAgeError ? <ErrorText message={`You must be ${MINIMUM_AGE} or older to join.`} /> : null}
-            </div>
-            <div className={cn(GROUP, "mt-5")}>
               <TextField
                 name="email"
                 label="Email"
                 type="email"
+                optional
                 autoComplete="email"
                 enterKeyHint="done"
                 maxLength={MAX_EMAIL}
-                placeholder="name@example.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                aside={<span className="text-[13px] text-muted-foreground">Optional</span>}
-                help={emailChecking ? "Checking that it is free…" : "Only for resetting your password."}
-                error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : emailTaken ? EMAIL_TAKEN : null}
+                onBlur={() => setEmailLeft(true)}
+                help={emailChecking ? "Checking that it is free…" : null}
+                error={
+                  emailLeft && email !== "" && !EMAIL_SHAPE.test(email)
+                    ? "That does not look like an email."
+                    : emailTaken
+                      ? EMAIL_TAKEN
+                      : null
+                }
               />
             </div>
             <AuthFooter>
@@ -515,11 +466,10 @@ function SignupForm({ notice }: { notice: ReactNode }) {
 
           <section data-step={2} className={screen(2)}>
             <AuthTitle title="Set a password">Use one you do not use anywhere else.</AuthTitle>
-            <div className={cn(GROUP, "mt-8")}>
+            <div className={cn(FIELDS, "mt-8")}>
               <PasswordField
                 name="password"
                 label="Password"
-                placeholder="Choose a password"
                 autoComplete="new-password"
                 value={password}
                 onChange={setPassword}
@@ -581,7 +531,7 @@ export function VerifyCodeForm({ usable, hasKeys, next = null }: { usable: boole
   return (
     <form action={action} className="settle flex flex-1 flex-col">
       {next ? <input type="hidden" name="next" value={next} /> : null}
-      <div className={cn(GROUP, "mt-8")}>
+      <div className={cn(FIELDS, "mt-8")}>
         <TextField
           name="code"
           label={usable ? "Code" : "Recovery code"}
@@ -591,7 +541,6 @@ export function VerifyCodeForm({ usable, hasKeys, next = null }: { usable: boole
           spellCheck={false}
           enterKeyHint="go"
           maxLength={20}
-          placeholder={usable ? "123456" : "abcd-efgh"}
           value={code}
           onChange={(event) => setCode(event.target.value)}
           className="text-center text-[22px] font-semibold tracking-[0.2em]"
@@ -628,7 +577,7 @@ export function ForgotPasswordForm() {
   const next = state.email ? `/reset-password?email=${encodeURIComponent(state.email)}` : "/reset-password"
   return (
     <form action={action} className="settle flex flex-1 flex-col">
-      <div className={cn(GROUP, "mt-8")}>
+      <div className={cn(FIELDS, "mt-8")}>
         <TextField
           name="account"
           label="Handle or email"
@@ -637,7 +586,6 @@ export function ForgotPasswordForm() {
           spellCheck={false}
           enterKeyHint="go"
           maxLength={MAX_EMAIL}
-          placeholder="your_handle or name@example.com"
           value={account}
           onChange={(event) => setAccount(event.target.value)}
         />
@@ -679,7 +627,7 @@ export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
   const ready = email.trim().length > 0 && code.trim().length > 0 && password.length >= MIN_PASSWORD
   return (
     <form action={action} className="settle flex flex-1 flex-col">
-      <div className={cn(GROUP, "mt-8")}>
+      <div className={cn(FIELDS, "mt-8")}>
         <TextField
           name="email"
           label="Email"
@@ -687,7 +635,6 @@ export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
           autoComplete="email"
           enterKeyHint="next"
           maxLength={MAX_EMAIL}
-          placeholder="name@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           help="The verified email on your account."
@@ -699,7 +646,6 @@ export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
           inputMode="numeric"
           enterKeyHint="next"
           maxLength={7}
-          placeholder="123456"
           value={code}
           onChange={(event) => setCode(event.target.value)}
           className="tracking-[0.2em]"
@@ -707,7 +653,6 @@ export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
         <PasswordField
           name="password"
           label="New password"
-          placeholder="Choose a password"
           autoComplete="new-password"
           value={password}
           onChange={setPassword}
