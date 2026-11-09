@@ -362,7 +362,7 @@ async function directFlow({ phone }) {
     await row.getByLabel("1 unread message").waitFor()
     // Opening the thread marks it read. The check waits for the server to confirm that before leaving the page, so a
     // navigation can't cancel the mark on the way out.
-    const marked = receiver.page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes(`/messages/${convId}`), { timeout: TIMEOUT })
+    const marked = receiver.page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes(`/api/conversations/${convId}/read`), { timeout: TIMEOUT })
     await row.click()
     await receiver.page.waitForURL((url) => url.pathname === `/messages/${convId}`)
     await threadText(receiver.page, ping).waitFor()
