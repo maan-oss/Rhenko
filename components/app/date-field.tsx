@@ -8,7 +8,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { SHEET_SETTLE, SPRING_SELECT, SPRING_SHEET } from "@/components/app/motion"
 import { cn } from "@/lib/utils"
 
-// A date picker. The field is a row in its form and stays where it is. Tapping it rises a drawer from the bottom edge that
+// A date picker. The field is a control of its own and stays where it is. Tapping it rises a drawer from the bottom edge that
 // holds only the calendar: the page behind it dims, and the drawer keeps one size, so months and the year list never resize
 // it. The field shows each pick as it is made and sits above the dimming. If the drawer would cover the field, the form lifts
 // by the amount needed (reported through onSheetChange) and lowers again on close. The value is posted as YYYY-MM-DD.
@@ -72,26 +72,31 @@ function useMounted(): boolean {
   return useSyncExternalStore(noopSubscribe, () => true, () => false)
 }
 
-// `bare` drops the pill and the icon, for a date in a row of a grouped form, where the row's label names the field.
+// `variant` picks the look: "pill" is the round field with its icon on the left, and "card" is a full-shape field with its icon
+// on the right. `invalid` draws the field in the error colour. `label` names the field for screen readers once a date is chosen.
 // `onSheetChange` tells the form when the drawer opens, and by how much it must lift to keep the field above the drawer.
 export function DateField({
   id,
   name,
+  label,
   defaultValue = "",
   placeholder = "Pick a date",
   max,
+  invalid = false,
   onChange,
   onSheetChange,
-  bare = false,
+  variant = "pill",
 }: {
   id: string
   name: string
+  label?: string
   defaultValue?: string
   placeholder?: string
   max?: string
+  invalid?: boolean
   onChange?: (value: string) => void
   onSheetChange?: (open: boolean, lift: number) => void
-  bare?: boolean
+  variant?: "pill" | "card"
 }) {
   const dialogId = useId()
   const mounted = useMounted()
@@ -129,10 +134,9 @@ export function DateField({
       return
     }
     const drawerTop = containerRef.current?.getBoundingClientRect().top ?? window.innerHeight - SHEET_HEIGHT
-    // The whole row is kept clear, its label and hint included, so the drawer never covers part of the field.
-    const row = triggerRef.current?.closest("[data-field-row]") ?? triggerRef.current
-    const rowBottom = row?.getBoundingClientRect().bottom ?? 0
-    tellForm(true, Math.max(0, rowBottom + CLEARANCE - drawerTop))
+    // The whole field is kept clear, so the drawer never covers any of it.
+    const fieldBottom = triggerRef.current?.getBoundingClientRect().bottom ?? 0
+    tellForm(true, Math.max(0, fieldBottom + CLEARANCE - drawerTop))
   }, [open])
   useEffect(() => () => tellForm(false, 0), [])
 
@@ -236,7 +240,7 @@ export function DateField({
         animate={{ y: dragY }}
         exit={{ y: "100%", transition: reduce ? { duration: 0 } : SHEET_SETTLE }}
         transition={dragging || reduce ? { duration: 0 } : SPRING_SHEET}
-        className="flex h-full flex-col rounded-t-[32px] border-x border-t border-border bg-popover px-5 text-popover-foreground shadow-[0_-30px_70px_-20px_rgba(0,0,0,0.5)] outline-none"
+        className="flex h-full flex-col rounded-t-[32px] border-x border-t border-border bg-popover px-5 text-popover-foreground shadow-[0_-6px_16px_-10px_rgba(0,0,0,0.2)] outline-none"
       >
         <div
           onPointerDown={handleDown}
@@ -367,8 +371,10 @@ export function DateField({
     </motion.div>
   )
 
+  const icon = <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+
   return (
-    // While open, the field's own row is raised above the dimming layer, so the value stays readable and in place.
+    // While open, the field is raised above the dimming layer, so the value stays readable and in place.
     <div className={cn("relative", open && "z-[85]")}>
       <input type="hidden" name={name} value={selected ? format(selected) : ""} />
       <button
@@ -378,15 +384,19 @@ export function DateField({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={dialogId}
+        aria-label={label && selected ? `${label}: ${shown}` : undefined}
         onClick={openSheet}
         className={cn(
           "flex w-full items-center gap-3 text-left outline-none",
-          bare
-            ? "h-7 text-[17px]"
+          variant === "card"
+            ? cn(
+                "h-14 rounded-[20px] border bg-card px-4 text-[17px] transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 focus-visible:shadow-[0_0_0_3px_var(--halo)]",
+                invalid ? "border-destructive" : "border-border"
+              )
             : "h-12 rounded-full bg-muted px-5 text-base transition-[background-color] duration-200 hover:bg-foreground/[0.06] focus:bg-background focus:shadow-[0_0_0_3px_var(--halo)]"
         )}
       >
-        {bare ? null : <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />}
+        {variant === "pill" ? icon : null}
         <span className="relative min-w-0 flex-1">
           {/* A new value fades up in place of the old one, so a pick reads as a change rather than a jump. */}
           <AnimatePresence initial={false} mode="popLayout">
@@ -402,6 +412,7 @@ export function DateField({
             </motion.span>
           </AnimatePresence>
         </span>
+        {variant === "card" ? icon : null}
       </button>
 
       {mounted

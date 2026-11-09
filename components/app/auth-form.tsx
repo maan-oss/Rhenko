@@ -63,7 +63,7 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <div className={ROW} data-field-row="">
+    <div className={ROW}>
       <div className="flex min-h-4 items-baseline justify-between gap-3">
         <label htmlFor={id} className="text-[13px] font-medium text-muted-foreground">
           {label}
@@ -383,6 +383,9 @@ function SignupForm({ notice }: { notice: ReactNode }) {
     }
   }, [email])
 
+  // A date that is too young is named once the calendar has closed, never while it is still open.
+  const showAgeError = Boolean(birthday) && !isOldEnough(birthday) && !datePick.open
+
   const valid = [
     name.trim().length > 0 && name.length <= MAX_NAME && handle.length > 0 && !handleProblem(handle),
     isOldEnough(birthday) && (email === "" || (EMAIL_SHAPE.test(email) && !emailChecking && !emailTaken)),
@@ -472,22 +475,22 @@ function SignupForm({ notice }: { notice: ReactNode }) {
 
           <section data-step={1} className={screen(1)}>
             <AuthTitle title="When were you born?">Only you can see this.</AuthTitle>
-            <div className={cn(GROUP, "mt-8", datePick.open && "relative z-[85]")}>
-              <Field
+            {/* The birthday is a field of its own, in its full shape. A message shows under it only when the date is too young,
+                and only once the calendar has closed, so it never appears while the person is still choosing. */}
+            <div className="mt-8 flex flex-col gap-2">
+              <DateField
                 id="field-birthday"
+                name="birthday"
                 label="Date of birth"
-                help={`Rhenko is for people ${MINIMUM_AGE} or older.`}
-                error={birthday && !isOldEnough(birthday) ? `You must be ${MINIMUM_AGE} or older to join.` : null}
-              >
-                <DateField
-                  id="field-birthday"
-                  name="birthday"
-                  bare
-                  placeholder="Pick your birthday"
-                  onChange={setBirthday}
-                  onSheetChange={(open, lift) => setDatePick((current) => (current.open === open && current.lift === lift ? current : { open, lift }))}
-                />
-              </Field>
+                variant="card"
+                placeholder="Date of birth"
+                invalid={showAgeError}
+                onChange={setBirthday}
+                onSheetChange={(open, lift) => setDatePick((current) => (current.open === open && current.lift === lift ? current : { open, lift }))}
+              />
+              {showAgeError ? <ErrorText message={`You must be ${MINIMUM_AGE} or older to join.`} /> : null}
+            </div>
+            <div className={cn(GROUP, "mt-5")}>
               <TextField
                 name="email"
                 label="Email"
