@@ -151,7 +151,7 @@ export function DateField({
               type="button"
               onClick={() => shiftMonth(-1)}
               aria-label="Previous month"
-              className="grid size-9 place-items-center rounded-full transition-colors hover:bg-muted"
+              className="grid size-11 place-items-center rounded-full transition-colors hover:bg-muted"
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -168,7 +168,7 @@ export function DateField({
               onClick={() => shiftMonth(1)}
               aria-label="Next month"
               disabled={view.year > maxParts.year || (view.year === maxParts.year && view.month >= maxParts.month)}
-              className="grid size-9 place-items-center rounded-full transition-colors hover:bg-muted disabled:opacity-50"
+              className="grid size-11 place-items-center rounded-full transition-colors hover:bg-muted disabled:opacity-50"
             >
               <ChevronRight className="size-4" />
             </button>
@@ -218,7 +218,7 @@ export function DateField({
                       aria-label={`${day} ${MONTHS[view.month]} ${view.year}`}
                       aria-pressed={isSelected}
                       className={cn(
-                        "mx-auto grid size-9 place-items-center rounded-full text-sm tabular-nums transition-colors",
+                        "mx-auto grid size-11 place-items-center rounded-full text-sm tabular-nums transition-colors",
                         isSelected ? "bg-foreground font-semibold text-background" : "hover:bg-muted",
                         isToday && !isSelected && "font-semibold underline underline-offset-4",
                         disabled && "pointer-events-none opacity-30"

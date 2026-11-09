@@ -131,7 +131,7 @@ function PasswordField({
           placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={cn(INPUT, "pr-10")}
+          className={cn(INPUT, "pr-11")}
         />
         <button
           type="button"
@@ -139,7 +139,7 @@ function PasswordField({
           aria-label={shown ? "Hide password" : "Show password"}
           aria-pressed={shown}
           tabIndex={-1}
-          className="absolute top-1/2 right-0 grid size-9 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+          className="absolute top-1/2 right-0 grid size-11 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
         >
           {shown ? <EyeOff className="size-[18px]" aria-hidden="true" /> : <Eye className="size-[18px]" aria-hidden="true" />}
         </button>
@@ -312,7 +312,7 @@ function LoginForm({ next }: { next: string | null }) {
           pendingLabel="Logging in"
           disabled={handle.length === 0 || password.length === 0 || (state.proofRequired === true && check.proof === "")}
         />
-        <Link href="/forgot-password" className="self-center py-2 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+        <Link href="/forgot-password" className="inline-flex min-h-11 items-center self-center px-3 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground">
           Forgot password?
         </Link>
         <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>

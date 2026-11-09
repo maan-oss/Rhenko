@@ -56,7 +56,7 @@ export function AuthBack({ onClick, href, label = "Back" }: { onClick?: () => vo
 // The one text action in the top bar, such as Sign up or Log in.
 export function AuthTopLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="rounded-full px-2 py-2 text-[17px] font-medium text-foreground transition-opacity hover:opacity-70">
+    <Link href={href} className="inline-flex min-h-11 items-center rounded-full px-3 text-[17px] font-medium text-foreground transition-opacity hover:opacity-70">
       {children}
     </Link>
   )
