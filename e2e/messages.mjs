@@ -1,7 +1,9 @@
 // Direct messages and group chats: requests, accepting and declining, sending text and photos, reactions, sharing a post,
 // deleting a message, muting a conversation, creating a group, renaming it, adding and removing people, and leaving.
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { RUN_ID, TIMEOUT, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
+import { OUT, RUN_ID, TIMEOUT, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import {
   chatBox,
@@ -309,6 +311,29 @@ async function directFlow({ phone }) {
     await embed.click()
     await receiver.page.waitForURL((url) => url.pathname === `/${sender.handle}/status/${postId}`)
     await waitForPost(receiver.page, shareText)
+  })
+
+  await check(`${where}: the Screenshot tile makes a picture of a post that saves as a PNG`, async () => {
+    const pictureText = uniq("A post for a picture")
+    await writePost(sender.page, pictureText)
+    await openProfile(sender.page, sender.handle)
+    const shown = await waitForPost(sender.page, pictureText)
+    await cardMenu(sender.page, shown, "Share")
+    const dialog = sender.page.getByRole("dialog", { name: "Share post" })
+    await dialog.waitFor()
+    await dialog.getByRole("button", { name: "Screenshot", exact: true }).click()
+    await dialog.getByRole("img", { name: `Picture of ${sender.name}'s post` }).waitFor()
+    const [download] = await Promise.all([
+      sender.page.waitForEvent("download"),
+      dialog.getByRole("button", { name: "Save picture", exact: true }).click(),
+    ])
+    const bytes = await readFile(await download.path())
+    // Kept beside the run's screenshots, so the picture itself can be looked at after the run.
+    await download.saveAs(join(OUT, `post-picture-${where.replace(/\W+/g, "-")}.png`))
+    assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], "the saved picture is not a PNG")
+    assert.ok(bytes.length > 20000, `the saved picture is only ${bytes.length} bytes, too small to hold the post`)
+    await dialog.getByRole("button", { name: "Back to sharing" }).click()
+    await dialog.getByRole("textbox", { name: "Search people" }).waitFor()
   })
 
   await check(`${where}: only your own messages can be deleted, and a deleted message becomes a notice for both people`, async () => {
