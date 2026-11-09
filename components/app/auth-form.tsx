@@ -393,8 +393,10 @@ function SignupForm({ notice }: { notice: ReactNode }) {
         left={<AuthMark />}
         right={step === 0 ? <AuthTopLink href="/login">Log in</AuthTopLink> : null}
       />
+      {/* The first screen reads as a sign-in page, so the steps start once the person is into the onboarding: from the
+          second screen on. The spacer keeps the same height, so the page does not move when the step changes. */}
       <div className="mt-3">
-        <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} />
+        {step > 0 ? <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} /> : <div aria-hidden="true" className="h-2.5" />}
       </div>
       {notice ? <div className="mt-4">{notice}</div> : null}
       {/* Outside the screens, so a refused sign-up shows its reason on whichever screen it sends the person back to. */}
