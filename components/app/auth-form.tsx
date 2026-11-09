@@ -18,6 +18,8 @@ import {
   type AuthState,
   type ResetRequestState,
 } from "@/actions/auth"
+import { motion, useReducedMotion } from "motion/react"
+import { SPRING_SHEET } from "@/components/app/motion"
 import { DateField } from "@/components/app/date-field"
 import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
 import { AuthBack, AuthBar, AuthFooter, AuthMark, AuthTitle, AuthTopLink, PRIMARY_BUTTON } from "@/components/app/auth-frame"
@@ -61,7 +63,7 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <div className={ROW}>
+    <div className={ROW} data-field-row="">
       <div className="flex min-h-4 items-baseline justify-between gap-3">
         <label htmlFor={id} className="text-[13px] font-medium text-muted-foreground">
           {label}
@@ -342,6 +344,10 @@ function SignupForm({ notice }: { notice: ReactNode }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [agree, setAgree] = useState(false)
+  // While the date drawer is open, the birthday group is raised above it and the screen lifts by `lift` pixels, so the field
+  // stays above the drawer's top edge. It is reset the moment the drawer closes.
+  const [datePick, setDatePick] = useState({ open: false, lift: 0 })
+  const reduce = useReducedMotion()
   const formRef = useRef<HTMLFormElement>(null)
   // The human check runs from the moment the form opens, while the person fills in the screens, so it is ready at the end.
   const check = useCheckAnswer(state)
@@ -413,10 +419,11 @@ function SignupForm({ notice }: { notice: ReactNode }) {
 
   // The screens share one grid cell, so the form is as tall as its tallest screen. A screen that is not showing is
   // invisible, not removed, so the page does not move when the step changes. Only the screen showing settles in.
-  const screen = (index: number) => cn("col-start-1 row-start-1 flex min-h-0 flex-col", step === index ? "settle" : "invisible")
+  // `settle-clean` leaves no transform behind after it runs, so a raised field can rise above the date drawer's dimming.
+  const screen = (index: number) => cn("col-start-1 row-start-1 flex min-h-0 flex-col", step === index ? "settle-clean" : "invisible")
 
   return (
-    <form ref={formRef} action={formAction} onSubmit={onSubmit} className="settle flex flex-1 flex-col" noValidate>
+    <form ref={formRef} action={formAction} onSubmit={onSubmit} className="settle-clean flex flex-1 flex-col" noValidate>
       <AuthBar
         left={step > 0 ? <AuthBack onClick={() => setStep(step - 1)} /> : <AuthMark />}
         right={step === 0 ? <AuthTopLink href="/login">Log in</AuthTopLink> : null}
@@ -432,103 +439,118 @@ function SignupForm({ notice }: { notice: ReactNode }) {
         </div>
       ) : null}
 
-      <div className="grid flex-1">
-        <section data-step={0} className={screen(0)}>
-          <AuthTitle title="Create your account">Start with a name and a handle.</AuthTitle>
-          <div className={cn(GROUP, "mt-8")}>
-            <TextField
-              name="name"
-              label="Name"
-              autoComplete="name"
-              enterKeyHint="next"
-              maxLength={MAX_NAME}
-              placeholder="Dan"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              aside={<Counter length={name.length} max={MAX_NAME} from={40} />}
-            />
-            <HandleField isLogin={false} value={handle} onChange={setHandle} />
-          </div>
-          <AuthFooter>
-            <Button onClick={() => setStep(1)} disabled={!valid[0]}>
-              Continue
-            </Button>
-          </AuthFooter>
-        </section>
+      {/* The screens sit beneath the steps above them. While the date drawer is open they lift under that edge, so the birthday
+          row clears the drawer and nothing is drawn over the steps. */}
+      <div className="-mx-3 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 -mb-3">
+        <motion.div
+          className="relative grid flex-1"
+          animate={{ top: datePick.open ? -datePick.lift : 0 }}
+          transition={reduce ? { duration: 0 } : SPRING_SHEET}
+        >
+          <section data-step={0} className={screen(0)}>
+            <AuthTitle title="Create your account">Start with a name and a handle.</AuthTitle>
+            <div className={cn(GROUP, "mt-8")}>
+              <TextField
+                name="name"
+                label="Name"
+                autoComplete="name"
+                enterKeyHint="next"
+                maxLength={MAX_NAME}
+                placeholder="Dan"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                aside={<Counter length={name.length} max={MAX_NAME} from={40} />}
+              />
+              <HandleField isLogin={false} value={handle} onChange={setHandle} />
+            </div>
+            <AuthFooter>
+              <Button onClick={() => setStep(1)} disabled={!valid[0]}>
+                Continue
+              </Button>
+            </AuthFooter>
+          </section>
 
-        <section data-step={1} className={screen(1)}>
-          <AuthTitle title="When were you born?">Only you can see this.</AuthTitle>
-          <div className={cn(GROUP, "mt-8")}>
-            <Field
-              id="field-birthday"
-              label="Date of birth"
-              help={`Rhenko is for people ${MINIMUM_AGE} or older.`}
-              error={birthday && !isOldEnough(birthday) ? `You must be ${MINIMUM_AGE} or older to join.` : null}
-            >
-              <DateField id="field-birthday" name="birthday" label="Date of birth" bare placeholder="Pick your birthday" onChange={setBirthday} />
-            </Field>
-            <TextField
-              name="email"
-              label="Email"
-              type="email"
-              autoComplete="email"
-              enterKeyHint="done"
-              maxLength={MAX_EMAIL}
-              placeholder="name@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              aside={<span className="text-[13px] text-muted-foreground">Optional</span>}
-              help={emailChecking ? "Checking that it is free…" : "Only for resetting your password."}
-              error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : emailTaken ? EMAIL_TAKEN : null}
-            />
-          </div>
-          <AuthFooter>
-            <Button onClick={() => setStep(2)} disabled={!valid[1]}>
-              Continue
-            </Button>
-          </AuthFooter>
-        </section>
+          <section data-step={1} className={screen(1)}>
+            <AuthTitle title="When were you born?">Only you can see this.</AuthTitle>
+            <div className={cn(GROUP, "mt-8", datePick.open && "relative z-[85]")}>
+              <Field
+                id="field-birthday"
+                label="Date of birth"
+                help={`Rhenko is for people ${MINIMUM_AGE} or older.`}
+                error={birthday && !isOldEnough(birthday) ? `You must be ${MINIMUM_AGE} or older to join.` : null}
+              >
+                <DateField
+                  id="field-birthday"
+                  name="birthday"
+                  bare
+                  placeholder="Pick your birthday"
+                  onChange={setBirthday}
+                  onSheetChange={(open, lift) => setDatePick((current) => (current.open === open && current.lift === lift ? current : { open, lift }))}
+                />
+              </Field>
+              <TextField
+                name="email"
+                label="Email"
+                type="email"
+                autoComplete="email"
+                enterKeyHint="done"
+                maxLength={MAX_EMAIL}
+                placeholder="name@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                aside={<span className="text-[13px] text-muted-foreground">Optional</span>}
+                help={emailChecking ? "Checking that it is free…" : "Only for resetting your password."}
+                error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : emailTaken ? EMAIL_TAKEN : null}
+              />
+            </div>
+            <AuthFooter>
+              <Button onClick={() => setStep(2)} disabled={!valid[1]}>
+                Continue
+              </Button>
+            </AuthFooter>
+          </section>
 
-        <section data-step={2} className={screen(2)}>
-          <AuthTitle title="Set a password">Use one you do not use anywhere else.</AuthTitle>
-          <div className={cn(GROUP, "mt-8")}>
-            <PasswordField
-              name="password"
-              label="Password"
-              placeholder="Choose a password"
-              autoComplete="new-password"
-              value={password}
-              onChange={setPassword}
-              help={<PasswordRule value={password} />}
-            />
-          </div>
-          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-border bg-card px-4 py-3.5 text-[14px] leading-relaxed">
-            <input
-              type="checkbox"
-              name="agree"
-              required
-              checked={agree}
-              onChange={(event) => setAgree(event.target.checked)}
-              className="mt-[3px] size-4 shrink-0 cursor-pointer accent-dusk"
-            />
-            <span>
-              I am {MINIMUM_AGE} or older, and I agree to the{" "}
-              <Link href="/terms" target="_blank" className={LINK}>
-                Terms
-              </Link>{" "}
-              and the{" "}
-              <Link href="/privacy" target="_blank" className={LINK}>
-                Privacy Policy
-              </Link>
-              .
-            </span>
-          </label>
-          <AuthFooter>
-            {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
-            {step === SIGNUP_LAST ? <ProofCheck key={check.key} quiet onReady={check.onReady} /> : null}
-            <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
-          </AuthFooter>
-        </section>
+          <section data-step={2} className={screen(2)}>
+            <AuthTitle title="Set a password">Use one you do not use anywhere else.</AuthTitle>
+            <div className={cn(GROUP, "mt-8")}>
+              <PasswordField
+                name="password"
+                label="Password"
+                placeholder="Choose a password"
+                autoComplete="new-password"
+                value={password}
+                onChange={setPassword}
+                help={<PasswordRule value={password} />}
+              />
+            </div>
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-border bg-card px-4 py-3.5 text-[14px] leading-relaxed">
+              <input
+                type="checkbox"
+                name="agree"
+                required
+                checked={agree}
+                onChange={(event) => setAgree(event.target.checked)}
+                className="mt-[3px] size-4 shrink-0 cursor-pointer accent-dusk"
+              />
+              <span>
+                I am {MINIMUM_AGE} or older, and I agree to the{" "}
+                <Link href="/terms" target="_blank" className={LINK}>
+                  Terms
+                </Link>{" "}
+                and the{" "}
+                <Link href="/privacy" target="_blank" className={LINK}>
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+            <AuthFooter>
+              {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
+              {step === SIGNUP_LAST ? <ProofCheck key={check.key} quiet onReady={check.onReady} /> : null}
+              <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
+            </AuthFooter>
+          </section>
+        </motion.div>
       </div>
 
       <HoneyPot />

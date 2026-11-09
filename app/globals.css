@@ -422,6 +422,12 @@ input[type="radio"]:focus-visible {
   animation: settle 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* The same motion as settle, but nothing is held once it ends. With `both`, the final frame keeps a translate and a blur, and
+   each of those makes the element a stacking context, so a field inside it could never rise above a dimming layer. */
+@utility settle-clean {
+  animation: settle 460ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
 /* Streamed page content rises in as it arrives. Only opacity and a short move, with no filter and no fill after the end,
    so a fixed overlay inside the content is never held in a containing block. */
 @keyframes reveal {

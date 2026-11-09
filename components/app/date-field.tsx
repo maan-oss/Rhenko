@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import type { PointerEvent as ReactPointerEvent } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
@@ -8,10 +8,10 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { SHEET_SETTLE, SPRING_SELECT, SPRING_SHEET } from "@/components/app/motion"
 import { cn } from "@/lib/utils"
 
-// A date picker in a drawer. Tapping the field lifts its value out of the field and into a card at the top of a drawer, which
-// rises from the bottom edge. The card sits above the calendar, not inside it, and shows each change as a date is picked.
-// Closing flies the value back into the field and lowers the drawer. The drawer has one fixed size, so months, years and the
-// year list never resize it. The value is submitted as YYYY-MM-DD in a hidden input.
+// A date picker. The field is a row in its form and stays where it is. Tapping it rises a drawer from the bottom edge that
+// holds only the calendar: the page behind it dims, and the drawer keeps one size, so months and the year list never resize
+// it. The field shows each pick as it is made and sits above the dimming. If the drawer would cover the field, the form lifts
+// by the amount needed (reported through onSheetChange) and lowers again on close. The value is posted as YYYY-MM-DD.
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
@@ -23,8 +23,10 @@ const ROW_GAP = 4
 const GRID_HEIGHT = 6 * CELL + 5 * ROW_GAP
 const WEEKDAY_HEIGHT = 28
 const BODY_HEIGHT = WEEKDAY_HEIGHT + GRID_HEIGHT
-// Handle 22, gap 16, value card 76, gap 20, month row 44 with 4 below, body, and 20 of bottom space.
-const SHEET_HEIGHT = 22 + 16 + 76 + 20 + 44 + 4 + BODY_HEIGHT + 20
+// Handle 22, gap 8, month row 44, gap 4, the body, then 20 below. A home indicator's space is added under this, not taken from it.
+const SHEET_HEIGHT = 22 + 8 + 44 + 4 + BODY_HEIGHT + 20
+// The least space kept between the field and the drawer's top edge when the form lifts for it.
+const CLEARANCE = 12
 
 const SLIDE = { duration: 0.28, ease: [0.2, 0.7, 0.2, 1] } as const
 const SLIDE_DISTANCE = 28
@@ -37,17 +39,10 @@ const PAGE = {
 // A pull down this far, or this fast, dismisses the drawer. Otherwise it springs back.
 const PUSH_DOWN_DISTANCE = 110
 const PUSH_DOWN_SPEED = 0.6
-// After a day is picked, the card shows the new date for a moment before the drawer lowers.
+// After a day is picked, the field shows the new date for a moment before the drawer lowers.
 const CLOSE_AFTER_PICK_MS = 260
-// The drawer rests so its value line sits LIFT pixels above the field's value, so the value glides up into the card. The value
-// line is VALUE_LINE_IN_SHEET pixels below the drawer's top edge.
-const LIFT = 40
-const VALUE_LINE_IN_SHEET = 73
 
 type Parts = { year: number; month: number; day: number }
-type Box = { x: number; y: number; w: number; h: number }
-// The value in flight between the field and the card. `to` is measured once the drawer is in place.
-type Flight = { id: number; kind: "open" | "close"; from: Box; to: Box | null; text: string; color: string }
 
 function parse(value: string): Parts | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -72,34 +67,30 @@ function leadingBlanks(year: number, month: number): number {
   return (new Date(year, month, 1).getDay() + 6) % 7
 }
 
-function boxOf(element: HTMLElement): Box {
-  const rect = element.getBoundingClientRect()
-  return { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
-}
-
 const noopSubscribe = () => () => {}
 function useMounted(): boolean {
   return useSyncExternalStore(noopSubscribe, () => true, () => false)
 }
 
 // `bare` drops the pill and the icon, for a date in a row of a grouped form, where the row's label names the field.
+// `onSheetChange` tells the form when the drawer opens, and by how much it must lift to keep the field above the drawer.
 export function DateField({
   id,
   name,
-  label = "Date",
   defaultValue = "",
   placeholder = "Pick a date",
   max,
   onChange,
+  onSheetChange,
   bare = false,
 }: {
   id: string
   name: string
-  label?: string
   defaultValue?: string
   placeholder?: string
   max?: string
   onChange?: (value: string) => void
+  onSheetChange?: (open: boolean, lift: number) => void
   bare?: boolean
 }) {
   const dialogId = useId()
@@ -117,16 +108,9 @@ export function DateField({
   })
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
-  const [flight, setFlight] = useState<Flight | null>(null)
-  // Where the drawer rests from the top of the screen, and how far below that it starts before it rises.
-  // `flush` drawers reach the bottom edge of the screen; a drawer lifted high enough to float keeps all its corners rounded.
-  const [anchor, setAnchor] = useState({ top: 0, rise: 0, flush: true })
-  const flightCount = useRef(0)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const triggerValueRef = useRef<HTMLSpanElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const cardValueRef = useRef<HTMLSpanElement>(null)
   const dragStart = useRef({ y: 0, time: 0 })
   const pickTimer = useRef<number | undefined>(undefined)
   const shown = selected ? readable(selected) : placeholder
@@ -136,70 +120,36 @@ export function DateField({
     return () => window.clearTimeout(timer.current)
   }, [])
 
-  // Closing starts the value flying from the card back to the field, and the drawer lowers at the same time.
-  const close = useCallback(() => {
-    const card = cardValueRef.current
-    const trigger = triggerValueRef.current
-    if (card && trigger) {
-      flightCount.current += 1
-      setFlight({
-        id: flightCount.current,
-        kind: "close",
-        from: boxOf(card),
-        to: boxOf(trigger),
-        text: card.textContent ?? "",
-        color: getComputedStyle(card).color,
-      })
+  // The form learns when the drawer opens and how far it must lift. The lift is measured once the drawer is laid out. Its
+  // container is never transformed (only the panel inside rises), so the container's top edge is where the drawer rests.
+  const tellForm = useEffectEvent((isOpen: boolean, lift: number) => onSheetChange?.(isOpen, lift))
+  useLayoutEffect(() => {
+    if (!open) {
+      tellForm(false, 0)
+      return
     }
+    const drawerTop = containerRef.current?.getBoundingClientRect().top ?? window.innerHeight - SHEET_HEIGHT
+    // The whole row is kept clear, its label and hint included, so the drawer never covers part of the field.
+    const row = triggerRef.current?.closest("[data-field-row]") ?? triggerRef.current
+    const rowBottom = row?.getBoundingClientRect().bottom ?? 0
+    tellForm(true, Math.max(0, rowBottom + CLEARANCE - drawerTop))
+  }, [open])
+  useEffect(() => () => tellForm(false, 0), [])
+
+  const close = useCallback(() => {
     setOpen(false)
     setYearList(false)
     triggerRef.current?.focus({ preventScroll: true })
   }, [])
 
-  // Opening starts the value flying out of the field. Its landing spot is measured once the drawer is laid out.
   function openSheet() {
     const start = selected ?? maxParts
     setView({ year: start.year, month: start.month })
     setDirection(0)
     setDragY(0)
     setYearList(false)
-    const trigger = triggerValueRef.current
-    if (trigger) {
-      const triggerTop = trigger.getBoundingClientRect().top
-      const top = Math.max(12, Math.min(triggerTop - LIFT - VALUE_LINE_IN_SHEET, window.innerHeight - SHEET_HEIGHT - 12))
-      setAnchor({ top, rise: window.innerHeight - top, flush: top + SHEET_HEIGHT > window.innerHeight - 40 })
-      flightCount.current += 1
-      setFlight({
-        id: flightCount.current,
-        kind: "open",
-        from: boxOf(trigger),
-        to: null,
-        text: trigger.textContent ?? "",
-        color: getComputedStyle(trigger).color,
-      })
-    }
     setOpen(true)
   }
-
-  // The drawer's container does not move, so its position and the card's offsets are the drawer's resting place. The panel
-  // inside it is the part that rises, so the card's position is read from offsets, which ignore that motion.
-  useLayoutEffect(() => {
-    if (!flight || flight.kind !== "open" || flight.to) return
-    const container = containerRef.current
-    const panel = panelRef.current
-    const value = cardValueRef.current
-    if (!container || !panel || !value) return
-    const containerRect = container.getBoundingClientRect()
-    setFlight({
-      ...flight,
-      to: {
-        x: containerRect.left + panel.clientLeft + value.offsetLeft,
-        y: containerRect.top + panel.clientTop + value.offsetTop,
-        w: value.offsetWidth,
-        h: value.offsetHeight,
-      },
-    })
-  }, [flight])
 
   useEffect(() => {
     if (!open) return
@@ -241,7 +191,7 @@ export function DateField({
     }, CLOSE_AFTER_PICK_MS)
   }
 
-  // The grab handle can be dragged down to dismiss the drawer. Nothing else in it moves or resizes.
+  // The handle can be dragged down to dismiss the drawer. Nothing else in it moves.
   function handleDown(event: ReactPointerEvent<HTMLDivElement>) {
     event.currentTarget.setPointerCapture(event.pointerId)
     dragStart.current = { y: event.clientY, time: event.timeStamp }
@@ -268,47 +218,12 @@ export function DateField({
   for (let year = maxParts.year; year >= FIRST_YEAR; year--) years.push(year)
   const pageTransition = reduce ? { duration: 0 } : SLIDE
 
-  // The field is hidden while the drawer is open or the value is in flight, so the value is only ever in one place.
-  const fieldValueVisible = !open && !flight
-  const cardValueVisible = open && !flight
-
-  const ghost =
-    flight && flight.to ? (
-      <motion.div
-        key={flight.id}
-        data-date-flight=""
-        aria-hidden="true"
-        initial={{ x: 0, y: 0 }}
-        animate={{ x: flight.to.x - flight.from.x, y: flight.to.y - flight.from.y }}
-        transition={reduce ? { duration: 0 } : SPRING_SHEET}
-        onAnimationComplete={() => setFlight(null)}
-        style={{
-          position: "fixed",
-          left: flight.from.x,
-          top: flight.from.y,
-          width: flight.from.w,
-          height: flight.from.h,
-          zIndex: 95,
-          pointerEvents: "none",
-          whiteSpace: "nowrap",
-          fontSize: 17,
-          lineHeight: "24px",
-          color: flight.color,
-        }}
-      >
-        {flight.text}
-      </motion.div>
-    ) : null
-
-  const sheet = (
+  const drawer = (
     <motion.div
-      key="sheet"
+      key="drawer"
       ref={containerRef}
-      className="fixed inset-x-0 z-[90] mx-auto w-full max-w-[420px]"
-      style={{
-        top: anchor.top,
-        ...(anchor.flush ? { bottom: 0 } : { height: `calc(${SHEET_HEIGHT}px + env(safe-area-inset-bottom, 0px))` }),
-      }}
+      className="fixed inset-x-0 bottom-0 z-[90] mx-auto w-full max-w-[420px]"
+      style={{ height: `calc(${SHEET_HEIGHT}px + env(safe-area-inset-bottom, 0px))` }}
     >
       <motion.div
         ref={panelRef}
@@ -317,14 +232,11 @@ export function DateField({
         aria-modal="true"
         aria-label="Choose a date"
         tabIndex={-1}
-        initial={{ y: anchor.rise }}
+        initial={{ y: "100%" }}
         animate={{ y: dragY }}
-        exit={{ y: anchor.rise, transition: SHEET_SETTLE }}
+        exit={{ y: "100%", transition: reduce ? { duration: 0 } : SHEET_SETTLE }}
         transition={dragging || reduce ? { duration: 0 } : SPRING_SHEET}
-        className={cn(
-          "absolute inset-0 flex flex-col border-border bg-popover px-5 text-popover-foreground shadow-[0_-30px_70px_-20px_rgba(0,0,0,0.5)] outline-none",
-          anchor.flush ? "rounded-t-[32px] border-x border-t" : "rounded-[32px] border"
-        )}
+        className="flex h-full flex-col rounded-t-[32px] border-x border-t border-border bg-popover px-5 text-popover-foreground shadow-[0_-30px_70px_-20px_rgba(0,0,0,0.5)] outline-none"
       >
         <div
           onPointerDown={handleDown}
@@ -336,27 +248,7 @@ export function DateField({
           <span aria-hidden="true" className="h-1.5 w-11 rounded-full bg-foreground/20" />
         </div>
 
-        <div className="mt-4 flex h-[76px] shrink-0 flex-col justify-center rounded-[20px] border border-border bg-card px-4">
-          <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
-          <span
-            ref={cardValueRef}
-            data-date-value="card"
-            style={{ visibility: cardValueVisible ? "visible" : "hidden" }}
-            className={cn("mt-0.5 block whitespace-nowrap text-[17px] leading-6", selected ? "text-foreground" : "text-muted-foreground")}
-          >
-            <motion.span
-              key={shown}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={pageTransition}
-              className="block"
-            >
-              {shown}
-            </motion.span>
-          </span>
-        </div>
-
-        <div className="mt-5 mb-1 flex h-11 shrink-0 items-center justify-between">
+        <div className="mt-2 flex h-11 shrink-0 items-center justify-between">
           <button
             type="button"
             onClick={() => shiftMonth(-1)}
@@ -384,97 +276,100 @@ export function DateField({
           </button>
         </div>
 
-        {yearList ? (
-          <div className="grid shrink-0 grid-cols-4 content-start gap-1.5 overflow-y-auto pr-1" style={{ height: BODY_HEIGHT }}>
-            {years.map((year) => (
-              <button
-                key={year}
-                type="button"
-                aria-pressed={year === view.year}
-                onClick={() => {
-                  setDirection(0)
-                  setView((current) => ({ year, month: current.month }))
-                  setYearList(false)
-                }}
-                className={cn(
-                  "rounded-full py-2 text-sm font-medium tabular-nums transition-colors",
-                  year === view.year ? "bg-foreground text-background" : "hover:bg-muted"
-                )}
-              >
-                {year}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <>
-            <div className="grid shrink-0 grid-cols-7 items-center text-center text-xs font-medium text-muted-foreground" style={{ height: WEEKDAY_HEIGHT }}>
-              {WEEKDAYS.map((day) => (
-                <span key={day}>{day}</span>
+        {/* A body of one fixed height. The month slides inside it and the year list takes its place, so nothing resizes. */}
+        <div className="mt-1 shrink-0" style={{ height: BODY_HEIGHT }}>
+          {yearList ? (
+            <div className="grid h-full grid-cols-4 content-start gap-1.5 overflow-y-auto pr-1">
+              {years.map((year) => (
+                <button
+                  key={year}
+                  type="button"
+                  aria-pressed={year === view.year}
+                  onClick={() => {
+                    setDirection(0)
+                    setView((current) => ({ year, month: current.month }))
+                    setYearList(false)
+                  }}
+                  className={cn(
+                    "rounded-full py-2 text-sm font-medium tabular-nums transition-colors",
+                    year === view.year ? "bg-foreground text-background" : "hover:bg-muted"
+                  )}
+                >
+                  {year}
+                </button>
               ))}
             </div>
-            {/* A fixed window the month slides in and out of. Its height never changes, so the drawer does not either. */}
-            <div className="relative shrink-0 overflow-hidden" style={{ height: GRID_HEIGHT }}>
-              <AnimatePresence initial={false} custom={direction}>
-                <motion.div
-                  key={`${view.year}-${view.month}`}
-                  custom={direction}
-                  variants={PAGE}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={pageTransition}
-                  className="absolute inset-0 grid grid-cols-7 text-center"
-                  style={{ gridTemplateRows: `repeat(6, ${CELL}px)`, rowGap: ROW_GAP }}
-                >
-                  {cells.map((day, index) => {
-                    if (day === null) return <span key={`blank-${index}`} />
-                    const disabled = isAfterMax(view.year, view.month, day)
-                    const isSelected =
-                      selected !== null && selected.year === view.year && selected.month === view.month && selected.day === day
-                    const isToday =
-                      today.getFullYear() === view.year && today.getMonth() === view.month && today.getDate() === day
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => choose(day)}
-                        aria-label={`${day} ${MONTHS[view.month]} ${view.year}`}
-                        aria-pressed={isSelected}
-                        className={cn(
-                          "relative isolate mx-auto grid size-11 place-items-center rounded-full text-[15px] tabular-nums transition-colors",
-                          isSelected ? "font-semibold text-background" : "text-foreground hover:bg-muted",
-                          disabled && "pointer-events-none opacity-30"
-                        )}
-                      >
-                        {isSelected ? (
-                          <motion.span
-                            layoutId={`${id}-day`}
-                            aria-hidden="true"
-                            initial={{ scale: 0.6 }}
-                            animate={{ scale: 1 }}
-                            transition={reduce ? { duration: 0 } : SPRING_SELECT}
-                            className="absolute inset-0 -z-10 rounded-full bg-foreground"
-                          />
-                        ) : null}
-                        {isToday && !isSelected ? (
-                          <span aria-hidden="true" className="absolute inset-0 rounded-full ring-1 ring-inset ring-foreground/40" />
-                        ) : null}
-                        {day}
-                      </button>
-                    )
-                  })}
-                </motion.div>
-              </AnimatePresence>
+          ) : (
+            <div className="flex h-full flex-col">
+              <div className="grid shrink-0 grid-cols-7 items-center text-center text-xs font-medium text-muted-foreground" style={{ height: WEEKDAY_HEIGHT }}>
+                {WEEKDAYS.map((day) => (
+                  <span key={day}>{day}</span>
+                ))}
+              </div>
+              <div className="relative shrink-0 overflow-hidden" style={{ height: GRID_HEIGHT }}>
+                <AnimatePresence initial={false} custom={direction}>
+                  <motion.div
+                    key={`${view.year}-${view.month}`}
+                    custom={direction}
+                    variants={PAGE}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={pageTransition}
+                    className="absolute inset-0 grid grid-cols-7 text-center"
+                    style={{ gridTemplateRows: `repeat(6, ${CELL}px)`, rowGap: ROW_GAP }}
+                  >
+                    {cells.map((day, index) => {
+                      if (day === null) return <span key={`blank-${index}`} />
+                      const disabled = isAfterMax(view.year, view.month, day)
+                      const isSelected =
+                        selected !== null && selected.year === view.year && selected.month === view.month && selected.day === day
+                      const isToday =
+                        today.getFullYear() === view.year && today.getMonth() === view.month && today.getDate() === day
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => choose(day)}
+                          aria-label={`${day} ${MONTHS[view.month]} ${view.year}`}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            "relative isolate mx-auto grid size-11 place-items-center rounded-full text-[15px] tabular-nums transition-colors",
+                            isSelected ? "font-semibold text-background" : "text-foreground hover:bg-muted",
+                            disabled && "pointer-events-none opacity-30"
+                          )}
+                        >
+                          {isSelected ? (
+                            <motion.span
+                              layoutId={`${id}-day`}
+                              aria-hidden="true"
+                              initial={{ scale: 0.6 }}
+                              animate={{ scale: 1 }}
+                              transition={reduce ? { duration: 0 } : SPRING_SELECT}
+                              className="absolute inset-0 -z-10 rounded-full bg-foreground"
+                            />
+                          ) : null}
+                          {isToday && !isSelected ? (
+                            <span aria-hidden="true" className="absolute inset-0 rounded-full ring-1 ring-inset ring-foreground/40" />
+                          ) : null}
+                          {day}
+                        </button>
+                      )
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
       </motion.div>
     </motion.div>
   )
 
   return (
-    <div className="relative">
+    // While open, the field's own row is raised above the dimming layer, so the value stays readable and in place.
+    <div className={cn("relative", open && "z-[85]")}>
       <input type="hidden" name={name} value={selected ? format(selected) : ""} />
       <button
         ref={triggerRef}
@@ -492,38 +387,40 @@ export function DateField({
         )}
       >
         {bare ? null : <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />}
-        <span className="min-w-0 flex-1">
-          <span
-            ref={triggerValueRef}
-            data-date-value="trigger"
-            style={{ visibility: fieldValueVisible ? "visible" : "hidden" }}
-            className={cn("block whitespace-nowrap", selected ? "text-foreground" : "text-muted-foreground")}
-          >
-            {shown}
-          </span>
+        <span className="relative min-w-0 flex-1">
+          {/* A new value fades up in place of the old one, so a pick reads as a change rather than a jump. */}
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.span
+              key={shown}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={pageTransition}
+              className={cn("block whitespace-nowrap", selected ? "text-foreground" : "text-muted-foreground")}
+            >
+              {shown}
+            </motion.span>
+          </AnimatePresence>
         </span>
       </button>
 
       {mounted
         ? createPortal(
-            <>
-              <AnimatePresence>
-                {open ? (
-                  <motion.div
-                    key="scrim"
-                    aria-hidden="true"
-                    onClick={close}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
-                    className="fixed inset-0 z-[80] bg-foreground/30 backdrop-blur-[3px]"
-                  />
-                ) : null}
-                {open ? sheet : null}
-              </AnimatePresence>
-              <AnimatePresence>{ghost}</AnimatePresence>
-            </>,
+            <AnimatePresence>
+              {open ? (
+                <motion.div
+                  key="scrim"
+                  aria-hidden="true"
+                  onClick={close}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
+                  className="fixed inset-0 z-[80] bg-foreground/30 backdrop-blur-[3px]"
+                />
+              ) : null}
+              {open ? drawer : null}
+            </AnimatePresence>,
             document.body
           )
         : null}
