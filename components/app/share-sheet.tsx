@@ -220,7 +220,7 @@ function ShareBody({ post, onDone }: { post: SharePost; onDone: () => void }) {
     if (making) return
     setMaking(true)
     try {
-      const blob = await makePostPicture(post, window.location.host)
+      const blob = await makePostPicture(post)
       setPicture({ blob, url: URL.createObjectURL(blob), file: new File([blob], `rhenko-post-${post.id}.png`, { type: "image/png" }) })
     } catch {
       toast.error("Couldn't make the picture.")

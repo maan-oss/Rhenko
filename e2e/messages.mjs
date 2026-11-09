@@ -23,7 +23,7 @@ import { query } from "./lib/db.mjs"
 import { allowNoise } from "./lib/watch.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
 import { block, follow } from "./lib/people.mjs"
-import { cardMenu, cardPostId, openProfile, waitForPost, writePost } from "./lib/posts.mjs"
+import { attach, cardMenu, cardPostId, homeComposer, openHome, openProfile, typeIn, waitForPost, writePost } from "./lib/posts.mjs"
 import { acted, alertText, bodyText, go, missingId, notHere, ready, toastText, until } from "./lib/ui.mjs"
 
 function uniq(label) {
@@ -334,6 +334,31 @@ async function directFlow({ phone }) {
     assert.ok(bytes.length > 20000, `the saved picture is only ${bytes.length} bytes, too small to hold the post`)
     await dialog.getByRole("button", { name: "Back to sharing" }).click()
     await dialog.getByRole("textbox", { name: "Search people" }).waitFor()
+  })
+
+  await check(`${where}: the picture of a post with a photo keeps the photo`, async () => {
+    const photoText = uniq("A post with a photo")
+    await openHome(sender.page)
+    const form = homeComposer(sender.page)
+    await typeIn(form, photoText)
+    await attach(form, makePng(`picture-post-${where}.png`, { width: 1200, height: 800, seed: 3 }))
+    await acted(sender.page, () => form.getByRole("button", { name: "Post", exact: true }).click())
+    await toastText(sender.page, /^Posted\./)
+    await openProfile(sender.page, sender.handle)
+    const shown = await waitForPost(sender.page, photoText)
+    await cardMenu(sender.page, shown, "Share")
+    const dialog = sender.page.getByRole("dialog", { name: "Share post" })
+    await dialog.waitFor()
+    await dialog.getByRole("button", { name: "Screenshot", exact: true }).click()
+    await dialog.getByRole("img", { name: `Picture of ${sender.name}'s post` }).waitFor()
+    const [download] = await Promise.all([
+      sender.page.waitForEvent("download"),
+      dialog.getByRole("button", { name: "Save picture", exact: true }).click(),
+    ])
+    // A text-only picture is small; one with a photo in it is much larger, so the size shows whether the photo was drawn.
+    await download.saveAs(join(OUT, `post-picture-photo-${where.replace(/\W+/g, "-")}.png`))
+    const bytes = await readFile(await download.path())
+    assert.ok(bytes.length > 60000, `the saved picture is only ${bytes.length} bytes, so the photo was probably not drawn`)
   })
 
   await check(`${where}: only your own messages can be deleted, and a deleted message becomes a notice for both people`, async () => {
