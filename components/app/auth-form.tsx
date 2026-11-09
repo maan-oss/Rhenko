@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react"
 import { useSafeActionState } from "@/lib/use-safe-action-state"
 import { useFormStatus } from "react-dom"
-import { ChevronLeft, Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
 import { requestStamp } from "@/actions/proof"
 import { ProofCheck } from "@/components/app/proof-check"
 import { PasskeyLoginButton, SecurityKeyButton } from "@/components/app/passkey-panel"
@@ -20,20 +20,19 @@ import {
 } from "@/actions/auth"
 import { DateField } from "@/components/app/date-field"
 import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
+import { AuthBack, AuthBar, AuthFooter, AuthMark, AuthTitle, AuthTopLink, PRIMARY_BUTTON } from "@/components/app/auth-frame"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
 import { handleProblem, HANDLE_MAX, MAX_NAME, MAX_PASSWORD, MIN_PASSWORD } from "@/lib/rules"
 import { cn } from "@/lib/utils"
 
-// One field shape everywhere, the same pill as the search bar. Focus is the halo; an error is a thin red edge.
-// Inputs are 16px so phones do not zoom in when they are tapped.
-const FIELD =
-  "h-12 w-full min-w-0 rounded-full bg-muted px-5 text-base outline-none transition-[background-color] duration-200 placeholder:text-muted-foreground hover:bg-foreground/[0.06] focus:bg-background"
-const FIELD_ERROR = "shadow-[inset_0_0_0_1px_var(--destructive)]"
-// A field's focus is one soft ring round its pill (the same halo as the composer), never a square outline.
-const FIELD_FOCUS = "focus:shadow-[0_0_0_3px_var(--halo)] focus-within:shadow-[0_0_0_3px_var(--halo)]"
+// A form is a group of rows, the way a phone app lists its fields: a small label above a plain input, and a hint or an
+// error under it. The group is one card with a hairline between rows, so the fields read as one form.
+const GROUP = "flex flex-col divide-y divide-border rounded-[20px] border border-border bg-card"
+const ROW =
+  "flex flex-col gap-1 px-4 pt-3 pb-3.5 first:rounded-t-[20px] last:rounded-b-[20px] transition-colors duration-200 focus-within:bg-background"
+const INPUT = "block h-7 w-full min-w-0 bg-transparent text-[17px] text-foreground outline-none placeholder:text-muted-foreground"
 const EMAIL_TAKEN = "That email is already used by another account. Use a different one, or leave it blank."
-
 const LINK = "font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground"
 
 // A counter shows only when a limit is close, so a long name or handle is never a surprise.
@@ -62,9 +61,9 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex min-h-5 items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-semibold">
+    <div className={ROW}>
+      <div className="flex min-h-4 items-baseline justify-between gap-3">
+        <label htmlFor={id} className="text-[13px] font-medium text-muted-foreground">
           {label}
         </label>
         {aside}
@@ -93,13 +92,7 @@ function TextField({
   const id = `field-${name}`
   return (
     <Field id={id} label={label} aside={aside} help={help} error={error}>
-      <input
-        id={id}
-        name={name}
-        className={cn(FIELD, error ? FIELD_ERROR : FIELD_FOCUS, className)}
-        aria-invalid={error ? true : undefined}
-        {...input}
-      />
+      <input id={id} name={name} className={cn(INPUT, className)} aria-invalid={error ? true : undefined} {...input} />
     </Field>
   )
 }
@@ -113,7 +106,6 @@ function PasswordField({
   value,
   onChange,
   help,
-  aside,
 }: {
   name: string
   label: string
@@ -122,12 +114,11 @@ function PasswordField({
   value: string
   onChange: (value: string) => void
   help?: ReactNode
-  aside?: ReactNode
 }) {
   const id = `field-${name}`
   const [shown, setShown] = useState(false)
   return (
-    <Field id={id} label={label} aside={aside} help={help}>
+    <Field id={id} label={label} help={help}>
       <div className="relative">
         <input
           id={id}
@@ -136,11 +127,11 @@ function PasswordField({
           autoComplete={autoComplete}
           autoCapitalize="none"
           spellCheck={false}
-          placeholder={placeholder}
           enterKeyHint="go"
+          placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={cn(FIELD, FIELD_FOCUS, "pr-12")}
+          className={cn(INPUT, "pr-10")}
         />
         <button
           type="button"
@@ -148,7 +139,7 @@ function PasswordField({
           aria-label={shown ? "Hide password" : "Show password"}
           aria-pressed={shown}
           tabIndex={-1}
-          className="absolute top-1/2 right-0 grid size-11 -translate-y-1/2 sm:right-2 sm:size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="absolute top-1/2 right-0 grid size-9 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
         >
           {shown ? <EyeOff className="size-[18px]" aria-hidden="true" /> : <Eye className="size-[18px]" aria-hidden="true" />}
         </button>
@@ -177,13 +168,7 @@ function HandleField({
       help={isLogin ? null : "3 to 15 letters, numbers or underscores."}
       error={problem}
     >
-      <div
-        className={cn(
-          FIELD,
-          "flex items-center gap-1 focus-within:bg-background",
-          problem ? FIELD_ERROR : FIELD_FOCUS
-        )}
-      >
+      <div className="flex h-7 items-center gap-1 text-[17px]">
         <span aria-hidden="true" className="select-none text-muted-foreground">
           @
         </span>
@@ -192,9 +177,9 @@ function HandleField({
           name="handle"
           maxLength={HANDLE_MAX}
           autoComplete={isLogin ? "username" : "off"}
-          enterKeyHint="next"
           autoCapitalize="none"
           spellCheck={false}
+          enterKeyHint={isLogin ? "next" : "done"}
           placeholder="your_handle"
           aria-invalid={problem ? true : undefined}
           value={value}
@@ -210,12 +195,7 @@ function HandleField({
 function SubmitButton({ label, pendingLabel, disabled }: { label: string; pendingLabel: string; disabled?: boolean }) {
   const { pending } = useFormStatus()
   return (
-    <button
-      type="submit"
-      disabled={pending || disabled}
-      aria-busy={pending || undefined}
-      className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-    >
+    <button type="submit" disabled={pending || disabled} aria-busy={pending || undefined} className={PRIMARY_BUTTON}>
       {pending ? pendingLabel : label}
     </button>
   )
@@ -224,7 +204,7 @@ function SubmitButton({ label, pendingLabel, disabled }: { label: string; pendin
 function ErrorText({ message }: { message?: string }) {
   if (!message) return null
   return (
-    <p role="alert" className="settle rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[14px] leading-snug text-destructive">
+    <p role="alert" className="settle rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[14px] leading-snug text-destructive">
       {message}
     </p>
   )
@@ -263,9 +243,10 @@ function isOldEnough(value: string): boolean {
   return age >= MINIMUM_AGE
 }
 
-// `next` is where a sign-in goes afterwards (a group invite), already checked by the page.
-export function AuthForm({ mode, next = null }: { mode: "login" | "signup"; next?: string | null }) {
-  return mode === "login" ? <LoginForm next={next} /> : <SignupForm />
+// `next` is where a sign-in goes afterwards (a group invite), already checked by the page. `notice` is a message shown
+// under the top bar of sign-up.
+export function AuthForm({ mode, next = null, notice = null }: { mode: "login" | "signup"; next?: string | null; notice?: ReactNode }) {
+  return mode === "login" ? <LoginForm next={next} /> : <SignupForm notice={notice} />
 }
 
 // A field no person sees or fills in. Programs fill in every field they find, so a value here marks the form as sent by one.
@@ -297,48 +278,51 @@ function useCheckAnswer(reply: { error?: string; sent?: boolean; proofRequired?:
   return { proof, key, onReady: (value: string | null) => setProof(value ?? "") }
 }
 
+// Sign in: the handle and password as one card, the primary action at the bottom, then the forgot link, then the passkey.
 function LoginForm({ next }: { next: string | null }) {
   const [state, formAction] = useSafeActionState(login, {} as AuthState)
   const [handle, setHandle] = useState("")
   const [password, setPassword] = useState("")
   const check = useCheckAnswer(state)
   return (
-    <>
-    <form action={formAction} className="settle flex w-full flex-col gap-5">
-      <HandleField isLogin value={handle} onChange={setHandle} />
-      <PasswordField
-        name="password"
-        label="Password"
-        placeholder="Your password"
-        autoComplete="current-password"
-        value={password}
-        onChange={setPassword}
-        aside={
-          <Link href="/forgot-password" className="tap-44 text-[13px] font-semibold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
-            Forgot?
-          </Link>
-        }
-      />
+    <form action={formAction} className="settle flex flex-1 flex-col">
+      <div className={cn(GROUP, "mt-8")}>
+        <HandleField isLogin value={handle} onChange={setHandle} />
+        <PasswordField
+          name="password"
+          label="Password"
+          placeholder="Your password"
+          autoComplete="current-password"
+          value={password}
+          onChange={setPassword}
+        />
+      </div>
       <HoneyPot />
       <input type="hidden" name="proof" value={state.proofRequired ? check.proof : ""} />
       {next ? <input type="hidden" name="next" value={next} /> : null}
-      <ErrorText message={state.error} />
-      {state.proofRequired ? <ProofCheck key={check.key} onReady={check.onReady} /> : null}
-      <SubmitButton
-        label="Log in"
-        pendingLabel="Logging in"
-        disabled={handle.length === 0 || password.length === 0 || (state.proofRequired === true && check.proof === "")}
-      />
+      {state.error || state.proofRequired ? (
+        <div className="mt-4 flex flex-col gap-4">
+          <ErrorText message={state.error} />
+          {state.proofRequired ? <ProofCheck key={check.key} onReady={check.onReady} /> : null}
+        </div>
+      ) : null}
+      <AuthFooter>
+        <SubmitButton
+          label="Log in"
+          pendingLabel="Logging in"
+          disabled={handle.length === 0 || password.length === 0 || (state.proofRequired === true && check.proof === "")}
+        />
+        <Link href="/forgot-password" className="self-center py-2 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+          Forgot password?
+        </Link>
+        <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+          <span className="h-px flex-1 bg-border" />
+          or
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <PasskeyLoginButton next={next} />
+      </AuthFooter>
     </form>
-    <div className="settle mt-5 flex w-full flex-col gap-5">
-      <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
-        <span className="h-px flex-1 bg-border" />
-        or
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <PasskeyLoginButton next={next} />
-    </div>
-    </>
   )
 }
 
@@ -346,10 +330,10 @@ function LoginForm({ next }: { next: string | null }) {
 // Every field stays in the form the whole time, so the sign-up action gets all of them. A screen that is not
 // showing is hidden, not removed, and the Continue button only moves on when that screen is valid.
 const SIGNUP_LAST = 2
-// The three sign-up screens, then the profile screen in setup: four dots in all, the same on every onboarding screen.
+// The three sign-up screens, then the profile screen in setup: six steps in all, the same on every onboarding screen.
 const SIGNUP_STEPS_TOTAL = SETUP_STEPS.total
 
-function SignupForm() {
+function SignupForm({ notice }: { notice: ReactNode }) {
   const [state, formAction] = useSafeActionState(signup, {} as AuthState)
   const [step, setStep] = useState(0)
   const [name, setName] = useState("")
@@ -429,89 +413,96 @@ function SignupForm() {
 
   // The screens share one grid cell, so the form is as tall as its tallest screen. A screen that is not showing is
   // invisible, not removed, so the page does not move when the step changes. Only the screen showing settles in.
-  const screen = (index: number) => cn("col-start-1 row-start-1 flex flex-col gap-7", step === index ? "settle" : "invisible")
+  const screen = (index: number) => cn("col-start-1 row-start-1 flex min-h-0 flex-col", step === index ? "settle" : "invisible")
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <div className="relative flex h-11 items-center justify-center">
-        {step > 0 ? <BackIcon onClick={() => setStep(step - 1)} /> : null}
+    <form ref={formRef} action={formAction} onSubmit={onSubmit} className="settle flex flex-1 flex-col" noValidate>
+      <AuthBar
+        left={step > 0 ? <AuthBack onClick={() => setStep(step - 1)} /> : <AuthMark />}
+        right={step === 0 ? <AuthTopLink href="/login">Log in</AuthTopLink> : null}
+      />
+      <div className="mt-3">
         <OnboardingSteps current={step} total={SIGNUP_STEPS_TOTAL} />
       </div>
+      {notice ? <div className="mt-4">{notice}</div> : null}
+      {/* Outside the screens, so a refused sign-up shows its reason on whichever screen it sends the person back to. */}
+      {state.error ? (
+        <div className="mt-4">
+          <ErrorText message={state.error} />
+        </div>
+      ) : null}
 
-      <form ref={formRef} action={formAction} onSubmit={onSubmit} className="flex w-full flex-col gap-5" noValidate>
-        <div className="grid">
+      <div className="grid flex-1">
         <section data-step={0} className={screen(0)}>
-          <div className="flex flex-col gap-2">
-            <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Create your account</h1>
-            <p className="text-[15px] leading-relaxed text-muted-foreground">Start with a name and a handle.</p>
+          <AuthTitle title="Create your account">Start with a name and a handle.</AuthTitle>
+          <div className={cn(GROUP, "mt-8")}>
+            <TextField
+              name="name"
+              label="Name"
+              autoComplete="name"
+              enterKeyHint="next"
+              maxLength={MAX_NAME}
+              placeholder="Dan"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              aside={<Counter length={name.length} max={MAX_NAME} from={40} />}
+            />
+            <HandleField isLogin={false} value={handle} onChange={setHandle} />
           </div>
-          <TextField
-            name="name"
-            label="Name"
-            autoComplete="name"
-            enterKeyHint="next"
-            maxLength={MAX_NAME}
-            placeholder="Dan"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            aside={<Counter length={name.length} max={MAX_NAME} from={40} />}
-          />
-          <HandleField isLogin={false} value={handle} onChange={setHandle} />
-          <div className="flex flex-col gap-3">
+          <AuthFooter>
             <Button onClick={() => setStep(1)} disabled={!valid[0]}>
               Continue
             </Button>
-          </div>
+          </AuthFooter>
         </section>
 
         <section data-step={1} className={screen(1)}>
-          <div className="flex flex-col gap-2">
-            <h1 className="text-[30px] leading-tight font-semibold tracking-tight">When were you born?</h1>
-            <p className="text-[15px] leading-relaxed text-muted-foreground">Only you can see this.</p>
+          <AuthTitle title="When were you born?">Only you can see this.</AuthTitle>
+          <div className={cn(GROUP, "mt-8")}>
+            <Field
+              id="field-birthday"
+              label="Date of birth"
+              help={`Rhenko is for people ${MINIMUM_AGE} or older.`}
+              error={birthday && !isOldEnough(birthday) ? `You must be ${MINIMUM_AGE} or older to join.` : null}
+            >
+              <DateField id="field-birthday" name="birthday" bare placeholder="Pick your birthday" onChange={setBirthday} />
+            </Field>
+            <TextField
+              name="email"
+              label="Email"
+              type="email"
+              autoComplete="email"
+              enterKeyHint="done"
+              maxLength={MAX_EMAIL}
+              placeholder="name@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              aside={<span className="text-[13px] text-muted-foreground">Optional</span>}
+              help={emailChecking ? "Checking that it is free…" : "Only for resetting your password."}
+              error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : emailTaken ? EMAIL_TAKEN : null}
+            />
           </div>
-          <Field
-            id="field-birthday"
-            label="Date of birth"
-            help={`Rhenko is for people ${MINIMUM_AGE} or older.`}
-            error={birthday && !isOldEnough(birthday) ? `You must be ${MINIMUM_AGE} or older to join.` : null}
-          >
-            <DateField id="field-birthday" name="birthday" placeholder="Pick your birthday" onChange={setBirthday} />
-          </Field>
-          <TextField
-            name="email"
-            label="Email"
-            type="email"
-            autoComplete="email"
-            maxLength={MAX_EMAIL}
-            placeholder="name@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            aside={<span className="text-[13px] text-muted-foreground">Optional</span>}
-            help={emailChecking ? "Checking that it is free…" : "Only for resetting your password."}
-            error={email && !EMAIL_SHAPE.test(email) ? "That does not look like an email." : emailTaken ? EMAIL_TAKEN : null}
-          />
-          <div className="flex flex-col gap-3">
+          <AuthFooter>
             <Button onClick={() => setStep(2)} disabled={!valid[1]}>
               Continue
             </Button>
-          </div>
+          </AuthFooter>
         </section>
 
         <section data-step={2} className={screen(2)}>
-          <div className="flex flex-col gap-2">
-            <h1 className="text-[30px] leading-tight font-semibold tracking-tight">Set a password</h1>
-            <p className="text-[15px] leading-relaxed text-muted-foreground">Use one you do not use anywhere else.</p>
+          <AuthTitle title="Set a password">Use one you do not use anywhere else.</AuthTitle>
+          <div className={cn(GROUP, "mt-8")}>
+            <PasswordField
+              name="password"
+              label="Password"
+              placeholder="Choose a password"
+              autoComplete="new-password"
+              value={password}
+              onChange={setPassword}
+              help={<PasswordRule value={password} />}
+            />
           </div>
-          <PasswordField
-            name="password"
-            label="Password"
-            placeholder="Choose a password"
-            autoComplete="new-password"
-            value={password}
-            onChange={setPassword}
-            help={<PasswordRule value={password} />}
-          />
-          <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed">
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-border bg-card px-4 py-3.5 text-[14px] leading-relaxed">
             <input
               type="checkbox"
               name="agree"
@@ -532,52 +523,27 @@ function SignupForm() {
               .
             </span>
           </label>
-          <div className="flex flex-col gap-3">
+          <AuthFooter>
             {/* Mounted only on this screen, so a Cloudflare check renders where it can be seen. Solving takes about as long as typing a password. */}
             {step === SIGNUP_LAST ? <ProofCheck key={check.key} quiet onReady={check.onReady} /> : null}
             <SubmitButton label="Create account" pendingLabel="Creating account" disabled={!valid[2] || check.proof === ""} />
-          </div>
+          </AuthFooter>
         </section>
+      </div>
 
-        </div>
-
-        {/* Outside the screens, so a refused sign-up shows its reason on whichever screen it sends the person back to. */}
-        <ErrorText message={state.error} />
-        <HoneyPot />
-        {/* No value prop: React would write its value back on the next render and clear the stamp. */}
-        <input ref={stampField} type="hidden" name="stamp" />
-        <input type="hidden" name="proof" value={check.proof} />
-
-      </form>
-    </div>
+      <HoneyPot />
+      {/* No value prop: React would write its value back on the next render and clear the stamp. */}
+      <input ref={stampField} type="hidden" name="stamp" />
+      <input type="hidden" name="proof" value={check.proof} />
+    </form>
   )
 }
 
-// A plain button for the primary action on a step that is not the last one. It does not send the form.
+// The primary action on a step that is not the last one. It does not send the form.
 function Button({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex h-12 w-full items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-    >
+    <button type="button" onClick={onClick} disabled={disabled} className={PRIMARY_BUTTON}>
       {children}
-    </button>
-  )
-}
-
-// The way back on a sign-up screen: a chevron at the left of the progress row, as in iOS. The primary button stays the last
-// thing on each screen, and the back control is reachable by thumb without taking up a line of its own.
-function BackIcon({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Back"
-      className="tap-44 absolute top-1/2 left-0 grid size-9 -translate-y-1/2 place-items-center rounded-full text-foreground transition-colors hover:bg-foreground/5"
-    >
-      <ChevronLeft className="size-6" aria-hidden="true" />
     </button>
   )
 }
@@ -588,34 +554,43 @@ export function VerifyCodeForm({ usable, hasKeys, next = null }: { usable: boole
   const [state, action] = useSafeActionState(verifySecondFactor, {} as AuthState)
   const [code, setCode] = useState("")
   return (
-    <form action={action} className="settle flex w-full flex-col gap-5">
+    <form action={action} className="settle flex flex-1 flex-col">
       {next ? <input type="hidden" name="next" value={next} /> : null}
-      <TextField
-        name="code"
-        label={usable ? "Code" : "Recovery code"}
-        autoFocus
-        autoComplete="one-time-code"
-        autoCapitalize="none"
-        spellCheck={false}
-        maxLength={20}
-        placeholder={usable ? "123456" : "abcd-efgh"}
-        value={code}
-        onChange={(event) => setCode(event.target.value)}
-        className="h-14 text-center text-xl font-semibold tracking-[0.2em]"
-        help={usable ? "From your authenticator app, or a recovery code." : "Each recovery code works once."}
-      />
-      <ErrorText message={state.error} />
-      <SubmitButton label="Continue" pendingLabel="Checking" disabled={code.trim().length === 0} />
-      {hasKeys ? (
-        <>
-          <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
-            <span className="h-px flex-1 bg-border" />
-            or
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <SecurityKeyButton next={next} />
-        </>
+      <div className={cn(GROUP, "mt-8")}>
+        <TextField
+          name="code"
+          label={usable ? "Code" : "Recovery code"}
+          autoFocus
+          autoComplete="one-time-code"
+          autoCapitalize="none"
+          spellCheck={false}
+          enterKeyHint="go"
+          maxLength={20}
+          placeholder={usable ? "123456" : "abcd-efgh"}
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          className="text-center text-[22px] font-semibold tracking-[0.2em]"
+          help={usable ? "From your authenticator app, or a recovery code." : "Each recovery code works once."}
+        />
+      </div>
+      {state.error ? (
+        <div className="mt-4">
+          <ErrorText message={state.error} />
+        </div>
       ) : null}
+      <AuthFooter>
+        <SubmitButton label="Continue" pendingLabel="Checking" disabled={code.trim().length === 0} />
+        {hasKeys ? (
+          <>
+            <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <SecurityKeyButton next={next} />
+          </>
+        ) : null}
+      </AuthFooter>
     </form>
   )
 }
@@ -627,36 +602,45 @@ export function ForgotPasswordForm() {
   const check = useCheckAnswer(state)
   const next = state.email ? `/reset-password?email=${encodeURIComponent(state.email)}` : "/reset-password"
   return (
-    <form action={action} className="settle flex w-full flex-col gap-5">
-      <TextField
-        name="account"
-        label="Handle or email"
-        autoComplete="username"
-        autoCapitalize="none"
-        spellCheck={false}
-        maxLength={MAX_EMAIL}
-        placeholder="your_handle or name@example.com"
-        value={account}
-        onChange={(event) => setAccount(event.target.value)}
-      />
+    <form action={action} className="settle flex flex-1 flex-col">
+      <div className={cn(GROUP, "mt-8")}>
+        <TextField
+          name="account"
+          label="Handle or email"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          enterKeyHint="go"
+          maxLength={MAX_EMAIL}
+          placeholder="your_handle or name@example.com"
+          value={account}
+          onChange={(event) => setAccount(event.target.value)}
+        />
+      </div>
       <HoneyPot />
       <input type="hidden" name="proof" value={check.proof} />
-      <ErrorText message={state.error} />
+      {state.error ? (
+        <div className="mt-4">
+          <ErrorText message={state.error} />
+        </div>
+      ) : null}
       {state.sent ? (
-        <div role="status" className="settle flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-4 text-[14px] leading-snug">
+        <div role="status" className="settle mt-4 flex flex-col gap-3 rounded-[20px] border border-border bg-card px-4 py-4 text-[14px] leading-snug">
           <p>If the account has a verified email, a code is on its way. It lasts {EMAIL_CODE_MINUTES} minutes.</p>
           <Link href={next} className="flex h-11 items-center justify-center rounded-full bg-foreground text-[15px] font-semibold text-background transition-opacity hover:opacity-90">
             Enter the code
           </Link>
         </div>
       ) : null}
-      {/* Every reset request sends an email, so each one waits for the human check. */}
-      <ProofCheck key={check.key} onReady={check.onReady} />
-      <SubmitButton
-        label={state.sent ? "Send another code" : "Send code"}
-        pendingLabel="Sending"
-        disabled={account.trim().length === 0 || check.proof === ""}
-      />
+      <AuthFooter>
+        {/* Every reset request sends an email, so each one waits for the human check. */}
+        <ProofCheck key={check.key} onReady={check.onReady} />
+        <SubmitButton
+          label={state.sent ? "Send another code" : "Send code"}
+          pendingLabel="Sending"
+          disabled={account.trim().length === 0 || check.proof === ""}
+        />
+      </AuthFooter>
     </form>
   )
 }
@@ -669,41 +653,51 @@ export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
   const [password, setPassword] = useState("")
   const ready = email.trim().length > 0 && code.trim().length > 0 && password.length >= MIN_PASSWORD
   return (
-    <form action={action} className="settle flex w-full flex-col gap-5">
-      <TextField
-        name="email"
-        label="Email"
-        type="email"
-        autoComplete="email"
-        maxLength={MAX_EMAIL}
-        placeholder="name@example.com"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-        help="The verified email on your account."
-      />
-      <TextField
-        name="code"
-        label="Code"
-        autoComplete="one-time-code"
-        inputMode="numeric"
-        maxLength={7}
-        placeholder="123456"
-        value={code}
-        onChange={(event) => setCode(event.target.value)}
-        className="tracking-[0.2em]"
-      />
-      <PasswordField
-        name="password"
-        label="New password"
-        placeholder="Choose a password"
-        autoComplete="new-password"
-        value={password}
-        onChange={setPassword}
-        help={<PasswordRule value={password} />}
-      />
-      <ErrorText message={state.error} />
-      <SubmitButton label="Set new password" pendingLabel="Saving" disabled={!ready} />
-      <p className="text-center text-[13px] text-muted-foreground">Every device you are signed in on is signed out.</p>
+    <form action={action} className="settle flex flex-1 flex-col">
+      <div className={cn(GROUP, "mt-8")}>
+        <TextField
+          name="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          enterKeyHint="next"
+          maxLength={MAX_EMAIL}
+          placeholder="name@example.com"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          help="The verified email on your account."
+        />
+        <TextField
+          name="code"
+          label="Code"
+          autoComplete="one-time-code"
+          inputMode="numeric"
+          enterKeyHint="next"
+          maxLength={7}
+          placeholder="123456"
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          className="tracking-[0.2em]"
+        />
+        <PasswordField
+          name="password"
+          label="New password"
+          placeholder="Choose a password"
+          autoComplete="new-password"
+          value={password}
+          onChange={setPassword}
+          help={<PasswordRule value={password} />}
+        />
+      </div>
+      {state.error ? (
+        <div className="mt-4">
+          <ErrorText message={state.error} />
+        </div>
+      ) : null}
+      <AuthFooter>
+        <SubmitButton label="Set new password" pendingLabel="Saving" disabled={!ready} />
+        <p className="text-center text-[13px] text-muted-foreground">Every device you are signed in on is signed out.</p>
+      </AuthFooter>
     </form>
   )
 }

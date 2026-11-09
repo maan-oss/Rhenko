@@ -37,6 +37,7 @@ function leadingBlanks(year: number, month: number): number {
   return (new Date(year, month, 1).getDay() + 6) % 7
 }
 
+// `bare` drops the pill and the icon, for a date sitting in a row of a grouped form: the row's label is the field's name.
 export function DateField({
   id,
   name,
@@ -44,6 +45,7 @@ export function DateField({
   placeholder = "Pick a date",
   max,
   onChange,
+  bare = false,
 }: {
   id: string
   name: string
@@ -51,6 +53,7 @@ export function DateField({
   placeholder?: string
   max?: string
   onChange?: (value: string) => void
+  bare?: boolean
 }) {
   const panelId = useId()
   const today = new Date()
@@ -118,13 +121,18 @@ export function DateField({
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "flex h-12 w-full items-center gap-3 px-5 text-left text-base outline-none transition-[background-color,border-radius] duration-200",
-          open
-            ? "rounded-t-[26px] rounded-b-none bg-background"
-            : "rounded-full bg-muted hover:bg-foreground/[0.06] focus:bg-background focus:shadow-[0_0_0_3px_var(--halo)]"
+          "flex w-full items-center gap-3 text-left outline-none",
+          bare
+            ? "h-7 text-[17px]"
+            : cn(
+                "h-12 px-5 text-base transition-[background-color,border-radius] duration-200",
+                open
+                  ? "rounded-t-[26px] rounded-b-none bg-background"
+                  : "rounded-full bg-muted hover:bg-foreground/[0.06] focus:bg-background focus:shadow-[0_0_0_3px_var(--halo)]"
+              )
         )}
       >
-        <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+        {bare ? null : <CalendarDays className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />}
         <span className={cn("flex-1 truncate", selected ? "text-foreground" : "text-muted-foreground")}>{selected ? readable(selected) : placeholder}</span>
       </button>
 
@@ -133,7 +141,10 @@ export function DateField({
           id={panelId}
           role="dialog"
           aria-label="Choose a date"
-          className="settle absolute inset-x-0 top-full z-50 rounded-b-[26px] border border-t-0 border-border bg-background px-4 pt-3 pb-4 shadow-[0_18px_40px_-18px_rgb(0_0_0/0.35)]"
+          className={cn(
+            "settle absolute inset-x-0 top-full z-50 border border-border bg-background px-4 pt-3 pb-4 shadow-[0_18px_40px_-18px_rgb(0_0_0/0.35)]",
+            bare ? "mt-2 rounded-[20px]" : "rounded-b-[26px] border-t-0"
+          )}
         >
           <div className="mb-3 flex items-center justify-between">
             <button

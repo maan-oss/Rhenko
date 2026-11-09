@@ -1,9 +1,9 @@
-import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getViewer } from "@/lib/auth"
 import { firstParam } from "@/lib/params"
 import { returnPathFrom } from "@/lib/invite-links"
 import { AuthForm } from "@/components/app/auth-form"
+import { AuthBack, AuthBar, AuthMark, AuthTitle, AuthTopLink } from "@/components/app/auth-frame"
 import { AuthNotice } from "../auth-notice"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
 
@@ -35,25 +35,18 @@ async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
   if (!adding && (await getViewer())) redirect(back ?? "/")
   return (
     <>
-      <div className="settle mb-5 flex flex-col gap-2">
-        <h1 className="text-[30px] leading-tight font-semibold tracking-tight">{adding ? "Add an account" : "Welcome back"}</h1>
-      </div>
-      {notice ? <div className="mb-4"><AuthNotice>{notice}</AuthNotice></div> : null}
-      <AuthForm mode="login" next={back} />
       {adding ? (
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href="/" className="font-semibold text-foreground underline underline-offset-4">
-            Back to your account
-          </Link>
-        </p>
+        <AuthBar left={<AuthBack href="/" label="Back to your account" />} />
       ) : (
-        <p className="mt-5 text-center text-sm text-muted-foreground">
-          New here?{" "}
-          <Link href="/signup" className="font-semibold text-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:decoration-foreground">
-            Create an account
-          </Link>
-        </p>
+        <AuthBar left={<AuthMark />} right={<AuthTopLink href="/signup">Sign up</AuthTopLink>} />
       )}
+      <AuthTitle title={adding ? "Add an account" : "Welcome back"} />
+      {notice ? (
+        <div className="mt-6">
+          <AuthNotice>{notice}</AuthNotice>
+        </div>
+      ) : null}
+      <AuthForm mode="login" next={back} />
     </>
   )
 }
