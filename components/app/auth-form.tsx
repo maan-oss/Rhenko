@@ -465,7 +465,7 @@ function SignupForm({ notice }: { notice: ReactNode }) {
               help={`Rhenko is for people ${MINIMUM_AGE} or older.`}
               error={birthday && !isOldEnough(birthday) ? `You must be ${MINIMUM_AGE} or older to join.` : null}
             >
-              <DateField id="field-birthday" name="birthday" bare placeholder="Pick your birthday" onChange={setBirthday} />
+              <DateField id="field-birthday" name="birthday" label="Date of birth" bare placeholder="Pick your birthday" onChange={setBirthday} />
             </Field>
             <TextField
               name="email"
