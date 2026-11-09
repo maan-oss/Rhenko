@@ -23,8 +23,8 @@ import { SPRING_SHEET } from "@/components/app/motion"
 import { DateField } from "@/components/app/date-field"
 import { OnboardingSteps, SETUP_STEPS } from "@/components/app/onboarding-steps"
 import { ErrorText, FloatingInput } from "@/components/app/floating-field"
-import { AuthBar, AuthFooter, AuthMark, AuthTitle, AuthTopLink, PRIMARY_BUTTON } from "@/components/app/auth-frame"
-import { SocialSignUpButton } from "@/components/app/social-buttons"
+import { AuthBar, AuthFooter, AuthMark, AuthTitle, PRIMARY_BUTTON } from "@/components/app/auth-frame"
+import { SocialAuthButton } from "@/components/app/social-buttons"
 import { toast } from "sonner"
 import { EMAIL_CODE_MINUTES, MAX_EMAIL, PASSWORD_RULE } from "@/lib/account-rules"
 import { MINIMUM_AGE } from "@/lib/legal"
@@ -247,7 +247,20 @@ function useCheckAnswer(reply: { error?: string; sent?: boolean; proofRequired?:
   return { proof, key, onReady: (value: string | null) => setProof(value ?? "") }
 }
 
-// Sign in: the handle and password, one above the other, the primary action at the bottom, then the forgot link, then the passkey.
+// The line at the foot of a screen that moves the person to the other of log in and sign up.
+function SwitchLine({ prompt, href, label }: { prompt: string; href: string; label: string }) {
+  return (
+    <p className="flex h-8 items-center justify-center text-[15px] text-muted-foreground">
+      {prompt}
+      <Link href={href} className="ml-1.5 font-semibold text-foreground transition-opacity hover:opacity-70">
+        {label}
+      </Link>
+    </p>
+  )
+}
+
+// Log in: the provider buttons, then the handle and password with the forgot link under them, then the primary action, the
+// passkey and the way to sign up, at the bottom.
 function LoginForm({ next }: { next: string | null }) {
   const [state, formAction] = useSafeActionState(login, {} as AuthState)
   const [handle, setHandle] = useState("")
@@ -255,9 +268,19 @@ function LoginForm({ next }: { next: string | null }) {
   const check = useCheckAnswer(state)
   return (
     <form action={formAction} className="settle flex flex-1 flex-col">
-      <div className={cn(FIELDS, "mt-8")}>
+      <div className="mt-6 flex flex-col gap-3">
+        <SocialAuthButton provider="google" verb="Log in" onClick={() => toast("Log in with Google isn't connected yet.")} />
+        <SocialAuthButton provider="apple" verb="Log in" onClick={() => toast("Log in with Apple isn't connected yet.")} />
+      </div>
+      <div className={cn(FIELDS, "mt-5")}>
         <HandleField isLogin value={handle} onChange={setHandle} />
         <PasswordField name="password" label="Password" autoComplete="current-password" value={password} onChange={setPassword} />
+        <Link
+          href="/forgot-password"
+          className="inline-flex h-8 items-center self-end px-5 text-[14px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Forgot password?
+        </Link>
       </div>
       <HoneyPot />
       <input type="hidden" name="proof" value={state.proofRequired ? check.proof : ""} />
@@ -274,15 +297,8 @@ function LoginForm({ next }: { next: string | null }) {
           pendingLabel="Logging in"
           disabled={handle.length === 0 || password.length === 0 || (state.proofRequired === true && check.proof === "")}
         />
-        <Link href="/forgot-password" className="inline-flex min-h-11 items-center self-center px-3 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground">
-          Forgot password?
-        </Link>
-        <div className="flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
-          <span className="h-px flex-1 bg-border" />
-          or
-          <span className="h-px flex-1 bg-border" />
-        </div>
         <PasskeyLoginButton next={next} />
+        <SwitchLine prompt="New to Rhenko?" href="/signup" label="Sign up" />
       </AuthFooter>
     </form>
   )
@@ -389,10 +405,7 @@ function SignupForm({ notice }: { notice: ReactNode }) {
 
   return (
     <form ref={formRef} action={formAction} onSubmit={onSubmit} className="settle-clean flex flex-1 flex-col" noValidate>
-      <AuthBar
-        left={<AuthMark />}
-        right={step === 0 ? <AuthTopLink href="/login">Log in</AuthTopLink> : null}
-      />
+      <AuthBar left={<AuthMark />} />
       {/* The first screen reads as a sign-in page, so the steps start once the person is into the onboarding: from the
           second screen on. The spacer keeps the same height, so the page does not move when the step changes. */}
       <div className="mt-3">
@@ -417,16 +430,16 @@ function SignupForm({ notice }: { notice: ReactNode }) {
           <section data-step={0} className={screen(0)}>
             <AuthTitle title="Create your account">Start with a name and a handle.</AuthTitle>
             {/* A provider sign-up sits above the form, as on the native sign-up screens. */}
-            <div className="mt-6 flex flex-col gap-3">
-              <SocialSignUpButton provider="google" onClick={() => toast("Sign up with Google isn't connected yet.")} />
-              <SocialSignUpButton provider="apple" onClick={() => toast("Sign up with Apple isn't connected yet.")} />
+            <div className="mt-5 flex flex-col gap-3">
+              <SocialAuthButton provider="google" verb="Sign up" onClick={() => toast("Sign up with Google isn't connected yet.")} />
+              <SocialAuthButton provider="apple" verb="Sign up" onClick={() => toast("Sign up with Apple isn't connected yet.")} />
             </div>
-            <div className="mt-5 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+            <div className="mt-4 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
               <span className="h-px flex-1 bg-border" />
               or
               <span className="h-px flex-1 bg-border" />
             </div>
-            <div className={cn(FIELDS, "mt-5")}>
+            <div className={cn(FIELDS, "mt-4")}>
               <TextField
                 name="name"
                 label="Name"
@@ -439,10 +452,11 @@ function SignupForm({ notice }: { notice: ReactNode }) {
               />
               <HandleField isLogin={false} value={handle} onChange={setHandle} />
             </div>
-            <AuthFooter>
+            <AuthFooter className="gap-2 pt-3">
               <Button onClick={() => setStep(1)} disabled={!valid[0]}>
                 Continue
               </Button>
+              <SwitchLine prompt="Already have an account?" href="/login" label="Log in" />
             </AuthFooter>
           </section>
 

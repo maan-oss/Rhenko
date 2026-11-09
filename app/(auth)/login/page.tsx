@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/auth"
 import { firstParam } from "@/lib/params"
 import { returnPathFrom } from "@/lib/invite-links"
 import { AuthForm } from "@/components/app/auth-form"
-import { AuthBack, AuthBar, AuthMark, AuthTitle, AuthTopLink } from "@/components/app/auth-frame"
+import { AuthBack, AuthBar, AuthMark, AuthTitle } from "@/components/app/auth-frame"
 import { AuthNotice } from "../auth-notice"
 import { RevealSuspense } from "@/components/app/reveal-suspense"
 
@@ -38,7 +38,7 @@ async function LoginBody({ searchParams }: { searchParams: SearchParams }) {
       {adding ? (
         <AuthBar left={<AuthBack href="/" label="Back to your account" />} />
       ) : (
-        <AuthBar left={<AuthMark />} right={<AuthTopLink href="/signup">Sign up</AuthTopLink>} />
+        <AuthBar left={<AuthMark />} />
       )}
       <AuthTitle title={adding ? "Add an account" : "Welcome back"} />
       {notice ? (

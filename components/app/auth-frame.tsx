@@ -2,6 +2,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { ChevronLeft } from "lucide-react"
 import { RhenkoSymbol } from "@/components/brand/symbol"
+import { cn } from "@/lib/utils"
 
 // Sign-in, sign-up and setup, drawn as a phone screen. On a phone the screen is the whole display. On a computer the same
 // screen sits centred at phone width, so it is never a wide page. Every screen has the same parts, top to bottom: a top bar
@@ -73,8 +74,8 @@ export function AuthTitle({ title, children }: { title: string; children?: React
 }
 
 // The bottom of a screen: its primary action and what sits with it. It rests on the bottom edge of the screen.
-export function AuthFooter({ children }: { children: ReactNode }) {
-  return <div className="mt-auto flex flex-col gap-3 pt-6">{children}</div>
+export function AuthFooter({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("mt-auto flex flex-col gap-3 pt-6", className)}>{children}</div>
 }
 
 // The primary action on every auth and setup screen: one full-width pill, 56 points tall, as in the native sign-up flows.

@@ -22,9 +22,17 @@ export function AppleMark(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-// A full-width sign-up button with the provider's mark. Apple's is black with a white mark; Google's is white with a hairline,
+// A full-width sign-up or log-in button with the provider's mark. Apple's is black with a white mark; Google's is white with a hairline,
 // as each provider's guidelines draw it.
-export function SocialSignUpButton({ provider, onClick }: { provider: "google" | "apple"; onClick: () => void }) {
+export function SocialAuthButton({
+  provider,
+  verb,
+  onClick,
+}: {
+  provider: "google" | "apple"
+  verb: "Sign up" | "Log in"
+  onClick: () => void
+}) {
   const apple = provider === "apple"
   return (
     <button
@@ -36,7 +44,7 @@ export function SocialSignUpButton({ provider, onClick }: { provider: "google" |
       )}
     >
       {apple ? <AppleMark className="size-[18px]" /> : <GoogleMark className="size-5" />}
-      {apple ? "Sign up with Apple" : "Sign up with Google"}
+      {apple ? `${verb} with Apple` : `${verb} with Google`}
     </button>
   )
 }
