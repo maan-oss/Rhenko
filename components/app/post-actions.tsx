@@ -550,6 +550,7 @@ export function PostActions(props: Props) {
         post={{
           id: postId,
           body: props.body,
+          views: props.views,
           author: { name: author.name, handle: author.handle, avatarFile: author.avatarFile },
           media: media.map((item) => ({ file: item.file, kind: item.kind })),
         }}

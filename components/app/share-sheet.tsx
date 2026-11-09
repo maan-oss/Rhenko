@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 type SharePost = {
   id: string
   body: string
+  views: number
   author: { name: string; handle: string; avatarFile: string | null }
   media: { file: string; kind: MediaKind }[]
 }
