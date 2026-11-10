@@ -2,7 +2,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { getViewer, listAccounts } from "@/lib/auth"
 import { circlesFor } from "@/lib/circles"
-import { unreadMessageCount, unreadNotificationCount } from "@/lib/data"
+import { recentSearches, unreadMessageCount, unreadNotificationCount } from "@/lib/data"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
 import { MobileTabBar } from "@/components/app/nav"
 import { SidebarPanel } from "@/components/app/sidebar-panel"
@@ -22,6 +22,7 @@ export async function Sidebar() {
         status: viewer.status ?? null,
       }}
       accounts={accounts}
+      recent={await recentSearches(viewer.id)}
       notifications={await unreadNotificationCount(viewer.id)}
       messages={await unreadMessageCount(viewer.id)}
       initialCollapsed={store.get(SIDEBAR_COOKIE)?.value === "collapsed"}

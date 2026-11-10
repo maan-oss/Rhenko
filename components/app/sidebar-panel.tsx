@@ -2,13 +2,14 @@
 
 import Link from "@/components/app/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
-import { motion } from "motion/react"
+import { useEffect, useRef, useState } from "react"
+import { motion, useReducedMotion } from "motion/react"
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { buildItems, type NavItemConfig } from "@/components/app/nav"
-import { SPRING_SELECT } from "@/components/app/motion"
+import { MORPH, SPRING_SELECT } from "@/components/app/motion"
 import { useLiveCounts } from "@/components/app/live-counts"
 import { SidebarFooter } from "@/components/app/sidebar-footer"
+import { SidebarSearch } from "@/components/app/sidebar-search"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import type { AccountSummary } from "@/lib/auth"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
@@ -25,14 +26,16 @@ type SidebarViewer = { id: string; name: string; handle: string; avatarFile: str
 type Props = {
   viewer: SidebarViewer
   accounts: AccountSummary[]
+  recent: string[]
   notifications: number
   messages: number
   initialCollapsed: boolean
 }
 
-// One full-height surface, fully opaque. The logo leads at the top, with the collapse control on the right.
-// The footer holds your profile, with its account menu and log out.
-export function SidebarPanel({ viewer, accounts, notifications, messages, initialCollapsed }: Props) {
+// One full-height surface, fully opaque. The logo leads at the top, with the collapse control on the right, then search
+// and the nav. The footer holds Post, then your profile with its account menu and log out. Search and Post are there only
+// while the rail is open.
+export function SidebarPanel({ viewer, accounts, recent, notifications, messages, initialCollapsed }: Props) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const path = usePathname()
 
@@ -56,8 +59,9 @@ export function SidebarPanel({ viewer, accounts, notifications, messages, initia
         className="pointer-events-none absolute inset-y-0 right-0 w-3 bg-[linear-gradient(to_left,rgba(31,29,26,0.05),transparent)] dark:bg-[linear-gradient(to_left,rgba(0,0,0,0.3),transparent)]"
       />
       <div className="flex h-full w-full flex-col justify-between px-3.5 py-4">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col">
           <Brand collapsed={collapsed} onToggle={() => save(!collapsed)} />
+          <SearchSlot recent={recent} collapsed={collapsed} />
           <SidebarNav path={path} notifications={notifications} messages={messages} collapsed={collapsed} />
         </div>
         <SidebarFooter viewer={viewer} accounts={accounts} collapsed={collapsed} />
@@ -103,6 +107,38 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
   )
 }
 
+// The search field sits under the logo while the rail is open. Closing the rail folds it away and the nav rises into its place,
+// on the rail's own curve. Opening it unfolds it again. Its 8px above is part of the slot, so the spacing folds with it.
+function SearchSlot({ recent, collapsed }: { recent: string[]; collapsed: boolean }) {
+  const reduce = useReducedMotion()
+  const slot = useRef<HTMLDivElement>(null)
+  // While the slot is moving, it clips, so the field never shows past its own edge. Once it settles open, its card may overlay the nav.
+  const [moving, setMoving] = useState(false)
+
+  useEffect(() => {
+    // Folding the field away takes focus with it, so a search that was open does not come back open.
+    if (!collapsed) return
+    const active = document.activeElement
+    if (active instanceof HTMLElement && slot.current?.contains(active)) active.blur()
+  }, [collapsed])
+
+  return (
+    <motion.div
+      ref={slot}
+      initial={false}
+      animate={{ height: collapsed ? 0 : 52, paddingTop: collapsed ? 0 : 8, opacity: collapsed ? 0 : 1, scale: collapsed ? 0.92 : 1 }}
+      transition={reduce ? { duration: 0 } : MORPH}
+      onAnimationStart={() => setMoving(true)}
+      onAnimationComplete={() => setMoving(false)}
+      inert={collapsed}
+      style={{ transformOrigin: "left center" }}
+      className={cn("shrink-0", collapsed || moving ? "overflow-hidden" : "overflow-visible")}
+    >
+      <SidebarSearch recent={recent} />
+    </motion.div>
+  )
+}
+
 function SidebarNav({
   path,
   notifications,
@@ -119,7 +155,7 @@ function SidebarNav({
   const items = buildItems(live?.notifications ?? notifications, live?.messages ?? messages)
   const current = items.find((item) => item.active(path))?.href
   return (
-    <nav aria-label="Main">
+    <nav aria-label="Main" className="pt-2">
       <ul className="flex flex-col gap-1">
         {items.map((item) => (
           <NavItem key={item.href} item={item} active={item.href === current} collapsed={collapsed} />

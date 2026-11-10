@@ -15,3 +15,6 @@ export const SPRING_BUBBLE = { type: "spring", visualDuration: 0.34, bounce: 0.1
 export const SEND_RISE = { duration: 0.22, ease: [0.22, 1, 0.36, 1] } as const
 // Small things that pop: a reaction arriving, a count changing.
 export const SPRING_POP = { type: "spring", visualDuration: 0.26, bounce: 0.3 } as const
+
+// The sidebar's pieces fold away and back on the rail's own curve and length, so they land with the rail's width, never after it.
+export const MORPH = { duration: 0.38, ease: [0.22, 1, 0.36, 1] } as const
