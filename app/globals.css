@@ -61,6 +61,16 @@
   --card-foreground: #1f1d19;
   /* The one-pixel light edge along the top of a raised surface. */
   --raised-edge: rgb(255 255 255 / 0.9);
+  /* The one shadow for every lifted panel and toast. Close and small, it reaches evenly round the card: about 12px to the
+     sides and 24px below, so a panel with 16px of room never shows a hard edge. */
+  --lift-shadow:
+    0 1px 2px rgb(31 29 26 / 0.05),
+    0 4px 12px -4px rgb(31 29 26 / 0.1),
+    0 12px 24px -12px rgb(31 29 26 / 0.16);
+  /* Where the bottom-left toasts sit. On a computer they follow the sidebar's column (see the media queries below); on a
+     phone they stay clear of the tab bar. */
+  --toast-left: 16px;
+  --toast-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 72px);
   --popover: #fbf9f4;
   --popover-foreground: #1f1d19;
   --primary: #1f1d19;
@@ -123,6 +133,11 @@
   --card: #2a2a2a;
   --card-foreground: #ececec;
   --raised-edge: rgb(255 255 255 / 0.07);
+  /* On the dark ground the same shape needs more ink to read, but it stays just as soft. */
+  --lift-shadow:
+    0 1px 2px rgb(0 0 0 / 0.35),
+    0 4px 12px -4px rgb(0 0 0 / 0.45),
+    0 12px 24px -12px rgb(0 0 0 / 0.6);
   --popover: #2f2f2f;
   --popover-foreground: #ececec;
   --primary: #ececec;
@@ -303,6 +318,23 @@ textarea:-webkit-autofill {
   }
 }
 
+/* Toasts sit over the sidebar's column, aligned with its content (14px in from its edge). The sidebar's edge is the stage's
+   left edge, centred in the viewport, so the offset is half of what the viewport leaves over the stage. */
+@media (min-width: 1024px) {
+  :root {
+    --toast-left: calc((100vw - 864px) / 2 + 14px);
+    --toast-bottom: 24px;
+  }
+}
+@media (min-width: 1280px) {
+  :root {
+    --toast-left: calc((100vw - 1204px) / 2 + 14px);
+  }
+  :root:has([data-settings-shell]) {
+    --toast-left: calc((100vw - 984px) / 2 + 14px);
+  }
+}
+
 /* On a phone, a control keeps the size it is drawn at and takes taps across at least 44px in both directions. */
 @media (max-width: 639px) {
   .tap-44:not(.absolute, .fixed, .sticky) {
@@ -356,9 +388,7 @@ textarea:-webkit-autofill {
   background-color: var(--card);
   box-shadow:
     inset 0 1px 0 var(--raised-edge),
-    0 1px 2px rgb(0 0 0 / 0.06),
-    0 6px 14px -6px rgb(0 0 0 / 0.16),
-    0 24px 48px -20px rgb(0 0 0 / 0.32);
+    var(--lift-shadow);
 }
 
 /* The phone's top bar tightens as the page scrolls: its row (data-bar-row) shrinks to 40px over the first 96px. This runs on

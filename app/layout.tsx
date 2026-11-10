@@ -45,8 +45,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <MotionRoot>{children}</MotionRoot>
-          {/* Toasts sit under the top banner, which takes the top centre (see components/app/banner-host.tsx). */}
-          <Toaster position="top-center" offset={88} />
+          {/* Toasts float bottom left. Their position and offset live with the component (components/ui/sonner.tsx). */}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

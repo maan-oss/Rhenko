@@ -9,7 +9,6 @@ import { buildItems, type NavItemConfig } from "@/components/app/nav"
 import { SPRING_SELECT } from "@/components/app/motion"
 import { useLiveCounts } from "@/components/app/live-counts"
 import { SidebarFooter } from "@/components/app/sidebar-footer"
-import { SidebarSearch } from "@/components/app/sidebar-search"
 import { RhenkoSymbol } from "@/components/brand/symbol"
 import type { AccountSummary } from "@/lib/auth"
 import { SIDEBAR_COOKIE } from "@/lib/sidebar"
@@ -26,15 +25,14 @@ type SidebarViewer = { id: string; name: string; handle: string; avatarFile: str
 type Props = {
   viewer: SidebarViewer
   accounts: AccountSummary[]
-  recent: string[]
   notifications: number
   messages: number
   initialCollapsed: boolean
 }
 
 // One full-height surface, fully opaque. The logo leads at the top, with the collapse control on the right.
-// The footer holds Post, then your profile with its account menu and log out.
-export function SidebarPanel({ viewer, accounts, recent, notifications, messages, initialCollapsed }: Props) {
+// The footer holds your profile, with its account menu and log out.
+export function SidebarPanel({ viewer, accounts, notifications, messages, initialCollapsed }: Props) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const path = usePathname()
 
@@ -60,7 +58,6 @@ export function SidebarPanel({ viewer, accounts, recent, notifications, messages
       <div className="flex h-full w-full flex-col justify-between px-3.5 py-4">
         <div className="flex flex-col gap-2">
           <Brand collapsed={collapsed} onToggle={() => save(!collapsed)} />
-          <SidebarSearch recent={recent} collapsed={collapsed} onExpand={() => save(false)} />
           <SidebarNav path={path} notifications={notifications} messages={messages} collapsed={collapsed} />
         </div>
         <SidebarFooter viewer={viewer} accounts={accounts} collapsed={collapsed} />
