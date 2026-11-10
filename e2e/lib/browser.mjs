@@ -62,6 +62,16 @@ export async function closeBrowser() {
   browser = null
 }
 
+// The development server's corner button (in a shadow portal) covers the phone composer's Attach button and takes its taps. A
+// production build has no such button, so the test pages hide it.
+function hideDevelopmentCorner() {
+  document.addEventListener("DOMContentLoaded", () => {
+    const style = document.createElement("style")
+    style.textContent = "nextjs-portal{display:none!important}"
+    document.head.append(style)
+  })
+}
+
 // A new person on a new device. `phone` gives the 390 by 844 touch layout, otherwise 1440 by 900.
 // `mic` grants the microphone. The address header makes the server count this person apart from the others.
 export async function newVisitor({ phone = false, mic = false, label = "page", address = randomAddress(), acceptDownloads = true } = {}) {
@@ -79,6 +89,7 @@ export async function newVisitor({ phone = false, mic = false, label = "page", a
   context.setDefaultTimeout(TIMEOUT)
   context.setDefaultNavigationTimeout(TIMEOUT + 15_000)
   await context.addInitScript(trackConnections)
+  await context.addInitScript(hideDevelopmentCorner)
   if (mic) await context.grantPermissions(["microphone"], { origin: BASE })
   const viewport = { name: phone ? "phone 390x844" : "desktop 1440x900", width: size.width, phone }
   const page = await context.newPage()

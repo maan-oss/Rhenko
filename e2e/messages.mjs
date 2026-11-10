@@ -165,7 +165,7 @@ async function bubbleLookChecks({ where, phone, sender, receiver }) {
     await threadText(receiver.page, short).waitFor()
     for (const person of [sender, receiver]) {
       const bubble = await boxOf(bubbleOf(person.page, short))
-      const time = await boxOf(bubbleOf(person.page, short).locator("span").filter({ hasText: CLOCK }).first())
+      const time = await boxOf(bubbleOf(person.page, short).locator("time").filter({ hasText: CLOCK }).first())
       assert.ok(insideBox(time, bubble), `${person.name}: the time of a message sits outside its bubble`)
     }
     await bubbleOf(sender.page, short).getByText("Seen", { exact: true }).waitFor({ state: "attached" })
@@ -181,7 +181,7 @@ async function bubbleLookChecks({ where, phone, sender, receiver }) {
     await threadText(receiver.page, label).waitFor()
     const row = bubbleOf(receiver.page, label)
     const more = await boxOf(row.getByRole("button", { name: "See more", exact: true }))
-    const time = await boxOf(row.locator("span").filter({ hasText: CLOCK }).first())
+    const time = await boxOf(row.locator("time").filter({ hasText: CLOCK }).first())
     assert.ok(time.x > more.x + more.width, "the time of a long message is not on the right of See more")
     assert.ok(Math.abs(time.y - more.y) < 24, "the time of a long message is not on the line of See more")
     assert.equal(await threadText(receiver.page, tail).count(), 0, "the whole message shows before See more is pressed")
@@ -195,7 +195,7 @@ async function bubbleLookChecks({ where, phone, sender, receiver }) {
     const frame = bubbleAround(photo)
     const padding = await frame.evaluate((el) => getComputedStyle(el).paddingTop)
     assert.equal(padding, "3px", `a photo's bubble has ${padding} of padding, not the thin frame`)
-    const time = await boxOf(frame.locator("span").filter({ hasText: CLOCK }).first())
+    const time = await boxOf(frame.locator("time").filter({ hasText: CLOCK }).first())
     assert.ok(insideBox(time, picture), "the time of a photo sits outside the picture")
   })
 
@@ -226,7 +226,7 @@ async function bubbleLookChecks({ where, phone, sender, receiver }) {
       assert.ok(insideBox(box, bubble), `${file}: the card sits outside its bubble`)
       await card.getByText(new RegExp(`^${escapeRegExp(label)} · `)).waitFor({ state: "attached" })
       await card.getByText(kind.toUpperCase(), { exact: true }).waitFor({ state: "attached" })
-      const time = await boxOf(bubbleAround(card).locator("span").filter({ hasText: CLOCK }).first())
+      const time = await boxOf(bubbleAround(card).locator("time").filter({ hasText: CLOCK }).first())
       assert.ok(insideBox(time, bubble), `${file}: the time sits outside the card's bubble`)
     }
   })
@@ -376,7 +376,10 @@ async function directFlow({ phone }) {
     // How many places in the thread show the words. The composer's own box holds the same text, so it is not counted.
     const inThread = () =>
       page.evaluate(
-        (text) => [...document.querySelectorAll("main *")].filter((el) => el.tagName !== "TEXTAREA" && el.childElementCount === 0 && el.textContent.trim() === text).length,
+        (text) =>
+          [...document.querySelectorAll("main *")].filter(
+            (el) => el.tagName !== "TEXTAREA" && [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim() === text)
+          ).length,
         words
       )
     // While offline the browser logs each request it could not make, and the send is one of them. Nothing shows that log;

@@ -52,8 +52,16 @@ export function messageRow(page, text) {
 export async function holdRow(page, row) {
   const bubble = row.locator('[tabindex="0"]').first()
   await bubble.waitFor()
-  await bubble.scrollIntoViewIfNeeded()
-  const box = await bubble.boundingBox()
+  // A thread that has just opened settles on its newest message a few frames later, and a scroll closes the actions. So the bubble is
+  // brought to the middle at once, and the hold waits until its place stops changing.
+  await bubble.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }))
+  let box = await bubble.boundingBox()
+  for (let still = 0; still < 2; ) {
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    const next = await bubble.boundingBox()
+    still = next && box && next.x === box.x && next.y === box.y ? still + 1 : 0
+    box = next
+  }
   if (!box) throw new Error("the message bubble has no place on screen to hold")
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
