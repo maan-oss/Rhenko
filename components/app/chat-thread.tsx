@@ -331,14 +331,22 @@ function followLatest() {
 // move.
 const BUBBLE_SHAPE = "relative flex max-w-full min-w-0 flex-col gap-2 rounded-[20px] text-[15px] leading-[1.4] break-words"
 
-// Where a message's time line sits inside its bubble: in the bottom-right corner under its words (beside a folded message's
-// "See more" when it is folded), along the foot of a card, or over a picture.
-type MetaPlace = "end" | "row" | "picture"
+// The tail on the top bubble of a run: a small wedge off its top corner, on the side the message comes from, in the bubble's own
+// colour. Only the first bubble of a run has one; a reply from the other person in between starts a new run, with its own tail.
+const TAIL_MINE =
+  "rounded-tr-none after:absolute after:top-0 after:left-full after:h-[13px] after:w-[9px] after:content-[''] after:bg-dusk after:[clip-path:polygon(0_0,100%_0,0_100%)]"
+const TAIL_THEIRS =
+  "rounded-tl-none before:absolute before:top-0 before:right-full before:h-[13px] before:w-[9px] before:content-[''] before:bg-muted before:[clip-path:polygon(100%_0,0_0,100%_100%)]"
+
+// Where a message's time sits inside its bubble: "inline" floats at the bottom-right of its words, on their last line (or on the
+// line under them when the last line is full), the way a chat app sets it; "row" sits along the foot of a card; "picture" sits
+// over a photo.
+type MetaPlace = "inline" | "row" | "picture"
 
 function metaClass(place: MetaPlace): string {
   return cn(
     "inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none tabular-nums",
-    place === "end" && "ml-auto opacity-70",
+    place === "inline" && "float-right ml-2 h-[21px] opacity-70",
     place === "row" && "ml-auto px-1 pt-1 pb-0.5 opacity-70",
     place === "picture" && "absolute right-2 bottom-2 rounded-full bg-black/55 px-2 py-[5px] text-white backdrop-blur-[2px]"
   )
@@ -366,17 +374,13 @@ function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string
       className={cn("flex flex-col items-end px-4", joins ? "pt-[3px]" : "pt-3")}
     >
       <div ref={columnRef} className="flex max-w-[min(78%,30rem)] min-w-0 flex-col items-end">
-        <div ref={bubbleRef} className={cn(BUBBLE_SHAPE, "bg-dusk px-3.5 py-2 text-background")}>
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="whitespace-pre-wrap">
-              <span data-flight-text>{body}</span>
-            </p>
-            <span className="flex justify-end">
-              <span ref={statusRef} aria-live="polite" className={metaClass("end")}>
-                Sending…
-              </span>
+        <div ref={bubbleRef} className={cn(BUBBLE_SHAPE, "bg-dusk px-3.5 py-2 text-background", !joins && TAIL_MINE)}>
+          <p className="flow-root whitespace-pre-wrap">
+            <span data-flight-text>{body}</span>
+            <span ref={statusRef} aria-live="polite" className={metaClass("inline")}>
+              Sending…
             </span>
-          </div>
+          </p>
         </div>
       </div>
     </motion.div>
@@ -647,24 +651,31 @@ function foldPoint(text: string): number | null {
 function ChatText({ text, message, refer }: { text: string; message: MessageView; refer: Ref<HTMLSpanElement> }) {
   const [open, setOpen] = useState(false)
   const cut = open ? null : foldPoint(text)
-  // The time always sits in the bottom-right corner, on its own line under the words. A folded message keeps "See more" on that
-  // same line, at the left.
+  // The time floats at the bottom-right of the words, on their last line. A folded message puts "See more" after its last words,
+  // and the time comes after that.
+  const time = <Meta message={message} place="inline" refer={refer} />
+  if (cut === null) {
+    return <PostBody text={text} fold={false} className="flow-root text-[15px] leading-[1.4]" after={time} />
+  }
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <PostBody text={cut === null ? text : `${text.slice(0, cut).trimEnd()}…`} fold={false} className="text-[15px] leading-[1.4]" />
-      <span className={cn("flex items-center gap-3", cut === null ? "justify-end" : "justify-between")}>
-        {cut !== null && (
+    <PostBody
+      text={`${text.slice(0, cut).trimEnd()}…`}
+      fold={false}
+      className="flow-root text-[15px] leading-[1.4]"
+      after={
+        <>
+          {" "}
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="rounded-sm text-[15px] leading-[1.4] font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-sm font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
           >
             See more
           </button>
-        )}
-        <Meta message={message} place="end" refer={refer} />
-      </span>
-    </div>
+          {time}
+        </>
+      }
+    />
   )
 }
 
@@ -1219,6 +1230,7 @@ function MessageRow({
                 BUBBLE_SHAPE,
                 bubblePadding,
                 bubbleTone,
+                !joinsPrev && (message.mine ? TAIL_MINE : TAIL_THEIRS),
                 "[-webkit-touch-callout:none]",
                 selecting && "pointer-events-none",
                 message.deleted && "italic opacity-70"
