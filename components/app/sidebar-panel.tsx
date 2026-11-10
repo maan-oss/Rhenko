@@ -218,7 +218,8 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
           <span
             aria-hidden="true"
             className={cn(
-              "pointer-events-none absolute top-1/2 left-full z-50 ml-3 flex -translate-y-1/2 origin-left translate-x-[-6px] scale-95 items-center gap-2.5 rounded-2xl bg-popover px-3.5 py-2.5 text-[14px] font-semibold whitespace-nowrap text-popover-foreground opacity-0 [box-shadow:var(--lift-shadow)] transition-[opacity,translate,scale] duration-300 group-hover:translate-x-0 group-hover:scale-100 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:scale-100 group-focus-visible:opacity-100",
+              // The tail is a wedge on the card's left edge, pointing at the icon, in the card's own colour, as the message bubbles have theirs.
+              "pointer-events-none absolute top-1/2 left-full z-50 ml-3 flex -translate-y-1/2 origin-left translate-x-[-6px] scale-95 items-center gap-2.5 rounded-2xl bg-popover px-3.5 py-2.5 text-[14px] font-semibold whitespace-nowrap text-popover-foreground opacity-0 [box-shadow:var(--lift-shadow)] transition-[opacity,translate,scale] duration-300 before:absolute before:top-1/2 before:right-full before:h-[14px] before:w-[8px] before:-translate-y-1/2 before:bg-popover before:content-[''] before:[clip-path:polygon(100%_0,100%_100%,0_50%)] group-hover:translate-x-0 group-hover:scale-100 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:scale-100 group-focus-visible:opacity-100",
               EASE
             )}
           >
