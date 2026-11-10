@@ -331,14 +331,15 @@ function followLatest() {
 // move.
 const BUBBLE_SHAPE = "relative flex max-w-full min-w-0 flex-col gap-2 rounded-[20px] text-[15px] leading-[1.4] break-words"
 
-// Where a message's time line sits inside its bubble: at the end of its last line of words, along the foot of a card, or over a
-// picture.
-type MetaPlace = "line" | "row" | "picture"
+// Where a message's time line sits inside its bubble: at the end of its last line of words, at the right of a folded message's
+// "See more" line, along the foot of a card, or over a picture.
+type MetaPlace = "line" | "end" | "row" | "picture"
 
 function metaClass(place: MetaPlace): string {
   return cn(
     "inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none tabular-nums",
-    place === "line" && "float-right mt-[4px] ml-3 opacity-70",
+    place === "line" && "ml-2 align-middle opacity-70",
+    place === "end" && "ml-auto opacity-70",
     place === "row" && "ml-auto px-1 pt-1 pb-0.5 opacity-70",
     place === "picture" && "absolute right-2 bottom-2 rounded-full bg-black/55 px-2 py-[5px] text-white backdrop-blur-[2px]"
   )
@@ -638,33 +639,30 @@ function foldPoint(text: string): number | null {
   return cut === null || cut >= text.length ? null : cut
 }
 
-// The words of a message, with its time at the end of the last line, as most chat apps set them.
-function ChatText({ text, meta }: { text: string; meta: ReactNode }) {
+// The words of a message, with its time at the end of the last line, as most chat apps set them. A folded message ends its words
+// with "…" and gives its own line below them: "See more" on the left, and the time and read state on the right of that line.
+function ChatText({ text, message, refer }: { text: string; message: MessageView; refer: Ref<HTMLSpanElement> }) {
   const [open, setOpen] = useState(false)
   const cut = open ? null : foldPoint(text)
+  if (cut === null) {
+    return (
+      <PostBody text={text} fold={false} className="text-[15px] leading-[1.4]" after={<Meta message={message} place="line" refer={refer} />} />
+    )
+  }
   return (
-    <PostBody
-      text={cut === null ? text : text.slice(0, cut).trimEnd()}
-      fold={false}
-      className="text-[15px] leading-[1.4]"
-      after={
-        <>
-          {cut === null ? null : (
-            <>
-              {"… "}
-              <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="rounded-sm font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                See more
-              </button>
-            </>
-          )}
-          {meta}
-        </>
-      }
-    />
+    <div className="flex min-w-0 flex-col gap-1">
+      <PostBody text={`${text.slice(0, cut).trimEnd()}…`} fold={false} className="text-[15px] leading-[1.4]" />
+      <span className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-sm text-[15px] leading-[1.4] font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          See more
+        </button>
+        <Meta message={message} place="end" refer={refer} />
+      </span>
+    </div>
   )
 }
 
@@ -1279,7 +1277,7 @@ function MessageRow({
                     <EditBox value={draft} onChange={setDraft} onSave={saveEdit} onCancel={() => setEditing(false)} pending={pending} />
                   ) : message.body ? (
                     <div className={cn(captioned && "px-2 pt-1 pb-1")}>
-                      <ChatText text={message.body} meta={<Meta message={message} place="line" refer={metaRef} />} />
+                      <ChatText text={message.body} message={message} refer={metaRef} />
                       {/* Empty unless a translate control shows, so it adds no space under the words. A sealed message is never
                           translated: translating sends its words to the translation service, and the server must not see them. */}
                       <div className="relative z-10 empty:hidden">

@@ -78,6 +78,17 @@ export async function holdRow(page, row) {
     }
   })
   await page.evaluate(() => (window.__holdLog.length = 0))
+  // Traces the bubble itself during the hold: what the press lands on and what leaves, moves or drags it.
+  await bubble.evaluate((el) => {
+    const log = window.__holdLog
+    for (const type of ["pointerdown", "pointerenter", "pointerleave", "pointermove", "pointercancel", "dragstart", "contextmenu"]) {
+      el.addEventListener(
+        type,
+        (event) => log.push(`bubble ${type} on ${event.target instanceof Element ? event.target.tagName.toLowerCase() : "?"} at ${Math.round(event.clientX)},${Math.round(event.clientY)}`),
+        { passive: true }
+      )
+    }
+  })
   const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
   await page.mouse.move(center.x, center.y)
   await page.mouse.down()
@@ -87,11 +98,12 @@ export async function holdRow(page, row) {
     const what = await page.evaluate(
       ({ x, y }) => {
         const hit = document.elementFromPoint(x, y)
-        return { under: hit ? `${hit.tagName.toLowerCase()} ${String(hit.className).slice(0, 80)}` : "nothing", log: window.__holdLog.slice(0, 20) }
+        return { under: hit ? `${hit.tagName.toLowerCase()} ${String(hit.className).slice(0, 80)}` : "nothing", log: window.__holdLog.slice(0, 30) }
       },
       center
     )
-    throw new Error(`the actions did not open on hold; under the press: ${JSON.stringify(what)}`, { cause: error })
+    const after = await bubble.boundingBox().catch(() => null)
+    throw new Error(`the actions did not open on hold; under the press: ${JSON.stringify(what)}; bubble before ${JSON.stringify(box)} after ${JSON.stringify(after)}`, { cause: error })
   } finally {
     await page.mouse.up()
   }
