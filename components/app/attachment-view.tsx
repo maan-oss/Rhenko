@@ -164,7 +164,7 @@ export function LocationCard({ lat, lng }: { lat: number; lng: number }) {
         <span className="grid size-7 shrink-0 place-items-center rounded-full bg-foreground text-background">
           <MapPin className="size-3.5" aria-hidden />
         </span>
-        <span className="min-w-0 flex-1 text-[14px] font-semibold leading-snug">Shared location</span>
+        <span className="min-w-0 flex-1 whitespace-nowrap text-[14px] font-semibold leading-snug">Location</span>
         <span className="flex items-center gap-0.5 text-[13px] font-semibold text-muted-foreground">
           Maps
           <ArrowUpRight className="size-3.5" aria-hidden />

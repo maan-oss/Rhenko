@@ -897,6 +897,27 @@ function MessageRow({
     setSheetOpen(true)
   }
 
+  // While the actions are open, they follow the bubble's place: a bubble still settling (a photo arriving, a message that is
+  // landing) is measured again each frame, so the actions sit beside it once it has stopped moving.
+  useEffect(() => {
+    if (!sheetOpen) return
+    let frame = 0
+    let last = ""
+    const follow = () => {
+      const rect = bubbleRef.current?.getBoundingClientRect()
+      if (rect) {
+        const key = `${rect.top},${rect.bottom},${rect.left},${rect.right}`
+        if (key !== last) {
+          last = key
+          setAnchor(rect)
+        }
+      }
+      frame = requestAnimationFrame(follow)
+    }
+    frame = requestAnimationFrame(follow)
+    return () => cancelAnimationFrame(frame)
+  }, [sheetOpen])
+
   function onPressStart(event: ReactPointerEvent<HTMLDivElement>) {
     if (!gestures) return
     if (event.pointerType !== "mouse") swipeControls.start(event)
