@@ -1250,7 +1250,8 @@ function MessageRow({
                       size={message.attachment?.kind === "document" ? message.attachment.size : 0}
                     />
                   ) : file ? (
-                    <span className={cn("relative block w-fit max-w-full overflow-hidden", framed ? "rounded-[17px]" : "rounded-[14px]", onPicture && "min-w-[11rem]")}>
+                    // A bare photo has a set width, so its bubble and its picture agree on the room they take, at any phone width.
+                    <span className={cn("relative block max-w-full overflow-hidden", onPicture ? "w-[16.5rem]" : "w-fit", framed ? "rounded-[17px]" : "rounded-[14px]")}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={`/media/${file}?w=${photoWidth}`}

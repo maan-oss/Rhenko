@@ -69,22 +69,23 @@ export async function holdRow(page, row) {
   await page.evaluate(() => {
     if (window.__holdLog) return
     window.__holdLog = []
+    const who = (node) => (node instanceof Element ? `${node.tagName.toLowerCase()}.${String(node.className).slice(0, 70)}${node.id ? `#${node.id}` : ""}` : "none")
     for (const type of ["pointerdown", "pointerup", "pointercancel", "scroll"]) {
-      window.addEventListener(
-        type,
-        (event) => window.__holdLog.push(`${type} on ${event.target instanceof Element ? event.target.tagName.toLowerCase() : "page"}`),
-        { capture: true, passive: true }
-      )
+      window.addEventListener(type, (event) => window.__holdLog.push(`${type} on ${who(event.target)}`), { capture: true, passive: true })
     }
   })
   await page.evaluate(() => (window.__holdLog.length = 0))
   // Traces the bubble itself during the hold: what the press lands on and what leaves, moves or drags it.
   await bubble.evaluate((el) => {
     const log = window.__holdLog
+    const who = (node) => (node instanceof Element ? `${node.tagName.toLowerCase()}.${String(node.className).slice(0, 70)}` : "none")
     for (const type of ["pointerdown", "pointerenter", "pointerleave", "pointermove", "pointercancel", "dragstart", "contextmenu"]) {
       el.addEventListener(
         type,
-        (event) => log.push(`bubble ${type} on ${event.target instanceof Element ? event.target.tagName.toLowerCase() : "?"} at ${Math.round(event.clientX)},${Math.round(event.clientY)}`),
+        (event) =>
+          log.push(
+            `bubble ${type} target ${who(event.target)} related ${who(event.relatedTarget)} at ${Math.round(event.clientX)},${Math.round(event.clientY)}`
+          ),
         { passive: true }
       )
     }
@@ -98,7 +99,8 @@ export async function holdRow(page, row) {
     const what = await page.evaluate(
       ({ x, y }) => {
         const hit = document.elementFromPoint(x, y)
-        return { under: hit ? `${hit.tagName.toLowerCase()} ${String(hit.className).slice(0, 80)}` : "nothing", log: window.__holdLog.slice(0, 30) }
+        const stack = document.elementsFromPoint(x, y).slice(0, 5).map((el) => `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 50)}`)
+        return { under: hit ? `${hit.tagName.toLowerCase()} ${String(hit.className).slice(0, 80)}` : "nothing", stack, log: window.__holdLog.slice(0, 30) }
       },
       center
     )
