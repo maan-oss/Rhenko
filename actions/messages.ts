@@ -686,7 +686,9 @@ async function directConversationClosed(conversationId: string, viewerId: string
   return (others?.c ?? 0) === 0
 }
 
-export async function leaveConversation(conversationId: string): Promise<VoidResult> {
+// Leaves a conversation. A viewer who leaves is taken away from its page by the caller, so the page is not refreshed for them, and
+// they are not sent the page's live update either: a refresh of a page they can no longer open would race the move to another page.
+export async function leaveConversation(conversationId: string, { stays = true }: { stays?: boolean } = {}): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in first." }
   const id = asId(conversationId)
@@ -716,8 +718,8 @@ export async function leaveConversation(conversationId: string): Promise<VoidRes
   }
   // A call they were in ends for them, and the conversation's call drops out of their view.
   await leaveConversationCalls(viewer.id, id)
-  await publish(everyone, { type: "message", conversationId: id })
-  refresh()
+  await publish(stays ? everyone : everyone.filter((member) => member !== viewer.id), { type: "message", conversationId: id })
+  if (stays) refresh()
   return { ok: true }
 }
 
@@ -734,7 +736,7 @@ export async function acceptConversation(conversationId: string): Promise<VoidRe
 
 // Declining a request removes you from the conversation. The sender keeps their side.
 export async function declineConversation(conversationId: string): Promise<VoidResult> {
-  return await leaveConversation(conversationId)
+  return await leaveConversation(conversationId, { stays: false })
 }
 
 export async function markConversationRead(conversationId: string): Promise<void> {
