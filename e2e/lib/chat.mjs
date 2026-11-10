@@ -49,7 +49,7 @@ export function messageRow(page, text) {
 
 // Opens the actions of a message by holding its bubble down, as a press does on a phone: the reactions, Reply, the menu and Delete
 // come up together. The hold stays until the sheet is on screen, then lets go, so the sheet stays open.
-export async function holdRow(page, row) {
+export async function holdRow(page, row, text = null) {
   const bubble = row.locator('[tabindex="0"]').first()
   await bubble.waitFor()
   // A page that has just loaded takes its presses only once React is in charge of it.
@@ -68,9 +68,21 @@ export async function holdRow(page, row) {
     }
   })
   const rowTabbable = await row.evaluate((el) => ({
+    id: el.getAttribute("data-message-id"),
     text: el.textContent.slice(0, 80),
     tabbable: [...el.querySelectorAll('[tabindex="0"]')].map((node) => node.textContent.slice(0, 30)),
   }))
+  // Which message rows hold the text this hold was asked for, so a hold that lands on another row says so.
+  const matches = text
+    ? await page.evaluate(
+        (wanted) =>
+          [...document.querySelectorAll("main div.group")]
+            .filter((el) => el.textContent.includes(wanted))
+            .map((el) => `${el.getAttribute("data-message-id")} ${el.textContent.slice(0, 30)}`),
+        text
+      )
+    : null
+  console.log(`holdRow target: ${JSON.stringify({ wanted: text, rowTabbable, matches })}`)
   if (before) console.log(`holdRow found an open action sheet before the press: ${JSON.stringify({ before, rowTabbable })}`)
   // A thread that has just opened settles on its newest message a few frames later, and a scroll closes the actions. So the bubble is
   // brought to the middle at once, and the hold waits until its place stops changing.
@@ -124,7 +136,7 @@ export async function holdRow(page, row) {
     )
     const after = await bubble.boundingBox().catch(() => null)
     throw new Error(
-      `the actions did not open on hold; under the press: ${JSON.stringify(what)}; bubble before ${JSON.stringify(box)} after ${JSON.stringify(after)}; sheet open before the press: ${JSON.stringify(before)}; row: ${JSON.stringify(rowTabbable)}`,
+      `the actions did not open on hold; under the press: ${JSON.stringify(what)}; bubble before ${JSON.stringify(box)} after ${JSON.stringify(after)}; sheet open before the press: ${JSON.stringify(before)}; row: ${JSON.stringify(rowTabbable)}; matches: ${JSON.stringify(matches)}`,
       { cause: error }
     )
   } finally {
@@ -134,7 +146,7 @@ export async function holdRow(page, row) {
 
 // Holds the message whose text is given.
 export function holdMessage(page, text) {
-  return holdRow(page, messageRow(page, text))
+  return holdRow(page, messageRow(page, text), text)
 }
 
 // Reacts to a message with the emoji at `index` of the picker. Returns the emoji.
