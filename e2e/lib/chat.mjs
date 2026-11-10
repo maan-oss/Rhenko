@@ -65,10 +65,33 @@ export async function holdRow(page, row) {
     box = next
   }
   if (!box) throw new Error("the message bubble has no place on screen to hold")
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  // Notes what the page receives while the hold runs, so a hold that opens nothing says where its press went.
+  await page.evaluate(() => {
+    if (window.__holdLog) return
+    window.__holdLog = []
+    for (const type of ["pointerdown", "pointerup", "pointercancel", "scroll"]) {
+      window.addEventListener(
+        type,
+        (event) => window.__holdLog.push(`${type} on ${event.target instanceof Element ? event.target.tagName.toLowerCase() : "page"}`),
+        { capture: true, passive: true }
+      )
+    }
+  })
+  await page.evaluate(() => (window.__holdLog.length = 0))
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.mouse.move(center.x, center.y)
   await page.mouse.down()
   try {
     await page.getByRole("group", { name: "Choose a reaction" }).waitFor({ timeout: 5000 })
+  } catch (error) {
+    const what = await page.evaluate(
+      ({ x, y }) => {
+        const hit = document.elementFromPoint(x, y)
+        return { under: hit ? `${hit.tagName.toLowerCase()} ${String(hit.className).slice(0, 80)}` : "nothing", log: window.__holdLog.slice(0, 20) }
+      },
+      center
+    )
+    throw new Error(`the actions did not open on hold; under the press: ${JSON.stringify(what)}`, { cause: error })
   } finally {
     await page.mouse.up()
   }

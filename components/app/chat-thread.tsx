@@ -1261,7 +1261,7 @@ function MessageRow({
                         loading={message.mine && fresh ? "eager" : "lazy"}
                         onLoad={message.mine && fresh ? followLatest : undefined}
                         decoding="async"
-                        className={cn("max-h-72 max-w-full object-cover", onPicture && "min-w-full", framed ? "rounded-[17px]" : "rounded-[14px] ring-1 ring-black/[0.06]")}
+                        className={cn("max-h-72 max-w-full object-cover", onPicture && "w-full", framed ? "rounded-[17px]" : "rounded-[14px] ring-1 ring-black/[0.06]")}
                       />
                       {message.attachment?.kind === "scan" ? (
                         <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
