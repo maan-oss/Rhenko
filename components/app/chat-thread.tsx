@@ -331,14 +331,13 @@ function followLatest() {
 // move.
 const BUBBLE_SHAPE = "relative flex max-w-full min-w-0 flex-col gap-2 rounded-[20px] text-[15px] leading-[1.4] break-words"
 
-// Where a message's time line sits inside its bubble: at the end of its last line of words, at the right of a folded message's
-// "See more" line, along the foot of a card, or over a picture.
-type MetaPlace = "line" | "end" | "row" | "picture"
+// Where a message's time line sits inside its bubble: in the bottom-right corner under its words (beside a folded message's
+// "See more" when it is folded), along the foot of a card, or over a picture.
+type MetaPlace = "end" | "row" | "picture"
 
 function metaClass(place: MetaPlace): string {
   return cn(
     "inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none tabular-nums",
-    place === "line" && "ml-2 align-middle opacity-70",
     place === "end" && "ml-auto opacity-70",
     place === "row" && "ml-auto px-1 pt-1 pb-0.5 opacity-70",
     place === "picture" && "absolute right-2 bottom-2 rounded-full bg-black/55 px-2 py-[5px] text-white backdrop-blur-[2px]"
@@ -368,12 +367,16 @@ function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string
     >
       <div ref={columnRef} className="flex max-w-[min(78%,30rem)] min-w-0 flex-col items-end">
         <div ref={bubbleRef} className={cn(BUBBLE_SHAPE, "bg-dusk px-3.5 py-2 text-background")}>
-          <p className="whitespace-pre-wrap">
-            <span data-flight-text>{body}</span>
-            <span ref={statusRef} aria-live="polite" className={metaClass("line")}>
-              Sending…
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="whitespace-pre-wrap">
+              <span data-flight-text>{body}</span>
+            </p>
+            <span className="flex justify-end">
+              <span ref={statusRef} aria-live="polite" className={metaClass("end")}>
+                Sending…
+              </span>
             </span>
-          </p>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -644,22 +647,21 @@ function foldPoint(text: string): number | null {
 function ChatText({ text, message, refer }: { text: string; message: MessageView; refer: Ref<HTMLSpanElement> }) {
   const [open, setOpen] = useState(false)
   const cut = open ? null : foldPoint(text)
-  if (cut === null) {
-    return (
-      <PostBody text={text} fold={false} className="text-[15px] leading-[1.4]" after={<Meta message={message} place="line" refer={refer} />} />
-    )
-  }
+  // The time always sits in the bottom-right corner, on its own line under the words. A folded message keeps "See more" on that
+  // same line, at the left.
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <PostBody text={`${text.slice(0, cut).trimEnd()}…`} fold={false} className="text-[15px] leading-[1.4]" />
-      <span className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-sm text-[15px] leading-[1.4] font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          See more
-        </button>
+      <PostBody text={cut === null ? text : `${text.slice(0, cut).trimEnd()}…`} fold={false} className="text-[15px] leading-[1.4]" />
+      <span className={cn("flex items-center gap-3", cut === null ? "justify-end" : "justify-between")}>
+        {cut !== null && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="rounded-sm text-[15px] leading-[1.4] font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            See more
+          </button>
+        )}
         <Meta message={message} place="end" refer={refer} />
       </span>
     </div>
