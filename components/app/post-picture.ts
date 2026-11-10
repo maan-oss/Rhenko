@@ -207,7 +207,16 @@ function loadVideoFrame(src: string): Promise<Frame | null> {
     }
     video.onseeked = () => {
       window.clearTimeout(timer)
-      finish(video.videoWidth && video.videoHeight ? { source: video, width: video.videoWidth, height: video.videoHeight } : null)
+      const { videoWidth: width, videoHeight: height } = video
+      if (!width || !height) return finish(null)
+      // Copy the frame now: finish() resets the video element, which would drop it.
+      const copy = document.createElement("canvas")
+      copy.width = width
+      copy.height = height
+      const copyCtx = copy.getContext("2d")
+      if (!copyCtx) return finish(null)
+      copyCtx.drawImage(video, 0, 0, width, height)
+      finish({ source: copy, width, height })
     }
     video.onerror = () => {
       window.clearTimeout(timer)
