@@ -744,7 +744,8 @@ export async function markConversationRead(conversationId: string): Promise<void
   const id = asId(conversationId)
   if (!viewer || !id) return
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", Date.now(), id, viewer.id)
-  await publish([viewer.id], { type: "message", conversationId: id })
+  // Everyone in the chat hears of it, so the sender's ticks turn to seen on their open thread without a reload.
+  await publish(await memberIds(id), { type: "message", conversationId: id })
   refresh()
 }
 
