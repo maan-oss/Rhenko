@@ -393,6 +393,72 @@ textarea:-webkit-autofill {
 
 /* The phone's top bar tightens as the page scrolls: its row (data-bar-row) shrinks to 40px over the first 96px. This runs on
    the browser's own scroll timeline. Where that is not supported, or the reader asks for less motion, the bar keeps its height. */
+/* The attach menu. It rises from the plus with a soft blur, settling on the sidebar's curve, and its rows arrive one after
+   another. A phone's grip is the menu's first child, so the rows start at the second. Closing is quicker than opening, and
+   the reader who asks for less motion gets none of it. The open fill is "backwards", so a drag on a phone can still move the
+   sheet once it has opened. */
+@keyframes attach-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@keyframes attach-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+    filter: blur(3px);
+  }
+}
+
+@keyframes attach-row {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.attach-menu[data-open] {
+  animation: attach-in 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.attach-menu[data-closed] {
+  animation: attach-out 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"] {
+  animation: attach-row 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(2) { animation-delay: 30ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(3) { animation-delay: 60ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(4) { animation-delay: 90ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(5) { animation-delay: 120ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(6) { animation-delay: 150ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(7) { animation-delay: 180ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(8) { animation-delay: 210ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(9) { animation-delay: 240ms; }
+.attach-menu[data-open] > [data-slot="dropdown-menu-item"]:nth-child(10) { animation-delay: 270ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .attach-menu[data-open],
+  .attach-menu[data-closed],
+  .attach-menu[data-open] > [data-slot="dropdown-menu-item"] {
+    animation: none;
+  }
+}
+
 @keyframes bar-tighten {
   to {
     height: 2.5rem;

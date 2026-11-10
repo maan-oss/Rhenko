@@ -70,12 +70,12 @@ export function SidebarPanel({ viewer, accounts, recent, notifications, messages
   )
 }
 
-// One panel icon for both states, the way most apps draw a sidebar toggle. Expanded: the logo sits on the left and
-// the panel-close icon on the right. Collapsed: the panel-open icon stands alone, so the control is always visible.
+// The panel control. Expanded: the logo leads, and the panel-close icon on the right appears only while the row is hovered.
+// Collapsed: the logo alone holds the rail's top. On hover it morphs into the panel-open button, and a click opens the rail.
 function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   if (!collapsed) {
     return (
-      <div className="flex h-11 items-center justify-between">
+      <div className="group/brand flex h-11 items-center justify-between">
         <span className="grid size-11 place-items-center">
           <RhenkoSymbol className="size-7" />
         </span>
@@ -84,7 +84,7 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
           onClick={onToggle}
           aria-label="Close sidebar"
           title="Close sidebar"
-          className="grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+          className="grid size-9 place-items-center rounded-full text-foreground opacity-0 transition-[opacity,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none group-hover/brand:opacity-100 hover:bg-foreground/5 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <PanelLeftClose className="size-[20px] scale-x-[-1]" strokeWidth={1.9} aria-hidden="true" />
         </button>
@@ -99,9 +99,17 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
         aria-label="Open sidebar"
         aria-expanded={false}
         title="Open sidebar"
-        className="grid size-11 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+        className="group/brand relative grid size-11 shrink-0 place-items-center rounded-full text-foreground outline-none transition-colors duration-300 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <PanelLeftOpen className="size-[20px] scale-x-[-1]" strokeWidth={1.9} aria-hidden="true" />
+        <span className="grid place-items-center transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/brand:scale-75 group-hover/brand:opacity-0 group-focus-visible/brand:scale-75 group-focus-visible/brand:opacity-0">
+          <RhenkoSymbol className="size-7" />
+        </span>
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 grid place-items-center scale-75 opacity-0 transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/brand:scale-100 group-hover/brand:opacity-100 group-focus-visible/brand:scale-100 group-focus-visible/brand:opacity-100"
+        >
+          <PanelLeftOpen className="size-[20px] scale-x-[-1]" strokeWidth={1.9} />
+        </span>
       </button>
     </div>
   )
@@ -206,15 +214,16 @@ function NavItem({ item, active, collapsed }: { item: NavItemConfig; active: boo
           </span>
         </span>
         {collapsed ? (
+          // The label, when the rail is closed, shows as a small card beside the icon. It rises and settles on hover or focus.
           <span
             aria-hidden="true"
             className={cn(
-              "pointer-events-none absolute top-1/2 left-full z-50 ml-2.5 -translate-y-1/2 translate-x-[-6px] rounded-xl bg-foreground px-3 py-1.5 text-[13px] font-semibold whitespace-nowrap text-background opacity-0 shadow-lg transition-[opacity,translate] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100",
+              "pointer-events-none absolute top-1/2 left-full z-50 ml-3 flex -translate-y-1/2 origin-left translate-x-[-6px] scale-95 items-center gap-2.5 rounded-2xl bg-popover px-3.5 py-2.5 text-[14px] font-semibold whitespace-nowrap text-popover-foreground opacity-0 [box-shadow:var(--lift-shadow)] transition-[opacity,translate,scale] duration-300 group-hover:translate-x-0 group-hover:scale-100 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:scale-100 group-focus-visible:opacity-100",
               EASE
             )}
           >
             {label}
-            {badge > 0 ? ` · ${badge > 99 ? "99+" : badge}` : ""}
+            {badge > 0 ? <CountPill count={badge} /> : null}
           </span>
         ) : null}
       </Link>

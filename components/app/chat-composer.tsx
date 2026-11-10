@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, AudioLines, Camera, Eye, FileText, Image as ImageIcon, ListChecks, MapPin, Mic, Music, Plus, ScanLine, UserRound, X } from "lucide-react"
 import { toast } from "sonner"
+import { SPRING_POP, SPRING_SELECT } from "@/components/app/motion"
 import { sendMessage, signalTyping, type ChatState } from "@/actions/messages"
 import { Avatar } from "@/components/app/avatar"
 import { GifGlyph, useGifSetup } from "@/components/app/gif-setup"
@@ -187,18 +188,34 @@ function describePick(pick: Pick): { title: string; detail: string; thumb: React
   }
 }
 
-function SendButton({ disabled }: { disabled: boolean }) {
+// The send arrow lives inside the field, at its right end, and only while there is something to send. It pops in and out, and
+// stays up while the form is sending. The microphone steps left to make room for it (see the field below).
+function SendButton({ visible }: { visible: boolean }) {
   const { pending } = useFormStatus()
+  const shown = visible || pending
   return (
-    <button
-      type="submit"
-      disabled={pending || disabled}
-      aria-label={pending ? "Sending" : "Send"}
-      title="Send"
-      className="tap-44 grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[opacity,transform] duration-200 hover:opacity-85 active:opacity-70 disabled:opacity-50"
-    >
-      <ArrowUp className="size-[19px]" strokeWidth={2.3} aria-hidden="true" />
-    </button>
+    <AnimatePresence>
+      {shown ? (
+        <motion.span
+          key="send"
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          transition={SPRING_POP}
+          className="absolute top-1/2 right-0 grid size-10 -translate-y-1/2 place-items-center"
+        >
+          <button
+            type="submit"
+            disabled={pending}
+            aria-label={pending ? "Sending" : "Send"}
+            title="Send"
+            className="tap-44 grid size-8 place-items-center rounded-full bg-foreground text-background outline-none transition-opacity duration-200 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring active:opacity-70 disabled:opacity-50"
+          >
+            <ArrowUp className="size-[17px]" strokeWidth={2.3} aria-hidden="true" />
+          </button>
+        </motion.span>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -220,7 +237,9 @@ function Waveform() {
 }
 
 const ATTACH = "tap-44 grid size-10 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
-const ATTACH_ITEM = "min-h-11 gap-3 text-[15px]"
+const ATTACH_ITEM = "min-h-11 gap-3 rounded-2xl px-2 text-[15px] font-medium"
+// The round badge behind each attachment's icon, so the rows read as a set of options rather than a plain list.
+const CHIP = "grid size-8 shrink-0 place-items-center rounded-full bg-muted text-foreground"
 
 // Sends a message. Enter sends, Shift+Enter starts a new line. Typing is signalled every few seconds.
 // One attachment can go with a message: a photo or video, a scan, a document, an audio file, a voice message, a contact, a
@@ -907,40 +926,47 @@ export function ChatComposer({
         />
 
         <DropdownMenu>
-          <DropdownMenuTrigger type="button" aria-label="Attach" title="Attach" className={ATTACH}>
-            <Plus className="size-[22px]" strokeWidth={2} aria-hidden="true" />
+          <DropdownMenuTrigger type="button" aria-label="Attach" title="Attach" className={cn(ATTACH, "group")}>
+            {/* The plus turns into an X while the menu is open. */}
+            <Plus className="size-[22px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-data-[popup-open]:rotate-45" strokeWidth={2} aria-hidden="true" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="min-w-56">
+          <DropdownMenuContent side="top" align="start" className={cn("attach-menu min-w-60 ring-0 [box-shadow:var(--lift-shadow)] data-open:animate-none data-closed:animate-none", "rounded-[28px] p-1.5")}>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => imageRef.current?.click()}>
-              <ImageIcon className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><ImageIcon className="size-4" aria-hidden="true" /></span>
               Photo or video
             </DropdownMenuItem>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => cameraRef.current?.click()}>
-              <Camera className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><Camera className="size-4" aria-hidden="true" /></span>
               Camera
             </DropdownMenuItem>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => scanRef.current?.click()}>
-              <ScanLine className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><ScanLine className="size-4" aria-hidden="true" /></span>
               Scan a page
             </DropdownMenuItem>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => documentRef.current?.click()}>
-              <FileText className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><FileText className="size-4" aria-hidden="true" /></span>
               Document
             </DropdownMenuItem>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => audioRef.current?.click()}>
-              <Music className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><Music className="size-4" aria-hidden="true" /></span>
               Audio file
             </DropdownMenuItem>
+            {canRecord ? (
+              <DropdownMenuItem className={ATTACH_ITEM} onClick={() => void startRecording()}>
+                <span className={CHIP}><AudioLines className="size-4" aria-hidden="true" /></span>
+                Voice message
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => setContactOpen(true)}>
-              <UserRound className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><UserRound className="size-4" aria-hidden="true" /></span>
               Contact
             </DropdownMenuItem>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={shareLocation}>
-              <MapPin className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><MapPin className="size-4" aria-hidden="true" /></span>
               Location
             </DropdownMenuItem>
             <DropdownMenuItem className={ATTACH_ITEM} onClick={() => setPollOpen(true)}>
-              <ListChecks className="size-[18px]" aria-hidden="true" />
+              <span className={CHIP}><ListChecks className="size-4" aria-hidden="true" /></span>
               Poll
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -958,7 +984,7 @@ export function ChatComposer({
           </button>
         ) : null}
 
-        <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-[background-color,box-shadow] focus-within:bg-background focus-within:shadow-[0_0_0_3px_var(--halo)]">
+        <div className="relative flex min-w-0 flex-1 items-center rounded-[26px] bg-muted transition-colors duration-200 focus-within:bg-background">
           <textarea
             data-composer-field
             ref={textRef}
@@ -977,70 +1003,72 @@ export function ChatComposer({
             placeholder="Start a message"
             aria-label="Message"
             aria-autocomplete={group ? "list" : undefined}
-            className="field-sizing-content max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2.5 pl-4 text-[15px] outline-none placeholder:text-muted-foreground"
+            className={cn(
+              "field-sizing-content max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2.5 pl-4 text-[15px] outline-none transition-[padding] duration-200 placeholder:text-muted-foreground",
+              // The right end keeps clear of the microphone, and of the send arrow when it is up beside it.
+              canSend ? "pr-22" : "pr-11"
+            )}
           />
           <AnimatePresence>
             {listening && text === "" ? (
-              // The label stops short of the two buttons on the right, so it never runs under them.
+              // The label stops short of the buttons on the right, so it never runs under them.
               <motion.div
                 key="listening"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="pointer-events-none absolute inset-y-0 left-4 right-[72px] flex min-w-0 items-center gap-2.5 text-[15px] text-muted-foreground"
+                className={cn(
+                  "pointer-events-none absolute inset-y-0 left-4 flex min-w-0 items-center gap-2.5 text-[15px] text-muted-foreground transition-[right] duration-200",
+                  canSend ? "right-22" : "right-11"
+                )}
               >
                 <Waveform />
                 <span className="truncate">Listening</span>
               </motion.div>
             ) : null}
           </AnimatePresence>
-          {canRecord && voice === null && recording === null ? (
-            <button
-              type="button"
-              onClick={() => void startRecording()}
-              aria-label="Record a voice message"
-              title="Record a voice message"
-              className="tap-44 relative mr-0.5 grid size-10 shrink-0 place-items-center rounded-full text-foreground transition-colors hover:bg-muted sm:size-8"
-            >
-              <AudioLines className="size-5 sm:size-[18px]" strokeWidth={2} aria-hidden="true" />
-            </button>
-          ) : null}
           {dictation ? (
-            <button
-              type="button"
-              onClick={listening ? stopDictation : startDictation}
-              aria-label={listening ? "Stop dictation" : "Dictate a message"}
-              aria-pressed={listening}
-              title={listening ? "Stop dictation" : "Dictate"}
-              className="tap-44 relative mr-0.5 grid size-10 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
+            // The microphone sits at the field's right end. When the send arrow comes in, it steps left to make room.
+            <motion.span
+              className="absolute top-1/2 right-0 grid size-10 -translate-y-1/2 place-items-center"
+              animate={{ x: canSend ? -40 : 0 }}
+              transition={SPRING_SELECT}
             >
-              <AnimatePresence>
-                {listening ? (
-                  <motion.span
-                    key="ring"
-                    aria-hidden="true"
-                    className="absolute inset-0 rounded-full bg-foreground"
-                    initial={{ scale: 1, opacity: 0.4 }}
-                    animate={{ scale: [1, 1.7], opacity: [0.4, 0] }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
-                  />
-                ) : null}
-              </AnimatePresence>
-              <span
-                className={cn(
-                  "relative grid size-10 place-items-center rounded-full transition-colors duration-200 sm:size-8",
-                  listening ? "bg-foreground text-background" : "text-foreground hover:bg-muted"
-                )}
+              <button
+                type="button"
+                onClick={listening ? stopDictation : startDictation}
+                aria-label={listening ? "Stop dictation" : "Dictate a message"}
+                aria-pressed={listening}
+                title={listening ? "Stop dictation" : "Dictate"}
+                className="tap-44 relative grid size-8 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Mic className="size-5 sm:size-[18px]" strokeWidth={2} aria-hidden="true" />
-              </span>
-            </button>
+                <AnimatePresence>
+                  {listening ? (
+                    <motion.span
+                      key="ring"
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-full bg-foreground"
+                      initial={{ scale: 1, opacity: 0.4 }}
+                      animate={{ scale: [1, 1.7], opacity: [0.4, 0] }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
+                    />
+                  ) : null}
+                </AnimatePresence>
+                <span
+                  className={cn(
+                    "relative grid size-8 place-items-center rounded-full transition-colors duration-200",
+                    listening ? "bg-foreground text-background" : "text-foreground hover:bg-muted"
+                  )}
+                >
+                  <Mic className="size-[17px]" strokeWidth={2} aria-hidden="true" />
+                </span>
+              </button>
+            </motion.span>
           ) : null}
+          <SendButton visible={canSend} />
         </div>
-
-        <SendButton disabled={!canSend} />
       </form>
 
       <ChatPollDialog open={pollOpen} onOpenChange={setPollOpen} onCreate={choosePoll} />
