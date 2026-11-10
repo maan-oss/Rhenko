@@ -54,6 +54,24 @@ export async function holdRow(page, row) {
   await bubble.waitFor()
   // A page that has just loaded takes its presses only once React is in charge of it.
   await ready(bubble)
+  // Notes what is on the page before the press: an action sheet still open from an earlier step, and the row this hold would hit.
+  const before = await page.evaluate(() => {
+    const backdrop = document.querySelector("div.fixed.inset-0.z-40")
+    if (!backdrop) return null
+    const sheet = document.querySelector("div.fixed.z-50.flex.flex-col")
+    return {
+      sheet: sheet ? `${sheet.style.top}|${sheet.style.left}|${sheet.style.right} ${sheet.textContent.slice(0, 120)}` : null,
+      bubbles: [...document.querySelectorAll('main [tabindex="0"]')].map((el) => {
+        const r = el.getBoundingClientRect()
+        return `${Math.round(r.top)}..${Math.round(r.bottom)} x${Math.round(r.left)} ${el.textContent.slice(0, 36)}`
+      }),
+    }
+  })
+  const rowTabbable = await row.evaluate((el) => ({
+    text: el.textContent.slice(0, 80),
+    tabbable: [...el.querySelectorAll('[tabindex="0"]')].map((node) => node.textContent.slice(0, 30)),
+  }))
+  if (before) console.log(`holdRow found an open action sheet before the press: ${JSON.stringify({ before, rowTabbable })}`)
   // A thread that has just opened settles on its newest message a few frames later, and a scroll closes the actions. So the bubble is
   // brought to the middle at once, and the hold waits until its place stops changing.
   await bubble.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }))
@@ -105,7 +123,10 @@ export async function holdRow(page, row) {
       center
     )
     const after = await bubble.boundingBox().catch(() => null)
-    throw new Error(`the actions did not open on hold; under the press: ${JSON.stringify(what)}; bubble before ${JSON.stringify(box)} after ${JSON.stringify(after)}`, { cause: error })
+    throw new Error(
+      `the actions did not open on hold; under the press: ${JSON.stringify(what)}; bubble before ${JSON.stringify(box)} after ${JSON.stringify(after)}; sheet open before the press: ${JSON.stringify(before)}; row: ${JSON.stringify(rowTabbable)}`,
+      { cause: error }
+    )
   } finally {
     await page.mouse.up()
   }
