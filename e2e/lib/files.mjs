@@ -50,6 +50,20 @@ export function makePng(name, { width = 96, height = 64, seed = 1 } = {}) {
   return file
 }
 
+// A small document of the given kind, written to disk. It has the signature the upload check reads (%PDF for a PDF, a ZIP container
+// for an Office file), so it is accepted; the chat only ever shows its name and size, so its body is never read.
+export function makeDocumentFile(name, kind) {
+  const body =
+    kind === "pdf"
+      ? Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n")
+      : Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(900, 0x20)])
+  const folder = path.join(OUT, "fixtures")
+  fs.mkdirSync(folder, { recursive: true })
+  const file = path.join(folder, name)
+  fs.writeFileSync(file, body)
+  return file
+}
+
 // A real JPEG that carries location-style EXIF text and a comment, written to disk. Made with the same image library the
 // app uses in its build scripts, so the file is a genuine photo with metadata, not a hand-built imitation.
 export async function makeExifJpeg(name, marker) {

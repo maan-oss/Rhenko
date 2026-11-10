@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { useEffect, useLayoutEffect, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from "react"
+import { createPortal } from "react-dom"
+import { AnimatePresence, motion, useDragControls, useMotionValue, useMotionValueEvent, useReducedMotion, useTransform, type MotionValue } from "motion/react"
 import Link from "@/components/app/link"
 import { SEND_RISE, SPRING_BUBBLE, SPRING_POP } from "@/components/app/motion"
 import { comeOut, hasFlight, launch, receive } from "@/components/app/send-flight"
-import { AlarmClock, AlarmClockOff, Check, Eye, EyeOff, Flag, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, SmilePlus, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
+import { AlarmClock, AlarmClockOff, Check, CheckCheck, Eye, EyeOff, Flag, Forward, Info, ListChecks, MoreHorizontal, Pin, PinOff, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pencil, Reply, Star, StarOff, Timer, TimerOff, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cancelMessageReminder, deleteMessage, editMessage, hideMessageForMe, loadEarlierMessages, openViewOnce, pinMessage, toggleReaction, toggleStarMessage } from "@/actions/messages"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -254,7 +255,6 @@ export function ChatThread({
       ) : null}
       {shown.map((message, index) => {
         const previous = shown[index - 1]
-        const next = shown[index + 1]
         return (
           <MessageRow
             key={message.id}
@@ -264,7 +264,6 @@ export function ChatThread({
             fresh={!openedWith.has(message.id) && !earlierIds.has(message.id)}
             // Messages from the same sender in quick succession stack into one run.
             joinsPrev={sameRun(previous, message)}
-            joinsNext={sameRun(message, next)}
             // In a group, name the sender once at the start of each run of their messages.
             showName={showNames && !message.mine && !sameRun(previous, message)}
             canPin={canPin}
@@ -316,10 +315,24 @@ function followLatest() {
 // A message being sent: it shows at once, until the saved copy arrives in the thread. The words leave the message box and
 // turn into this bubble as it lands (components/app/send-flight.ts), so it does not rise in place then. It stays at full
 // strength while it flies, so the saved bubble that replaces it looks exactly the same; with no flight, it is faded as before.
-// The status line under a bubble, outside it: the time, and on the last of your messages in a run whether it is delivered or
-// seen. Every message has one, so a message that joins a run moves nothing.
-const FOOT = "mt-0.5 flex h-3.5 items-center gap-1 px-1 whitespace-nowrap text-[11px] leading-none text-muted-foreground"
+// The shape every bubble shares. A message being sent uses the same shape, colour and line, so the bubble that replaces it does not
+// move.
+const BUBBLE_SHAPE = "relative flex max-w-full min-w-0 flex-col gap-2 rounded-[20px] text-[15px] leading-[1.4] break-words"
 
+// Where a message's time line sits inside its bubble: at the end of its last line of words, along the foot of a card, or over a
+// picture.
+type MetaPlace = "line" | "row" | "picture"
+
+function metaClass(place: MetaPlace): string {
+  return cn(
+    "inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none tabular-nums",
+    place === "line" && "float-right mt-[4px] ml-3 opacity-70",
+    place === "row" && "ml-auto px-1 pt-1 pb-0.5 opacity-70",
+    place === "picture" && "absolute right-2 bottom-2 rounded-full bg-black/55 px-2 py-[5px] text-white backdrop-blur-[2px]"
+  )
+}
+
+// A message being sent: its words, with "Sending…" where the time will be.
 function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string; body: string; joins: boolean }) {
   const [flies] = useState(() => hasFlight(id))
   const columnRef = useRef<HTMLDivElement>(null)
@@ -328,7 +341,7 @@ function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
     const column = columnRef.current
-    // The bubble and its line stay hidden while the words fly; the line comes out once the bubble has landed.
+    // The bubble stays hidden while the words fly; it comes out once it has landed.
     if (!flies || !bubble || !column) return
     launch(bubble, id, chatId, () => comeOut(statusRef.current), column)
   }, [flies, id, chatId])
@@ -340,16 +353,15 @@ function PendingBubble({ id, chatId, body, joins }: { id: string; chatId: string
       style={{ transformOrigin: "100% 100%" }}
       className={cn("flex flex-col items-end px-4", joins ? "pt-[3px]" : "pt-3")}
     >
-      {/* Built the same as the saved message (the bubble, then its line underneath), so the swap does not move it. */}
       <div ref={columnRef} className="flex max-w-[min(78%,30rem)] min-w-0 flex-col items-end">
-        <div ref={bubbleRef} className="flex max-w-full flex-col gap-2 whitespace-pre-wrap break-words rounded-[22px] bg-dusk px-3.5 py-2.5 text-[15px] leading-relaxed text-background">
-          <span data-flight-text className="block">
-            {body}
-          </span>
+        <div ref={bubbleRef} className={cn(BUBBLE_SHAPE, "bg-dusk px-3.5 py-2 text-background")}>
+          <p className="whitespace-pre-wrap">
+            <span data-flight-text>{body}</span>
+            <span ref={statusRef} aria-live="polite" className={metaClass("line")}>
+              Sending…
+            </span>
+          </p>
         </div>
-        <span ref={statusRef} aria-live="polite" className={FOOT}>
-          Sending…
-        </span>
       </div>
     </motion.div>
   )
@@ -542,6 +554,226 @@ function ViewOnceTile({ video, opened, pending, onOpen }: { video: boolean; open
   )
 }
 
+// The meta of a message: its marks, "Edited", the time, and for your messages the ticks (one when delivered, two when seen).
+function Meta({ message, place, refer }: { message: MessageView; place: MetaPlace; refer?: Ref<HTMLSpanElement> }) {
+  return (
+    <span ref={refer} className={metaClass(place)}>
+      {message.viewOnce ? (
+        <>
+          <Eye className="size-3" aria-hidden="true" />
+          <span className="sr-only">View once, </span>
+        </>
+      ) : null}
+      {message.starred ? (
+        <>
+          <Star className="size-3" aria-hidden="true" />
+          <span className="sr-only">Starred, </span>
+        </>
+      ) : null}
+      {message.pinned ? (
+        <>
+          <Pin className="size-3" aria-hidden="true" />
+          <span className="sr-only">Pinned, </span>
+        </>
+      ) : null}
+      {message.reminderAt !== null ? (
+        <>
+          <AlarmClock className="size-3" aria-hidden="true" />
+          <span className="sr-only">Reminder set, </span>
+        </>
+      ) : null}
+      {message.expiresAt !== null ? (
+        <>
+          <Timer className="size-3" aria-hidden="true" />
+          <span className="sr-only">Disappearing message, </span>
+        </>
+      ) : null}
+      {message.editedAt !== null ? <span>Edited</span> : null}
+      <LocalTime at={message.createdAt} variant="clock" />
+      {message.mine ? <Ticks seen={message.seen} /> : null}
+    </span>
+  )
+}
+
+// One tick is delivered; two ticks, in full ink, are seen.
+function Ticks({ seen }: { seen: boolean }) {
+  const Icon = seen ? CheckCheck : Check
+  return (
+    <span className={cn("inline-flex", !seen && "opacity-60")}>
+      <Icon className="size-[14px]" aria-hidden="true" />
+      <span className="sr-only">{seen ? "Seen" : "Delivered"}</span>
+    </span>
+  )
+}
+
+// Chat words fold after a long stretch: the opening words stop at a space, with "See more" right after them, and the time on that
+// same line.
+const FOLD_CHARS = 460
+const FOLD_LINES = 9
+
+// Where a long message folds, or null when it is short enough to show whole.
+function foldPoint(text: string): number | null {
+  let cut: number | null = null
+  if (text.length > FOLD_CHARS) {
+    const space = text.lastIndexOf(" ", FOLD_CHARS)
+    cut = space > FOLD_CHARS * 0.6 ? space : FOLD_CHARS
+  }
+  const lines = text.split("\n")
+  if (lines.length > FOLD_LINES) {
+    const at = lines.slice(0, FOLD_LINES).join("\n").length
+    cut = cut === null ? at : Math.min(cut, at)
+  }
+  return cut === null || cut >= text.length ? null : cut
+}
+
+// The words of a message, with its time at the end of the last line, as most chat apps set them.
+function ChatText({ text, meta }: { text: string; meta: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const cut = open ? null : foldPoint(text)
+  return (
+    <PostBody
+      text={cut === null ? text : text.slice(0, cut).trimEnd()}
+      fold={false}
+      className="text-[15px] leading-[1.4]"
+      after={
+        <>
+          {cut === null ? null : (
+            <>
+              {"… "}
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="rounded-sm font-semibold outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                See more
+              </button>
+            </>
+          )}
+          {meta}
+        </>
+      }
+    />
+  )
+}
+
+// How far a swipe must go before a release replies, and how far the bubble can be pulled.
+const REPLY_SWIPE = 56
+const SWIPE_MAX = 76
+// How long a hold lasts before it opens the actions for a message.
+const HOLD_MS = 420
+
+// The reply mark in the gap a swipe opens. It fills once a release will reply.
+function SwipeCue({ progress, armed, mine }: { progress: MotionValue<number>; armed: boolean; mine: boolean }) {
+  const scale = useTransform(progress, [0, 1], [0.6, 1])
+  return (
+    <motion.span
+      aria-hidden="true"
+      style={{ opacity: progress, scale }}
+      className={cn(
+        "pointer-events-none absolute top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full transition-colors duration-150",
+        armed ? "bg-foreground text-background" : "bg-muted text-foreground",
+        mine ? "right-2" : "left-2"
+      )}
+    >
+      <Reply className="size-4" />
+    </motion.span>
+  )
+}
+
+// The actions for a message, opened by a hold or a right click: the reactions spring in one after another, then Reply, the menu of
+// everything else, and Delete for your own messages. It sits above the message when there is room, and below it when there is not.
+function ActionSheet({
+  anchor,
+  mine,
+  canDelete,
+  onClose,
+  onReact,
+  onReply,
+  onDelete,
+  more,
+}: {
+  anchor: DOMRect
+  mine: boolean
+  canDelete: boolean
+  onClose: () => void
+  onReact: (emoji: string) => void
+  onReply: () => void
+  onDelete: () => void
+  more: ReactNode
+}) {
+  const above = anchor.top > 170
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose()
+    }
+    // Scrolling moves the message away from where the sheet is pinned, so the sheet closes with it.
+    window.addEventListener("keydown", onKey)
+    window.addEventListener("scroll", onClose, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("scroll", onClose, { capture: true })
+    }
+  }, [onClose])
+  const pill = "flex items-center gap-0.5 rounded-full bg-background p-1 shadow-[0_14px_36px_-12px_rgba(0,0,0,0.45)] ring-1 ring-black/[0.08]"
+  return createPortal(
+    <>
+      <div aria-hidden="true" onPointerDown={onClose} className="fixed inset-0 z-40" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={SPRING_POP}
+        style={{
+          top: above ? anchor.top - 10 : anchor.bottom + 10,
+          transformOrigin: `${mine ? "100%" : "0%"} ${above ? "100%" : "0%"}`,
+          ...(mine ? { right: Math.max(12, window.innerWidth - anchor.right) } : { left: Math.max(12, anchor.left) }),
+        }}
+        className={cn("fixed z-50 flex flex-col gap-2", above && "-translate-y-full", mine ? "items-end" : "items-start")}
+      >
+        <div role="group" aria-label="Choose a reaction" className={cn(pill, "gap-0.5 px-1.5")}>
+          {REACTIONS.map((emoji, index) => (
+            <motion.button
+              key={emoji}
+              type="button"
+              aria-label={`React with ${emoji}`}
+              initial={{ opacity: 0, scale: 0.3, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ ...SPRING_POP, delay: 0.03 + index * 0.04 }}
+              whileHover={{ scale: 1.2, y: -2 }}
+              whileTap={{ scale: 0.88 }}
+              onClick={() => onReact(emoji)}
+              className="grid size-10 place-items-center rounded-full text-[22px] leading-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {emoji}
+            </motion.button>
+          ))}
+        </div>
+        <motion.div initial={{ opacity: 0, y: mine ? 6 : -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: 0.12 }} className={pill}>
+          <button
+            type="button"
+            aria-label="Reply"
+            onClick={onReply}
+            className="grid size-10 place-items-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Reply className="size-[18px]" aria-hidden="true" />
+          </button>
+          {more}
+          {canDelete ? (
+            <button
+              type="button"
+              aria-label="Delete message"
+              onClick={onDelete}
+              className="grid size-10 place-items-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Trash2 className="size-[18px]" aria-hidden="true" />
+            </button>
+          ) : null}
+        </motion.div>
+      </motion.div>
+    </>,
+    document.body
+  )
+}
+
 function MessageRow({
   conversationId,
   message,
@@ -549,7 +781,6 @@ function MessageRow({
   fresh,
   showName,
   joinsPrev,
-  joinsNext,
   canPin,
   selecting,
   picked,
@@ -564,7 +795,6 @@ function MessageRow({
   fresh: boolean
   showName: boolean
   joinsPrev: boolean
-  joinsNext: boolean
   canPin: boolean
   // Whether the thread is picking messages for a bulk action, and whether this one is picked.
   selecting: boolean
@@ -574,10 +804,10 @@ function MessageRow({
   onReport: () => void
 }) {
   const photoWidth = useImageWidth(1280)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  // Hover does not exist on a phone, so a tap on the bubble shows its actions instead.
-  const [revealed, setRevealed] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  // The actions sheet, the spot it is pinned to, and the dialogs it opens.
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [anchor, setAnchor] = useState<DOMRect | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   // When the reminder dialog was opened, so its quick times are worked out from that moment. Null while it is closed.
@@ -590,14 +820,33 @@ function MessageRow({
   // A new bubble of yours may be where a flight from the composer lands (components/app/send-flight.ts). It is held until the
   // flight claims it, so a photo shows only once its picture is in place.
   const bubbleRef = useRef<HTMLDivElement>(null)
-  // The bubble and the line under it, held together until a flight lands; the line then comes out.
+  // The bubble and the reactions under it, held together until a flight lands.
   const columnRef = useRef<HTMLDivElement>(null)
-  const statusRef = useRef<HTMLSpanElement>(null)
+  const metaRef = useRef<HTMLSpanElement>(null)
+  // The hold timer, and where the pointer went down, so a move cancels the hold.
+  const holdTimer = useRef<number | null>(null)
+  const holdFrom = useRef<{ x: number; y: number } | null>(null)
+  // A swipe toward the reply side, and whether a release now would reply.
+  const swipe = useMotionValue(0)
+  const swipeControls = useDragControls()
+  const progress = useTransform(swipe, (value) => Math.min(1, Math.abs(value) / REPLY_SWIPE))
+  const [armed, setArmed] = useState(false)
+  useMotionValueEvent(swipe, "change", (value) => setArmed(Math.abs(value) >= REPLY_SWIPE))
+  useEffect(() => {
+    if (armed) navigator.vibrate?.(8)
+  }, [armed])
+
+  function cancelHold() {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current)
+    holdTimer.current = null
+  }
+  useEffect(() => cancelHold, [])
+
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
     const column = columnRef.current
     if (message.mine && fresh && bubble && column) {
-      receive(conversationId, bubble, bubble.querySelector<HTMLElement>("[data-flight-picture]"), column, () => comeOut(statusRef.current))
+      receive(conversationId, bubble, bubble.querySelector<HTMLElement>("[data-flight-picture]"), column, () => comeOut(metaRef.current))
     }
     // Only the message as it arrived; later renders of the same row are not new arrivals.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -629,14 +878,51 @@ function MessageRow({
   // A view-once file, sealed or plain, is hidden until the viewer opens it.
   const viewOnceHidden = (message.mediaFile !== null || message.sealedAttachment?.kind === "media") && message.viewOnce && !message.mine && !viewed
 
-  function toggleOnTouch() {
-    if (selecting || message.deleted || editing) return
-    if (window.matchMedia("(pointer: coarse)").matches) setRevealed((open) => !open)
+  // The gestures: a finger or pen swipes the bubble toward its reply side, and a hold (or a right click) opens the actions. A mouse
+  // drag selects text as it always does, so a mouse holds instead of swiping.
+  const gestures = !selecting && !message.deleted && !editing
+
+  function openSheet() {
+    setAnchor(bubbleRef.current?.getBoundingClientRect() ?? null)
+    setSheetOpen(true)
+  }
+
+  function onPressStart(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!gestures) return
+    if (event.pointerType !== "mouse") swipeControls.start(event)
+    holdFrom.current = { x: event.clientX, y: event.clientY }
+    cancelHold()
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null
+      navigator.vibrate?.(12)
+      openSheet()
+    }, HOLD_MS)
+  }
+
+  function onPressMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const from = holdFrom.current
+    if (from && Math.hypot(event.clientX - from.x, event.clientY - from.y) > 8) cancelHold()
+  }
+
+  function onContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!gestures) return
+    event.preventDefault()
+    cancelHold()
+    openSheet()
+  }
+
+  // The keyboard reaches the same actions: Enter, Space, the Menu key or Shift+F10 on the bubble itself.
+  function onBubbleKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!gestures || event.target !== event.currentTarget) return
+    if (event.key === "Enter" || event.key === " " || event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+      event.preventDefault()
+      openSheet()
+    }
   }
 
   // Hands the message to the composer, which shows who is being answered and takes the focus.
   function startReply() {
-    setRevealed(false)
+    setSheetOpen(false)
     window.dispatchEvent(
       new CustomEvent("rhenko:reply-to", {
         detail: { conversationId, id: message.id, name: message.mine ? "yourself" : message.senderName, snippet: previewOf(message) },
@@ -645,7 +931,7 @@ function MessageRow({
   }
 
   function react(emoji: string) {
-    setPickerOpen(false)
+    setSheetOpen(false)
     startTransition(async () => {
       const result = await toggleReaction(message.id, emoji)
       if (!result.ok) toast.error(result.error)
@@ -654,7 +940,6 @@ function MessageRow({
 
   // Stars or unstars the message for this viewer alone.
   function toggleStar() {
-    setRevealed(false)
     startTransition(async () => {
       const result = await toggleStarMessage(message.id)
       if (result.ok) {
@@ -668,7 +953,6 @@ function MessageRow({
 
   // Pins the message for everyone in the chat, or unpins it.
   function togglePin() {
-    setRevealed(false)
     startTransition(async () => {
       const result = await pinMessage(message.id, !message.pinned)
       if (!result.ok) toast.error(result.error)
@@ -677,7 +961,6 @@ function MessageRow({
   }
 
   function clearReminder() {
-    setRevealed(false)
     startTransition(async () => {
       const result = await cancelMessageReminder(message.id)
       if (!result.ok) toast.error(result.error)
@@ -686,7 +969,6 @@ function MessageRow({
   }
 
   function startEdit() {
-    setRevealed(false)
     setDraft(message.body)
     setEditing(true)
   }
@@ -724,7 +1006,6 @@ function MessageRow({
 
   // Removes the message from this viewer's own view. It stays for everyone else in the chat.
   function deleteForMe() {
-    setRevealed(false)
     startTransition(async () => {
       const result = await hideMessageForMe(message.id)
       if (result.ok) onChange({ hidden: true })
@@ -735,34 +1016,105 @@ function MessageRow({
   if (message.call) return <CallEvent message={message} />
   if (message.timerChange !== null) return <TimerEvent message={message} />
 
-  // The marks a message carries. They sit on its time line, or on a line of their own when it is in the middle of a run.
-  const marks = (
-    <>
-      {message.viewOnce ? (
-        <>
-          <Eye className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-          <span className="sr-only">View once, </span>
-        </>
-      ) : null}
-      {message.starred ? (
-        <>
-          <Star className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-          <span className="sr-only">Starred, </span>
-        </>
-      ) : null}
-      {message.pinned ? (
-        <>
-          <Pin className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-          <span className="sr-only">Pinned, </span>
-        </>
-      ) : null}
-      {message.reminderAt !== null ? (
-        <>
-          <AlarmClock className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-          <span className="sr-only">Reminder set, </span>
-        </>
-      ) : null}
-    </>
+  // What the bubble holds decides where its time line sits and how much room it leaves around the content.
+  const file = message.mediaFile
+  const isPicture = file !== null && !isVoiceFile(file) && !isAudioFile(file) && !isVideoFile(file) && !isDocumentFile(file)
+  const onPicture =
+    isPicture &&
+    !viewOnceHidden &&
+    !editing &&
+    !message.body &&
+    !message.replyTo &&
+    !message.forwarded &&
+    !message.link &&
+    !message.poll &&
+    !message.post &&
+    !message.postUnavailable
+  const onText = !editing && Boolean(message.body)
+  // A photo with words under it keeps the thin frame of a bare photo; the words get their own room inside it.
+  const captioned = isPicture && !viewOnceHidden && onText
+  const framed = onPicture || captioned
+  const rowMeta = !message.deleted && !editing && !onText && !onPicture
+  const compact = rowMeta && (file !== null || message.attachment !== null || message.sealedAttachment !== null || message.post !== null) && !message.poll
+  const bubblePadding = framed ? "p-[3px]" : compact ? "p-1.5" : "px-3.5 py-2"
+  const bubbleTone = message.mine
+    ? "bg-dusk text-background [&_a:not([data-embed])]:text-background [&_a:not([data-embed])]:underline"
+    : "bg-muted text-foreground"
+
+  const moreMenu = (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) setEditable(judgeEditable())
+        else setSheetOpen(false)
+      }}
+    >
+      <DropdownMenuTrigger
+        aria-label="More message options"
+        className="grid size-10 place-items-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <MoreHorizontal className="size-[18px]" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={message.mine ? "end" : "start"} className="min-w-44">
+        {editable ? (
+          <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={startEdit}>
+            <Pencil className="size-4" aria-hidden="true" />
+            Edit
+          </DropdownMenuItem>
+        ) : null}
+        {message.viewOnce ? null : (
+          <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={toggleStar}>
+            {message.starred ? <StarOff className="size-4" aria-hidden="true" /> : <Star className="size-4" aria-hidden="true" />}
+            {message.starred ? "Unstar" : "Star"}
+          </DropdownMenuItem>
+        )}
+        {message.viewOnce ? null : (
+          <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setForwardOpen(true)}>
+            <Forward className="size-4" aria-hidden="true" />
+            Forward
+          </DropdownMenuItem>
+        )}
+        {canPin && !message.deleted && message.call === null && message.timerChange === null && !message.viewOnce ? (
+          <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={togglePin}>
+            {message.pinned ? <PinOff className="size-4" aria-hidden="true" /> : <Pin className="size-4" aria-hidden="true" />}
+            {message.pinned ? "Unpin" : "Pin"}
+          </DropdownMenuItem>
+        ) : null}
+        {!message.deleted && message.call === null && message.timerChange === null ? (
+          <>
+            <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setReminderOpenedAt(Date.now())}>
+              <AlarmClock className="size-4" aria-hidden="true" />
+              {message.reminderAt !== null ? "Change reminder" : "Remind me"}
+            </DropdownMenuItem>
+            {message.reminderAt !== null ? (
+              <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={clearReminder}>
+                <AlarmClockOff className="size-4" aria-hidden="true" />
+                Cancel reminder
+              </DropdownMenuItem>
+            ) : null}
+          </>
+        ) : null}
+        <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={onSelectStart}>
+          <ListChecks className="size-4" aria-hidden="true" />
+          Select
+        </DropdownMenuItem>
+        {message.mine && !message.call && message.timerChange === null ? (
+          <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setInfoOpen(true)}>
+            <Info className="size-4" aria-hidden="true" />
+            Message info
+          </DropdownMenuItem>
+        ) : null}
+        {!message.mine && !message.deleted && message.call === null && message.timerChange === null ? (
+          <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={onReport}>
+            <Flag className="size-4" aria-hidden="true" />
+            Report
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={deleteForMe}>
+          <EyeOff className="size-4" aria-hidden="true" />
+          Delete for me
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 
   return (
@@ -778,8 +1130,8 @@ function MessageRow({
         selecting && picked && "bg-dusk/10"
       )}
     >
-      {showName ? <span className="text-xs text-muted-foreground">{message.senderName}</span> : null}
-      <div className={cn("flex items-end gap-2", message.mine && "flex-row-reverse")}>
+      {showName ? <span className="px-1 text-xs text-muted-foreground">{message.senderName}</span> : null}
+      <div className={cn("relative flex items-end gap-2", message.mine && "flex-row-reverse")}>
         {selecting ? (
           <button
             type="button"
@@ -797,299 +1149,207 @@ function MessageRow({
             {picked ? <Check className="size-3.5" aria-hidden="true" /> : null}
           </button>
         ) : null}
+        {gestures ? <SwipeCue progress={progress} armed={armed} mine={message.mine} /> : null}
         <div ref={columnRef} className={cn("flex min-w-0 max-w-[min(78%,30rem)] flex-col", message.mine ? "items-end" : "items-start")}>
           <motion.div
-            ref={bubbleRef}
-            onClick={toggleOnTouch}
-            // A message of theirs rises in as it arrives, growing out of its own corner, with the spring of Parley's bubbles. Yours
-            // comes in on its flight from the composer, or not at all, so the text does not rise a second time after it lands.
-            initial={fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={SPRING_BUBBLE}
-            style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
-            className={cn(
-              "flex max-w-full flex-col gap-2 rounded-[22px] px-3.5 py-2.5 text-[15px] leading-relaxed",
-              selecting && "pointer-events-none",
-              // Every bubble has the same shape. A run of messages is told apart by the space around it, not by the corners.
-              // Text links take the bubble's colour. The shared-post card is a link too, but it sits on its own surface, so it is skipped.
-              message.mine ? "bg-dusk text-background [&_a:not([data-embed])]:text-background [&_a:not([data-embed])]:underline" : "bg-muted",
-              message.deleted && "italic opacity-70"
-            )}
+            drag={gestures ? "x" : false}
+            dragControls={swipeControls}
+            dragListener={false}
+            dragDirectionLock
+            dragSnapToOrigin
+            dragElastic={0.12}
+            dragConstraints={message.mine ? { left: -SWIPE_MAX, right: 0 } : { left: 0, right: SWIPE_MAX }}
+            onDragStart={cancelHold}
+            onDragEnd={(_event, info) => {
+              if (Math.abs(info.offset.x) >= REPLY_SWIPE) startReply()
+            }}
+            style={{ x: swipe, zIndex: sheetOpen ? 50 : undefined }}
+            className="relative flex max-w-full min-w-0 touch-pan-y flex-col"
           >
-            {message.deleted ? (
-              <span>This message was deleted.</span>
-            ) : (
-              <>
-                {message.forwarded ? (
-                  <p className="flex items-center gap-1 text-xs italic opacity-80">
-                    <Forward className="size-3" aria-hidden="true" />
-                    Forwarded
-                  </p>
-                ) : null}
-                {message.replyTo ? (
-                  <button
-                    type="button"
-                    onClick={() => jumpTo(message.replyTo?.id ?? "")}
-                    className={cn(
-                      "block w-full rounded-xl border-l-2 px-2.5 py-1.5 text-left text-[13px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      message.mine ? "border-background/70 bg-background/15 text-background" : "border-foreground/40 bg-background text-foreground"
-                    )}
-                  >
-                    <span className="block truncate font-semibold">{message.replyTo.senderName}</span>
-                    <span className={cn("block truncate", message.mine ? "text-background/80" : "text-muted-foreground")}>
-                      {message.replyTo.deleted ? "This message was deleted." : message.replyTo.snippet}
-                    </span>
-                  </button>
-                ) : null}
-                {viewOnceHidden ? (
-                  <ViewOnceTile video={isVideoFile(message.mediaFile ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
-                ) : message.sealedAttachment?.kind === "media" ? (
-                  <SealedAttachment
-                    conversationId={conversationId}
-                    messageId={message.id}
-                    media={message.sealedAttachment.media}
-                    mine={message.mine}
-                    onLoad={message.mine && fresh ? followLatest : undefined}
-                  />
-                ) : message.mediaFile && isVoiceFile(message.mediaFile) ? (
-                  <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
-                ) : message.mediaFile && isVideoFile(message.mediaFile) ? (
-                  <div className="w-full max-w-[300px] overflow-hidden rounded-xl">
-                    <VideoPlayer src={`/media/${message.mediaFile}`} label="Shared video" maxHeight="320px" />
-                  </div>
-                ) : message.mediaFile && isAudioFile(message.mediaFile) ? (
-                  <audio controls preload="metadata" src={`/media/${message.mediaFile}`} aria-label="Audio file" className="block h-10 w-[260px] max-w-full" />
-                ) : message.mediaFile && isDocumentFile(message.mediaFile) ? (
-                  <DocumentCard
-                    file={message.mediaFile}
-                    name={message.attachment?.kind === "document" ? message.attachment.name : "File"}
-                    size={message.attachment?.kind === "document" ? message.attachment.size : 0}
-                    mine={message.mine}
-                  />
-                ) : message.mediaFile ? (
-                  <span className="relative block w-fit max-w-full">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/media/${message.mediaFile}?w=${photoWidth}`} alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"} data-flight-picture loading={message.mine && fresh ? "eager" : "lazy"} onLoad={message.mine && fresh ? followLatest : undefined} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
-                    {message.attachment?.kind === "scan" ? (
-                      <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
-                    ) : null}
-                  </span>
-                ) : null}
-                {message.attachment?.kind === "contact" ? <ContactCard user={message.contact} mine={message.mine} /> : null}
-                {message.sealedAttachment?.kind === "contact" ? <ContactCard user={message.sealedAttachment.user} mine={message.mine} /> : null}
-                {message.sealedAttachment?.kind === "location" ? (
-                  <LocationCard lat={message.sealedAttachment.lat} lng={message.sealedAttachment.lng} mine={message.mine} />
-                ) : null}
-                {message.attachment?.kind === "location" ? (
-                  <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} mine={message.mine} />
-                ) : null}
-                {editing ? (
-                  <EditBox value={draft} onChange={setDraft} onSave={saveEdit} onCancel={() => setEditing(false)} pending={pending} />
-                ) : message.body ? (
-                  <>
-                    <PostBody text={message.body} className="text-[15px]" />
-                    {/* Empty unless a translate control shows, so it adds no space (and no gap) under the words. A sealed message is
-                        never translated: translating sends its words to the translation service, and the server must not see them. */}
-                    <div className="relative z-10 empty:hidden">
-                      {message.sealed ? null : <TranslateControl kind="message" id={message.id} lang={message.lang} />}
-                    </div>
-                  </>
-                ) : null}
-                {message.link ? <LinkCard preview={message.link} className="mt-0 w-72" /> : null}
-                {message.poll ? <ChatPollView messageId={message.id} poll={message.poll} /> : null}
-                {message.post ? (
-                  <Link
-                    href={`/${message.post.author.handle}/status/${message.post.id}`}
-                    data-embed=""
-                    className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
-                  >
-                    <span className="text-sm font-semibold">{message.post.author.name}</span>
-                    {message.post.body ? <span className="mt-1 line-clamp-3 text-sm">{message.post.body}</span> : null}
-                  </Link>
-                ) : null}
-                {message.postUnavailable ? (
-                  <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                    This post is unavailable.
-                  </p>
-                ) : null}
-                {message.editedAt !== null ? <span className="-mt-1 self-end text-xs leading-none opacity-70">Edited</span> : null}
-              </>
-            )}
-          </motion.div>
-          {/* The status line, under the bubble: the time on every message, and on the last of your messages in a run whether it is
-              delivered or seen. Every message keeps its line, so one that joins a run does not move the rest of the thread. */}
-          {message.deleted ? null : (
-            <motion.span
-              ref={statusRef}
-              // A message of theirs that rises in brings its time with it, a beat after the bubble starts.
-              initial={fresh && !message.mine ? { opacity: 0 } : false}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.22, delay: 0.1, ease: "easeOut" }}
-              className={FOOT}
-            >
-              {marks}
-              {message.expiresAt !== null ? (
-                <>
-                  <Timer className="mr-1 inline size-3 align-[-2px]" aria-hidden="true" />
-                  <span className="sr-only">Disappearing message, </span>
-                </>
-              ) : null}
-              <LocalTime at={message.createdAt} variant="clock" />
-              {message.mine && !joinsNext ? (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>{message.seen ? "Seen" : "Delivered"}</span>
-                </>
-              ) : null}
-            </motion.span>
-          )}
-        </div>
-
-        {!message.deleted && !selecting ? (
-          <div className={cn("flex items-center gap-0.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100", (pickerOpen || revealed || menuOpen) && "opacity-100")}>
-            <button type="button" aria-label="Reply" title="Reply" onClick={startReply} className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
-              <Reply className="size-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="React"
-              aria-expanded={pickerOpen}
-              onClick={() => setPickerOpen((open) => !open)}
-              className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted"
-            >
-              <SmilePlus className="size-4" />
-            </button>
-            {message.mine ? (
-              <ConfirmDialog
-                trigger={
-                  <button type="button" aria-label="Delete message" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
-                    <Trash2 className="size-4" />
-                  </button>
-                }
-                title="Delete this message?"
-                description="It's removed for everyone in the conversation."
-                confirmLabel="Delete"
-                action={() => deleteMessage(message.id)}
-              />
-            ) : null}
-            <DropdownMenu
-              onOpenChange={(open) => {
-                setMenuOpen(open)
-                if (open) setEditable(judgeEditable())
-              }}
-            >
-              <DropdownMenuTrigger aria-label="More message options" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted">
-                <MoreHorizontal className="size-4" aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align={message.mine ? "end" : "start"} className="min-w-44">
-                {editable ? (
-                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={startEdit}>
-                    <Pencil className="size-4" aria-hidden="true" />
-                    Edit
-                  </DropdownMenuItem>
-                ) : null}
-                {message.viewOnce ? null : (
-                  <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={toggleStar}>
-                    {message.starred ? <StarOff className="size-4" aria-hidden="true" /> : <Star className="size-4" aria-hidden="true" />}
-                    {message.starred ? "Unstar" : "Star"}
-                  </DropdownMenuItem>
-                )}
-                {message.viewOnce ? null : (
-                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setForwardOpen(true)}>
-                    <Forward className="size-4" aria-hidden="true" />
-                    Forward
-                  </DropdownMenuItem>
-                )}
-                {canPin && !message.deleted && message.call === null && message.timerChange === null && !message.viewOnce ? (
-                  <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={togglePin}>
-                    {message.pinned ? <PinOff className="size-4" aria-hidden="true" /> : <Pin className="size-4" aria-hidden="true" />}
-                    {message.pinned ? "Unpin" : "Pin"}
-                  </DropdownMenuItem>
-                ) : null}
-                {!message.deleted && message.call === null && message.timerChange === null ? (
-                  <>
-                    <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setReminderOpenedAt(Date.now())}>
-                      <AlarmClock className="size-4" aria-hidden="true" />
-                      {message.reminderAt !== null ? "Change reminder" : "Remind me"}
-                    </DropdownMenuItem>
-                    {message.reminderAt !== null ? (
-                      <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={clearReminder}>
-                        <AlarmClockOff className="size-4" aria-hidden="true" />
-                        Cancel reminder
-                      </DropdownMenuItem>
-                    ) : null}
-                  </>
-                ) : null}
-                <DropdownMenuItem
-                  className={MENU_ITEM_PHONE}
-                  onClick={() => {
-                    setRevealed(false)
-                    onSelectStart()
-                  }}
-                >
-                  <ListChecks className="size-4" aria-hidden="true" />
-                  Select
-                </DropdownMenuItem>
-                {message.mine && !message.call && message.timerChange === null ? (
-                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={() => setInfoOpen(true)}>
-                    <Info className="size-4" aria-hidden="true" />
-                    Message info
-                  </DropdownMenuItem>
-                ) : null}
-                {!message.mine && !message.deleted && message.call === null && message.timerChange === null ? (
-                  <DropdownMenuItem className={MENU_ITEM_PHONE} onClick={onReport}>
-                    <Flag className="size-4" aria-hidden="true" />
-                    Report
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem className={MENU_ITEM_PHONE} disabled={pending} onClick={deleteForMe}>
-                  <EyeOff className="size-4" aria-hidden="true" />
-                  Delete for me
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : null}
-      </div>
-
-      {pickerOpen ? (
-        <div role="group" aria-label="Choose a reaction" className="flex gap-1 rounded-full border border-border bg-background px-1.5 py-1">
-          {REACTIONS.map((emoji) => (
-            <button key={emoji} type="button" onClick={() => react(emoji)} className="grid size-8 place-items-center rounded-full text-lg hover:bg-muted">
-              {emoji}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {message.reactions.length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.55 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={SPRING_POP}
-          style={{ transformOrigin: message.mine ? "100% 0%" : "0% 0%" }}
-          className={cn("flex flex-wrap gap-1", selecting && "pointer-events-none")}
-        >
-          {message.reactions.map((reaction) => (
-            <button
-              key={reaction.emoji}
-              type="button"
-              disabled={pending}
-              aria-pressed={reaction.mine}
-              aria-label={`${reaction.emoji} ${reaction.count}${reaction.mine ? ", yours" : ""}`}
-              onClick={() => react(reaction.emoji)}
+            <motion.div
+              ref={bubbleRef}
+              tabIndex={gestures ? 0 : undefined}
+              onPointerDown={onPressStart}
+              onPointerMove={onPressMove}
+              onPointerUp={cancelHold}
+              onPointerCancel={cancelHold}
+              onPointerLeave={cancelHold}
+              onContextMenu={onContextMenu}
+              onKeyDown={onBubbleKey}
+              // A message of theirs rises in as it arrives, growing out of its own corner, with the spring of Parley's bubbles. Yours
+              // comes in on its flight from the composer, or not at all, so the text does not rise a second time after it lands.
+              initial={fresh && !message.mine ? { opacity: 0, y: 10, scale: 0.86 } : false}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={SPRING_BUBBLE}
+              style={{ transformOrigin: message.mine ? "100% 100%" : "0% 100%" }}
               className={cn(
-                "flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm tabular-nums",
-                reaction.mine ? "border-dusk bg-dusk/10" : "border-border"
+                BUBBLE_SHAPE,
+                bubblePadding,
+                bubbleTone,
+                "[-webkit-touch-callout:none]",
+                selecting && "pointer-events-none",
+                message.deleted && "italic opacity-70"
               )}
             >
-              <span>{reaction.emoji}</span>
-              <span>{reaction.count}</span>
-            </button>
-          ))}
-        </motion.div>
-      ) : null}
+              {message.deleted ? (
+                <span>This message was deleted.</span>
+              ) : (
+                <>
+                  {message.forwarded ? (
+                    <p className="flex items-center gap-1 text-xs italic opacity-80">
+                      <Forward className="size-3" aria-hidden="true" />
+                      Forwarded
+                    </p>
+                  ) : null}
+                  {message.replyTo ? (
+                    <button
+                      type="button"
+                      onClick={() => jumpTo(message.replyTo?.id ?? "")}
+                      className={cn(
+                        "block w-full rounded-xl border-l-2 px-2.5 py-1.5 text-left text-[13px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        message.mine ? "border-background/70 bg-background/15 text-background" : "border-foreground/40 bg-background text-foreground"
+                      )}
+                    >
+                      <span className="block truncate font-semibold">{message.replyTo.senderName}</span>
+                      <span className={cn("block truncate", message.mine ? "text-background/80" : "text-muted-foreground")}>
+                        {message.replyTo.deleted ? "This message was deleted." : message.replyTo.snippet}
+                      </span>
+                    </button>
+                  ) : null}
+                  {viewOnceHidden ? (
+                    <ViewOnceTile video={isVideoFile(file ?? "")} opened={message.viewOpened} pending={pending} onOpen={openOnce} />
+                  ) : message.sealedAttachment?.kind === "media" ? (
+                    <SealedAttachment
+                      conversationId={conversationId}
+                      messageId={message.id}
+                      media={message.sealedAttachment.media}
+                      onLoad={message.mine && fresh ? followLatest : undefined}
+                    />
+                  ) : file && isVoiceFile(file) ? (
+                    <audio controls preload="metadata" src={`/media/${file}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />
+                  ) : file && isVideoFile(file) ? (
+                    <div className="w-full max-w-[300px] overflow-hidden rounded-xl">
+                      <VideoPlayer src={`/media/${file}`} label="Shared video" maxHeight="320px" />
+                    </div>
+                  ) : file && isAudioFile(file) ? (
+                    <audio controls preload="metadata" src={`/media/${file}`} aria-label="Audio file" className="block h-10 w-[260px] max-w-full" />
+                  ) : file && isDocumentFile(file) ? (
+                    <DocumentCard
+                      file={file}
+                      name={message.attachment?.kind === "document" ? message.attachment.name : "File"}
+                      size={message.attachment?.kind === "document" ? message.attachment.size : 0}
+                    />
+                  ) : file ? (
+                    <span className={cn("relative block w-fit max-w-full overflow-hidden", framed ? "rounded-[17px]" : "rounded-[14px]")}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/media/${file}?w=${photoWidth}`}
+                        alt={message.attachment?.kind === "scan" ? "Scan" : "Shared photo"}
+                        data-flight-picture
+                        loading={message.mine && fresh ? "eager" : "lazy"}
+                        onLoad={message.mine && fresh ? followLatest : undefined}
+                        decoding="async"
+                        className={cn("max-h-72 max-w-full object-cover", framed ? "rounded-[17px]" : "rounded-[14px] ring-1 ring-black/[0.06]")}
+                      />
+                      {message.attachment?.kind === "scan" ? (
+                        <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>
+                      ) : null}
+                      {onPicture ? <Meta message={message} place="picture" refer={metaRef} /> : null}
+                    </span>
+                  ) : null}
+                  {message.attachment?.kind === "contact" ? <ContactCard user={message.contact} /> : null}
+                  {message.sealedAttachment?.kind === "contact" ? <ContactCard user={message.sealedAttachment.user} /> : null}
+                  {message.sealedAttachment?.kind === "location" ? (
+                    <LocationCard lat={message.sealedAttachment.lat} lng={message.sealedAttachment.lng} />
+                  ) : null}
+                  {message.attachment?.kind === "location" ? <LocationCard lat={message.attachment.lat} lng={message.attachment.lng} /> : null}
+                  {editing ? (
+                    <EditBox value={draft} onChange={setDraft} onSave={saveEdit} onCancel={() => setEditing(false)} pending={pending} />
+                  ) : message.body ? (
+                    <div className={cn(captioned && "px-2 pt-1 pb-1")}>
+                      <ChatText text={message.body} meta={<Meta message={message} place="line" refer={metaRef} />} />
+                      {/* Empty unless a translate control shows, so it adds no space under the words. A sealed message is never
+                          translated: translating sends its words to the translation service, and the server must not see them. */}
+                      <div className="relative z-10 empty:hidden">
+                        {message.sealed ? null : <TranslateControl kind="message" id={message.id} lang={message.lang} />}
+                      </div>
+                    </div>
+                  ) : null}
+                  {message.link ? <LinkCard preview={message.link} className="mt-0 w-72" /> : null}
+                  {message.poll ? <ChatPollView messageId={message.id} poll={message.poll} /> : null}
+                  {message.post ? (
+                    <Link
+                      href={`/${message.post.author.handle}/status/${message.post.id}`}
+                      data-embed=""
+                      className="block rounded-xl border border-border bg-background p-3 text-foreground no-underline"
+                    >
+                      <span className="text-sm font-semibold">{message.post.author.name}</span>
+                      {message.post.body ? <span className="mt-1 line-clamp-3 text-sm">{message.post.body}</span> : null}
+                    </Link>
+                  ) : null}
+                  {message.postUnavailable ? (
+                    <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                      This post is unavailable.
+                    </p>
+                  ) : null}
+                  {rowMeta ? <Meta message={message} place="row" refer={metaRef} /> : null}
+                </>
+              )}
+            </motion.div>
+          </motion.div>
 
+          {message.reactions.length > 0 ? (
+            <div className={cn("mt-1 flex flex-wrap gap-1", message.mine ? "justify-end" : "justify-start", selecting && "pointer-events-none")}>
+              {message.reactions.map((reaction, index) => (
+                <motion.button
+                  key={reaction.emoji}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={reaction.mine}
+                  aria-label={`${reaction.emoji} ${reaction.count}${reaction.mine ? ", yours" : ""}`}
+                  onClick={() => react(reaction.emoji)}
+                  initial={{ opacity: 0, scale: 0.4, y: -6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ ...SPRING_POP, delay: index * 0.05 }}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[13px] tabular-nums shadow-[0_2px_6px_-2px_rgba(0,0,0,0.2)]",
+                    reaction.mine ? "border-dusk bg-dusk/10" : "border-border bg-background"
+                  )}
+                >
+                  <span className="text-[15px] leading-none">{reaction.emoji}</span>
+                  <span className="font-medium">{reaction.count}</span>
+                </motion.button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {gestures && sheetOpen && anchor ? (
+        <ActionSheet
+          anchor={anchor}
+          mine={message.mine}
+          canDelete={message.mine}
+          onClose={() => setSheetOpen(false)}
+          onReact={react}
+          onReply={startReply}
+          onDelete={() => {
+            setSheetOpen(false)
+            setDeleteOpen(true)
+          }}
+          more={moreMenu}
+        />
+      ) : null}
+      {message.mine ? (
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="Delete this message?"
+          description="It's removed for everyone in the conversation."
+          confirmLabel="Delete"
+          action={() => deleteMessage(message.id)}
+        />
+      ) : null}
       {forwardOpen ? (
         <ForwardDialog
           messageId={message.id}

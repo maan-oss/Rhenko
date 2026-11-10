@@ -3,13 +3,14 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
-import { OUT, RUN_ID, TIMEOUT, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
+import { BASE, OUT, RUN_ID, TIMEOUT, escapeRegExp, randomWord, sleep } from "./lib/env.mjs"
 import { createUser } from "./lib/accounts.mjs"
 import {
   chatBox,
   waitForConversation,
   closeGroupInfo,
   createGroupChat,
+  holdMessage,
   messageRow,
   openChat,
   openGroupInfo,
@@ -18,7 +19,7 @@ import {
   sendChat,
   threadText,
 } from "./lib/chat.mjs"
-import { makePng } from "./lib/files.mjs"
+import { makeDocumentFile, makePng } from "./lib/files.mjs"
 import { query } from "./lib/db.mjs"
 import { allowNoise } from "./lib/watch.mjs"
 import { expectBanner, idleOnSettings } from "./lib/live.mjs"
@@ -95,6 +96,169 @@ async function waitForMuteLabel(page, label) {
   await muteRow(page, label).waitFor({ state: "detached" })
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// How a message is laid out: its time and read state inside the bubble, a long message folded with "See more", a photo in a
+// thin frame with its time on the picture, documents and a place as cards, the actions a hold opens, and a swipe to reply.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// The clock a message shows ("3:45 PM") alone in its element. The space before AM or PM may be a narrow no-break space.
+const CLOCK = /^\d{1,2}:\d{2}\s[AP]M$/
+
+// Whether a box lies inside another one, to the half pixel.
+function insideBox(inner, outer) {
+  return (
+    inner.x >= outer.x - 0.5 &&
+    inner.y >= outer.y - 0.5 &&
+    inner.x + inner.width <= outer.x + outer.width + 0.5 &&
+    inner.y + inner.height <= outer.y + outer.height + 0.5
+  )
+}
+
+// Where an element is on screen. It is brought into view first, and must have a place to be measured.
+async function boxOf(locator) {
+  await locator.waitFor()
+  await locator.scrollIntoViewIfNeeded()
+  const box = await locator.boundingBox()
+  if (!box) throw new Error("the element has no place on screen")
+  return box
+}
+
+// The bubble of a message: the first element in its row that takes focus.
+function bubbleOf(page, text) {
+  return messageRow(page, text).locator('[tabindex="0"]').first()
+}
+
+// The bubble around an element: its nearest ancestor that takes focus.
+function bubbleAround(locator) {
+  return locator.locator("xpath=ancestor-or-self::*[@tabindex='0'][1]")
+}
+
+// A finger drag along a row on a phone: the finger goes down at `from`, moves `dx` pixels sideways and lifts. The browser's own
+// touch events are sent, so the page reads a finger rather than a mouse.
+async function fingerDrag(page, from, dx) {
+  const session = await page.context().newCDPSession(page)
+  try {
+    const at = (x) => [{ x, y: from.y }]
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(from.x) })
+    const steps = 12
+    for (let i = 1; i <= steps; i++) {
+      await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(from.x + (dx * i) / steps) })
+      await sleep(16)
+    }
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
+  } finally {
+    await session.detach()
+  }
+}
+
+// Swipes a message's bubble sideways: a swipe far enough starts a reply, which the composer names.
+async function swipeToReply(page, text, dx) {
+  const box = await boxOf(bubbleOf(page, text))
+  await fingerDrag(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, dx)
+}
+
+async function bubbleLookChecks({ where, phone, sender, receiver }) {
+  const short = uniq("Short line")
+
+  await check(`${where}: a message's time sits inside its bubble, and a message you sent shows Seen there`, async () => {
+    await sendChat(sender.page, short)
+    await threadText(receiver.page, short).waitFor()
+    for (const person of [sender, receiver]) {
+      const bubble = await boxOf(bubbleOf(person.page, short))
+      const time = await boxOf(bubbleOf(person.page, short).locator("span").filter({ hasText: CLOCK }).first())
+      assert.ok(insideBox(time, bubble), `${person.name}: the time of a message sits outside its bubble`)
+    }
+    await bubbleOf(sender.page, short).getByText("Seen", { exact: true }).waitFor({ state: "attached" })
+  })
+
+  await check(`${where}: a long message folds with See more, and its time sits on the right of See more`, async () => {
+    const label = uniq("Long message")
+    const tail = uniq("The end of the long message")
+    const body = `${label} ${"This sentence keeps going so the message is long enough to fold in the thread. ".repeat(9)}${tail}`
+    await ready(chatBox(sender.page))
+    await chatBox(sender.page).fill(body)
+    await acted(sender.page, () => chatBox(sender.page).press("Enter"))
+    await threadText(receiver.page, label).waitFor()
+    const row = bubbleOf(receiver.page, label)
+    const more = await boxOf(row.getByRole("button", { name: "See more", exact: true }))
+    const time = await boxOf(row.locator("span").filter({ hasText: CLOCK }).first())
+    assert.ok(time.x > more.x + more.width, "the time of a long message is not on the right of See more")
+    assert.ok(Math.abs(time.y - more.y) < 24, "the time of a long message is not on the line of See more")
+    assert.equal(await threadText(receiver.page, tail).count(), 0, "the whole message shows before See more is pressed")
+    await row.getByRole("button", { name: "See more", exact: true }).click()
+    await threadText(receiver.page, tail).waitFor()
+  })
+
+  await check(`${where}: a photo sits in a thin frame, and its time is on the picture`, async () => {
+    const photo = sender.page.locator('main img[alt="Shared photo"]').last()
+    const picture = await boxOf(photo)
+    const frame = bubbleAround(photo)
+    const padding = await frame.evaluate((el) => getComputedStyle(el).paddingTop)
+    assert.equal(padding, "3px", `a photo's bubble has ${padding} of padding, not the thin frame`)
+    const time = await boxOf(frame.locator("span").filter({ hasText: CLOCK }).first())
+    assert.ok(insideBox(time, picture), "the time of a photo sits outside the picture")
+  })
+
+  await check(`${where}: a hold opens the reactions on screen, beside the message and not over it`, async () => {
+    await holdMessage(sender.page, short)
+    const picker = sender.page.getByRole("group", { name: "Choose a reaction" })
+    const sheet = await boxOf(picker)
+    const bubble = await boxOf(bubbleOf(sender.page, short))
+    const view = sender.page.viewportSize()
+    assert.ok(view && sheet.x >= 0 && sheet.y >= 0 && sheet.x + sheet.width <= view.width && sheet.y + sheet.height <= view.height, "the reaction picker is cut off by the screen")
+    const beside = sheet.y + sheet.height <= bubble.y + 1 || sheet.y >= bubble.y + bubble.height - 1
+    assert.ok(beside, "the reaction picker covers the message")
+    await sender.page.screenshot({ path: join(OUT, `bubble-sheet-${where}.png`) })
+    await sender.page.keyboard.press("Escape")
+    await picker.waitFor({ state: "detached" })
+  })
+
+  await check(`${where}: a PDF and an Excel sheet arrive as cards that name their kind and size, inside the bubble`, async () => {
+    for (const [file, kind, label] of [
+      [`bubble-${RUN_ID}.pdf`, "pdf", "PDF document"],
+      [`bubble-${RUN_ID}.xlsx`, "xlsx", "Excel workbook"],
+    ]) {
+      await sender.page.locator("input[name=document]").setInputFiles(makeDocumentFile(file, kind))
+      await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+      const card = receiver.page.getByRole("link", { name: new RegExp(`^Download ${escapeRegExp(file)}, ${escapeRegExp(label)}, `) })
+      const box = await boxOf(card)
+      const bubble = await boxOf(bubbleAround(card))
+      assert.ok(insideBox(box, bubble), `${file}: the card sits outside its bubble`)
+      await card.getByText(new RegExp(`^${escapeRegExp(label)} · `)).waitFor({ state: "attached" })
+      await card.getByText(kind.toUpperCase(), { exact: true }).waitFor({ state: "attached" })
+      const time = await boxOf(bubbleAround(card).locator("span").filter({ hasText: CLOCK }).first())
+      assert.ok(insideBox(time, bubble), `${file}: the time sits outside the card's bubble`)
+    }
+  })
+
+  await check(`${where}: a shared place is a map card, and its coordinates are never written on the page`, async () => {
+    await sender.context.grantPermissions(["geolocation"], { origin: BASE })
+    await sender.context.setGeolocation({ latitude: 12.9716, longitude: 77.5946 })
+    await sender.page.getByRole("button", { name: "Attach", exact: true }).click()
+    await sender.page.getByRole("menuitem", { name: "Location", exact: true }).click()
+    await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
+    const place = receiver.page.getByRole("link", { name: "Shared location, open in Maps" }).last()
+    const card = await boxOf(place)
+    const bubble = await boxOf(bubbleAround(place))
+    assert.ok(insideBox(card, bubble), "the place card sits outside its bubble")
+    const text = await receiver.page.locator("main").innerText()
+    assert.equal(/12\.97|77\.59/.test(text), false, "the coordinates of a shared place are written on the page")
+    await receiver.page.screenshot({ path: join(OUT, `bubbles-${where}-receiver.png`) })
+    await sender.page.screenshot({ path: join(OUT, `bubbles-${where}-sender.png`) })
+  })
+
+  if (phone) {
+    await check(`${where}: a swipe right on a message from someone else replies to them, and a swipe left on your own replies to yourself`, async () => {
+      await swipeToReply(receiver.page, short, 90)
+      await receiver.page.getByText(`Replying to ${sender.name}`, { exact: true }).waitFor()
+      await receiver.page.getByRole("button", { name: "Cancel reply", exact: true }).click()
+      await swipeToReply(sender.page, short, -90)
+      await sender.page.getByText("Replying to yourself", { exact: true }).waitFor()
+      await sender.page.getByRole("button", { name: "Cancel reply", exact: true }).click()
+    })
+  }
+}
+
 async function directFlow({ phone }) {
   const where = phone ? "phone" : "desktop"
   const sender = await createUser({ tag: phone ? "dsp" : "dsd", phone })
@@ -146,7 +310,8 @@ async function directFlow({ phone }) {
 
   await check(`${where}: a message from the other person can be reported, and the server seals the report for the report key`, async () => {
     need(convId, "the conversation")
-    await messageRow(receiver.page, first).getByRole("button", { name: "More message options" }).click()
+    await holdMessage(receiver.page, first)
+    await receiver.page.getByRole("button", { name: "More message options" }).click()
     await receiver.page.getByRole("menuitem", { name: "Report", exact: true }).click()
     const dialog = receiver.page.getByRole("dialog", { name: "Report message" })
     await dialog.getByText("Abusive or harmful", { exact: true }).click()
@@ -166,7 +331,8 @@ async function directFlow({ phone }) {
     const words = uniq("Reported at once")
     await sendChat(receiver.page, words)
     await threadText(sender.page, words).waitFor()
-    await messageRow(sender.page, words).getByRole("button", { name: "More message options" }).click()
+    await holdMessage(sender.page, words)
+    await sender.page.getByRole("button", { name: "More message options" }).click()
     await sender.page.getByRole("menuitem", { name: "Report", exact: true }).click()
     const dialog = sender.page.getByRole("dialog", { name: "Report message" })
     await dialog.getByText("Child sexual abuse material", { exact: true }).click()
@@ -257,6 +423,8 @@ async function directFlow({ phone }) {
       })
     }
   })
+
+  await bubbleLookChecks({ where, phone, sender, receiver })
 
   await check(`${where}: a voice message is recorded, sent, and can be played by both people`, async () => {
     await sender.page.getByRole("button", { name: "Record a voice message", exact: true }).click()
@@ -365,19 +533,17 @@ async function directFlow({ phone }) {
     need(convId, "the conversation")
     await openChat(sender.page, convId)
     await openChat(receiver.page, convId)
-    const theirs = messageRow(sender.page, second)
-    await theirs.hover()
-    assert.equal(await theirs.getByRole("button", { name: "Delete message" }).count(), 0, "Delete message is offered on someone else's message")
-    const mine = messageRow(sender.page, first)
-    await mine.hover()
-    await mine.getByRole("button", { name: "Delete message" }).click()
+    await holdMessage(sender.page, second)
+    assert.equal(await sender.page.getByRole("button", { name: "Delete message" }).count(), 0, "Delete message is offered on someone else's message")
+    await holdMessage(sender.page, first)
+    await sender.page.getByRole("button", { name: "Delete message" }).click()
     const dialog = sender.page.getByRole("dialog", { name: "Delete this message?" })
     await dialog.waitFor()
     await dialog.getByRole("button", { name: "Cancel" }).click()
     await dialog.waitFor({ state: "detached" })
     await threadText(sender.page, first).waitFor()
-    await mine.hover()
-    await mine.getByRole("button", { name: "Delete message" }).click()
+    await holdMessage(sender.page, first)
+    await sender.page.getByRole("button", { name: "Delete message" }).click()
     await acted(sender.page, () => dialog.getByRole("button", { name: "Delete", exact: true }).click())
     for (const person of [sender, receiver]) {
       // The child-safety report above already left a deleted notice in this thread, so wait for this message's own text to go, not for any notice.

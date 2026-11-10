@@ -20,8 +20,14 @@ const FOLD_AFTER = 480
 type Context = { key: number }
 
 // A quoted post sits inside a link, so it never folds: a control inside a link would be invalid, and the quote is short anyway.
-export function PostBody({ text, className, fold = true }: { text: string; className?: string; fold?: boolean }) {
-  const body = <p className={cn("whitespace-pre-line break-words", className)}>{inline(text, { key: 0 })}</p>
+// `after` sits at the end of the words, on their last line: a chat message puts its time and its "See more" there.
+export function PostBody({ text, className, fold = true, after }: { text: string; className?: string; fold?: boolean; after?: ReactNode }) {
+  const body = (
+    <p className={cn("whitespace-pre-line break-words", className)}>
+      {inline(text, { key: 0 })}
+      {after}
+    </p>
+  )
   if (!fold || text.length <= FOLD_AFTER) return body
   return <ExpandableText>{body}</ExpandableText>
 }

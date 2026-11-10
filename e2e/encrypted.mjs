@@ -4,7 +4,7 @@
 import { area, assert, check, guard, need } from "./lib/harness.mjs"
 import { BASE, RUN_ID, escapeRegExp, randomWord } from "./lib/env.mjs"
 import { createUser, signInElsewhere } from "./lib/accounts.mjs"
-import { chatBox, messageRow, sendChat, threadText, waitForConversation } from "./lib/chat.mjs"
+import { chatBox, holdMessage, holdRow, sendChat, threadText, waitForConversation } from "./lib/chat.mjs"
 import { openProfile } from "./lib/posts.mjs"
 import { query } from "./lib/db.mjs"
 import { makePng } from "./lib/files.mjs"
@@ -187,7 +187,8 @@ async function chatFlow() {
 
   await check("the other person's message can be reported: the report is sealed on the device, and the server keeps none of its words", async () => {
     need(convId, "the conversation")
-    await messageRow(receiver.page, first).getByRole("button", { name: "More message options" }).click()
+    await holdMessage(receiver.page, first)
+    await receiver.page.getByRole("button", { name: "More message options" }).click()
     await receiver.page.getByRole("menuitem", { name: "Report", exact: true }).click()
     const dialog = receiver.page.getByRole("dialog", { name: "Report message" })
     await dialog.getByText("Spam", { exact: true }).click()
@@ -204,7 +205,8 @@ async function chatFlow() {
     assert.equal(sealed.kid, report.kid, "the report is not sealed to the key it names")
     assert.ok(Number(report.retain_until) - Number(report.created_at) >= 364 * DAY, "the report is not kept for a year")
     // The report is only made once: reporting the same message again changes nothing.
-    await messageRow(receiver.page, first).getByRole("button", { name: "More message options" }).click()
+    await holdMessage(receiver.page, first)
+    await receiver.page.getByRole("button", { name: "More message options" }).click()
     await receiver.page.getByRole("menuitem", { name: "Report", exact: true }).click()
     await receiver.page.getByRole("dialog", { name: "Report message" }).getByRole("button", { name: "Report", exact: true }).click()
     await toastText(receiver.page, "Report sent.")
@@ -285,7 +287,8 @@ async function chatFlow() {
     const after = `Sealed after edit ${RUN_ID}${randomWord(4)}`
     await sendChat(sender.page, before)
     await threadText(receiver.page, before).waitFor()
-    await sender.page.getByRole("button", { name: "More message options" }).last().click()
+    await holdRow(sender.page, sender.page.locator("main div.group").last())
+    await sender.page.getByRole("button", { name: "More message options" }).click()
     await sender.page.getByRole("menuitem", { name: "Edit", exact: true }).click()
     await sender.page.getByLabel("Edit message").fill(after)
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Save", exact: true }).click())
@@ -326,7 +329,9 @@ async function chatFlow() {
     await sender.page.getByRole("button", { name: "Attach", exact: true }).click()
     await sender.page.getByRole("menuitem", { name: "Location", exact: true }).click()
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
-    await receiver.page.getByText("12.97160, 77.59460").first().waitFor()
+    await receiver.page.getByRole("link", { name: "Shared location, open in Maps" }).first().waitFor()
+    // The card draws its own map and never writes the place out, so the coordinates are not on the page at all.
+    assert.equal(/12\.97|77\.59/.test(await receiver.page.locator("main").innerText()), false, "the place's coordinates are written out on the page")
     const [row] = await query(
       "SELECT attachment, cipher FROM chat_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
       convId
@@ -370,7 +375,8 @@ async function chatFlow() {
     const text = `Sealed to forward ${RUN_ID}${randomWord(4)}`
     await sendChat(sender.page, text)
     await threadText(receiver.page, text).waitFor()
-    await sender.page.getByRole("button", { name: "More message options" }).last().click()
+    await holdRow(sender.page, sender.page.locator("main div.group").last())
+    await sender.page.getByRole("button", { name: "More message options" }).click()
     await sender.page.getByRole("menuitem", { name: "Forward", exact: true }).click()
     const forwarding = sender.page.getByRole("dialog", { name: "Forward message" })
     await forwarding.getByRole("checkbox", { name: new RegExp(escapeRegExp(receiver.name)) }).click()

@@ -42,16 +42,36 @@ export async function sendChat(page, text) {
   await threadText(page, text).waitFor()
 }
 
-// The whole row of one message: bubble, reactions and the small buttons that appear on hover.
+// The whole row of one message: its bubble and the reactions under it.
 export function messageRow(page, text) {
   return page.locator("main div.group").filter({ hasText: text }).last()
 }
 
+// Opens the actions of a message by holding its bubble down, as a press does on a phone: the reactions, Reply, the menu and Delete
+// come up together. The hold stays until the sheet is on screen, then lets go, so the sheet stays open.
+export async function holdRow(page, row) {
+  const bubble = row.locator('[tabindex="0"]').first()
+  await bubble.waitFor()
+  await bubble.scrollIntoViewIfNeeded()
+  const box = await bubble.boundingBox()
+  if (!box) throw new Error("the message bubble has no place on screen to hold")
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  try {
+    await page.getByRole("group", { name: "Choose a reaction" }).waitFor({ timeout: 5000 })
+  } finally {
+    await page.mouse.up()
+  }
+}
+
+// Holds the message whose text is given.
+export function holdMessage(page, text) {
+  return holdRow(page, messageRow(page, text))
+}
+
 // Reacts to a message with the emoji at `index` of the picker. Returns the emoji.
 export async function react(page, text, index = 0) {
-  const row = messageRow(page, text)
-  await row.hover()
-  await row.getByRole("button", { name: "React" }).click()
+  await holdMessage(page, text)
   const picker = page.getByRole("group", { name: "Choose a reaction" })
   const choice = picker.getByRole("button").nth(index)
   const emoji = (await choice.innerText()).trim()

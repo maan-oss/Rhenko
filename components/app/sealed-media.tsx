@@ -13,18 +13,16 @@ export function SealedAttachment({
   conversationId,
   messageId,
   media,
-  mine,
   onLoad,
 }: {
   conversationId: string
   messageId: string
   media: SealedMediaView
-  mine: boolean
   onLoad?: () => void
 }) {
   if (media.media === "image") return <SealedPicture conversationId={conversationId} messageId={messageId} media={media} onLoad={onLoad} />
   if (media.media === "document") {
-    return <SealedDocument conversationId={conversationId} messageId={messageId} media={media} mine={mine} />
+    return <SealedDocument conversationId={conversationId} messageId={messageId} media={media} />
   }
   return (
     <SealedSound
@@ -113,17 +111,7 @@ function SealedSound({
 }
 
 // A document is opened when its card is pressed, then saved under the name it was sent with.
-function SealedDocument({
-  conversationId,
-  messageId,
-  media,
-  mine,
-}: {
-  conversationId: string
-  messageId: string
-  media: SealedMediaView
-  mine: boolean
-}) {
+function SealedDocument({ conversationId, messageId, media }: { conversationId: string; messageId: string; media: SealedMediaView }) {
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -146,5 +134,5 @@ function SealedDocument({
     }
   }
 
-  return <DocumentCard file={media.name} name={media.name} size={media.size} mine={mine} onSave={save} />
+  return <DocumentCard file={media.name} name={media.name} size={media.size} onSave={save} />
 }
