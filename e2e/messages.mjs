@@ -430,7 +430,9 @@ async function directFlow({ phone }) {
   await bubbleLookChecks({ where, phone, sender, receiver })
 
   await check(`${where}: a voice message is recorded, sent, and can be played by both people`, async () => {
-    await sender.page.getByRole("button", { name: "Record a voice message", exact: true }).click()
+    // Voice lives in the attach menu now, beside the other ways to send something.
+    await sender.page.getByRole("button", { name: "Attach", exact: true }).click()
+    await sender.page.getByRole("menuitem", { name: "Voice message" }).click()
     await sender.page.getByText("Recording a voice message").waitFor()
     await sleep(1500)
     await sender.page.getByRole("button", { name: "Stop", exact: true }).click()
