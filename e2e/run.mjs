@@ -48,6 +48,7 @@ import * as bots from "./bots.mjs"
 import * as posts from "./posts.mjs"
 import * as ranking from "./ranking.mjs"
 import * as feed from "./feed.mjs"
+import * as home from "./home.mjs"
 import * as circles from "./circles.mjs"
 import * as passkeys from "./passkeys.mjs"
 import * as articles from "./articles.mjs"
@@ -118,6 +119,7 @@ const AREAS = [
   ["posts", posts],
   ["ranking", ranking],
   ["feed", feed],
+  ["home", home],
   ["circles", circles],
   ["passkeys", passkeys],
   ["articles", articles],

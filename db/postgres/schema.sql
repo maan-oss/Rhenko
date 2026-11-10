@@ -624,7 +624,18 @@ CREATE TABLE timeline_pins (
     user_id text NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     list_id text NOT NULL REFERENCES lists (id) ON DELETE CASCADE,
     created_at bigint NOT NULL,
+    -- The order of the viewer's Home tabs. Lists and topics share one order, so it is compared with topic_tab_pins.
+    position bigint NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, list_id)
+  );
+
+-- A followed topic pinned as a tab on Home. Its position shares one order with the pinned lists.
+CREATE TABLE topic_tab_pins (
+    user_id text NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    tag text NOT NULL,
+    created_at bigint NOT NULL,
+    position bigint NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, tag)
   );
 
 CREATE INDEX ad_campaigns_post ON ad_campaigns (post_id);

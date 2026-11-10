@@ -263,8 +263,8 @@ export const REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🔥"] as c
 
 export const MAX_LIST_NAME = 25
 export const MAX_LIST_DESCRIPTION = 100
-// How many lists can be pinned as tabs on Home.
-export const MAX_TIMELINE_PINS = 5
+// Home tabs the viewer can pin, lists and topics together. Their order is the viewer's to set.
+export const MAX_HOME_TABS = 10
 // One click on "Follow everyone" follows at most this many people from a starter pack. The follow limits apply on top.
 export const MAX_PACK_FOLLOWS = 100
 

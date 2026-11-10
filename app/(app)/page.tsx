@@ -11,7 +11,7 @@ import { followedTopics, whoToFollow } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
 import { normalizeTag, topicLabel } from "@/lib/rules"
 import { snoozedTopics } from "@/lib/topic-snoozes"
-import { pinnedTimelines } from "@/lib/timelines"
+import { pinnedTabs } from "@/lib/timelines"
 import { firstParam } from "@/lib/params"
 import { SignedOutHome } from "@/components/marketing/signed-out-home"
 import { Avatar } from "@/components/app/avatar"
@@ -21,13 +21,15 @@ import { emptyActionClass } from "@/components/app/empty-state"
 import { PageHeader } from "@/components/app/page-header"
 import { PeopleList } from "@/components/app/people-list"
 import { IconTabLinks } from "@/components/app/tabs"
-import { Pin, Sparkles, UsersRound } from "lucide-react"
+import { Hash, Pin, Sparkles, UsersRound } from "lucide-react"
 import { Composer } from "@/components/app/composer"
 import { FeedList } from "@/components/app/feed-list"
 import { FeedSkeleton } from "@/components/app/feed-skeleton"
 import { FollowButton } from "@/components/app/follow-button"
 import { SetupBanner } from "@/components/app/setup-banner"
 import { TopicChips } from "@/components/app/topic-chips"
+import { TopicPinButton } from "@/components/app/topic-pin-button"
+import { MAX_HOME_TABS } from "@/lib/rules"
 
 type SearchParams = Promise<{ tab?: string | string[]; topic?: string | string[] }>
 
@@ -66,18 +68,25 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
   // back to For you.
   const remembered = parseHomeTab((await cookies()).get(FEED_TAB_COOKIE)?.value)
   const tab = firstParam(params.tab) ?? remembered ?? undefined
-  // A pinned list is a tab of its own. Only a list the viewer has pinned opens here, whatever the address says.
-  const pins = await pinnedTimelines(viewer.id)
-  const pin = pins.find((item) => item.id === tab) ?? null
+  // Home tabs the viewer pinned, in their order: lists and topics. Only a tab the viewer still has opens here, whatever the
+  // address says.
+  const now = await clock()
+  const tabs = await pinnedTabs(viewer.id, now)
+  // A list tab is addressed by its id, a topic tab by topic:<tag>.
+  const chosen = tabs.find((item) => (item.kind === "list" ? item.id === tab : `topic:${item.tag}` === tab)) ?? null
+  const pin = chosen?.kind === "list" ? chosen : null
+  const pinnedTopic = chosen?.kind === "topic" ? chosen.tag : null
   const mode = tab === "following" ? "following" : "for-you"
-  // For you can be narrowed to a topic the viewer follows and has not snoozed. Anything else in the address is ignored.
-  const snoozed = await snoozedTopics(viewer.id, await clock())
+  // For you can be narrowed to a topic the viewer follows and has not snoozed. A pinned topic tab is that same filter.
+  const snoozed = await snoozedTopics(viewer.id, now)
   const chips = (await followedTopics(viewer.id)).filter((tag) => !snoozed.has(tag)).slice(0, TOPIC_CHIPS)
   const asked = firstParam(params.topic)
-  const topic = mode === "for-you" && !pin && asked && chips.includes(normalizeTag(asked)) ? normalizeTag(asked) : undefined
+  const chipTopic = mode === "for-you" && !pin && !pinnedTopic && asked && chips.includes(normalizeTag(asked)) ? normalizeTag(asked) : undefined
+  const topic = pinnedTopic ?? chipTopic
+  const pinnedTags = new Set(tabs.flatMap((item) => (item.kind === "topic" ? [item.tag] : [])))
   const spec: FeedSpec = pin ? { kind: "list", listId: pin.id } : { kind: "home", mode, topic }
   const page = await feedFor(spec, viewer.id)
-  const following = !pin && mode === "following"
+  const following = !pin && !pinnedTopic && mode === "following"
   const empty = page.items.length === 0 && !page.next
   const active = pin ? pin.id : topic ? `topic:${topic}` : mode
   return (
@@ -89,14 +98,18 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
           <IconTabLinks
             label="Home sections"
             items={[
-              { href: "/?tab=for-you", label: "For you", icon: <Sparkles strokeWidth={2} />, active: !following && !pin },
+              { href: "/?tab=for-you", label: "For you", icon: <Sparkles strokeWidth={2} />, active: !following && !pin && !pinnedTopic },
               { href: "/?tab=following", label: "Following", icon: <UsersRound strokeWidth={2} />, active: following },
-              ...pins.map((item) => ({ href: `/?tab=${item.id}`, label: item.name, icon: <Pin strokeWidth={2} />, active: pin?.id === item.id })),
+              ...tabs.map((item) =>
+                item.kind === "list"
+                  ? { href: `/?tab=${item.id}`, label: item.name, icon: <Pin strokeWidth={2} />, active: pin?.id === item.id }
+                  : { href: `/?tab=${encodeURIComponent(`topic:${item.tag}`)}`, label: `#${item.tag}`, icon: <Hash strokeWidth={2} />, active: pinnedTopic === item.tag }
+              ),
             ]}
           />
         }
       />
-      {pin ? null : <RememberFeedTab tab={mode} />}
+      {pin || pinnedTopic ? null : <RememberFeedTab tab={mode} />}
       {viewer.onboarding === "pending" ? <SetupBanner /> : null}
       <Composer
         viewer={viewer}
@@ -104,7 +117,12 @@ async function Home({ searchParams }: { searchParams: SearchParams }) {
         id="compose"
         circles={(await circlesFor(viewer.id)).map((circle) => ({ id: circle.id, name: circle.name }))}
       />
-      {mode === "for-you" && !pin && chips.length > 0 ? <TopicChips topics={chips} active={topic ?? null} /> : null}
+      {mode === "for-you" && !pin && !pinnedTopic && chips.length > 0 ? <TopicChips topics={chips} active={chipTopic ?? null} /> : null}
+      {topic ? (
+        <div className="px-4 pt-2">
+          <TopicPinButton tag={topic} pinned={pinnedTags.has(topic)} full={tabs.length >= MAX_HOME_TABS} />
+        </div>
+      ) : null}
       <FeedList
         key={active}
         items={page.items}

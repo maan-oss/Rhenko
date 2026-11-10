@@ -262,6 +262,8 @@ export async function setTopicFollow(tag: string, follow: boolean): Promise<Topi
   if (!checked.ok) return checked
   if (!follow) {
     await run("DELETE FROM topic_follows WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
+    // A topic that is no longer followed does not stay pinned to Home.
+    await run("DELETE FROM topic_tab_pins WHERE user_id = ? AND tag = ?", viewer.id, checked.tag)
     refresh()
     return { ok: true, following: false }
   }

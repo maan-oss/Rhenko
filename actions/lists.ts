@@ -5,8 +5,8 @@ import { toggleFollow } from "@/actions/social"
 import { getAgreedViewer, newId } from "@/lib/auth"
 import { all, get, run } from "@/lib/db"
 import { blockedEitherWay } from "@/lib/notify"
-import { isTimelinePinned, mayPin, setTimelinePin as storeTimelinePin, timelinePinCount } from "@/lib/timelines"
-import { MAX_LIST_DESCRIPTION, MAX_LIST_NAME, MAX_PACK_FOLLOWS, MAX_TIMELINE_PINS } from "@/lib/rules"
+import { homeTabCount, isTimelinePinned, mayPin, setTimelinePin as storeTimelinePin } from "@/lib/timelines"
+import { MAX_HOME_TABS, MAX_LIST_DESCRIPTION, MAX_LIST_NAME, MAX_PACK_FOLLOWS } from "@/lib/rules"
 
 export type ListResult = { ok: true; id: string } | { ok: false; error: string }
 export type VoidResult = { ok: true } | { ok: false; error: string }
@@ -171,15 +171,16 @@ export async function followStarterPack(listId: string): Promise<FollowPackResul
   return { ok: true, following, total: members.length, stopped }
 }
 
-// Pins a list as a tab on Home, or takes it off. Only lists the viewer can open can be pinned, up to MAX_TIMELINE_PINS.
+// Pins a list as a tab on Home, or takes it off. Only lists the viewer can open can be pinned. Lists and topics share the
+// MAX_HOME_TABS limit.
 export async function setTimelinePin(listId: string, on: boolean): Promise<VoidResult> {
   const viewer = await getAgreedViewer()
   if (!viewer) return { ok: false, error: "Sign in to pin lists to Home." }
   if (typeof listId !== "string") return { ok: false, error: "That list no longer exists." }
   if (on) {
     if (!await mayPin(listId, viewer.id)) return { ok: false, error: "Follow this list before you pin it to Home." }
-    if (!await isTimelinePinned(viewer.id, listId) && await timelinePinCount(viewer.id) >= MAX_TIMELINE_PINS) {
-      return { ok: false, error: `Home holds up to ${MAX_TIMELINE_PINS} pinned lists. Unpin one to add another.` }
+    if (!await isTimelinePinned(viewer.id, listId) && await homeTabCount(viewer.id) >= MAX_HOME_TABS) {
+      return { ok: false, error: `Home holds up to ${MAX_HOME_TABS} tabs. Unpin one to add another.` }
     }
   }
   await storeTimelinePin(viewer.id, listId, on, Date.now())
