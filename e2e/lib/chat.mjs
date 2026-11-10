@@ -83,7 +83,12 @@ export async function holdRow(page, row, text = null) {
       )
     : null
   console.log(`holdRow target: ${JSON.stringify({ wanted: text, rowTabbable, matches })}`)
-  if (before) console.log(`holdRow found an open action sheet before the press: ${JSON.stringify({ before, rowTabbable })}`)
+  if (before) {
+    console.log(`holdRow found an open action sheet before the press: ${JSON.stringify({ before, rowTabbable })}`)
+    // A sheet left open by an earlier step covers the thread, so the press would only close it. Escape closes it first.
+    await page.keyboard.press("Escape")
+    await page.locator("div.fixed.inset-0.z-40").waitFor({ state: "detached" })
+  }
   // A thread that has just opened settles on its newest message a few frames later, and a scroll closes the actions. So the bubble is
   // brought to the middle at once, and the hold waits until its place stops changing.
   await bubble.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }))
