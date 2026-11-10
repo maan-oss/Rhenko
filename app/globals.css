@@ -282,6 +282,27 @@ textarea:-webkit-autofill {
   background-color: var(--background);
 }
 
+/* The column group keeps its place. The sidebar keeps its left edge when it narrows, and the main column and the rail move to
+   meet it, so nothing slides under the main column. At full width the group is still centred, as it always was. The width is
+   the group's full width at each size: the main column alone below large screens, plus the sidebar, plus the rail. */
+.app-stage {
+  --stage-width: 600px;
+  padding-inline-start: clamp(0px, calc((100% - var(--stage-width)) / 2), calc((1320px - var(--stage-width)) / 2));
+}
+@media (min-width: 1024px) {
+  .app-stage {
+    --stage-width: 864px;
+  }
+}
+@media (min-width: 1280px) {
+  .app-stage {
+    --stage-width: 1204px;
+  }
+  .app-stage:has([data-settings-shell]) {
+    --stage-width: 984px;
+  }
+}
+
 /* On a phone, a control keeps the size it is drawn at and takes taps across at least 44px in both directions. */
 @media (max-width: 639px) {
   .tap-44:not(.absolute, .fixed, .sticky) {
@@ -327,6 +348,17 @@ textarea:-webkit-autofill {
     inset 0 1px 0 var(--raised-edge),
     0 1px 2px rgb(0 0 0 / 0.04),
     0 10px 28px -20px rgb(0 0 0 / 0.22);
+}
+
+/* Lifted: a card that sits clearly above the ground, for the side panels. Its depth comes from layered shadows, a close one
+   under the edge and a long soft one beneath it, not from an outline. */
+@utility lifted {
+  background-color: var(--card);
+  box-shadow:
+    inset 0 1px 0 var(--raised-edge),
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 6px 14px -6px rgb(0 0 0 / 0.16),
+    0 24px 48px -20px rgb(0 0 0 / 0.32);
 }
 
 /* The phone's top bar tightens as the page scrolls: its row (data-bar-row) shrinks to 40px over the first 96px. This runs on

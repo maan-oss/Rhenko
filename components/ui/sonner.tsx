@@ -37,10 +37,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
         } as React.CSSProperties
       }
       toastOptions={{
-        // A toast is a raised card and its buttons are pills, the same shape as every other button. The colours are the
-        // page's own ink and surface, so no toast carries a tint.
+        // A toast is a pill, the same shape as its buttons. The colours are the page's own ink and surface, so no toast carries a tint.
         classNames: {
-          toast: "cn-toast !w-auto !max-w-[min(22rem,calc(100vw-2rem))] !min-w-[15rem] rounded-[22px] border border-border/60 bg-popover/95 text-popover-foreground shadow-[0_18px_44px_-16px_rgba(0,0,0,0.38)] backdrop-blur-xl",
+          toast: "cn-toast !w-auto !max-w-[min(22rem,calc(100vw-2rem))] !min-w-[15rem] rounded-full border border-border/60 bg-popover/95 text-popover-foreground shadow-[0_18px_44px_-16px_rgba(0,0,0,0.38)] backdrop-blur-xl",
           actionButton: "!h-8 !rounded-full !bg-foreground !px-3.5 !text-[13px] !font-semibold !text-background",
           cancelButton: "!h-8 !rounded-full !bg-muted !px-3.5 !text-[13px] !font-semibold !text-foreground",
           closeButton: "!rounded-full !border-border !bg-background !text-foreground",

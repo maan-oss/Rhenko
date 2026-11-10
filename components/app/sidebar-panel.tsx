@@ -58,7 +58,7 @@ export function SidebarPanel({ viewer, accounts, recent, notifications, messages
         className="pointer-events-none absolute inset-y-0 right-0 w-3 bg-[linear-gradient(to_left,rgba(31,29,26,0.05),transparent)] dark:bg-[linear-gradient(to_left,rgba(0,0,0,0.3),transparent)]"
       />
       <div className="flex h-full w-full flex-col justify-between px-3.5 py-4">
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
           <Brand collapsed={collapsed} onToggle={() => save(!collapsed)} />
           <SidebarSearch recent={recent} collapsed={collapsed} onExpand={() => save(false)} />
           <SidebarNav path={path} notifications={notifications} messages={messages} collapsed={collapsed} />
@@ -85,7 +85,7 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
           title="Close sidebar"
           className="grid size-9 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <PanelLeftClose className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
+          <PanelLeftClose className="size-[20px] scale-x-[-1]" strokeWidth={1.9} aria-hidden="true" />
         </button>
       </div>
     )
@@ -100,7 +100,7 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
         title="Open sidebar"
         className="grid size-11 shrink-0 place-items-center rounded-full text-foreground transition-colors duration-200 outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <PanelLeftOpen className="size-[20px]" strokeWidth={1.9} aria-hidden="true" />
+        <PanelLeftOpen className="size-[20px] scale-x-[-1]" strokeWidth={1.9} aria-hidden="true" />
       </button>
     </div>
   )

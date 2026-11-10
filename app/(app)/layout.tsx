@@ -41,7 +41,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <ViewerLanguages speaks={viewer?.speaks ?? []} translate={translationOn()}>
       <GifSetupProvider value={publicGifSetup()}>
         <LiveCountsProvider initial={counts}>
-          <div className="app-canvas mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center">
+          <div className="app-canvas app-stage mx-auto flex min-h-dvh w-full max-w-[1320px]">
             <Sidebar />
             <main data-app-main className="min-w-0 w-full max-w-[600px] flex-1 border-x border-border bg-background pb-24 lg:pb-0">{children}</main>
             <RightRail />
