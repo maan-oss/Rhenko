@@ -17,7 +17,6 @@ import { GroupCallButton } from "@/components/app/group-call-button"
 import { GroupPanel } from "@/components/app/group-panel"
 import { PageHeader } from "@/components/app/page-header"
 import { PinnedBar, type PinnedLine } from "@/components/app/pinned-bar"
-import { ThreadMarker } from "@/components/app/thread-marker"
 
 type Params = Promise<{ id: string }>
 type SearchParams = Promise<{ m?: string | string[] }>
@@ -149,7 +148,6 @@ async function ConversationBody({ params, searchParams }: { params: Params; sear
         ) : null}
         <PinnedBar conversationId={conversation.id} pins={pinLines} canChange={!requested} />
       </PageHeader>
-      <ThreadMarker conversationId={conversation.id} />
       {requested ? <AcceptBar conversationId={conversation.id} /> : null}
       {/* Picking messages swaps the footer for a bar of actions. The footer stays mounted underneath, so a draft is kept. */}
       <SelectionScope key={conversation.id} footer={footer}>

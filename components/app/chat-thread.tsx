@@ -27,6 +27,7 @@ import { LinkCard } from "@/components/app/link-card"
 import { VideoPlayer } from "@/components/app/video-player"
 import { TranslateControl } from "@/components/app/translate-control"
 import { LocalTime } from "@/components/app/time-text"
+import { markThreadRead } from "@/components/app/thread-marker"
 import { callSummary } from "@/lib/format"
 import { isAudioFile, isDocumentFile, isVideoFile, isVoiceFile } from "@/lib/media-names"
 import { quoteLabel } from "@/lib/message-attachments"
@@ -153,6 +154,17 @@ export function ChatThread({
       if (!waiting.includes(item)) removePending(conversationId, item.key)
     }
   }, [pending, waiting, conversationId])
+
+  // Opening a thread marks it read, and so does each message that arrives while it is open on screen. A tab in the background
+  // waits until it is shown again.
+  useEffect(() => {
+    function markWhenShown() {
+      if (document.visibilityState === "visible") markThreadRead(conversationId)
+    }
+    markWhenShown()
+    document.addEventListener("visibilitychange", markWhenShown)
+    return () => document.removeEventListener("visibilitychange", markWhenShown)
+  }, [conversationId, newest])
 
   // Start at the newest message, and follow new ones. Older messages added above do not move the view. The scroll
   // waits for the first frame so the thread has its height before it moves.
@@ -1240,7 +1252,7 @@ function MessageRow({
                       size={message.attachment?.kind === "document" ? message.attachment.size : 0}
                     />
                   ) : file ? (
-                    <span className={cn("relative block w-fit max-w-full overflow-hidden", framed ? "rounded-[17px]" : "rounded-[14px]")}>
+                    <span className={cn("relative block w-fit max-w-full overflow-hidden", framed ? "rounded-[17px]" : "rounded-[14px]", onPicture && "min-w-[11rem]")}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={`/media/${file}?w=${photoWidth}`}
@@ -1249,7 +1261,7 @@ function MessageRow({
                         loading={message.mine && fresh ? "eager" : "lazy"}
                         onLoad={message.mine && fresh ? followLatest : undefined}
                         decoding="async"
-                        className={cn("max-h-72 max-w-full object-cover", framed ? "rounded-[17px]" : "rounded-[14px] ring-1 ring-black/[0.06]")}
+                        className={cn("max-h-72 max-w-full object-cover", onPicture && "min-w-full", framed ? "rounded-[17px]" : "rounded-[14px] ring-1 ring-black/[0.06]")}
                       />
                       {message.attachment?.kind === "scan" ? (
                         <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span>

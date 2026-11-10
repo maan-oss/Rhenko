@@ -52,6 +52,8 @@ export function messageRow(page, text) {
 export async function holdRow(page, row) {
   const bubble = row.locator('[tabindex="0"]').first()
   await bubble.waitFor()
+  // A page that has just loaded takes its presses only once React is in charge of it.
+  await ready(bubble)
   // A thread that has just opened settles on its newest message a few frames later, and a scroll closes the actions. So the bubble is
   // brought to the middle at once, and the hold waits until its place stops changing.
   await bubble.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }))
