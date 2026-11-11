@@ -123,6 +123,7 @@ async function Results({ q, type, viewer }: { q: string; type: (typeof TYPES)[nu
       items={page.items}
       next={page.next}
       spec={spec}
+      endLabel={media ? "That's all the photos and videos." : "That's all the results."}
       viewer={viewer}
       emptyTitle={media ? `No photos or videos for “${q}”` : `No results for “${q}”`}
       emptyBody={media ? "Posts with photos or videos that match your words show up here." : "Check the spelling, or try a different word or operator."}

@@ -6,11 +6,10 @@ import { suggestionsFor, topPeople } from "@/lib/connections"
 import { topicLabel } from "@/lib/rules"
 import { Avatar } from "@/components/app/avatar"
 import { ProfileLink } from "@/components/app/profile-hover"
-import { cn } from "@/lib/utils"
 
 // The side panel is a short list, the way trending is on X: each hashtag or cashtag sits on one line with its post count.
-// People are a stack of faces, each covering a quarter of the one before it, so the row takes little room. Pointing at a
-// face opens its card. Nothing here is a button, so the panel reads as something to look at, not something to act on.
+// People are a short row of faces, so the panel takes little room. Pointing at a face opens its card. Nothing here is a
+// button, so the panel reads as something to look at, not something to act on.
 
 // The time the panel is read. Read after connection(), so the page is never built with a fixed clock.
 async function clock(): Promise<number> {
@@ -73,18 +72,14 @@ export async function RightRail() {
           <h2 id="meet-title" className="text-[18px] font-semibold tracking-tight">
             People to meet
           </h2>
-          {/* Stacked, each face covers a quarter of the one before. Resting on the row spreads them apart, so every face shows
-              whole. Every face keeps the same size, hovered or not. */}
-          <div className="group mt-4 flex items-center pl-1">
-            {people.map((person, index) => (
+          {/* Four faces at most, side by side. Each one shows whole, so its initials always read. */}
+          <div className="mt-4 flex items-center gap-2 pl-1">
+            {people.map((person) => (
               <ProfileLink
                 key={person.id}
                 handle={person.handle}
                 label={person.name}
-                className={cn(
-                  "relative rounded-full outline-none transition-[margin] duration-200 focus-visible:ring-2 focus-visible:ring-ring",
-                  index > 0 && "-ml-[11px] group-hover:ml-1"
-                )}
+                className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Avatar user={{ id: person.id, name: person.name, avatarFile: person.avatarFile }} size={44} className="ring-2 ring-background" />
               </ProfileLink>

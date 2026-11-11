@@ -23,7 +23,7 @@ async function ListsBody() {
   return (
     <>
       <ListsHeader />
-      <Link href="/packs" className="mx-4 mb-2 flex flex-col gap-0.5 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50">
+      <Link href="/packs" className="mx-4 mt-4 mb-2 flex flex-col gap-0.5 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50">
         <span className="font-semibold">Starter packs</span>
         <span className="text-sm text-muted-foreground">Lists of people, published by the people who made them. Follow everyone in one at once.</span>
       </Link>

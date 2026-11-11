@@ -47,10 +47,25 @@ type Props = {
   folders?: { id: string; name: string }[]
   // The post these items are replies to. Its replies are drawn as one conversation, joined by a thread line.
   threadOf?: string
+  // What the list says after its last item. A search has results, not a backlog to be caught up on.
+  endLabel?: string
 }
 
 // Renders a feed and loads older pages as the reader reaches the end.
-export function FeedList({ items: initialItems, next: initialNext = null, spec, viewer, emptyTitle, emptyBody, emptyAction, folders, threadOf, largeEmpty, compactEmpty }: Props) {
+export function FeedList({
+  items: initialItems,
+  next: initialNext = null,
+  spec,
+  viewer,
+  emptyTitle,
+  emptyBody,
+  emptyAction,
+  folders,
+  threadOf,
+  largeEmpty,
+  compactEmpty,
+  endLabel = "You're all caught up.",
+}: Props) {
   const router = useRouter()
   const [items, setItems] = useState(initialItems)
   const [next, setNext] = useState<string | null>(initialNext)
@@ -221,7 +236,7 @@ export function FeedList({ items: initialItems, next: initialNext = null, spec, 
           {failed ? <p className="text-sm text-destructive">Couldn&apos;t load more posts. Try again.</p> : null}
         </div>
       ) : items.length > 0 ? (
-        <p className="px-4 py-10 text-center text-sm text-muted-foreground">You&apos;re all caught up.</p>
+        <p className="px-4 py-10 text-center text-sm text-muted-foreground">{endLabel}</p>
       ) : null}
     </div>
   )
