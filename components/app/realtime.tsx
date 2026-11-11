@@ -70,9 +70,10 @@ export function Realtime({ viewerId }: { viewerId: string }) {
           refreshCounts()
           if (!onFeed(path.current)) refresh()
           return
+        // A read by someone else refreshes the thread for the sender's ticks. The reader's own read does not reload their page.
         case "message":
           refreshCounts()
-          if (path.current.startsWith("/messages")) refresh()
+          if (path.current.startsWith("/messages") && event.readBy !== viewerId) refresh()
           return
         default:
           refresh()

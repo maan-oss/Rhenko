@@ -70,12 +70,12 @@ export function SidebarPanel({ viewer, accounts, recent, notifications, messages
   )
 }
 
-// The panel control. Expanded: the logo leads, and the panel-close icon on the right appears only while the row is hovered.
+// The panel control. Expanded: the logo leads, and the panel-close button sits on the right, always there, and fills in on hover.
 // Collapsed: the logo alone holds the rail's top. On hover it morphs into the panel-open button, and a click opens the rail.
 function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   if (!collapsed) {
     return (
-      <div className="group/brand flex h-11 items-center justify-between">
+      <div className="flex h-11 items-center justify-between">
         <span className="grid size-11 place-items-center">
           <RhenkoSymbol className="size-7" />
         </span>
@@ -84,7 +84,7 @@ function Brand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => vo
           onClick={onToggle}
           aria-label="Close sidebar"
           title="Close sidebar"
-          className="grid size-9 place-items-center rounded-full text-foreground opacity-0 transition-[opacity,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none group-hover/brand:opacity-100 hover:bg-foreground/5 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+          className="grid size-9 place-items-center rounded-full text-muted-foreground transition-[color,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <PanelLeftClose className="size-[20px] scale-x-[-1]" strokeWidth={1.9} aria-hidden="true" />
         </button>

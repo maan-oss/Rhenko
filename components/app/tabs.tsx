@@ -42,14 +42,14 @@ export function usePressedTab(items: Pick<TabItem, "href" | "active">[]): { curr
   return { current, press: (href) => setPressed({ from: served, to: href }) }
 }
 
-// The tabs at the top of Home: one icon each on a track. The chosen tab is filled black and opens to show its word, and the
-// others stay icons, so the row is only as wide as the choice needs. The fill slides to the new choice while the two tabs
-// change size, so a switch reads as one movement rather than a swap of words.
+// The tabs at the top of Home: one icon each. The chosen tab is a black pill and opens to show its word, and the others stay
+// icons, so the row is only as wide as the choice needs. The black pill slides to the new choice while the two tabs change
+// size, so a switch reads as one movement rather than a swap of words.
 export function IconTabLinks({ items, label = "Sections", className }: { items: TabItem[]; label?: string; className?: string }) {
   const { current, press } = usePressedTab(items)
   const id = useId()
   return (
-    <nav aria-label={label} className={cn("flex items-center gap-1 rounded-full bg-muted p-1", className)}>
+    <nav aria-label={label} className={cn("flex items-center gap-1.5", className)}>
       {items.map((item) => {
         const active = item.href === current
         return (
@@ -92,16 +92,16 @@ export function IconTabLinks({ items, label = "Sections", className }: { items: 
   )
 }
 
-// The tabs at the top of a page: one track of words, with the chosen tab lifted onto a raised surface. The raised surface
-// is one shared element that slides between the words, and it casts a soft neutral shadow, so it reads as a layer on the
-// track rather than a rule under the words. Each tab is a link, so every section keeps its own address.
+// The tabs at the top of a page: a row of pills, with the chosen one filled black like every other selected pill in the app.
+// The black fill is one shared element that slides between the pills. Each tab is a link, so every section keeps its own
+// address.
 export function TabLinks({ items, label = "Sections", className }: { items: TabItem[]; label?: string; className?: string }) {
   const { current, press } = usePressedTab(items)
   const id = useId()
   return (
     <nav
       aria-label={label}
-      className={cn("mx-4 my-2 flex gap-1 overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
+      className={cn("mx-4 my-2 flex gap-2 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
     >
       {items.map((item) => {
         const active = item.href === current
@@ -113,19 +113,19 @@ export function TabLinks({ items, label = "Sections", className }: { items: TabI
             aria-current={active ? "page" : undefined}
             onClick={() => press(item.href)}
             className={cn(
-              "tap-44 relative isolate flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold whitespace-nowrap outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              "tap-44 relative isolate flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold whitespace-nowrap outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring",
+              active ? "text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            {active ? (
-              <TabFill
-                layoutId={`${id}-tab`}
-                className="-z-10 bg-background shadow-[0_1px_2px_rgba(0,0,0,0.14),0_4px_12px_-6px_rgba(0,0,0,0.28)]"
-              />
-            ) : null}
+            {active ? <TabFill layoutId={`${id}-tab`} className="-z-10 bg-foreground" /> : null}
             {item.label}
             {item.badge ? (
-              <span className="grid min-w-5 place-items-center rounded-full bg-foreground px-1.5 text-xs leading-5 font-semibold text-background">
+              <span
+                className={cn(
+                  "grid min-w-5 place-items-center rounded-full px-1.5 text-xs leading-5 font-semibold",
+                  active ? "bg-background text-foreground" : "bg-foreground text-background"
+                )}
+              >
                 {item.badge > 99 ? "99+" : item.badge}
               </span>
             ) : null}

@@ -103,7 +103,8 @@ export type RealtimeEvent =
   // The first event on every stream. The boot id changes when the server restarts.
   | { type: "hello"; bootId: string }
   | { type: "notification" }
-  | { type: "message"; conversationId: string }
+  // readBy is set when someone has read the chat. The reader's own page does not reload for their own read.
+  | { type: "message"; conversationId: string; readBy?: string }
   | { type: "typing"; conversationId: string; name: string }
   | {
       type: "banner"

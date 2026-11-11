@@ -2,8 +2,7 @@
 
 import type { ReactNode } from "react"
 import Link, { useLinkStatus } from "@/components/app/link"
-import { motion } from "motion/react"
-import { Clock, Sparkles } from "lucide-react"
+import { Clock, Images, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Both controls are links, so the page stays a plain server render and the choice is in the URL.
@@ -32,6 +31,7 @@ export function RankingButton({ href, sort }: { href: string; sort: "top" | "lat
   )
 }
 
+// The media filter is a pill like the ranking one. Turned on, it is filled black, the same as every selected pill in the app.
 export function MediaSwitch({ href, checked }: { href: string; checked: boolean }) {
   return (
     <Link
@@ -40,24 +40,15 @@ export function MediaSwitch({ href, checked }: { href: string; checked: boolean 
       role="switch"
       aria-checked={checked}
       aria-label="Only posts with photos or videos"
-      className="flex h-12 shrink-0 items-center gap-2.5 rounded-full pr-1 pl-2 text-sm font-semibold"
+      className={cn(
+        "tap-44 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold transition-colors duration-200",
+        checked ? "bg-foreground text-background" : "glass text-foreground hover:bg-foreground/5"
+      )}
     >
-      <span>Media</span>
-      <Track checked={checked} />
+      <Pending className="flex items-center gap-1.5">
+        <Images className="size-4" aria-hidden="true" />
+        Media
+      </Pending>
     </Link>
-  )
-}
-
-function Track({ checked }: { checked: boolean }) {
-  const { pending } = useLinkStatus()
-  return (
-    <span className={cn("flex h-7 w-12 items-center rounded-full p-[3px] transition-colors duration-200", checked ? "metal" : "bg-muted-foreground/35")}>
-      <motion.span
-        aria-hidden="true"
-        className={cn("size-[22px] rounded-full bg-background shadow-sm", pending && "animate-pulse")}
-        animate={{ x: checked ? 20 : 0 }}
-        transition={{ type: "spring", stiffness: 500, damping: 36 }}
-      />
-    </span>
   )
 }

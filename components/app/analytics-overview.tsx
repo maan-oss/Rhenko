@@ -104,7 +104,7 @@ export function AnalyticsOverview({ days, followers }: { days: AnalyticsDay[]; f
               </span>
             </p>
           </div>
-          <div className="flex shrink-0 rounded-full bg-muted p-1" role="group" aria-label="Date range">
+          <div className="flex shrink-0 gap-1.5" role="group" aria-label="Date range">
             {RANGES.map((option) => {
               const on = option === range
               return (

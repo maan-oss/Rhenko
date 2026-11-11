@@ -31,7 +31,7 @@ import {
   writePost,
 } from "./lib/posts.mjs"
 import { idleOnSettings, recordBanners, sawBanner } from "./lib/live.mjs"
-import { follow } from "./lib/people.mjs"
+import { follow, profileMenu } from "./lib/people.mjs"
 import { acted, bodyText, go, ready, toastText } from "./lib/ui.mjs"
 
 function uniq(label) {
@@ -585,7 +585,7 @@ async function scheduledPost() {
   let bannerSeen = false
   await check("scheduled: the Scheduled list shows it, and the profile does not, until it goes out", async () => {
     await follow(follower.page, author.handle)
-    await acted(follower.page, () => follower.page.getByRole("button", { name: `Get post notifications for @${author.handle}` }).click())
+    await acted(follower.page, () => profileMenu(follower.page, "Get post notifications"))
     await toastText(follower.page, /hear about new posts/i)
 
     await openHome(author.page)

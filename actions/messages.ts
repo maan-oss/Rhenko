@@ -744,8 +744,11 @@ export async function markConversationRead(conversationId: string): Promise<void
   const id = asId(conversationId)
   if (!viewer || !id) return
   await run("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?", Date.now(), id, viewer.id)
-  // Everyone in the chat hears of it, so the sender's ticks turn to seen on their open thread without a reload.
-  await publish(await memberIds(id), { type: "message", conversationId: id })
+  // The reader hears of it (their counts move), and so does everyone who has sent in the chat, so their ticks turn to seen on an
+  // open thread without a reload. Someone who has sent nothing has no ticks to turn, so the read is not sent to them: their
+  // reload would undo a decline made right after the other person's read.
+  const senders = await all<{ sender_id: string }>("SELECT DISTINCT sender_id FROM chat_messages WHERE conversation_id = ?", id)
+  await publish([viewer.id, ...senders.map((row) => row.sender_id)], { type: "message", conversationId: id, readBy: viewer.id })
   refresh()
 }
 

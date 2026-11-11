@@ -1,7 +1,7 @@
 import Link from "@/components/app/link"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
-import { BarChart3, Lock } from "lucide-react"
+import { BarChart3, Lock, MapPin } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { canSeePost, getPost, getProfileByHandle, mutualFollowers, type MiniUser, type ProfileTab } from "@/lib/data"
 import { feedFor, type FeedSpec } from "@/lib/feeds"
@@ -13,7 +13,7 @@ import { FeedList } from "@/components/app/feed-list"
 import type { FollowState } from "@/components/app/follow-button"
 import { PageHeader } from "@/components/app/page-header"
 import { PostCard } from "@/components/app/post-card"
-import { MessageButton, ProfileActions } from "@/components/app/profile-actions"
+import { ProfileActions } from "@/components/app/profile-actions"
 import { ProfileBanner } from "@/components/app/profile-banner"
 import { ProfileVisit } from "@/components/app/profile-visit"
 import { ProfileEditDialog } from "@/components/app/profile-edit"
@@ -110,12 +110,13 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
         <ProfileBanner file={profile.bannerFile} handle={profile.handle} className="h-36 sm:h-52" />
       </div>
 
-      {/* The avatar hangs over the banner's lower edge. The buttons sit on the same row, so they never run under it. */}
-      <div className="relative z-10 flex items-end justify-between gap-3 px-4">
+      {/* The avatar hangs over the banner's lower edge. On a wide screen the buttons sit on its row. On a phone they take a
+          full row under it, so Following and Message have room. */}
+      <div className="relative z-10 flex flex-wrap items-end justify-between gap-3 px-4">
         <div className="-mt-12 rounded-full bg-background p-1.5">
           <Avatar user={profile} size={96} />
         </div>
-        <div className="flex min-w-0 flex-nowrap items-center justify-end gap-2 pb-1">
+        <div className="order-last flex w-full min-w-0 flex-nowrap items-center justify-end gap-2 sm:order-none sm:w-auto sm:pb-1">
           {isSelf ? (
             <>
               <Link
@@ -163,14 +164,21 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
           ) : null}
           {profile.status ? <p className="text-[15px] leading-6">{profile.status}</p> : null}
           {profile.bio ? <p className="text-[15px] leading-6 whitespace-pre-line">{profile.bio}</p> : null}
-          <Link href={`${base}/about`} className="w-fit text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline">
-            Joined {String(new Date(profile.createdAt).getFullYear())}
-          </Link>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <Link href={`${base}/about`} className="w-fit transition-colors hover:text-foreground hover:underline">
+              Joined {String(new Date(profile.createdAt).getFullYear())}
+            </Link>
+            {profile.location ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                {profile.location}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         <ProfileStats base={base} following={profile.following} followers={profile.followers} />
         {mutual && mutual.total > 0 ? <MutualLine users={mutual.users} total={mutual.total} /> : null}
-        {isSelf ? null : <MessageButton handle={profile.handle} />}
       </section>
 
       <ProfileTabs

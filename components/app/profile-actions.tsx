@@ -10,11 +10,11 @@ import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { FollowButton, type FollowState } from "@/components/app/follow-button"
 import { useProofGate } from "@/components/app/proof-dialog"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// Opens a direct message with someone. The profile places it under the stats, as a small outline pill.
-export function MessageButton({ handle }: { handle: string }) {
+// Opens a direct message with someone. It sits in the profile's action row, beside Following.
+export function MessageButton({ handle, className }: { handle: string; className?: string }) {
   const router = useRouter()
   const [messaging, startMessaging] = useTransition()
   const proof = useProofGate()
@@ -41,7 +41,7 @@ export function MessageButton({ handle }: { handle: string }) {
         aria-label={`Message @${handle}`}
         disabled={messaging}
         onClick={() => message()}
-        className="h-9 w-fit rounded-full px-4 font-semibold"
+        className={cn("h-11 w-fit rounded-full px-4 font-semibold", className)}
       >
         <Mail className="size-4" aria-hidden="true" />
         Message
@@ -51,7 +51,8 @@ export function MessageButton({ handle }: { handle: string }) {
   )
 }
 
-// The actions on someone else's profile, in the header row beside the avatar. Follow leads, and the bell and the menu are square.
+// The actions on someone else's profile: Following, then Message, then a menu with post notifications, mute and block.
+// On a phone the row takes the full width under the avatar.
 export function ProfileActions({
   handle,
   state,
@@ -96,7 +97,7 @@ export function ProfileActions({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
       {blocked ? (
         <Button
           type="button"
@@ -111,21 +112,8 @@ export function ProfileActions({
         </Button>
       ) : (
         <>
-          <FollowButton handle={handle} state={state} from={from} className="h-11 flex-1 rounded-full sm:h-11" />
-          {state === "following" ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={notifying ? `Stop post notifications for @${handle}` : `Get post notifications for @${handle}`}
-              aria-pressed={notifying}
-              disabled={pending}
-              onClick={togglePosts}
-              className={cn("size-11 shrink-0 rounded-xl", notifying && "border-foreground text-foreground")}
-            >
-              {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
-            </Button>
-          ) : null}
+          <FollowButton handle={handle} state={state} from={from} className="h-11 flex-1 rounded-full sm:flex-none" />
+          <MessageButton handle={handle} className="flex-1 sm:flex-none" />
         </>
       )}
       <DropdownMenu>
@@ -136,6 +124,15 @@ export function ProfileActions({
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-52">
+          {!blocked && state === "following" ? (
+            <>
+              <DropdownMenuItem onClick={togglePosts}>
+                {notifying ? <BellRing className="size-4" /> : <Bell className="size-4" />}
+                {notifying ? "Stop post notifications" : "Get post notifications"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuItem onClick={mute}>
             {muted ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
             {muted ? `Unmute @${handle}` : `Mute @${handle}`}

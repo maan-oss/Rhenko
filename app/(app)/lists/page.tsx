@@ -1,5 +1,5 @@
 import Link from "@/components/app/link"
-import { Lock } from "lucide-react"
+import { ChevronRight, Lock } from "lucide-react"
 import { requireViewer } from "@/lib/auth"
 import { listsFor, type ListSummary } from "@/lib/data"
 import { formatCount } from "@/lib/format"
@@ -23,9 +23,16 @@ async function ListsBody() {
   return (
     <>
       <ListsHeader />
-      <Link href="/packs" className="mx-4 mt-4 mb-2 flex flex-col gap-0.5 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50">
-        <span className="font-semibold">Starter packs</span>
-        <span className="text-sm text-muted-foreground">Lists of people, published by the people who made them. Follow everyone in one at once.</span>
+      {/* A full-width row like the pack rows under it, so its text lines up with the section headings below. */}
+      <Link
+        href="/packs"
+        className="mt-3 flex items-center justify-between gap-4 border-y border-border px-4 py-4 transition-colors hover:bg-muted/50"
+      >
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="font-semibold">Starter packs</span>
+          <span className="text-sm text-muted-foreground">Lists of people, published by the people who made them. Follow everyone in one at once.</span>
+        </span>
+        <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>
       <Section title="Your lists" lists={owned} empty="You haven't made a list yet. Use New list at the top to make one, then add people to it." />
       <Section

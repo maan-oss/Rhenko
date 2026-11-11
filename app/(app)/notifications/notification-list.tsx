@@ -173,7 +173,6 @@ function NoteRow({ note, viewerHandle }: { note: NotificationView; viewerHandle:
             </div>
           ) : null}
         </div>
-        {note.read ? null : <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-foreground" />}
       </Link>
     </li>
   )
