@@ -57,7 +57,7 @@ export function CreateListForm() {
       </label>
       <label className="flex items-center gap-2 text-[15px]">
         <input name="private" type="checkbox" className="size-4 accent-dusk" />
-        Private. Only you can see it, and nobody can follow it.
+        Nobody can follow a private list.
       </label>
       {state.error ? (
         <p role="alert" className="text-sm text-destructive">

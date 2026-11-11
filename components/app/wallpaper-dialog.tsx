@@ -41,7 +41,7 @@ export function WallpaperDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-md", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
         <DialogTitle>Chat wallpaper</DialogTitle>
-        <DialogDescription>Only you see this background. The other people in the chat keep theirs.</DialogDescription>
+        <DialogDescription className="sr-only">Choose a background for this chat.</DialogDescription>
         <div role="radiogroup" aria-label="Wallpaper" className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {WALLPAPERS.map((wallpaper) => {
             const on = wallpaper.key === current

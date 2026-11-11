@@ -14,7 +14,7 @@ const GROUPS = [
       { href: "/settings/about", title: "About you" },
       { href: "/settings/connections", title: "Connections and languages" },
       { href: "/settings/security", title: "Security" },
-      { href: "/settings/devices", title: "Devices and encryption" },
+      { href: "/settings/devices", title: "Devices" },
       { href: "/settings/privacy", title: "Privacy and safety" },
     ],
   },
@@ -24,7 +24,7 @@ const GROUPS = [
       { href: "/settings/appearance", title: "Appearance" },
       { href: "/settings/notifications", title: "Notifications" },
       { href: "/settings/for-you", title: "For you" },
-      { href: "/settings/shortcuts", title: "Keyboard shortcuts" },
+      { href: "/settings/shortcuts", title: "Keyboard shortcuts", desktopOnly: true },
     ],
   },
   {
@@ -64,7 +64,7 @@ async function SettingsBody() {
             <h2 className="px-4 pb-1 text-[13px] font-medium text-muted-foreground">{group.title}</h2>
             <ul className="list-none">
               {group.sections.map((section) => (
-                <li key={section.href}>
+                <li key={section.href} className={section.desktopOnly ? "hidden lg:block" : undefined}>
                   <Link
                     href={section.href}
                     className="flex items-center justify-between px-4 py-3.5 text-[16px] font-semibold transition-colors duration-200 hover:bg-foreground/5 lg:py-3"

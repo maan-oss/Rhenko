@@ -74,8 +74,7 @@ export function PasskeysPanel({ passkeys }: { passkeys: PasskeyItem[] }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-[15px] leading-relaxed text-muted-foreground">
-        A passkey signs you in with your device&apos;s fingerprint, face or PIN, with no password. A security key works as the
-        second step after your password.
+        Sign in with your device&apos;s fingerprint, face or PIN, with no password.
       </p>
       {!supported ? (
         <p className="text-[15px] text-muted-foreground">This browser can&apos;t use passkeys or security keys.</p>

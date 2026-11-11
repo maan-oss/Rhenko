@@ -121,7 +121,7 @@ export function PostCard({
                 Goes out <LocalTime at={post.publishAt} variant="full" />
               </>
             ) : (
-              "Draft. Only you can see it."
+              "Draft"
             )}
           </span>
         </p>

@@ -44,8 +44,8 @@ async function DraftsBody({ searchParams }: { searchParams: SearchParams }) {
           title={tab === "drafts" ? "No drafts" : "Nothing scheduled"}
           body={
             tab === "drafts"
-              ? "Start a post and press Save draft. It waits here until you publish it."
-              : "Write a post, press the calendar, and pick a time. It waits here and goes out by itself."
+              ? "Start a post and choose Save draft. It waits here until you publish it."
+              : "Write a post and schedule it for a time. It waits here and goes out by itself."
           }
         >
           <ComposeAction>Write a post</ComposeAction>

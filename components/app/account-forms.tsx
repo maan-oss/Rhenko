@@ -101,7 +101,6 @@ export function BirthdayForm({ birthday }: { birthday: string | null }) {
           Date of birth
         </label>
         <DateField id="account-birthday" name="birthday" defaultValue={birthday ?? ""} placeholder="Pick your birthday" />
-        <span className="text-xs text-muted-foreground">Only you can see this.</span>
       </div>
       <ErrorLine message={state.error} />
       <div className="flex justify-end">

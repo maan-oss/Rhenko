@@ -259,7 +259,7 @@ async function postFlows({ phone }) {
     await openDrafts(author.page)
     const item = card(author.page, draftText)
     await item.waitFor()
-    await item.getByText("Draft. Only you can see it.").waitFor()
+    await item.getByText("Draft", { exact: true }).first().waitFor()
     await openProfile(reader.page, author.handle)
     assert.equal(await noPost(reader.page, draftText), true, "a draft shows on the author's profile")
     await openDrafts(author.page)

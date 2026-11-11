@@ -34,7 +34,7 @@ function uniq(label) {
 // With encryption on, a chat row shows the fixed label for a sealed message, never its text (lib/e2ee-payload.ts). The
 // rows below are found by the label the page really shows, so the same check works in both modes.
 const ENCRYPTED = process.env.RHENKO_E2EE === "1"
-const ENCRYPTED_PREVIEW = "Encrypted message"
+const ENCRYPTED_PREVIEW = "Sent a message"
 function previewOf(text) {
   return ENCRYPTED ? ENCRYPTED_PREVIEW : text
 }
@@ -82,7 +82,10 @@ function muteRow(page, label) {
 }
 
 async function clickMuteSwitch(page, label) {
-  await page.getByRole("button", { name: "Chat options" }).click()
+  // The button is painted before the page is ready, and a tap then does nothing, so the wait is for the page to take it.
+  const options = page.getByRole("button", { name: "Chat options" })
+  await ready(options)
+  await options.click()
   await acted(page, () => muteRow(page, label).click())
   // The phone drawer stays open after a tap, where the menu closed by itself, so close it here.
   await page.keyboard.press("Escape")
@@ -90,7 +93,9 @@ async function clickMuteSwitch(page, label) {
 
 // Waits until the mute switch offers this label. That means opening the options to read its row.
 async function waitForMuteLabel(page, label) {
-  await page.getByRole("button", { name: "Chat options" }).click()
+  const options = page.getByRole("button", { name: "Chat options" })
+  await ready(options)
+  await options.click()
   await muteRow(page, label).waitFor()
   await page.keyboard.press("Escape")
   await muteRow(page, label).waitFor({ state: "detached" })
@@ -220,7 +225,8 @@ async function bubbleLookChecks({ where, phone, sender, receiver }) {
     ]) {
       await sender.page.locator("input[name=document]").setInputFiles(makeDocumentFile(file, kind))
       await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
-      const card = receiver.page.getByRole("link", { name: new RegExp(`^Download ${escapeRegExp(file)}, ${escapeRegExp(label)}, `) })
+      // A plain document is a link to its file. An encrypted one is opened and saved on the device, so it is a button.
+      const card = receiver.page.getByRole(ENCRYPTED ? "button" : "link", { name: new RegExp(`^Download ${escapeRegExp(file)}, ${escapeRegExp(label)}, `) })
       const box = await boxOf(card)
       const bubble = await boxOf(bubbleAround(card))
       assert.ok(insideBox(box, bubble), `${file}: the card sits outside its bubble`)
@@ -289,8 +295,7 @@ async function directFlow({ phone }) {
     await row.waitFor()
     await row.click()
     await receiver.page.waitForURL((url) => url.pathname === `/messages/${convId}`)
-    await receiver.page.getByText("Accept this message request to reply.").waitFor()
-    await receiver.page.getByText("Accept the request to reply.").waitFor()
+    await receiver.page.getByText("Accept this request to reply.").waitFor()
     await threadText(receiver.page, first).waitFor()
     assert.equal(await chatBox(receiver.page).count(), 0, "a message box is offered before the request is accepted")
     assert.equal(await receiver.page.getByRole("button", { name: `Call ${sender.name}`, exact: true }).isDisabled(), true, "the call button works before the request is accepted")

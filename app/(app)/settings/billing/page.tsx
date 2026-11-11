@@ -8,7 +8,7 @@ type SearchParams = Promise<{ payouts?: string | string[] }>
 
 const NOTICES: Record<string, string> = {
   "payouts:return": "Thanks, your payout details are saved. Stripe is checking them, and tips can reach you once it's done.",
-  "payouts:refresh": "That Stripe link has expired. Tap Set up payouts to get a fresh one.",
+  "payouts:refresh": "That Stripe link has expired. Use Set up payouts to get a fresh one.",
 }
 
 export default function BillingPage({ searchParams }: { searchParams: SearchParams }) {

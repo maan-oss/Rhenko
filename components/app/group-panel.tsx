@@ -251,7 +251,7 @@ export function GroupPanel({ conversationId, title, members }: { conversationId:
               alone
                 ? "You're the only one left, so leaving deletes the group and its messages."
                 : viewerIsCreator
-                  ? "You made this group. Once you leave, nobody can remove people from it. You won't get its messages, and someone in the group can add you back."
+                  ? "You made this group. Once you leave, nobody can remove people from it."
                   : "You won't get its messages any more. Someone in the group can add you back."
             }
             confirmLabel="Leave group"

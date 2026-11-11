@@ -48,7 +48,7 @@ async function BookmarksBody({ searchParams }: { searchParams: SearchParams }) {
         viewer={viewer}
         folders={folders.length > 0 ? folders : undefined}
         emptyTitle="Nothing saved here"
-        emptyBody="Bookmark a post with the bookmark button, and it lands here. Only you can see your bookmarks."
+        emptyBody="Posts you bookmark show up here."
       />
     </>
   )

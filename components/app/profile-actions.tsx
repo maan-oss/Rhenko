@@ -147,7 +147,7 @@ export function ProfileActions({
         open={confirmingBlock}
         onOpenChange={setConfirmingBlock}
         title={`Block @${handle}?`}
-        description={`They won't be able to follow you, see your posts or message you, and you won't see theirs. Any follow between you ends, and unblocking doesn't bring it back.`}
+        description={`They can't follow you, see your posts or message you, and you can't see theirs. Unblocking doesn't restore follows.`}
         confirmLabel="Block"
         action={() => toggleBlock(handle, true)}
         onDone={() => toast.success(`Blocked @${handle}.`)}

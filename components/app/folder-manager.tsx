@@ -25,7 +25,7 @@ export function FolderManager({ folders }: { folders: { id: string; name: string
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md" showCloseButton>
         <DialogTitle className="pr-8 text-lg font-semibold">Bookmark folders</DialogTitle>
-        <DialogDescription className="text-sm text-muted-foreground">Sort saved posts into folders. Only you can see them.</DialogDescription>
+        <DialogDescription className="text-sm text-muted-foreground">Sort saved posts into folders.</DialogDescription>
         <form
           ref={formRef}
           className="flex gap-2"

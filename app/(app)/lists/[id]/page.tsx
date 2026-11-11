@@ -60,7 +60,7 @@ async function ListBody({ params, searchParams }: { params: Params; searchParams
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           {list.private ? (
             <span className="flex items-center gap-1">
-              <Lock className="size-3.5" /> Private. Only you can see it.
+              <Lock className="size-3.5" /> Private
             </span>
           ) : null}
           <span>

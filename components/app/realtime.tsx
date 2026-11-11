@@ -50,8 +50,11 @@ export function Realtime({ viewerId }: { viewerId: string }) {
         return
       }
       switch (event.type) {
+        // Each connection opens with a hello. A message sent before the stream opened is never pushed, so a thread refreshes once here
+        // to pick up anything it missed.
         case "hello":
           receiveHello(event.bootId)
+          if (path.current.startsWith("/messages")) refresh()
           return
         case "call":
           receiveCallEvent(event)

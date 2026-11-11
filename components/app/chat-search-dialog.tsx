@@ -100,10 +100,7 @@ export function ChatSearchDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-md", DIALOG_CLOSE_PHONE, DIALOG_FIT)}>
         <DialogTitle>Search this chat</DialogTitle>
-        <DialogDescription>
-          Finds the words in messages here. Your own and theirs, newest first.
-          {encrypted ? " Encrypted messages are searched on this device." : null}
-        </DialogDescription>
+        <DialogDescription className="sr-only">Search the messages in this chat.</DialogDescription>
         <label className="mt-2 flex items-center gap-2 rounded-full border border-border bg-background px-4 focus-within:ring-2 focus-within:ring-ring">
           <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">Search words in this chat</span>

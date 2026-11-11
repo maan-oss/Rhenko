@@ -13,7 +13,7 @@ export const PAYLOAD_POLL_CHOICES_MIN = 2
 export const PAYLOAD_POLL_CHOICES_MAX = 12
 
 // What a banner, the chats list, a push, a reminder or a digest says about an encrypted message. The server never knows what it says.
-export const ENCRYPTED_PREVIEW = "Encrypted message"
+export const ENCRYPTED_PREVIEW = "Sent a message"
 
 // The kinds of file an encrypted chat carries. A video is not among them: the server cannot strip the location and device details from
 // a file it cannot read, so videos wait until that can be done on the device.

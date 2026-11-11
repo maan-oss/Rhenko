@@ -136,7 +136,7 @@ async function chatFlow() {
   await check("the receiver reads the request's first message on their own device, after a fresh load", async () => {
     need(convId, "the conversation")
     await go(receiver.page, `/messages/${convId}`, threadText(receiver.page, first))
-    await receiver.page.getByText("Accept the request to reply.").waitFor()
+    await receiver.page.getByText("Accept this request to reply.").waitFor()
   })
 
   await check("once accepted, the reply reaches the sender decrypted, without a reload", async () => {
@@ -247,10 +247,15 @@ async function chatFlow() {
     await framing.waitFor({ state: "detached" })
     await sender.page.getByRole("button", { name: "View once", exact: true }).click()
     await acted(sender.page, () => sender.page.getByRole("button", { name: "Send", exact: true }).click())
-    const [row] = await query(
-      "SELECT media_file FROM chat_messages WHERE conversation_id = ? AND media_file LIKE '%.sealed' AND view_once = 1 ORDER BY created_at DESC LIMIT 1",
-      convId
-    )
+    // The photo is stored once the server answers, which can be after the send is shown, so the row is awaited.
+    let row = null
+    await eventually(async () => {
+      ;[row] = await query(
+        "SELECT media_file FROM chat_messages WHERE conversation_id = ? AND media_file LIKE '%.sealed' AND view_once = 1 ORDER BY created_at DESC LIMIT 1",
+        convId
+      )
+      return row !== undefined
+    }, "the view-once photo to be stored")
     assert.ok(row, "the view-once photo is not stored")
     const tile = receiver.page.getByRole("button", { name: /View once photo/ }).first()
     await tile.waitFor()
@@ -432,7 +437,7 @@ async function chatFlow() {
     await go(receiver.page, "/settings/devices", receiver.page.getByRole("heading", { name: "Waiting for approval" }))
     await receiver.page.getByText(code, { exact: true }).waitFor()
     await acted(receiver.page, () => receiver.page.getByRole("button", { name: "Approve", exact: true }).click())
-    await second.page.getByText("This browser is linked, so it can read and send encrypted messages.").waitFor()
+    await second.page.getByText("Linked and ready.").waitFor()
     await go(second.page, `/messages/${convId}`, threadText(second.page, first))
     await threadText(second.page, reply).waitFor()
     const [count] = await query(

@@ -169,12 +169,16 @@ export async function rewrapFor(input: {
 export async function safetyNumber(first: string[], second: string[]): Promise<string> {
   const subtle = globalThis.crypto.subtle
   const fingerprints = [await fingerprint(first), await fingerprint(second)].sort()
-  // Twelve groups of five digits need 48 bytes; two rounds of SHA-256 give 64.
+  // Twelve groups of five digits read four bytes each, 48 bytes in all. Two SHA-256 digests give 64 bytes, so every group has
+  // real bytes behind it: one digest alone is 32 bytes, and the last groups would read past its end.
   const once = new Uint8Array(await subtle.digest("SHA-256", encoder.encode(fingerprints.join("|"))))
-  const digest = new Uint8Array(await subtle.digest("SHA-256", once))
+  const twice = new Uint8Array(await subtle.digest("SHA-256", once))
+  const bytes = new Uint8Array(once.length + twice.length)
+  bytes.set(once, 0)
+  bytes.set(twice, once.length)
   const groups: string[] = []
   for (let i = 0; i < 12; i++) {
-    const value = ((digest[i * 4] << 24) | (digest[i * 4 + 1] << 16) | (digest[i * 4 + 2] << 8) | digest[i * 4 + 3]) >>> 0
+    const value = ((bytes[i * 4] << 24) | (bytes[i * 4 + 1] << 16) | (bytes[i * 4 + 2] << 8) | bytes[i * 4 + 3]) >>> 0
     groups.push(String(value % 100000).padStart(5, "0"))
   }
   return groups.join(" ")

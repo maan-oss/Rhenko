@@ -26,11 +26,11 @@ async function ListsBody() {
       {/* A full-width row like the pack rows under it, so its text lines up with the section headings below. */}
       <Link
         href="/packs"
-        className="mt-3 flex items-center justify-between gap-4 border-y border-border px-4 py-4 transition-colors hover:bg-muted/50"
+        className="flex items-center justify-between gap-4 border-b border-border px-4 py-4 transition-colors hover:bg-muted/50"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="font-semibold">Starter packs</span>
-          <span className="text-sm text-muted-foreground">Lists of people, published by the people who made them. Follow everyone in one at once.</span>
+          <span className="text-sm text-muted-foreground">Lists of people, published by the people who made them. Follow everyone in one go.</span>
         </span>
         <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>

@@ -155,7 +155,7 @@ function ThisDevice({ publicKey, serverOn }: { publicKey: string; serverOn: bool
         <Skeleton className="h-10 w-full shrink-0 rounded-lg sm:w-56" />
       ) : here === "off" ? (
         <Button type="button" onClick={turnOn} disabled={pending} className="h-10 w-full shrink-0 rounded-lg px-5 sm:w-auto">
-          {pending ? "Turning on" : "Turn on push on this device"}
+          {pending ? "Turning on" : "Turn on push notifications"}
         </Button>
       ) : here === "on" ? (
         <Button type="button" variant="outline" onClick={turnOff} disabled={pending} className="h-10 w-full shrink-0 rounded-lg px-5 sm:w-auto">

@@ -1062,7 +1062,9 @@ function MessageRow({
 
   // What the bubble holds decides where its time line sits and how much room it leaves around the content.
   const file = message.mediaFile
-  const isPicture = file !== null && !isVoiceFile(file) && !isAudioFile(file) && !isVideoFile(file) && !isDocumentFile(file)
+  // An encrypted photo is a picture like any other. Its file is opened on this device, so the server gives no file name for it.
+  const sealedPicture = message.sealedAttachment?.kind === "media" && message.sealedAttachment.media.media === "image"
+  const isPicture = sealedPicture || (file !== null && !isVoiceFile(file) && !isAudioFile(file) && !isVideoFile(file) && !isDocumentFile(file))
   const onPicture =
     isPicture &&
     !viewOnceHidden &&
@@ -1269,6 +1271,9 @@ function MessageRow({
                       messageId={message.id}
                       media={message.sealedAttachment.media}
                       onLoad={message.mine && fresh ? followLatest : undefined}
+                      framed={framed}
+                      wide={onPicture}
+                      time={onPicture ? <Meta message={message} place="picture" refer={metaRef} /> : null}
                     />
                   ) : file && isVoiceFile(file) ? (
                     <audio controls preload="metadata" src={`/media/${file}`} aria-label="Voice message" className="block h-10 w-[240px] max-w-full" />

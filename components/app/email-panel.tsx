@@ -109,12 +109,12 @@ export function EmailPanel({ email, verified, pending, ready, codeNeed }: Props)
           <p className="text-sm text-muted-foreground">
             {verified
               ? "You can use it to reset your password if you forget it."
-              : "Verify it to use it for password resets. Only you can see it."}
+              : "Verify it to reset your password by email."}
           </p>
         </div>
       ) : (
         <p className="text-[15px] text-muted-foreground">
-          No email yet. Add one and verify it, and you can reset your password by email. Only you can see it.
+          No email yet. Add one to reset your password by email.
         </p>
       )}
 

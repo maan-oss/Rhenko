@@ -150,7 +150,7 @@ export function DigestSettings({ state, address, enabled, chosen, hour, lastSent
               Send it at
             </label>
             <span id="digest-hour-note" className="text-sm text-muted-foreground">
-              Rhenko doesn&apos;t store your time zone, so the hour is in UTC. Beside each hour is the time on this device&apos;s clock.
+              Times are in UTC. Your local time is shown beside each hour.
               {lastSentAt ? (
                 <>
                   {" "}

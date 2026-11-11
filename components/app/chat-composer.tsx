@@ -332,7 +332,7 @@ export function ChatComposer({
     if (pick === null) return null
     if (pick.kind === "media") {
       if (pick.file.type.startsWith("video/")) {
-        toast.error("Videos aren't available in encrypted chats yet.")
+        toast.error("Videos can't be sent in this chat yet.")
         return "refused"
       }
       return { file: pick.file, kind: "image", mime: baseType(pick.file.type), name: pick.file.name, scan: pick.scan, viewOnce: viewOnce && !pick.scan }

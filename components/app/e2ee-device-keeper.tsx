@@ -14,7 +14,7 @@ const SLOW_AFTER_MS = 9_000
 // Gives this browser its encryption device as soon as the app opens, when encrypted chats are on. The others in an encrypted chat
 // can only send to someone who has a device, so it is made before anyone needs it. When the account already has devices, this browser
 // has to be linked from one of them, so the app says so once, with a way to the page that does it. While the keys are being made the
-// first time, the setup animation covers the page. Otherwise it renders nothing.
+// first time, a short setup card covers the page. Otherwise it renders nothing.
 export function DeviceKeeper({ enabled }: { enabled: boolean }) {
   const router = useRouter()
   const [phase, setPhase] = useState<"idle" | "setting" | "slow">("idle")
@@ -37,7 +37,7 @@ export function DeviceKeeper({ enabled }: { enabled: boolean }) {
     readyDevice().then(done, (failure: unknown) => {
       done()
       if (!(failure instanceof DeviceLinkRequired)) return
-      toast("Link this browser to read your encrypted chats.", {
+      toast("Link this browser to read your messages.", {
         duration: 15_000,
         action: { label: "Link", onClick: () => router.push("/settings/devices") },
       })

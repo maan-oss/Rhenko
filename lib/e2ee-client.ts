@@ -3,7 +3,7 @@
 // lib/e2ee-keystore.ts. The server only sees envelopes, wraps, public keys, the encrypted bytes of a file, and the ids of a poll's
 // choices. Browser only.
 
-import { decryptMessage, E2eeError, encryptMessage, generateDeviceKeys, rewrapFor, type DeviceKeys, type Recipient, type Wrap } from "@/lib/e2ee"
+import { decryptMessage, E2eeError, encryptMessage, generateDeviceKeys, rewrapFor, type DeviceKeys, type Envelope, type Recipient, type Wrap } from "@/lib/e2ee"
 import { openFile, sealFile } from "@/lib/e2ee-media"
 import { loadDeviceKeys, pinnedSigningKey, pinSigningKey, saveDeviceKeys } from "@/lib/e2ee-keystore"
 import {
@@ -187,9 +187,14 @@ export async function shareHistoryWithLink(
   return { ok: true, count, skipped }
 }
 
+// The name a linked browser is listed under, the way a person would say it: "Chrome on iPhone", "Safari on Mac". Not the
+// platform string ("Linux x86_64"), which reads as a computer's name even on a phone.
 function browserLabel(): string {
-  const platform = typeof navigator !== "undefined" && navigator.platform ? navigator.platform : "browser"
-  return `Browser on ${platform}`
+  const agent = typeof navigator !== "undefined" ? navigator.userAgent : ""
+  const system = /iPhone/.test(agent) ? "iPhone" : /iPad/.test(agent) ? "iPad" : /Android/.test(agent) ? "Android" : /Windows/.test(agent) ? "Windows" : /CrOS/.test(agent) ? "ChromeOS" : /Mac OS X|Macintosh/.test(agent) ? "Mac" : /Linux/.test(agent) ? "Linux" : null
+  const browser = /Edg\//.test(agent) ? "Edge" : /Firefox|FxiOS/.test(agent) ? "Firefox" : /CriOS|Chrome|Chromium/.test(agent) ? "Chrome" : /Safari/.test(agent) ? "Safari" : null
+  if (browser && system) return `${browser} on ${system}`
+  return browser ?? system ?? "Browser"
 }
 
 // What sealing a message needs: this browser's device, and every device that should be able to read it. Refused while someone in the
@@ -220,6 +225,41 @@ type SendOptions = {
   postId?: string | null
 }
 
+// The messages this browser sent, by id, with the envelope they were sealed as and the payload they carry. The sender already has the
+// payload, so its own messages can read as soon as they reach the page, rather than after this device opens them again. Only the last
+// few are kept, in this page's memory.
+const SENT_HERE_LIMIT = 200
+// The signature is what identifies an envelope: the server returns it as JSON text, so it is compared as its signature, not as text.
+const sentHere = new Map<string, { sig: string; payload: MessagePayload }>()
+
+function rememberSent(messageId: string, envelope: Envelope, payload: MessagePayload) {
+  sentHere.set(messageId, { sig: envelope.sig, payload })
+  if (sentHere.size > SENT_HERE_LIMIT) {
+    const oldest = sentHere.keys().next().value
+    if (oldest !== undefined) sentHere.delete(oldest)
+  }
+}
+
+// The payload this browser sealed for a message, if the envelope on the page carries the signature it sent. An edited message has a new
+// signature, so its new text is opened as usual.
+function sentPayload(messageId: string, envelope: string): MessagePayload | null {
+  const sent = sentHere.get(messageId)
+  if (!sent) return null
+  let sig: unknown
+  try {
+    sig = (JSON.parse(envelope) as { sig?: unknown }).sig
+  } catch {
+    return null
+  }
+  return sig === sent.sig ? sent.payload : null
+}
+
+// The text of a plain text message this browser sent, when it is still on the page. Other kinds are opened as usual.
+export function sentText(messageId: string, envelope: string): OpenedMessage | null {
+  const sent = sentPayload(messageId, envelope)
+  return sent?.kind === "text" ? { ok: true, text: sent.body, attachment: null } : null
+}
+
 // Seals a payload for every device in the chat and sends it as a new message. The message id is picked here, because it is bound into
 // the encryption.
 async function sendSealedPayload(conversationId: string, payload: MessagePayload, options: SendOptions): Promise<SealedSend> {
@@ -235,6 +275,7 @@ async function sendSealedPayload(conversationId: string, payload: MessagePayload
       payload,
       recipients: sealing.recipients,
     })
+    rememberSent(messageId, sealed.envelope, payload)
     const result = await sendEncryptedMessage({
       conversationId,
       id: messageId,
@@ -352,25 +393,27 @@ type FileSend = {
 async function sendSealedFile(input: FileSend, sealing: SealingOk): Promise<SealedSend> {
   const messageId = crypto.randomUUID()
   const file = await sealFile(input.plain, input.conversationId, messageId)
+  const payload: MessagePayload = {
+    kind: "media",
+    body: input.body,
+    media: input.media,
+    mime: input.mime,
+    name: input.name,
+    size: input.plain.byteLength,
+    key: file.key,
+    iv: file.iv,
+    scan: input.scan,
+    viewOnce: input.viewOnce,
+  }
   const sealed = await encryptMessage({
     conversationId: input.conversationId,
     messageId,
     senderDevice: sealing.own.id,
     senderSigningPrivate: sealing.own.keys.signingPrivate,
-    payload: {
-      kind: "media",
-      body: input.body,
-      media: input.media,
-      mime: input.mime,
-      name: input.name,
-      size: input.plain.byteLength,
-      key: file.key,
-      iv: file.iv,
-      scan: input.scan,
-      viewOnce: input.viewOnce,
-    },
+    payload,
     recipients: sealing.recipients,
   })
+  rememberSent(messageId, sealed.envelope, payload)
   const form = new FormData()
   form.append("conversationId", input.conversationId)
   form.append("id", messageId)
@@ -502,19 +545,26 @@ async function decryptPayload(conversationId: string, message: SealedInput, own:
 export async function openSealed(conversationId: string, sealed: SealedInput[]): Promise<Record<string, OpenedMessage>> {
   const opened: Record<string, OpenedMessage> = {}
   if (sealed.length === 0) return opened
-  let own: OwnDevice
+  // A message this browser sent is read from what it sealed. The others need this device, so a device that can't be read fails only those.
+  let own: OwnDevice | null = null
+  let ownError = OPEN_FAILED
   try {
     own = await readyDevice()
   } catch (error) {
-    const reason = error instanceof E2eeError ? error.message : OPEN_FAILED
-    for (const message of sealed) opened[message.id] = { ok: false, error: reason }
-    return opened
+    ownError = error instanceof E2eeError ? error.message : OPEN_FAILED
   }
-  const signing = await signingMap(conversationId)
+  const signing = own ? await signingMap(conversationId) : new Map<string, string>()
   for (const message of sealed) {
     try {
-      const payload = await decryptPayload(conversationId, message, own, signing)
-      opened[message.id] = await openedFrom(conversationId, payload, message)
+      const sent = sentPayload(message.id, message.envelope)
+      if (sent) {
+        opened[message.id] = await openedFrom(conversationId, sent, message)
+      } else if (own) {
+        const payload = await decryptPayload(conversationId, message, own, signing)
+        opened[message.id] = await openedFrom(conversationId, payload, message)
+      } else {
+        opened[message.id] = { ok: false, error: ownError }
+      }
     } catch (error) {
       opened[message.id] = { ok: false, error: failureOf(message, error) }
     }

@@ -22,7 +22,7 @@ export default async function StarredMessagesPage() {
     <>
       <PageHeader title="Starred messages" backHref="/messages" />
       {messages.length === 0 ? (
-        <EmptyState title="No starred messages" body="Star a message from its menu and it appears here. Only you can see your stars." />
+        <EmptyState title="No starred messages" body="Star a message from its menu and it shows up here." />
       ) : (
         <ul className="list-none">
           {messages.map((message) => {

@@ -139,7 +139,7 @@ function TargetList({
                 <span className="block truncate font-semibold">{target.title}</span>
                 {wrongKind ? (
                   <span className="block text-[12px] text-muted-foreground">
-                    {encrypted ? "Not an encrypted chat" : "An encrypted chat"}
+                    {"Can't forward here"}
                   </span>
                 ) : null}
               </span>

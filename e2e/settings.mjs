@@ -100,16 +100,16 @@ async function settingsPages({ phone }) {
     await go(page, "/settings", page.getByRole("navigation", { name: "Settings sections" }))
     const nav = page.getByRole("navigation", { name: "Settings sections" })
     const titles = (await nav.getByRole("link").allInnerTexts()).map((text) => text.trim())
-    // Notices and Legal are their own pages, reached from this list (last, under Policies), so they are listed but not
-    // opened as sections.
     // Rhenko Plus, Notices and Legal are their own pages, reached from this list, so they are listed but not opened as
     // sections. Rhenko Plus sits just above Subscriptions and tips, and Notices and Legal come last, under Policies.
-    const titlesOnly = SECTIONS.map((section) => section.title)
+    // Keyboard shortcuts is a computer setting, so the Settings page on a phone does not list it.
+    const listed = SECTIONS.filter((section) => !phone || section.title !== "Keyboard shortcuts")
+    const titlesOnly = listed.map((section) => section.title)
     const billing = titlesOnly.indexOf("Subscriptions and tips")
     const expected = [...titlesOnly.slice(0, billing), "Rhenko Plus", ...titlesOnly.slice(billing), "Notices and appeals", "Legal"]
     assert.deepEqual(titles, expected, "the Settings page lists different sections than expected")
     await page.locator("main").getByRole("button", { name: "Log out", exact: true }).waitFor()
-    for (const section of SECTIONS) {
+    for (const section of listed) {
       await nav.getByRole("link", { name: section.title, exact: true }).click()
       await page.waitForURL((url) => url.pathname === section.path)
       await section.ready(page).first().waitFor()

@@ -78,7 +78,6 @@ export function AboutSettings({ initial, handle }: { initial: Initial; handle: s
       </form>
       <div className="border-b border-border px-4 py-4">
         <TopicPicker initial={initial.topics} />
-        <p className="mt-3 text-[13px] text-muted-foreground">Interests are private. Only you see them.</p>
       </div>
     </>
   )

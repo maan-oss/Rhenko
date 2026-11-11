@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react"
 import { ENCRYPTED_PREVIEW, type SealedAttachmentView } from "@/lib/e2ee-chat"
 import type { MessageView } from "@/lib/data"
-import { openSealed, readyDevice, type OpenedMessage } from "@/lib/e2ee-client"
+import { openSealed, readyDevice, sentText, type OpenedMessage } from "@/lib/e2ee-client"
 
 type Poll = NonNullable<MessageView["poll"]>
 // What a message was opened to, with the envelope it was opened from. An edited message has a new envelope, so its old result is not shown.
 type Opened = { envelope: string; result: OpenedMessage }
 
 // The thread's messages with each encrypted one's text and what it carries, filled in from this browser's device. Until a message is
-// opened it reads "Encrypted message", and a poll is not shown, because its question and choices are only known once it is opened. The
+// opened it reads "Sent a message", and a poll is not shown, because its question and choices are only known once it is opened. The
 // text lives only in this page's memory. A message is opened again when its envelope changes, which happens when it is edited. A file's
 // bytes are not read here: the bubble fetches and opens them when it shows them.
 export function useOpenedMessages(conversationId: string, messages: MessageView[], encrypted: boolean): MessageView[] {
@@ -55,7 +55,8 @@ export function useOpenedMessages(conversationId: string, messages: MessageView[
   return messages.map((message) => {
     if (message.sealed === null) return message
     const entry = opened[message.id]
-    const result = entry && entry.envelope === message.sealed.envelope ? entry.result : undefined
+    // A text this browser sent is shown at once; anything else waits for it to be opened.
+    const result = (entry && entry.envelope === message.sealed.envelope ? entry.result : undefined) ?? sentText(message.id, message.sealed.envelope)
     if (!result) return { ...message, body: ENCRYPTED_PREVIEW, attachment: null, contact: null, poll: null, sealedAttachment: null }
     if (!result.ok) return { ...message, body: result.error, attachment: null, contact: null, poll: null, sealedAttachment: null }
     return {

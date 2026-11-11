@@ -3,24 +3,36 @@
 // A file in an encrypted chat, shown the way its kind is shown in a plain chat. The file's bytes are fetched and opened here, when the
 // bubble shows them, and the decrypted copy lives only in this page's memory: an object URL that is released when the bubble leaves.
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { DocumentCard } from "@/components/app/attachment-view"
 import { openSealedFile } from "@/lib/e2ee-client"
 import type { SealedMediaView } from "@/lib/e2ee-chat"
+import { cn } from "@/lib/utils"
 
 export function SealedAttachment({
   conversationId,
   messageId,
   media,
   onLoad,
+  framed,
+  wide,
+  time,
 }: {
   conversationId: string
   messageId: string
   media: SealedMediaView
   onLoad?: () => void
+  // A picture that is the whole bubble: it keeps the thin frame and the set width a plain photo has, and its time line.
+  framed?: boolean
+  wide?: boolean
+  time?: ReactNode
 }) {
-  if (media.media === "image") return <SealedPicture conversationId={conversationId} messageId={messageId} media={media} onLoad={onLoad} />
+  if (media.media === "image") {
+    return (
+      <SealedPicture conversationId={conversationId} messageId={messageId} media={media} onLoad={onLoad} framed={framed} wide={wide} time={time} />
+    )
+  }
   if (media.media === "document") {
     return <SealedDocument conversationId={conversationId} messageId={messageId} media={media} />
   }
@@ -69,24 +81,39 @@ function SealedPicture({
   messageId,
   media,
   onLoad,
+  framed,
+  wide,
+  time,
 }: {
   conversationId: string
   messageId: string
   media: SealedMediaView
   onLoad?: () => void
+  framed?: boolean
+  wide?: boolean
+  time?: ReactNode
 }) {
   const picture = useOpenedUrl(conversationId, messageId, media)
   if (picture.failed) {
-    return <p className="rounded-xl bg-background px-3 py-2 text-sm text-muted-foreground">This picture couldn&apos;t be opened on this device.</p>
+    return <p className="rounded-xl bg-background px-3 py-2 text-sm text-muted-foreground">Couldn&apos;t open this picture.</p>
   }
+  // The same box a plain photo gets, so the bubble does not change shape when the picture arrives.
+  const box = cn("relative block max-w-full overflow-hidden", wide ? "w-[16.5rem]" : "w-fit", framed ? "rounded-[17px]" : "rounded-[14px]")
   if (picture.url === null) {
-    return <span role="img" aria-label="Loading picture" className="block h-40 w-56 max-w-full animate-pulse rounded-xl bg-foreground/10" />
+    return <span role="img" aria-label="Loading picture" className={cn("block h-40 max-w-full animate-pulse bg-foreground/10", wide ? "w-[16.5rem]" : "w-56", framed ? "rounded-[17px]" : "rounded-[14px]")} />
   }
   return (
-    <span className="relative block w-fit max-w-full">
+    <span className={box}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={picture.url} alt={media.scan ? "Scan" : "Shared photo"} onLoad={onLoad} decoding="async" className="max-h-72 max-w-full rounded-xl object-cover" />
+      <img
+        src={picture.url}
+        alt={media.scan ? "Scan" : "Shared photo"}
+        onLoad={onLoad}
+        decoding="async"
+        className={cn("max-h-72 max-w-full object-cover", wide && "w-full", framed ? "rounded-[17px]" : "rounded-[14px] ring-1 ring-black/[0.06]")}
+      />
       {media.scan ? <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-semibold text-white">Scan</span> : null}
+      {time}
     </span>
   )
 }
@@ -105,7 +132,7 @@ function SealedSound({
   width: string
 }) {
   const sound = useOpenedUrl(conversationId, messageId, media)
-  if (sound.failed) return <p className="rounded-xl bg-background px-3 py-2 text-sm text-muted-foreground">This recording couldn&apos;t be opened on this device.</p>
+  if (sound.failed) return <p className="rounded-xl bg-background px-3 py-2 text-sm text-muted-foreground">Couldn&apos;t open this recording.</p>
   if (sound.url === null) return <span role="status" aria-label="Loading recording" className={`block h-10 ${width} max-w-full animate-pulse rounded-full bg-foreground/10`} />
   return <audio controls preload="metadata" src={sound.url} aria-label={label} className={`block h-10 ${width} max-w-full`} />
 }
@@ -128,7 +155,7 @@ function SealedDocument({ conversationId, messageId, media }: { conversationId: 
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch {
-      toast.error("This file couldn't be opened on this device.")
+      toast.error("Couldn't open this file.")
     } finally {
       setSaving(false)
     }

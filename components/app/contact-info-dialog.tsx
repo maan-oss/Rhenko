@@ -119,10 +119,6 @@ export function ContactInfoDialog({ conversationId, onOpenChange }: { conversati
                 <h3 id="chat-safety" className="text-sm font-semibold text-muted-foreground">
                   Safety numbers
                 </h3>
-                <p className="mt-2 text-[14px] text-muted-foreground">
-                  Compare each number with that person in person or on a call you trust. When they match, only the two of you can read this chat.
-                  A number changes when someone links or removes a browser, so compare again after that.
-                </p>
                 <ul className="mt-3 flex flex-col gap-4">
                   {safety.entries.map((entry) => (
                     <li key={entry.id}>

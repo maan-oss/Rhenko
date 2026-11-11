@@ -113,7 +113,8 @@ async function ProfileBody({ params, searchParams }: { params: Params; searchPar
       {/* The avatar hangs over the banner's lower edge. On a wide screen the buttons sit on its row. On a phone they take a
           full row under it, so Following and Message have room. */}
       <div className="relative z-10 flex flex-wrap items-end justify-between gap-3 px-4">
-        <div className="-mt-12 rounded-full bg-background p-1.5">
+        {/* The ring around the picture is the page's own colour, so the picture itself lines up with the name below it. */}
+        <div className="-mt-12 -ml-1.5 rounded-full bg-background p-1.5">
           <Avatar user={profile} size={96} />
         </div>
         <div className="order-last flex w-full min-w-0 flex-nowrap items-center justify-end gap-2 sm:order-none sm:w-auto sm:pb-1">

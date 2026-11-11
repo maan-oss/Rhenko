@@ -482,7 +482,7 @@ async function listsFlow({ phone }) {
   await check(`${where}: a private list opens for its owner and answers 404 to everyone else`, async () => {
     const privateName = uniq("Private list")
     const privateId = await createList(owner.page, { name: privateName, isPrivate: true })
-    await owner.page.getByText("Private. Only you can see it.").waitFor()
+    await owner.page.getByText("Private", { exact: true }).first().waitFor()
     const privateAnswer = await notHere(viewer.page, `/lists/${privateId}`)
     const unknownAnswer = await notHere(viewer.page, `/lists/${missingId()}`)
     assert.equal(privateAnswer, unknownAnswer, "a private list answers differently from a list that does not exist")

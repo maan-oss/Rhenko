@@ -519,7 +519,7 @@ async function draftsFlow({ phone }) {
   await check(`${where}: the author opens the draft and the scheduled post by link and sees the draft's picture`, async () => {
     need(mediaPath, "the draft's picture")
     await opensPost(author.page, author.handle, ids.draft, text.draft)
-    await author.page.getByText("Draft. Only you can see it.").waitFor()
+    await author.page.getByText("Draft", { exact: true }).first().waitFor()
     await mediaOpens(author.page, mediaPath)
     await opensPost(author.page, author.handle, ids.scheduled, text.scheduled)
     await author.page.getByText(/Goes out/).first().waitFor()

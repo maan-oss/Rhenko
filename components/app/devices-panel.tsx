@@ -23,7 +23,7 @@ export function DevicesPanel({
   encrypted: boolean
 }) {
   if (!encrypted) {
-    return <p className="text-[15px] text-muted-foreground">Encrypted chats are not turned on on this server.</p>
+    return <p className="text-[15px] text-muted-foreground">Not available on this server.</p>
   }
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +62,7 @@ function ThisBrowser() {
         if (failure instanceof DeviceLinkRequired) {
           setStatus("needs-link")
         } else {
-          setError(failure instanceof Error ? failure.message : "This browser can't set up encryption.")
+          setError(failure instanceof Error ? failure.message : "This browser couldn't finish setting up.")
           setStatus("failed")
         }
       })
@@ -102,7 +102,7 @@ function ThisBrowser() {
       <h2 className="text-lg font-semibold">This browser</h2>
       {status === "checking" ? <p className="text-[15px] text-muted-foreground">Checking this browser…</p> : null}
       {status === "ready" ? (
-        <p className="text-[15px]">This browser is linked, so it can read and send encrypted messages.</p>
+        <p className="text-[15px]">Linked and ready.</p>
       ) : null}
       {status === "needs-link" ? (
         <>
@@ -204,7 +204,7 @@ function Pending({ links }: { links: PendingLink[] }) {
         ))}
       </ul>
       <p className="text-sm text-muted-foreground">
-        Approve only a code you can see on the new browser. Approving copies your encrypted chat history to that browser.
+        Check that the code matches the new browser. Approving copies your chat history to it.
       </p>
     </section>
   )
