@@ -51,7 +51,7 @@ const SUMMARY = (
       <li>Payments are taken by Stripe. Rhenko never sees your card number or bank details.</li>
       <li>
         The operator can reach what is stored on this server. Messages in a chat that is not end-to-end encrypted can be read by the
-        operator. In an end-to-end encrypted chat, the content is sealed on your devices and the server cannot read it.
+        operator. In an end-to-end encrypted chat, the content is sealed on your devices and the server cannot read it. Only a chat started while the operator had end-to-end encryption switched on is encrypted, and a chat keeps the setting it was started with.
       </li>
       <li>
         Your email address, if you add one, is used only to send you codes, and the daily digest if you turn it on. Date of birth is used
@@ -266,13 +266,12 @@ const SECTIONS: LegalSection[] = [
           Messages are stored as you send them, with the reactions to them, and voice messages are stored like photos. A message in a
           chat that is not end-to-end encrypted can be read by the operator. In a chat that is end-to-end encrypted, the text, photos,
           voice messages and files are encrypted on your devices before they reach the server, and the server stores only the
-          encrypted content. The server still sees who is in the chat, when a message was sent, its size, and the reaction chosen.
+          encrypted content. The server still sees who is in the chat, when a message was sent, its size, the reaction chosen, and which people a message mentions so that it can notify them.
           Messages are kept until they are deleted.
         </P>
         <P>
           In an end-to-end encrypted chat, videos cannot be sent yet. Link previews are not made and messages cannot be translated, so
-          the server never fetches a link or reads a message for those. A notification for an encrypted message says Encrypted message,
-          not its text.
+          the server never fetches a link or reads a message for those. A notification for an encrypted message shows Sent a message in place of its text, when message previews are on. With previews off, it shows the usual line with no text.
         </P>
         <P>
           In an end-to-end encrypted chat, Contact info shows a safety number for each other person. You can compare it with them
@@ -280,13 +279,13 @@ const SECTIONS: LegalSection[] = [
           numbers for you.
         </P>
         <List>
-          <li>Deleting a message you sent erases its text and photo for everyone in the conversation.</li>
+          <li>Deleting a message you sent erases its text, photos, files and reactions for everyone in the conversation.</li>
           <li>
-            Leaving a conversation removes you from it. When the last person leaves, the conversation and its photos are deleted.
+            Leaving a conversation removes you from it. When the last person leaves, the conversation and its photos are deleted, except a photo kept with a chat report.
           </li>
           <li>Deleting your account deletes the messages you sent.</li>
           <li>
-            The people in a conversation can see when you have seen a message and when you are typing. Typing is not stored.
+            The people in a conversation can see when you have seen a message and when you are typing. Typing is passed along and kept on the server only briefly, for delivery.
           </li>
         </List>
       </>
