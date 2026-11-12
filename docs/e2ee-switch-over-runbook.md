@@ -42,15 +42,18 @@ dumps for 30 days (`BACKUP_KEEP_DAYS`).
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-plus-badge.sql
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-badges.sql
     docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-boosts.sql
+    docker compose exec -T db psql -U rhenko -d rhenko -v ON_ERROR_STOP=1 < db/postgres/upgrades/2026-11-home-tabs.sql
 
-Expect NOTICE lines and no ERROR. All seven files are safe to run again. Run them before the new code: the previous code keeps working
+Expect NOTICE lines and no ERROR. All eight files are safe to run again. Run them before the new code: the previous code keeps working
 on the upgraded schema. The second file adds the copyright notice fields (telephone, sworn statement, the 24-hour deadline on
 intimate-image notices) and the counter-notice table. The third adds the payment records kept when an account is deleted. Account
 deletion in the new code writes to that table, so it must exist before the new code runs. The fourth adds the age-check columns
 (`age_check`, `age_check_session`, `age_checked_at`) to `users`; every existing account starts at `none`. The fifth sets the Plus badge
 (`paid_verified`) on accounts with an active or trialing Plus subscription, and changes nothing else. The sixth adds the OG column
 (`og_badge`, set for the first 1,000 accounts by creation time) and the ID-checked switch (`show_id_badge`, off for everyone until the
-person turns it on). The seventh adds the boost link on ad campaigns (`post_id`), so a boosted post can be tied to its campaign. It adds a column and an index, and changes no rows.
+person turns it on). The seventh adds the boost link on ad campaigns (`post_id`), so a boosted post can be tied to its campaign. It adds a column and an index, and changes no rows. The eighth adds the position of each pinned list and followed topic in Home tabs
+(`timeline_pins.position`, and the `topic_tab_pins` table), numbering existing pins in the order they were made. The new code reads them, so
+it must run before the new code.
 
 Existing accounts are not grandfathered. Until an account completes the Stripe identity check on the settings page, it can read and
 follow but cannot post, reply, message or upload media. Tell users before the switch, because the first thing many of them will see is

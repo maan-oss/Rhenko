@@ -103,7 +103,13 @@ const SECTIONS: LegalSection[] = [
           copy can remain in backups until they are replaced.
         </P>
         <P>
-          Rhenko does not use your posts to train AI models. The operator does not sell your content.
+          Rhenko does not use your posts to train AI models. The operator does not sell your content. The one exception is
+          Sahayak: when someone asks it a question, the question and the posts it replies to are sent to an AI service to write
+          the answer, as the <TextLink href="/privacy#sharing">Privacy Policy</TextLink> explains.
+        </P>
+        <P>
+          Sahayak, the AI assistant, answers when someone mentions it under a post. Its posts carry an AI label. Its answers can be
+          wrong, so check anything important before you act on it. See <TextLink href="/transparency#sahayak">How Sahayak works</TextLink>.
         </P>
         <P>
           You confirm that you have the rights to what you post. You are responsible for it, including for the people and works
