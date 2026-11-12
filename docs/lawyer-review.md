@@ -4,11 +4,10 @@ This is what a lawyer needs to review the legal text of Rhenko: what the operato
 made (with the reasons), the payment decisions, and what is still open. The step-by-step launch checklist is in
 [legal-operations.md](legal-operations.md).
 
-## Status (8 November 2026)
+## Status (12 November 2026)
 
-- The legal pages are drafts. Each carries a draft notice, shown until `RHENKO_LEGAL_REVIEWED=1` is set (`app/_legal/shell.tsx`).
-- `RHENKO_LEGAL_REVIEWED` is not set and must not be set until a lawyer's review is on record. The operator has said the text was
-  reviewed; no review record or list of changes has reached the repository, so this packet still treats it as unreviewed.
+- The legal pages carry a draft notice, shown until `RHENKO_LEGAL_REVIEWED=1` is set (`app/_legal/shell.tsx`).
+- The operator says a lawyer has reviewed the text for every country served (12 November 2026), and sets `RHENKO_LEGAL_REVIEWED=1` on the production server for that reason. The lawyer's name, the review date and the list of changes are not yet in the repository; add them here when received. The Sahayak paragraphs added to the Terms on 12 November 2026 may not be in the text the lawyer saw, so counsel should check them.
 - The operator has made the decisions below, so counsel can confirm or change them. Each is marked **Decided** and says what the app
   and the pages do now. Where the assistant made a decision on the operator's instruction, the entry says so.
 - Where a value is missing, the page says it has not been published. Nothing was filled from a guess.

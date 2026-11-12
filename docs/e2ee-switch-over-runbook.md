@@ -92,6 +92,8 @@ as restricted as the report. A report and its files are removed one year after t
 
 Run this only after step 2 is confirmed and counsel's preservation advice is in hand.
 
+The operator reports (12 November 2026) that no plaintext messages exist, because the app has no users yet. If the dry run in a. returns no row with `e2ee = 0`, nothing is deleted: skip b. to d. and go to step 6. If it returns any row, stop and tell the operator; do not run c.
+
 a. Dry run. This only reads. Plaintext messages are those in conversations with `e2ee = 0`.
 
     select c.e2ee, count(*) as messages, count(m.media_file) as with_file
